@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: brawl-hibrido
+    runtime: node
+    rootDir: brawlhibrido_v36
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DISABLE_MANUS_RUNTIME
+        value: "1"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: BRAWL_STARS_API_KEY
+        sync: false
