@@ -1,0 +1,130 @@
+.draft-rules-panel { margin: 0 0 1.2rem; border: 1px solid rgba(125,100,255,.28); border-radius: 18px; background: linear-gradient(120deg, rgba(19,20,38,.94), rgba(11,23,38,.9)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 18px 42px rgba(1,4,13,.22); overflow: hidden; }
+.draft-rules-panel.is-expanded { border-color: rgba(89,224,255,.42); }
+.draft-rules-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; }
+.draft-rules-panel-head > div:first-child { min-width: 0; }
+.draft-rules-panel-head strong { display: block; margin-top: .18rem; color: var(--bh-text); font-size: .96rem; letter-spacing: .01em; }
+.draft-rules-panel-head p { max-width: 690px; margin: .26rem 0 0; color: var(--bh-text-muted); font-size: .77rem; line-height: 1.45; }
+.draft-rules-toggle, .draft-rules-actions button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: .45rem; min-height: 34px; border: 1px solid rgba(110,228,255,.45); border-radius: 9px; background: rgba(73,205,244,.10); color: var(--bh-info); padding: .48rem .7rem; font-size: .72rem; font-weight: 800; letter-spacing: .035em; transition: transform .16s var(--ease-out), background .16s var(--ease-out), border-color .16s var(--ease-out); }
+.draft-rules-toggle:hover, .draft-rules-actions button:hover:not(:disabled) { border-color: rgba(156,109,255,.8); background: rgba(134,94,255,.18); transform: translateY(-1px); }
+.draft-rules-toggle:active, .draft-rules-actions button:active:not(:disabled) { transform: scale(.97); }
+.draft-rules-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.draft-rules-body { border-top: 1px solid rgba(148,166,218,.13); padding: .85rem 1.15rem 1rem; }
+.draft-rules-section { margin: 0; padding: .85rem 0; border: 0; border-bottom: 1px solid rgba(148,166,218,.12); }
+.draft-rules-section legend { color: var(--bh-text); font-size: .78rem; font-weight: 850; letter-spacing: .055em; text-transform: uppercase; padding: 0; }
+.draft-rules-section p { margin: .22rem 0 .62rem; color: var(--bh-text-dim); font-size: .7rem; line-height: 1.35; }
+.draft-rules-grid { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: .5rem; }
+.draft-rule-input { display: flex; align-items: center; justify-content: space-between; gap: .45rem; min-width: 0; border: 1px solid rgba(151,170,222,.17); border-radius: 9px; background: rgba(4,9,20,.33); color: var(--bh-text-muted); padding: .42rem .48rem; font-size: .7rem; }
+.draft-rule-input > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-rule-input > div { display: flex; align-items: center; flex: 0 0 auto; width: 70px; border-bottom: 1px solid rgba(112,226,255,.30); }
+.draft-rule-input input { width: 50px; appearance: textfield; border: 0; outline: 0; background: transparent; color: var(--bh-text); font: inherit; font-weight: 800; text-align: right; padding: .14rem .08rem; }
+.draft-rule-input input::-webkit-inner-spin-button, .draft-rule-input input::-webkit-outer-spin-button { opacity: .65; }
+.draft-rule-input em { color: var(--bh-info); font-size: .67rem; font-style: normal; font-weight: 800; }
+.draft-rules-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .85rem; color: var(--bh-text-dim); font-size: .7rem; line-height: 1.35; }
+@media (max-width: 720px) { .draft-rules-panel-head { align-items: flex-start; flex-direction: column; }.draft-rules-toggle { width: 100%; }.draft-rules-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.draft-rules-actions { align-items: stretch; flex-direction: column; }.draft-rules-actions button { width: 100%; } }
+@media (max-width: 420px) { .draft-rules-body, .draft-rules-panel-head { padding-left: .8rem; padding-right: .8rem; }.draft-rules-grid { grid-template-columns: 1fr; } }
+
+/*
+ * Regras que o motor deixou de aplicar.
+ *
+ * Um campo editável que não muda nada é uma promessa falsa: quem o ajusta fica
+ * à espera de ver o Score mexer. Em vez de o esconder — o valor ainda existe na
+ * configuração e pode voltar a ser usado — mostra-se desligado, com a razão à
+ * vista.
+ */
+.draft-rule-input.is-inactive { flex-wrap: wrap; opacity: .72; border-style: dashed; }
+.draft-rule-input.is-inactive input { color: var(--bh-text-dim); cursor: not-allowed; }
+.draft-rule-input .rule-inactive-tag {
+  margin-left: .4rem; padding: .05rem .3rem; border-radius: 5px;
+  background: rgba(251,191,36,.14); color: var(--bh-gold-soft);
+  font-size: .56rem; font-style: normal; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+}
+.draft-rule-input .rule-inactive-note {
+  flex-basis: 100%; margin-top: .3rem; color: var(--bh-info); font-size: .6rem; line-height: 1.45;
+}
+
+/*
+ * Novidades detetadas na rotação Ranked e no catálogo de brawlers.
+ *
+ * Discreto por definição: na maior parte dos dias não aparece de todo. Quando
+ * aparece, é numa mudança de temporada — e aí o que interessa é ficar claro que
+ * o site já sabe da novidade e está à espera de dados, e não que se esqueceu
+ * dela.
+ */
+.roster-watch {
+  margin: 1.1rem 0; padding: .95rem 1.05rem; border-radius: 13px;
+  border: 1px solid rgba(112,226,255,.22); background: rgba(9,18,34,.55); color: var(--bh-text-muted);
+}
+.roster-watch-head { display: flex; gap: .65rem; align-items: flex-start; }
+.roster-watch-head svg { flex: 0 0 auto; margin-top: .12rem; color: var(--bh-info); }
+.roster-watch-head strong { display: block; font-size: .82rem; letter-spacing: .02em; color: var(--bh-text); }
+.roster-watch-head p { margin: .3rem 0 0; font-size: .68rem; line-height: 1.55; color: var(--bh-text-muted); max-width: 76ch; }
+.roster-watch-group { margin-top: .8rem; }
+.roster-watch-label {
+  display: inline-block; margin-bottom: .4rem; padding: .1rem .42rem; border-radius: 5px;
+  background: rgba(53,224,171,.13); color: var(--bh-positive);
+  font-size: .57rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+}
+.roster-watch-group.is-leaving .roster-watch-label { background: rgba(251,191,36,.13); color: var(--bh-gold-soft); }
+.roster-watch ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
+.roster-watch li {
+  display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap;
+  padding: .32rem .55rem; border-radius: 8px;
+  border: 1px solid rgba(151,170,222,.16); background: rgba(4,9,20,.4); font-size: .68rem;
+}
+.roster-watch li strong { color: var(--bh-text); font-weight: 700; }
+.roster-watch-kind { color: var(--bh-info); font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; }
+.roster-watch li em { color: var(--bh-text-muted); font-style: normal; font-size: .62rem; }
+@media (max-width: 680px) {
+  .roster-watch { padding: .8rem .85rem; }
+  .roster-watch ul { flex-direction: column; }
+}
+
+/*
+ * Ajuste do Counter, pick a pick.
+ *
+ * Seis linhas em vez de uma porque um counter não vale o mesmo em todos os
+ * momentos do draft: no primeiro pick escolhe-se às cegas, no último o counter
+ * é definitivo. Cada linha mostra o efeito ao lado ("+10% → 15%") para a
+ * escolha ser feita sobre um número concreto e não sobre um multiplicador
+ * abstrato.
+ */
+.counter-pick-grid { display: flex; flex-direction: column; gap: .38rem; margin-top: .5rem; }
+.counter-pick-row { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+.counter-pick-label {
+  flex: 0 0 3.6rem; color: var(--bh-text-muted); font-size: .66rem; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.counter-pick-effect { color: var(--bh-info); font-size: .63rem; font-weight: 700; white-space: nowrap; }
+.counter-pick-presets { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; }
+.counter-pick-presets > span { color: var(--bh-info); font-size: .63rem; }
+.counter-pick-presets button {
+  padding: .24rem .5rem; border-radius: 7px;
+  border: 1px solid rgba(112,226,255,.24); background: rgba(9,18,34,.5); color: var(--bh-text-muted);
+  font-size: .63rem; font-weight: 700; cursor: pointer;
+}
+.counter-pick-presets button:hover { border-color: rgba(112,226,255,.5); color: var(--bh-text); }
+@media (max-width: 680px) {
+  .counter-pick-row { gap: .35rem; }
+  .counter-pick-label { flex-basis: 100%; }
+  .counter-pick-effect { flex-basis: 100%; }
+}
+
+/*
+ * Condição de cada regra, à vista.
+ *
+ * A queixa era "o bónus de Fit não funciona". Funciona — mas só depois de haver
+ * um aliado escolhido, e isso não estava escrito em lado nenhum. Sem a condição
+ * visível, não há maneira de distinguir "está partido" de "a condição ainda não
+ * aconteceu", e a suspeita recai sempre sobre o código.
+ */
+.draft-rule-input { flex-wrap: wrap; }
+.draft-rule-input .rule-when {
+  margin-left: .35rem; padding: .04rem .3rem; border-radius: 5px;
+  background: var(--bh-surface-3); color: var(--bh-text-dim);
+  font-size: .55rem; font-style: normal; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  cursor: help;
+}
+.draft-rule-input .rule-helper-note {
+  flex-basis: 100%; margin-top: .28rem;
+  color: var(--bh-text-dim); font-size: .6rem; line-height: 1.45;
+}

@@ -1,0 +1,148 @@
+/* v55: lightweight arena skin; scoring and source data stay in shared modules. */
+.app-shell { background-color: #090f26; background-image: radial-gradient(ellipse at 20% 0%, #25377880, transparent 65%) !important; }
+.site-version-badge { position: fixed; top: 6px; right: 10px; z-index: 60; pointer-events: none; background: #ffce45; color: #19213a; padding: 4px 9px; border: 2px solid #111a33; border-radius: 7px; font: 900 12px/1.1 sans-serif; box-shadow: 0 2px 0 #03091d; }
+.draft-shell .draft-main { max-width: 1720px; padding: 22px 24px 48px; gap: 18px; }
+.draft-shell .draft-contextbar { order: 0; margin: 0; padding: 16px 20px; border: 1px solid #415591; border-radius: 16px; background: linear-gradient(115deg, #233d83, #392566); box-shadow: 0 5px 0 #050b20; }
+.draft-contextbar-kicker { color: #ffcf4b; }
+.draft-shell .draft-contextbar-main strong { color: #fff; font-size: 28px; }
+.draft-shell .draft-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; width: 100%; }
+.draft-shell .draft-content > * { order: 0; margin: 0; min-width: 0; grid-column: 1 / -1; }
+.draft-shell .draft-content > .draft-arena,
+.draft-shell .draft-content > .recommendations-section { width: 100%; margin: 0; border: 1px solid #354574; border-radius: 18px; background: #111b37 !important; box-shadow: 0 5px 0 #050b20; overflow: hidden; }
+.draft-shell .draft-arena-header { padding: 18px; background: linear-gradient(110deg,#193b72,#342349); }
+.draft-shell .draft-arena-header h2 { font-size: 28px; margin: 6px 0; }
+.draft-shell .draft-arena-header p { font-size: 12px; color: #bdcbed; }
+.draft-shell .draft-arena-map-status { display: none; }
+.draft-shell .draft-action-zone { display: block; padding: 14px; }
+.draft-shell .draft-progress { margin-bottom: 14px; padding: 0; gap: 10px; flex-wrap: wrap; }
+.draft-shell .progress-copy strong { font-size: 19px; }
+.draft-shell .progress-copy small { display: none; }
+.draft-shell .draft-progress-actions { flex-wrap: wrap; gap: 6px; }
+.draft-shell .draft-board-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; gap: 10px; margin: 0; }
+.draft-shell .draft-board-grid .team-board { order: 0; padding: 12px; border: 1px solid #3866a5; border-radius: 12px; background: #132b4d; min-width: 0; }
+.draft-shell .draft-board-grid .team-board.red { border-color: #8d466a; background: #392039; }
+.draft-shell .team-heading { flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.draft-shell .team-heading h3 { font-size: 23px; }
+.draft-shell .team-kicker { display: none; }
+.draft-shell .team-heading-meta { gap: 5px; }
+.draft-shell .team-perspective { font-size: 9px; }
+.draft-shell .slot-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 6px; }
+.draft-shell .draft-slot { min-height: 48px; border-radius: 8px; padding: 6px; }
+.draft-shell .draft-slot .slot-copy { min-width: 0; }
+.draft-shell .draft-slot .slot-copy strong { white-space: normal; font-size: 12px; overflow-wrap: anywhere; }
+.draft-shell .draft-slot.is-active { border-color: #ffd453; background: #544729; box-shadow: 0 0 0 2px #ffd45338; }
+.draft-shell .draft-board-grid .draft-probability-center { order: 1; grid-column: 1/-1; width: auto; min-height: 0; padding: 12px; background: #0a142c; border-radius: 10px; }
+.draft-shell .draft-probability-center strong { font-size: 24px; }
+.draft-shell .draft-arena-controls { display: block; padding: 14px; }
+.draft-shell .draft-arena-map-control { padding: 0; border: 0; }
+.draft-shell .draft-arena-map-control > strong,
+.draft-shell .draft-arena-map-control > small { display: none; }
+.draft-shell .draft-select { width: 100%; margin: 8px 0; }
+.arena-more { padding: 12px 16px; border-top: 1px solid #304168; }
+.arena-more summary { cursor: pointer; color: #d1def7; font-size: 13px; font-weight: 700; min-height: 24px; }
+.arena-more[open] summary { color: #ffcf4b; margin-bottom: 12px; }
+.arena-options { padding: 12px 0 0; }
+.arena-options-body { display: grid; gap: 16px; }
+.draft-shell .recommendations-section { padding: 18px; }
+.draft-shell .recommendations-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
+.draft-shell .recommendations-heading h2 { font-size: 27px; margin: 4px 0; }
+.draft-shell .recommendations-heading p { font-size: 12px; line-height: 1.5; margin: 0; color: #aebfdf; }
+.turn-team { display: inline-block; font: 800 11px/1.5 sans-serif; vertical-align: middle; padding: 3px 8px; border-radius: 6px; background: #255da3; color: #fff; }
+.turn-team.red { background: #a43c63; }
+.pick-details-toggle { flex-shrink: 0; padding: 10px; border: 1px solid #4a5e8b; border-radius: 8px; color: #e1ebff; font-size: 12px; background: #233252; cursor: pointer; }
+.pick-details-toggle[aria-pressed="true"] { color: #ffcf4b; border-color: #ffcf4b; }
+.draft-shell .recommendation-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.draft-shell .draft-search-voice { flex: 1 1 230px; min-width: 0; }
+.draft-shell .draft-search { min-width: 0; background: #0a132b; border-radius: 10px; }
+.draft-shell .draft-role-filter { flex-wrap: wrap; }
+.draft-shell .draft-role-filter button { min-height: 36px; padding: 6px 12px; }
+.draft-shell .draft-role-filter button.is-active { background: #ffcf4b; color: #152044; border-color: #ffcf4b; }
+.draft-shell .draft-recommendation-list { display: grid; gap: 8px; }
+.draft-shell .draft-recommendation { display: grid; grid-template-columns: 22px 46px minmax(0,1fr) 64px; align-items: center; gap: 10px; width: 100%; min-height: 90px; padding: 12px; border: 1px solid #30446f; border-bottom: 3px solid #070e23; border-radius: 12px; background: #192745; content-visibility: auto; contain-intrinsic-size: auto 90px; transition: transform .14s ease, border-color .14s ease, background .14s ease; }
+.draft-shell .draft-recommendation:hover:not(:disabled) { transform: translateY(-2px); border-color: #eec344; background: #223458; }
+.draft-shell .draft-recommendation:active:not(:disabled) { transform: translateY(1px); }
+.draft-shell .recommendation-avatar { width: 46px; height: 46px; border-radius: 10px; border: 2px solid #6683c1; }
+.draft-shell .recommendation-rank { font-size: 14px; color: #91a6ce; }
+.draft-shell .draft-recommendation-list > :first-child .recommendation-rank { color: #ffcf4b; }
+.draft-shell .recommendation-main { min-width: 0; }
+.draft-shell .recommendation-main > strong { font-size: 18px; color: #fff; }
+.draft-shell .recommendation-main > small { font-size: 11px; line-height: 1.5; white-space: normal; }
+.draft-shell .recommendation-metrics b { color: #ffda66; font-size: 25px; }
+.draft-shell .recommendation-metrics small { font-size: 8px; }
+.draft-shell .recommendation-side,.draft-shell .recommendation-action { display: none; }
+.draft-shell .pick-brief { color: #b3c5e6; margin-top: 4px; }
+.draft-shell .with-details .draft-recommendation { align-items: start; contain-intrinsic-size: auto 650px; }
+.draft-shell .with-details .recommendation-main { overflow-wrap: anywhere; }
+.draft-shell .roster-pagination { flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.draft-shell .signal-radar-grid { grid-template-columns: minmax(0,1fr); }
+.draft-shell .recommendation-foot { display: none; }
+.draft-shell button:focus-visible,.draft-shell summary:focus-visible,.draft-shell select:focus-visible { outline: 3px solid #ffe078; outline-offset: 3px; }
+@media (min-width: 1150px) {
+  .draft-shell .draft-content { grid-template-columns: minmax(420px,.95fr) minmax(430px,1.05fr); align-items: start; }
+  .draft-shell .draft-content > .draft-arena { grid-column: 1; grid-row: 1; position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; scrollbar-width: thin; }
+  .draft-shell .draft-content > .recommendations-section { grid-column: 2; grid-row: 1; }
+}
+@media (max-width: 600px) {
+  .draft-shell .draft-main { padding: 12px 10px 90px; gap: 12px; }
+  .draft-shell .draft-contextbar { padding: 12px; }
+  .draft-shell .draft-contextbar-stats { display: none; }
+  .draft-shell .recommendations-section { padding: 12px; }
+  .draft-shell .draft-arena-header { padding: 12px; }
+  .draft-shell .draft-action-zone { padding: 10px; }
+  .draft-shell .draft-board-grid .team-board { padding: 8px; }
+  .draft-shell .team-heading-meta .team-count { display: none; }
+  .draft-shell .draft-recommendation { grid-template-columns: 18px 38px minmax(0,1fr) 50px; gap: 7px; padding: 10px 8px; }
+  .draft-shell .recommendation-avatar { width: 38px; height: 38px; }
+  .draft-shell .recommendation-main > strong { font-size: 16px; }
+  .draft-shell .recommendation-metrics b { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .draft-shell *, .draft-shell *::before, .draft-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+/* Shared navigation keeps the same visual identity across the site. */
+.app-shell .app-sidebar { background: linear-gradient(180deg,#142342,#0b1329); border-right: 1px solid #34436b; }
+.app-shell .sidebar-link { border-radius: 10px; margin-bottom: 5px; }
+.app-shell .sidebar-link.is-active { color: #ffe078; background: #33466b; border-color: #6b7da1; }
+.app-shell .topbar { background: #0d1730; border-bottom-color: #2d3e65; }
+.app-shell .refresh-button { box-shadow: 0 3px 0 #785719; border-radius: 9px; }
+.draft-shell .is-compact .draft-recommendation { overflow: hidden; }
+/* v56: expanded audits use the full card width, without ellipsis or clipping. */
+.draft-shell .with-details .draft-recommendation { content-visibility: visible; contain: none; contain-intrinsic-size: none; overflow: visible; grid-template-columns: 22px 46px minmax(0,1fr) 64px; }
+.draft-shell .with-details .recommendation-main { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+.draft-shell .with-details .recommendation-metrics { grid-column: 4; grid-row: 1; }
+.draft-shell .with-details .recommendation-main :is(span,small,strong,b,em) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; max-height: none; min-width: 0; }
+.draft-shell .with-details .recommendation-counter-audit { grid-template-columns: minmax(0,1fr); }
+.draft-shell .with-details .recommendation-bonus-chip { flex-wrap: wrap; max-width: 100%; }
+.draft-shell .with-details .recommendation-bonus-source { flex: 1 1 100%; }
+.draft-shell .with-details .recommendation-counter-audit :is(small,b,span),
+.draft-shell .with-details .recommendation-main > small { font-size: 12px !important; line-height: 1.5; letter-spacing: normal; }
+.ranking-order-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #d1def7; font-size: 12px; }
+.ranking-order-control select { min-width: 0; max-width: 100%; padding: 9px; background: #182744; border: 1px solid #4a5e8b; border-radius: 8px; color: #ffe078; }
+.ranking-order-control small { flex-basis: 100%; line-height: 1.5; }
+/* v57: comparisons are visible again and reachable directly from the board. */
+.duel-jump-link { display: inline-flex; align-items: center; padding: 10px 12px; border: 1px solid #ffcf4b; border-radius: 9px; color: #ffe078; background: #182744; font-size: 12px; font-weight: 700; text-decoration: none; }
+.duel-jump-link:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.draft-shell #matchup-matrix { scroll-margin-top: 24px; }
+.draft-shell .matchup-score-rise-bonuses > span { white-space: normal; flex-wrap: wrap; overflow-wrap: anywhere; }
+.draft-shell .matchup-score-rise-bonus-source { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .draft-shell .draft-contextbar { flex-wrap: wrap; gap: 10px; } }
+
+/* v61: leitura resumida dos duelos, sem remover as percentagens. */
+.duel-points-overview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:14px 0; }
+.duel-points-overview > div { display:grid; gap:6px; padding:14px; border:1px solid #365577; border-radius:12px; min-width:0; }
+.duel-points-overview span { font-weight:800; overflow-wrap:anywhere; }
+.duel-points-overview strong { font-size:24px; color:#fff; }
+.duel-points-overview small { font-size:12px; color:#bfd0e6; }
+.duel-points-overview b { color:#ffd75a; }
+.duel-details > summary { cursor:pointer; padding:12px 0; font-weight:700; color:#ffd75a; }
+.duel-details .matchup-score-rise-grid { grid-template-columns:1fr; }
+.duel-details .matchup-score-rise-bonuses { display:grid; gap:8px; }
+.duel-details .matchup-score-rise-bonuses > span { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px; border-radius:6px; padding:10px; }
+.duel-details .matchup-score-rise-bonus-source { grid-column:1 / -1; white-space:normal; overflow-wrap:anywhere; }
+@media(max-width:480px) { .duel-points-overview { gap:6px; } .duel-points-overview > div { padding:9px; } }
+
+/* v62: sinergias tão visíveis quanto os counters no perfil. */
+#perfil-sinergias { scroll-margin-top: 90px; }
+#perfil-sinergias .sourced-counter-copy > div { flex-wrap: wrap; }
+#perfil-sinergias .sourced-counter-copy strong { white-space: normal; overflow: visible; }
+#perfil-sinergias .sourced-counter-copy > small:first-of-type { font-size: 15px; font-weight: 800; color: var(--bh-text); }

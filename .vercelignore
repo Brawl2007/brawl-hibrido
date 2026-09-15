@@ -1,0 +1,27 @@
+# Material de desenvolvimento que não é necessário no runtime
+node_modules
+dist
+public
+.vercel
+.manus-logs
+.git
+
+# Documentação, auditorias e pesquisas não usadas no build
+/docs/
+/research/
+/reports/
+*.md
+*.patch
+*.bak
+*.txt
+
+# Fixtures e testes não necessários para compilar ou executar
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Arquivos de comparação e ferramentas auxiliares de investigação
+BRAWLER_*.json
+.source_comparison_previous.txt
+verify_live_sync.mjs

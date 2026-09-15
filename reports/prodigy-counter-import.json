@@ -1,0 +1,2634 @@
+{
+  "generatedAt": "2026-08-15T00:20:23.930Z",
+  "source": "https://powerleagueprodigy.com",
+  "rosterCount": 105,
+  "importedCount": 105,
+  "notImportedCount": 0,
+  "entries": [
+    {
+      "brawler": "8-bit",
+      "sourceUrl": "https://powerleagueprodigy.com/8-bit",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Jae-yong",
+        "Darryl",
+        "Shelly",
+        "Buzz",
+        "Fang",
+        "Lily",
+        "R-t"
+      ],
+      "counteredBy": [
+        "Maisie",
+        "Sprout",
+        "Brock",
+        "Bolt",
+        "Gigi",
+        "Hank",
+        "Nori",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Alli",
+      "sourceUrl": "https://powerleagueprodigy.com/alli",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Squeak",
+        "Brock",
+        "Edgar",
+        "Sandy",
+        "Grom",
+        "Stu",
+        "Bo"
+      ],
+      "counteredBy": [
+        "Melodie",
+        "Shade",
+        "Bull",
+        "Carl",
+        "Doug",
+        "Hank",
+        "Meg",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Amber",
+      "sourceUrl": "https://powerleagueprodigy.com/amber",
+      "status": "imported",
+      "targets": [
+        "Charlie",
+        "Melodie",
+        "Shelly",
+        "Surge",
+        "Nita",
+        "Tara",
+        "Emz",
+        "Max"
+      ],
+      "counteredBy": [
+        "Brock",
+        "Byron",
+        "Edgar",
+        "Piper",
+        "Crow",
+        "Gray",
+        "Bea",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Angelo",
+      "sourceUrl": "https://powerleagueprodigy.com/angelo",
+      "status": "imported",
+      "targets": [
+        "Colette",
+        "Belle",
+        "Brock",
+        "Byron",
+        "Pearl",
+        "Colt",
+        "Gene",
+        "Bea"
+      ],
+      "counteredBy": [
+        "Larry & Lawrie",
+        "Mandy",
+        "Ruffs",
+        "Grom",
+        "Lola",
+        "Nani",
+        "Tara",
+        "Kit"
+      ]
+    },
+    {
+      "brawler": "Ash",
+      "sourceUrl": "https://powerleagueprodigy.com/ash",
+      "status": "imported",
+      "targets": [
+        "Cordelius",
+        "Darryl",
+        "Mr. P",
+        "Sandy",
+        "Leon",
+        "Nita",
+        "Otis",
+        "Sam"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Barley",
+        "Shelly",
+        "Amber",
+        "Spike",
+        "Crow",
+        "Rico",
+        "Rosa"
+      ]
+    },
+    {
+      "brawler": "Barley",
+      "sourceUrl": "https://powerleagueprodigy.com/barley",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sirius",
+        "Sprout",
+        "8-bit",
+        "Berry",
+        "Ruffs",
+        "Tara",
+        "Lou"
+      ],
+      "counteredBy": [
+        "Frank",
+        "Bolt",
+        "Buzz",
+        "Lily",
+        "Mico",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Bea",
+      "sourceUrl": "https://powerleagueprodigy.com/bea",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Pierce",
+        "Sprout",
+        "Squeak",
+        "Belle",
+        "Mandy",
+        "Ruffs",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Edgar",
+        "Kenji",
+        "Bibi",
+        "Kaze",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Belle",
+      "sourceUrl": "https://powerleagueprodigy.com/belle",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Jae-yong",
+        "Colette",
+        "Barley",
+        "Shelly",
+        "Chuck",
+        "Ziggy",
+        "Crow"
+      ],
+      "counteredBy": [
+        "Sprout",
+        "Kenji",
+        "Trunk",
+        "Bibi",
+        "Bolt",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Berry",
+      "sourceUrl": "https://powerleagueprodigy.com/berry",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Mandy",
+        "Piper",
+        "Gene",
+        "Grom",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Trunk",
+        "Bibi",
+        "Hank",
+        "Juju",
+        "Mina",
+        "Nori",
+        "Rosa",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Bibi",
+      "sourceUrl": "https://powerleagueprodigy.com/bibi",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Mandy",
+        "Mr. P",
+        "Ziggy",
+        "Grom",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Clancy",
+        "Damian",
+        "Willow",
+        "Bolt",
+        "Lola",
+        "Otis",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Bo",
+      "sourceUrl": "https://powerleagueprodigy.com/bo",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Berry",
+        "Frank",
+        "Gene",
+        "Gray",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Starr Nova",
+        "Trunk",
+        "Bolt",
+        "Hank",
+        "Mico",
+        "Nori",
+        "Rosa",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Bolt",
+      "sourceUrl": "https://powerleagueprodigy.com/bolt",
+      "status": "imported",
+      "targets": [
+        "Buster",
+        "Squeak",
+        "Frank",
+        "Mr. P",
+        "Carl",
+        "Grom",
+        "Leon",
+        "Lumi"
+      ],
+      "counteredBy": [
+        "Charlie",
+        "Melodie",
+        "Clancy",
+        "Willow",
+        "Buzz",
+        "Gale",
+        "Rosa",
+        "Meg"
+      ]
+    },
+    {
+      "brawler": "Bonnie",
+      "sourceUrl": "https://powerleagueprodigy.com/bonnie",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Jae-yong",
+        "Barley",
+        "Sprout",
+        "Willow",
+        "Chuck",
+        "Ruffs",
+        "Ziggy"
+      ],
+      "counteredBy": [
+        "Starr Nova",
+        "8-bit",
+        "Edgar",
+        "Pearl",
+        "Bolt",
+        "Carl",
+        "Nori",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Brock",
+      "sourceUrl": "https://powerleagueprodigy.com/brock",
+      "status": "imported",
+      "targets": [
+        "Shelly",
+        "8-bit",
+        "Mr. P",
+        "Spike",
+        "Hank",
+        "Nita",
+        "Emz",
+        "Pam"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "Mortis",
+        "Edgar",
+        "Bibi",
+        "Crow",
+        "Leon",
+        "Max",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Bull",
+      "sourceUrl": "https://powerleagueprodigy.com/bull",
+      "status": "imported",
+      "targets": [
+        "Buster",
+        "Sprout",
+        "Bibi",
+        "Buzz",
+        "Grom",
+        "Poco",
+        "Gus",
+        "Sam"
+      ],
+      "counteredBy": [
+        "Charlie",
+        "Colette",
+        "Maisie",
+        "Shelly",
+        "Surge",
+        "Otis",
+        "Lou",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Buster",
+      "sourceUrl": "https://powerleagueprodigy.com/buster",
+      "status": "imported",
+      "targets": [
+        "Cordelius",
+        "Charlie",
+        "Spike",
+        "Carl",
+        "Lily",
+        "Lola",
+        "Rico",
+        "Tara"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Colette",
+        "Darryl",
+        "Frank",
+        "Jacky",
+        "Bull",
+        "Buzz",
+        "Doug"
+      ]
+    },
+    {
+      "brawler": "Buzz",
+      "sourceUrl": "https://powerleagueprodigy.com/buzz",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Jessie",
+        "Sprout",
+        "Mr. P",
+        "Ziggy",
+        "Bolt",
+        "Grom",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Damian",
+        "8-bit",
+        "Griff",
+        "Surge",
+        "Bull",
+        "Nita",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Byron",
+      "sourceUrl": "https://powerleagueprodigy.com/byron",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Barley",
+        "Sirius",
+        "Willow",
+        "Berry",
+        "Lumi",
+        "Tara"
+      ],
+      "counteredBy": [
+        "Sprout",
+        "Brock",
+        "Chuck",
+        "Bolt",
+        "Nita",
+        "Poco",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Carl",
+      "sourceUrl": "https://powerleagueprodigy.com/carl",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Jae-yong",
+        "Barley",
+        "Sprout",
+        "Willow",
+        "Ziggy",
+        "Grom",
+        "Poco"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Jacky",
+        "Bibi",
+        "Bolt",
+        "Gale",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Charlie",
+      "sourceUrl": "https://powerleagueprodigy.com/charlie",
+      "status": "imported",
+      "targets": [
+        "Cordelius",
+        "Jae-yong",
+        "Colette",
+        "Chuck",
+        "Bolt",
+        "Bull",
+        "Fang",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Sirius",
+        "Sprout",
+        "Bibi",
+        "Buzz",
+        "Nita",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Chester",
+      "sourceUrl": "https://powerleagueprodigy.com/chester",
+      "status": "imported",
+      "targets": [
+        "Mortis",
+        "Edgar",
+        "Frank",
+        "Jacky",
+        "Sandy",
+        "Lily",
+        "Kit",
+        "Pam"
+      ],
+      "counteredBy": [
+        "Charlie",
+        "Angelo",
+        "Willow",
+        "Belle",
+        "Byron",
+        "Piper",
+        "Lola",
+        "Meg"
+      ]
+    },
+    {
+      "brawler": "Chuck",
+      "sourceUrl": "https://powerleagueprodigy.com/chuck",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Barley",
+        "Sprout",
+        "Squeak",
+        "Byron",
+        "Mr. P",
+        "Colt",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "El Primo",
+        "Charlie",
+        "Shelly",
+        "Bull",
+        "Fang",
+        "Gale",
+        "Otis"
+      ]
+    },
+    {
+      "brawler": "Clancy",
+      "sourceUrl": "https://powerleagueprodigy.com/clancy",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Damian",
+        "Trunk",
+        "Bibi",
+        "Bolt",
+        "Rosa",
+        "Tick",
+        "Sam"
+      ],
+      "counteredBy": [
+        "8-bit",
+        "Jacky",
+        "Buzz",
+        "Hank",
+        "Nita",
+        "Nori",
+        "Tara",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Colette",
+      "sourceUrl": "https://powerleagueprodigy.com/colette",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Jae-yong",
+        "Sprout",
+        "Mandy",
+        "Gene",
+        "Grom",
+        "Mico",
+        "Kit"
+      ],
+      "counteredBy": [
+        "Maisie",
+        "Ruffs",
+        "Bolt",
+        "Lola",
+        "Nori",
+        "Tara",
+        "Ash",
+        "Eve"
+      ]
+    },
+    {
+      "brawler": "Colt",
+      "sourceUrl": "https://powerleagueprodigy.com/colt",
+      "status": "imported",
+      "targets": [
+        "Sprout",
+        "Byron",
+        "Mandy",
+        "Najia",
+        "Gene",
+        "Grom",
+        "Nani",
+        "R-t"
+      ],
+      "counteredBy": [
+        "Angelo",
+        "Jacky",
+        "Bibi",
+        "Hank",
+        "Nori",
+        "Rosa",
+        "Ash",
+        "Moe"
+      ]
+    },
+    {
+      "brawler": "Cordelius",
+      "sourceUrl": "https://powerleagueprodigy.com/cordelius",
+      "status": "imported",
+      "targets": [
+        "Colette",
+        "Shelly",
+        "Chuck",
+        "Bull",
+        "Fang",
+        "Rosa",
+        "Tara",
+        "Stu"
+      ],
+      "counteredBy": [
+        "Amber",
+        "Frank",
+        "Griff",
+        "Surge",
+        "Crow",
+        "Gale",
+        "Nita",
+        "Max"
+      ]
+    },
+    {
+      "brawler": "Crow",
+      "sourceUrl": "https://powerleagueprodigy.com/crow",
+      "status": "imported",
+      "targets": [
+        "Shelly",
+        "Squeak",
+        "Amber",
+        "Byron",
+        "Bull",
+        "Leon",
+        "Max",
+        "Pam"
+      ],
+      "counteredBy": [
+        "Jessie",
+        "Mr. P",
+        "Pearl",
+        "Spike",
+        "Lola",
+        "Nita",
+        "Tara",
+        "Tick"
+      ]
+    },
+    {
+      "brawler": "Damian",
+      "sourceUrl": "https://powerleagueprodigy.com/damian",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Mandy",
+        "Ziggy",
+        "Gale",
+        "Grom",
+        "Nani",
+        "Nori"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Clancy",
+        "Willow",
+        "Bull",
+        "Juju",
+        "Otis",
+        "Ash",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Darryl",
+      "sourceUrl": "https://powerleagueprodigy.com/darryl",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Jae-yong",
+        "Jessie",
+        "Sprout",
+        "Mr. P",
+        "Ziggy",
+        "Grom",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "Chester",
+        "Colette",
+        "8-bit",
+        "Edgar",
+        "Bibi",
+        "Bull",
+        "Nita"
+      ]
+    },
+    {
+      "brawler": "Doug",
+      "sourceUrl": "https://powerleagueprodigy.com/doug",
+      "status": "imported",
+      "targets": [
+        "Chuck",
+        "Pearl",
+        "Gene",
+        "Lola",
+        "Tara",
+        "Tick",
+        "Eve",
+        "Stu"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Darryl",
+        "Squeak",
+        "Belle",
+        "Piper",
+        "Bull",
+        "Nani",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Draco",
+      "sourceUrl": "https://powerleagueprodigy.com/draco",
+      "status": "imported",
+      "targets": [
+        "Melodie",
+        "Meeple",
+        "Sprout",
+        "Squeak",
+        "Kenji",
+        "Gray",
+        "Lily",
+        "Stu"
+      ],
+      "counteredBy": [
+        "Clancy",
+        "Darryl",
+        "Maisie",
+        "Shelly",
+        "8-bit",
+        "Bull",
+        "Doug",
+        "Gale"
+      ]
+    },
+    {
+      "brawler": "Dynamike",
+      "sourceUrl": "https://powerleagueprodigy.com/dynamike",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Charlie",
+        "Sprout",
+        "Squeak",
+        "Mandy",
+        "Ruffs",
+        "Gene",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Melodie",
+        "Bolt",
+        "Buzz",
+        "Kaze",
+        "Lily",
+        "Nori",
+        "Rosa",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Edgar",
+      "sourceUrl": "https://powerleagueprodigy.com/edgar",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Sprout",
+        "Squeak",
+        "Amber",
+        "Mandy",
+        "Grom",
+        "Poco",
+        "Meg"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "Chester",
+        "Maisie",
+        "Shelly",
+        "Surge",
+        "Gale",
+        "Otis",
+        "R-t"
+      ]
+    },
+    {
+      "brawler": "El Primo",
+      "sourceUrl": "https://powerleagueprodigy.com/el-primo",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Mandy",
+        "Ruffs",
+        "Ziggy",
+        "Grom",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "Clancy",
+        "Maisie",
+        "8-bit",
+        "Griff",
+        "Nita",
+        "Nori",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Emz",
+      "sourceUrl": "https://powerleagueprodigy.com/emz",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Jae-yong",
+        "Sprout",
+        "Glowy",
+        "Mandy",
+        "Grom",
+        "Nani",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Larry & Lawrie",
+        "Melodie",
+        "Barley",
+        "Bonnie",
+        "Willow",
+        "Bolt",
+        "Juju",
+        "Mico"
+      ]
+    },
+    {
+      "brawler": "Eve",
+      "sourceUrl": "https://powerleagueprodigy.com/eve",
+      "status": "imported",
+      "targets": [
+        "Colette",
+        "Shelly",
+        "Najia",
+        "Piper",
+        "Ziggy",
+        "Crow",
+        "Otis",
+        "Tick"
+      ],
+      "counteredBy": [
+        "8-bit",
+        "Pearl",
+        "Penny",
+        "Bolt",
+        "Doug",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Fang",
+      "sourceUrl": "https://powerleagueprodigy.com/fang",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Jessie",
+        "Chuck",
+        "Mr. P",
+        "Piper",
+        "Ziggy",
+        "Grom",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Shelly",
+        "8-bit",
+        "Surge",
+        "Bull",
+        "Gale",
+        "Nita",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Finx",
+      "sourceUrl": "https://powerleagueprodigy.com/finx",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Brock",
+        "Mandy",
+        "Piper",
+        "Grom",
+        "Leon",
+        "Nani"
+      ],
+      "counteredBy": [
+        "Kenji",
+        "Bibi",
+        "Bull",
+        "Buzz",
+        "Crow",
+        "Doug",
+        "Nori",
+        "Rosa"
+      ]
+    },
+    {
+      "brawler": "Frank",
+      "sourceUrl": "https://powerleagueprodigy.com/frank",
+      "status": "imported",
+      "targets": [
+        "Cordelius",
+        "Charlie",
+        "Sprout",
+        "Squeak",
+        "Penny",
+        "Gene",
+        "Grom",
+        "Ash"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Colette",
+        "Maisie",
+        "Shelly",
+        "Surge",
+        "Fang",
+        "Emz",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Gale",
+      "sourceUrl": "https://powerleagueprodigy.com/gale",
+      "status": "imported",
+      "targets": [
+        "Mortis",
+        "Glowy",
+        "Griff",
+        "Bolt",
+        "Carl",
+        "Fang",
+        "Leon",
+        "Mina"
+      ],
+      "counteredBy": [
+        "Jae-yong",
+        "Chester",
+        "Damian",
+        "Meeple",
+        "Pierce",
+        "Sirius",
+        "Shade",
+        "Poco"
+      ]
+    },
+    {
+      "brawler": "Gene",
+      "sourceUrl": "https://powerleagueprodigy.com/gene",
+      "status": "imported",
+      "targets": [
+        "Barley",
+        "Sprout",
+        "Squeak",
+        "Buzz",
+        "Carl",
+        "Fang",
+        "Rico",
+        "Emz"
+      ],
+      "counteredBy": [
+        "Brock",
+        "Mandy",
+        "Mr. P",
+        "Piper",
+        "Mico",
+        "Bea",
+        "Eve",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Gigi",
+      "sourceUrl": "https://powerleagueprodigy.com/gigi",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Jae-yong",
+        "Barley",
+        "Jessie",
+        "Sprout",
+        "8-bit",
+        "Mr. P",
+        "Ziggy"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Bibi",
+        "Bolt",
+        "Bull",
+        "Buzz",
+        "Gray",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Glowy",
+      "sourceUrl": "https://powerleagueprodigy.com/glowy",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Jae-yong",
+        "Sprout",
+        "Chuck",
+        "Colt",
+        "Gene",
+        "Nani",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Maisie",
+        "Edgar",
+        "Bolt",
+        "Doug",
+        "Gale",
+        "Nita",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Gray",
+      "sourceUrl": "https://powerleagueprodigy.com/gray",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Sprout",
+        "Squeak",
+        "Carl",
+        "Gigi",
+        "Grom",
+        "Emz",
+        "Lou"
+      ],
+      "counteredBy": [
+        "Mr. P",
+        "Lola",
+        "Nani",
+        "Tara",
+        "Gus",
+        "R-t",
+        "Sam",
+        "Bo"
+      ]
+    },
+    {
+      "brawler": "Griff",
+      "sourceUrl": "https://powerleagueprodigy.com/griff",
+      "status": "imported",
+      "targets": [
+        "Colette",
+        "Darryl",
+        "Janet",
+        "Bull",
+        "Nita",
+        "Poco",
+        "Rosa",
+        "Sam"
+      ],
+      "counteredBy": [
+        "Spike",
+        "Surge",
+        "Buzz",
+        "Colt",
+        "Crow",
+        "Fang",
+        "Stu",
+        "Bo"
+      ]
+    },
+    {
+      "brawler": "Grom",
+      "sourceUrl": "https://powerleagueprodigy.com/grom",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Meeple",
+        "Willow",
+        "Byron",
+        "Griff",
+        "Ruffs",
+        "Spike",
+        "Crow"
+      ],
+      "counteredBy": [
+        "Darryl",
+        "Kenji",
+        "Bibi",
+        "Bolt",
+        "Kaze",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Gus",
+      "sourceUrl": "https://powerleagueprodigy.com/gus",
+      "status": "imported",
+      "targets": [
+        "Squeak",
+        "Amber",
+        "Belle",
+        "Fang",
+        "Gray",
+        "Lola",
+        "Emz",
+        "Bo"
+      ],
+      "counteredBy": [
+        "Bonnie",
+        "Mandy",
+        "Mr. P",
+        "Nani",
+        "Eve",
+        "Pam",
+        "R-t",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Hank",
+      "sourceUrl": "https://powerleagueprodigy.com/hank",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Chuck",
+        "Piper",
+        "Gene",
+        "Grom",
+        "Nani"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Surge",
+        "Bibi",
+        "Bull",
+        "Gale",
+        "Nita",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Jacky",
+      "sourceUrl": "https://powerleagueprodigy.com/jacky",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Mortis",
+        "Edgar",
+        "Doug",
+        "Grom",
+        "Hank",
+        "Poco",
+        "Tick"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Chester",
+        "Colette",
+        "Maisie",
+        "Shelly",
+        "Griff",
+        "Gale",
+        "Otis"
+      ]
+    },
+    {
+      "brawler": "Jae-yong",
+      "sourceUrl": "https://powerleagueprodigy.com/jae-yong",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Colette",
+        "Sirius",
+        "Chuck",
+        "Ruffs",
+        "Ziggy",
+        "Colt",
+        "Gale"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Edgar",
+        "Pearl",
+        "Bibi",
+        "Bolt",
+        "Doug",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Janet",
+      "sourceUrl": "https://powerleagueprodigy.com/janet",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Charlie",
+        "Sandy",
+        "Spike",
+        "Nani",
+        "Nita",
+        "Tara",
+        "Stu"
+      ],
+      "counteredBy": [
+        "Edgar",
+        "Bibi",
+        "Bolt",
+        "Carl",
+        "Gale",
+        "Leon",
+        "Ash",
+        "Pam"
+      ]
+    },
+    {
+      "brawler": "Jessie",
+      "sourceUrl": "https://powerleagueprodigy.com/jessie",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Chuck",
+        "Mandy",
+        "Piper",
+        "Ruffs",
+        "Gene",
+        "Bea"
+      ],
+      "counteredBy": [
+        "Darryl",
+        "Edgar",
+        "Kenji",
+        "Alli",
+        "Buzz",
+        "Fang",
+        "Gigi",
+        "Kaze"
+      ]
+    },
+    {
+      "brawler": "Juju",
+      "sourceUrl": "https://powerleagueprodigy.com/juju",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Willow",
+        "Berry",
+        "Ruffs",
+        "Ziggy",
+        "Bull",
+        "Crow"
+      ],
+      "counteredBy": [
+        "Trunk",
+        "Bolt",
+        "Buzz",
+        "Carl",
+        "Lily",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Kaze",
+      "sourceUrl": "https://powerleagueprodigy.com/kaze",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Jae-yong",
+        "Barley",
+        "Jessie",
+        "Sprout",
+        "Mr. P",
+        "Ziggy",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Trunk",
+        "Bibi",
+        "Bull",
+        "Doug",
+        "Nita",
+        "Nori",
+        "Rosa"
+      ]
+    },
+    {
+      "brawler": "Kenji",
+      "sourceUrl": "https://powerleagueprodigy.com/kenji",
+      "status": "imported",
+      "targets": [
+        "Mortis",
+        "Squeak",
+        "Brock",
+        "Penny",
+        "Sandy",
+        "Gray",
+        "Grom",
+        "Poco"
+      ],
+      "counteredBy": [
+        "Darryl",
+        "Shelly",
+        "Jacky",
+        "Surge",
+        "Gale",
+        "Nita",
+        "Otis",
+        "Moe"
+      ]
+    },
+    {
+      "brawler": "Kit",
+      "sourceUrl": "https://powerleagueprodigy.com/kit",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Angelo",
+        "Squeak",
+        "Belle",
+        "Brock",
+        "Mr. P",
+        "Colt",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "Charlie",
+        "Chester",
+        "Bull",
+        "Gale",
+        "Poco",
+        "Tara",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Larry & Lawrie",
+      "sourceUrl": "https://powerleagueprodigy.com/larry-lawrie",
+      "status": "imported",
+      "targets": [
+        "Colette",
+        "Sprout",
+        "Willow",
+        "Mandy",
+        "Piper",
+        "Ruffs",
+        "Otis",
+        "Emz"
+      ],
+      "counteredBy": [
+        "Kenji",
+        "Bibi",
+        "Bolt",
+        "Bull",
+        "Buzz",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Leon",
+      "sourceUrl": "https://powerleagueprodigy.com/leon",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Colette",
+        "Barley",
+        "Berry",
+        "Chuck",
+        "Mr. P",
+        "Ziggy",
+        "Colt"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Jacky",
+        "Trunk",
+        "Bolt",
+        "Bull",
+        "Gale",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Lily",
+      "sourceUrl": "https://powerleagueprodigy.com/lily",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Barley",
+        "Sprout",
+        "Squeak",
+        "Willow",
+        "Mandy",
+        "Ziggy",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Chester",
+        "8-bit",
+        "Trunk",
+        "Bull",
+        "Buzz",
+        "Hank",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Lola",
+      "sourceUrl": "https://powerleagueprodigy.com/lola",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Charlie",
+        "Colette",
+        "Sprout",
+        "Berry",
+        "Bibi",
+        "Tick",
+        "Bea"
+      ],
+      "counteredBy": [
+        "8-bit",
+        "Kenji",
+        "Penny",
+        "Shade",
+        "Bolt",
+        "Gigi",
+        "Mico",
+        "Nori"
+      ]
+    },
+    {
+      "brawler": "Lou",
+      "sourceUrl": "https://powerleagueprodigy.com/lou",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Darryl",
+        "8-bit",
+        "Frank",
+        "Jacky",
+        "Bull",
+        "Poco",
+        "Pam"
+      ],
+      "counteredBy": [
+        "Griff",
+        "Crow",
+        "Lola",
+        "Tara",
+        "Bea",
+        "Emz",
+        "Max",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Lumi",
+      "sourceUrl": "https://powerleagueprodigy.com/lumi",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Mandy",
+        "Gene",
+        "Grom",
+        "Nani",
+        "Tick",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Damian",
+        "Piper",
+        "Surge",
+        "Bolt",
+        "Gray",
+        "Nori",
+        "Bo"
+      ]
+    },
+    {
+      "brawler": "Maisie",
+      "sourceUrl": "https://powerleagueprodigy.com/maisie",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Sprout",
+        "Squeak",
+        "Berry",
+        "Mandy",
+        "Gene",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Surge",
+        "Bibi",
+        "Bolt",
+        "Nori",
+        "Rico",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Mandy",
+      "sourceUrl": "https://powerleagueprodigy.com/mandy",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Barley",
+        "Clancy",
+        "Berry",
+        "Chuck",
+        "Finx",
+        "Gale"
+      ],
+      "counteredBy": [
+        "Sprout",
+        "Brock",
+        "Kenji",
+        "Mr. P",
+        "Pearl",
+        "Bolt",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Max",
+      "sourceUrl": "https://powerleagueprodigy.com/max",
+      "status": "imported",
+      "targets": [
+        "Sprout",
+        "Brock",
+        "Byron",
+        "Frank",
+        "Colt",
+        "Nani",
+        "Tick",
+        "Bo"
+      ],
+      "counteredBy": [
+        "Ruffs",
+        "Spike",
+        "Carl",
+        "Crow",
+        "Gene",
+        "Otis",
+        "Tara",
+        "Bea"
+      ]
+    },
+    {
+      "brawler": "Meeple",
+      "sourceUrl": "https://powerleagueprodigy.com/meeple",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Berry",
+        "Chuck",
+        "Ollie",
+        "Colt",
+        "Gale",
+        "Lumi"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Sprout",
+        "Trunk",
+        "Bolt",
+        "Doug",
+        "Rosa",
+        "Ash",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Meg",
+      "sourceUrl": "https://powerleagueprodigy.com/meg",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Sprout",
+        "Belle",
+        "Mandy",
+        "Bolt",
+        "Grom",
+        "Nani"
+      ],
+      "counteredBy": [
+        "Larry & Lawrie",
+        "Barley",
+        "Damian",
+        "Bibi",
+        "Juju",
+        "Mico",
+        "Nita",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Melodie",
+      "sourceUrl": "https://powerleagueprodigy.com/melodie",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Jae-yong",
+        "Barley",
+        "Sprout",
+        "Ziggy",
+        "Bolt",
+        "Grom",
+        "Tick"
+      ],
+      "counteredBy": [
+        "8-bit",
+        "Bibi",
+        "Doug",
+        "Gale",
+        "Hank",
+        "Nori",
+        "Rosa",
+        "R-t"
+      ]
+    },
+    {
+      "brawler": "Mico",
+      "sourceUrl": "https://powerleagueprodigy.com/mico",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Dynamike",
+        "Jae-yong",
+        "Barley",
+        "Willow",
+        "Mr. P",
+        "Ziggy",
+        "Bo"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Colette",
+        "Pearl",
+        "Trunk",
+        "Bull",
+        "Doug",
+        "Nori",
+        "R-t"
+      ]
+    },
+    {
+      "brawler": "Mina",
+      "sourceUrl": "https://powerleagueprodigy.com/mina",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Barley",
+        "Berry",
+        "Chuck",
+        "Ziggy",
+        "Tick",
+        "Bea"
+      ],
+      "counteredBy": [
+        "Jacky",
+        "Kenji",
+        "Trunk",
+        "Doug",
+        "Gale",
+        "Hank",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Moe",
+      "sourceUrl": "https://powerleagueprodigy.com/moe",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Barley",
+        "Sprout",
+        "Piper",
+        "Ziggy",
+        "Gene",
+        "Grom",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Chester",
+        "Bibi",
+        "Bolt",
+        "Buzz",
+        "Kaze",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Mortis",
+      "sourceUrl": "https://powerleagueprodigy.com/mortis",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Barley",
+        "Sprout",
+        "Willow",
+        "Mr. P",
+        "Grom",
+        "Tick",
+        "Emz"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Buster",
+        "Shelly",
+        "Jacky",
+        "Bull",
+        "Buzz",
+        "Gale",
+        "Nita"
+      ]
+    },
+    {
+      "brawler": "Mr. P",
+      "sourceUrl": "https://powerleagueprodigy.com/mr-p",
+      "status": "imported",
+      "targets": [
+        "Colette",
+        "Maisie",
+        "Piper",
+        "Crow",
+        "Gene",
+        "Gray",
+        "Bea",
+        "Stu"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Edgar",
+        "Penny",
+        "Buzz",
+        "Carl",
+        "Fang",
+        "Gigi",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Najia",
+      "sourceUrl": "https://powerleagueprodigy.com/najia",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Charlie",
+        "Barley",
+        "Willow",
+        "Byron",
+        "Ziggy",
+        "Bea",
+        "Lou"
+      ],
+      "counteredBy": [
+        "Trunk",
+        "Bolt",
+        "Buzz",
+        "Poco",
+        "Rosa",
+        "Ash",
+        "Eve",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Nani",
+      "sourceUrl": "https://powerleagueprodigy.com/nani",
+      "status": "imported",
+      "targets": [
+        "Angelo",
+        "Mortis",
+        "8-bit",
+        "Belle",
+        "Mandy",
+        "Piper",
+        "Fang",
+        "R-t"
+      ],
+      "counteredBy": [
+        "Amber",
+        "Mr. P",
+        "Pearl",
+        "Carl",
+        "Leon",
+        "Eve",
+        "Max",
+        "Pam"
+      ]
+    },
+    {
+      "brawler": "Nita",
+      "sourceUrl": "https://powerleagueprodigy.com/nita",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Mandy",
+        "Sandy",
+        "Gene",
+        "Grom",
+        "Tick",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Jessie",
+        "8-bit",
+        "Griff",
+        "Carl",
+        "Lumi",
+        "Rico",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Nori",
+      "sourceUrl": "https://powerleagueprodigy.com/nori",
+      "status": "imported",
+      "targets": [
+        "Pierce",
+        "Sirius",
+        "8-bit",
+        "Finx",
+        "Lumi",
+        "Gus",
+        "Stu",
+        "Bo"
+      ],
+      "counteredBy": [
+        "Starr Nova",
+        "Chester",
+        "Angelo",
+        "Damian",
+        "Surge",
+        "Bolt",
+        "Otis",
+        "Pam"
+      ]
+    },
+    {
+      "brawler": "Ollie",
+      "sourceUrl": "https://powerleagueprodigy.com/ollie",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "Dynamike",
+        "Jae-yong",
+        "Barley",
+        "Sprout",
+        "Chuck",
+        "Ziggy",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Meeple",
+        "Edgar",
+        "Bolt",
+        "Doug",
+        "Nita",
+        "Poco",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Otis",
+      "sourceUrl": "https://powerleagueprodigy.com/otis",
+      "status": "imported",
+      "targets": [
+        "Damian",
+        "Chuck",
+        "Trunk",
+        "Bibi",
+        "Nori",
+        "Rosa",
+        "Ash",
+        "Sam"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Buster",
+        "Willow",
+        "Jacky",
+        "Bolt",
+        "Hank",
+        "Eve",
+        "Bo"
+      ]
+    },
+    {
+      "brawler": "Pam",
+      "sourceUrl": "https://powerleagueprodigy.com/pam",
+      "status": "imported",
+      "targets": [
+        "Sprout",
+        "Belle",
+        "Mandy",
+        "Piper",
+        "Grom",
+        "Nani",
+        "Nori",
+        "Tick"
+      ],
+      "counteredBy": [
+        "Starr Nova",
+        "Damian",
+        "Edgar",
+        "Kenji",
+        "Bibi",
+        "Bolt",
+        "Bull",
+        "Buzz"
+      ]
+    },
+    {
+      "brawler": "Pearl",
+      "sourceUrl": "https://powerleagueprodigy.com/pearl",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Mortis",
+        "Edgar",
+        "Gray",
+        "Leon",
+        "Mico",
+        "Max",
+        "Sam"
+      ],
+      "counteredBy": [
+        "Colette",
+        "Amber",
+        "Belle",
+        "Brock",
+        "Mandy",
+        "Nani",
+        "Eve",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Penny",
+      "sourceUrl": "https://powerleagueprodigy.com/penny",
+      "status": "imported",
+      "targets": [
+        "Charlie",
+        "Spike",
+        "Surge",
+        "Crow",
+        "Gene",
+        "Lola",
+        "Bea",
+        "Eve"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Squeak",
+        "Belle",
+        "Mr. P",
+        "Ollie",
+        "Sandy",
+        "Carl",
+        "Poco"
+      ]
+    },
+    {
+      "brawler": "Pierce",
+      "sourceUrl": "https://powerleagueprodigy.com/pierce",
+      "status": "imported",
+      "targets": [
+        "Larry & Lawrie",
+        "El Primo",
+        "Jae-yong",
+        "Colette",
+        "Berry",
+        "Draco",
+        "Gale",
+        "Pam"
+      ],
+      "counteredBy": [
+        "Sprout",
+        "Chuck",
+        "Bolt",
+        "Kaze",
+        "Nori",
+        "Rosa",
+        "Ash",
+        "Eve"
+      ]
+    },
+    {
+      "brawler": "Piper",
+      "sourceUrl": "https://powerleagueprodigy.com/piper",
+      "status": "imported",
+      "targets": [
+        "Bonnie",
+        "Belle",
+        "Brock",
+        "Byron",
+        "Mandy",
+        "Colt",
+        "Gene",
+        "Bea"
+      ],
+      "counteredBy": [
+        "Angelo",
+        "Mortis",
+        "Mr. P",
+        "Gray",
+        "Nani",
+        "Tick",
+        "Max",
+        "R-t"
+      ]
+    },
+    {
+      "brawler": "Poco",
+      "sourceUrl": "https://powerleagueprodigy.com/poco",
+      "status": "imported",
+      "targets": [
+        "Byron",
+        "Najia",
+        "Ollie",
+        "Crow",
+        "Gale",
+        "Kit",
+        "Lou",
+        "Max"
+      ],
+      "counteredBy": [
+        "Frank",
+        "Bibi",
+        "Bull",
+        "Doug",
+        "Nita",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "R-t",
+      "sourceUrl": "https://powerleagueprodigy.com/r-t",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Melodie",
+        "Chuck",
+        "Draco",
+        "Bull",
+        "Lily",
+        "Mico",
+        "Nori"
+      ],
+      "counteredBy": [
+        "Brock",
+        "Janet",
+        "Pearl",
+        "Rico",
+        "Rosa",
+        "Tara",
+        "Ash",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Rico",
+      "sourceUrl": "https://powerleagueprodigy.com/rico",
+      "status": "imported",
+      "targets": [
+        "Jessie",
+        "Mortis",
+        "Shelly",
+        "Penny",
+        "Spike",
+        "Crow",
+        "Mico",
+        "Nita"
+      ],
+      "counteredBy": [
+        "Cordelius",
+        "Barley",
+        "Sprout",
+        "Ruffs",
+        "Carl",
+        "Gray",
+        "Tara",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Rosa",
+      "sourceUrl": "https://powerleagueprodigy.com/rosa",
+      "status": "imported",
+      "targets": [
+        "Sprout",
+        "Squeak",
+        "Mandy",
+        "Ruffs",
+        "Ziggy",
+        "Bolt",
+        "Grom",
+        "Nani"
+      ],
+      "counteredBy": [
+        "Clancy",
+        "Damian",
+        "8-bit",
+        "Frank",
+        "Griff",
+        "Bibi",
+        "Otis",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Ruffs",
+      "sourceUrl": "https://powerleagueprodigy.com/ruffs",
+      "status": "imported",
+      "targets": [
+        "Cordelius",
+        "Colette",
+        "Clancy",
+        "Berry",
+        "Gale",
+        "Nani",
+        "Gus",
+        "R-t"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Bonnie",
+        "Jacky",
+        "Trunk",
+        "Doug",
+        "Rosa",
+        "Ash",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Sam",
+      "sourceUrl": "https://powerleagueprodigy.com/sam",
+      "status": "imported",
+      "targets": [
+        "Sprout",
+        "Squeak",
+        "Willow",
+        "Belle",
+        "Byron",
+        "Poco",
+        "Rico",
+        "Stu"
+      ],
+      "counteredBy": [
+        "El Primo",
+        "Colette",
+        "Shelly",
+        "Griff",
+        "Surge",
+        "Gale",
+        "Otis",
+        "Lou"
+      ]
+    },
+    {
+      "brawler": "Sandy",
+      "sourceUrl": "https://powerleagueprodigy.com/sandy",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Sprout",
+        "Mandy",
+        "Piper",
+        "Gene",
+        "Leon",
+        "Nani"
+      ],
+      "counteredBy": [
+        "Jacky",
+        "Trunk",
+        "Buzz",
+        "Doug",
+        "Nita",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Shade",
+      "sourceUrl": "https://powerleagueprodigy.com/shade",
+      "status": "imported",
+      "targets": [
+        "Jessie",
+        "Sprout",
+        "Squeak",
+        "Mr. P",
+        "Ziggy",
+        "Gale",
+        "Gene",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Frank",
+        "Jacky",
+        "Trunk",
+        "Bibi",
+        "Doug",
+        "Rosa",
+        "Ash",
+        "R-t"
+      ]
+    },
+    {
+      "brawler": "Shelly",
+      "sourceUrl": "https://powerleagueprodigy.com/shelly",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Mortis",
+        "Edgar",
+        "Frank",
+        "Jacky",
+        "Bibi",
+        "Rosa",
+        "Sam"
+      ],
+      "counteredBy": [
+        "Spike",
+        "Surge",
+        "Crow",
+        "Gale",
+        "Lola",
+        "Nita",
+        "Tara",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Sirius",
+      "sourceUrl": "https://powerleagueprodigy.com/sirius",
+      "status": "imported",
+      "targets": [
+        "Cordelius",
+        "Charlie",
+        "Sprout",
+        "Berry",
+        "Fang",
+        "Gale",
+        "Bea",
+        "R-t"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Bonnie",
+        "Penny",
+        "Bolt",
+        "Carl",
+        "Gigi",
+        "Nori",
+        "Rosa"
+      ]
+    },
+    {
+      "brawler": "Spike",
+      "sourceUrl": "https://powerleagueprodigy.com/spike",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Berry",
+        "Ruffs",
+        "Fang",
+        "Bea",
+        "Gus",
+        "Moe"
+      ],
+      "counteredBy": [
+        "Willow",
+        "Chuck",
+        "Mr. P",
+        "Bolt",
+        "Carl",
+        "Mico",
+        "Rosa",
+        "Eve"
+      ]
+    },
+    {
+      "brawler": "Sprout",
+      "sourceUrl": "https://powerleagueprodigy.com/sprout",
+      "status": "imported",
+      "targets": [
+        "Amber",
+        "Belle",
+        "Penny",
+        "Spike",
+        "Tara",
+        "Bea",
+        "Eve",
+        "Gus"
+      ],
+      "counteredBy": [
+        "Darryl",
+        "Mortis",
+        "Edgar",
+        "Carl",
+        "Fang",
+        "Gray",
+        "Ash",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Squeak",
+      "sourceUrl": "https://powerleagueprodigy.com/squeak",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Colette",
+        "Pierce",
+        "Sirius",
+        "Berry",
+        "Chuck",
+        "Colt",
+        "Gene"
+      ],
+      "counteredBy": [
+        "Kenji",
+        "Trunk",
+        "Bibi",
+        "Bolt",
+        "Nori",
+        "Rosa",
+        "Ash",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Starr Nova",
+      "sourceUrl": "https://powerleagueprodigy.com/starr-nova",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Mandy",
+        "Mr. P",
+        "Ollie",
+        "Ziggy",
+        "Grom",
+        "Nori"
+      ],
+      "counteredBy": [
+        "Trunk",
+        "Bibi",
+        "Bolt",
+        "Hank",
+        "Nita",
+        "Rosa",
+        "Ash",
+        "R-t"
+      ]
+    },
+    {
+      "brawler": "Stu",
+      "sourceUrl": "https://powerleagueprodigy.com/stu",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Chuck",
+        "Mandy",
+        "Ziggy",
+        "Grom",
+        "Nani"
+      ],
+      "counteredBy": [
+        "Damian",
+        "Jacky",
+        "Bibi",
+        "Hank",
+        "Nori",
+        "Rosa",
+        "Ash",
+        "Sam"
+      ]
+    },
+    {
+      "brawler": "Surge",
+      "sourceUrl": "https://powerleagueprodigy.com/surge",
+      "status": "imported",
+      "targets": [
+        "El Primo",
+        "Edgar",
+        "Frank",
+        "Jacky",
+        "Bibi",
+        "Bull",
+        "Buzz",
+        "Doug"
+      ],
+      "counteredBy": [
+        "Barley",
+        "Bonnie",
+        "Sprout",
+        "Willow",
+        "Belle",
+        "Piper",
+        "Crow",
+        "Tick"
+      ]
+    },
+    {
+      "brawler": "Tara",
+      "sourceUrl": "https://powerleagueprodigy.com/tara",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Chuck",
+        "Glowy",
+        "Mandy",
+        "Nani",
+        "Gus",
+        "R-t"
+      ],
+      "counteredBy": [
+        "Starr Nova",
+        "Damian",
+        "Penny",
+        "Bolt",
+        "Carl",
+        "Rosa",
+        "Ash",
+        "Emz"
+      ]
+    },
+    {
+      "brawler": "Tick",
+      "sourceUrl": "https://powerleagueprodigy.com/tick",
+      "status": "imported",
+      "targets": [
+        "Dynamike",
+        "Colette",
+        "Berry",
+        "Ziggy",
+        "Crow",
+        "Finx",
+        "Otis",
+        "Bea"
+      ],
+      "counteredBy": [
+        "Ollie",
+        "Pearl",
+        "Bibi",
+        "Bolt",
+        "Buzz",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    },
+    {
+      "brawler": "Trunk",
+      "sourceUrl": "https://powerleagueprodigy.com/trunk",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sprout",
+        "Squeak",
+        "Mandy",
+        "Shade",
+        "Ziggy",
+        "Alli",
+        "Grom"
+      ],
+      "counteredBy": [
+        "Clancy",
+        "Damian",
+        "Shelly",
+        "8-bit",
+        "Griff",
+        "Otis",
+        "Rico",
+        "Rosa"
+      ]
+    },
+    {
+      "brawler": "Willow",
+      "sourceUrl": "https://powerleagueprodigy.com/willow",
+      "status": "imported",
+      "targets": [
+        "Jessie",
+        "Maisie",
+        "Amber",
+        "Penny",
+        "Spike",
+        "Gale",
+        "Otis",
+        "Eve"
+      ],
+      "counteredBy": [
+        "Melodie",
+        "Mortis",
+        "Gray",
+        "Lily",
+        "Mico",
+        "Moe",
+        "Sam",
+        "Stu"
+      ]
+    },
+    {
+      "brawler": "Ziggy",
+      "sourceUrl": "https://powerleagueprodigy.com/ziggy",
+      "status": "imported",
+      "targets": [
+        "Jae-yong",
+        "Sirius",
+        "Sprout",
+        "Willow",
+        "Ruffs",
+        "Crow",
+        "Grom",
+        "Emz"
+      ],
+      "counteredBy": [
+        "Kenji",
+        "Trunk",
+        "Bibi",
+        "Bolt",
+        "Buzz",
+        "Nori",
+        "Rosa",
+        "Ash"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `counter_sync_relation_evidence` MODIFY COLUMN `source` enum('brawlscope','calculator','planet','prodigy') NOT NULL;

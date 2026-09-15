@@ -1,0 +1,438 @@
+{
+  "sourceUrl": "https://brawlstars-stats.azurewebsites.net/Brawlers",
+  "thresholdConfirmedByBrawlPlanet": [
+    "Angelo",
+    "Charlie",
+    "Melodie"
+  ],
+  "catalogCount": 105,
+  "longRangeCount": 86,
+  "missing": [
+    "Angelo",
+    "Bolt",
+    "Charlie",
+    "Melodie"
+  ],
+  "records": [
+    {
+      "brawler": "8-bit",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Alli",
+      "mainAttackRange": 5
+    },
+    {
+      "brawler": "Amber",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Angelo",
+      "mainAttackRange": null
+    },
+    {
+      "brawler": "Ash",
+      "mainAttackRange": 4.67
+    },
+    {
+      "brawler": "Barley",
+      "mainAttackRange": 7.33
+    },
+    {
+      "brawler": "Bea",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Belle",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Berry",
+      "mainAttackRange": 6.33
+    },
+    {
+      "brawler": "Bibi",
+      "mainAttackRange": 3.67
+    },
+    {
+      "brawler": "Bo",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Bolt",
+      "mainAttackRange": null
+    },
+    {
+      "brawler": "Bonnie",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Brock",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Bull",
+      "mainAttackRange": 5.33
+    },
+    {
+      "brawler": "Buster",
+      "mainAttackRange": 5.33
+    },
+    {
+      "brawler": "Buzz",
+      "mainAttackRange": 3
+    },
+    {
+      "brawler": "Byron",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Carl",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Charlie",
+      "mainAttackRange": null
+    },
+    {
+      "brawler": "Chester",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Chuck",
+      "mainAttackRange": 6.67
+    },
+    {
+      "brawler": "Clancy",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Colette",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Colt",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Cordelius",
+      "mainAttackRange": 5.33
+    },
+    {
+      "brawler": "Crow",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Damian",
+      "mainAttackRange": 2.67
+    },
+    {
+      "brawler": "Darryl",
+      "mainAttackRange": 6
+    },
+    {
+      "brawler": "Doug",
+      "mainAttackRange": 3.33
+    },
+    {
+      "brawler": "Draco",
+      "mainAttackRange": 5.33
+    },
+    {
+      "brawler": "Dynamike",
+      "mainAttackRange": 7.33
+    },
+    {
+      "brawler": "Edgar",
+      "mainAttackRange": 2
+    },
+    {
+      "brawler": "El Primo",
+      "mainAttackRange": 3
+    },
+    {
+      "brawler": "Emz",
+      "mainAttackRange": 6.67
+    },
+    {
+      "brawler": "Eve",
+      "mainAttackRange": 9.33
+    },
+    {
+      "brawler": "Fang",
+      "mainAttackRange": 2.67
+    },
+    {
+      "brawler": "Finx",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Frank",
+      "mainAttackRange": 6
+    },
+    {
+      "brawler": "Gale",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Gene",
+      "mainAttackRange": 5.67
+    },
+    {
+      "brawler": "Gigi",
+      "mainAttackRange": 3.33
+    },
+    {
+      "brawler": "Glowy",
+      "mainAttackRange": 8
+    },
+    {
+      "brawler": "Gray",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Griff",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Grom",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Gus",
+      "mainAttackRange": 9.33
+    },
+    {
+      "brawler": "Hank",
+      "mainAttackRange": 3.33
+    },
+    {
+      "brawler": "Jacky",
+      "mainAttackRange": 3.33
+    },
+    {
+      "brawler": "Jae-yong",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Janet",
+      "mainAttackRange": 4
+    },
+    {
+      "brawler": "Jessie",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Juju",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Kaze",
+      "mainAttackRange": 2.67
+    },
+    {
+      "brawler": "Kenji",
+      "mainAttackRange": 3.67
+    },
+    {
+      "brawler": "Kit",
+      "mainAttackRange": 7.66
+    },
+    {
+      "brawler": "Larry & Lawrie",
+      "mainAttackRange": 8
+    },
+    {
+      "brawler": "Leon",
+      "mainAttackRange": 9.67
+    },
+    {
+      "brawler": "Lily",
+      "mainAttackRange": 2
+    },
+    {
+      "brawler": "Lola",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Lou",
+      "mainAttackRange": 9.33
+    },
+    {
+      "brawler": "Lumi",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Maisie",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Mandy",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Max",
+      "mainAttackRange": 8.33
+    },
+    {
+      "brawler": "Meeple",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Meg",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Melodie",
+      "mainAttackRange": null
+    },
+    {
+      "brawler": "Mico",
+      "mainAttackRange": 5.33
+    },
+    {
+      "brawler": "Mina",
+      "mainAttackRange": 67
+    },
+    {
+      "brawler": "Moe",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Mortis",
+      "mainAttackRange": 2.67
+    },
+    {
+      "brawler": "Mr. P",
+      "mainAttackRange": 7
+    },
+    {
+      "brawler": "Najia",
+      "mainAttackRange": 6
+    },
+    {
+      "brawler": "Nani",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Nita",
+      "mainAttackRange": 6
+    },
+    {
+      "brawler": "Nori",
+      "mainAttackRange": 16.67
+    },
+    {
+      "brawler": "Ollie",
+      "mainAttackRange": 6.33
+    },
+    {
+      "brawler": "Otis",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Pam",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Pearl",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Penny",
+      "mainAttackRange": 26
+    },
+    {
+      "brawler": "Pierce",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Piper",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Poco",
+      "mainAttackRange": 7
+    },
+    {
+      "brawler": "R-t",
+      "mainAttackRange": 10
+    },
+    {
+      "brawler": "Rico",
+      "mainAttackRange": 9.67
+    },
+    {
+      "brawler": "Rosa",
+      "mainAttackRange": 3.67
+    },
+    {
+      "brawler": "Ruffs",
+      "mainAttackRange": 9
+    },
+    {
+      "brawler": "Sam",
+      "mainAttackRange": 3
+    },
+    {
+      "brawler": "Sandy",
+      "mainAttackRange": 6
+    },
+    {
+      "brawler": "Shade",
+      "mainAttackRange": 5.33
+    },
+    {
+      "brawler": "Shelly",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Sirius",
+      "mainAttackRange": 7.33
+    },
+    {
+      "brawler": "Spike",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Sprout",
+      "mainAttackRange": 5
+    },
+    {
+      "brawler": "Squeak",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Starr Nova",
+      "mainAttackRange": 5.67
+    },
+    {
+      "brawler": "Stu",
+      "mainAttackRange": 7.67
+    },
+    {
+      "brawler": "Surge",
+      "mainAttackRange": 6.67
+    },
+    {
+      "brawler": "Tara",
+      "mainAttackRange": 8
+    },
+    {
+      "brawler": "Tick",
+      "mainAttackRange": 8.67
+    },
+    {
+      "brawler": "Trunk",
+      "mainAttackRange": 3.33
+    },
+    {
+      "brawler": "Willow",
+      "mainAttackRange": 7.33
+    },
+    {
+      "brawler": "Ziggy",
+      "mainAttackRange": 7.33
+    }
+  ]
+}

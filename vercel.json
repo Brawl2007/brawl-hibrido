@@ -1,0 +1,16 @@
+{
+  "services": {
+    "brawl-hibrido": {
+      "root": ".",
+      "framework": "express",
+      "entrypoint": "api/index.ts",
+      "installCommand": "pnpm install --frozen-lockfile",
+      "buildCommand": "pnpm build",
+      "outputDirectory": "public"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "brawl-hibrido", "path": "/api" } },
+    { "source": "/(.*)", "destination": { "service": "brawl-hibrido", "path": "/index.html" } }
+  ]
+}
