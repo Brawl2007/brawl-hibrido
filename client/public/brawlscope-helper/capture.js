@@ -1,6 +1,5 @@
 /** Injected in a normal, visible Chrome tab; no requests, cookies or hidden APIs. */
 export async function captureProfile() {
-  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   const visible = element => Boolean(element && element.getClientRects().length);
   const clean = element => (element?.innerText || "").replace(/\s+/g, " ").trim();
   const page = document.body?.innerText || "";
@@ -19,10 +18,18 @@ export async function captureProfile() {
   if (!expectedCount) return { error: "Sem amostra nesta vista; nenhuma ficha foi inventada." };
   if (!details.open) summary.click();
   let anchors = [];
-  for (let attempt = 0; attempt < 40; attempt++) {
+  const readAnchors = () => {
     anchors = Array.from(details.querySelectorAll('a[href*="/counters/"]')).filter(a => visible(a) && /\d\s*%\s*vs/.test(clean(a)));
-    if (anchors.length === expectedCount) break;
-    await delay(250);
+    return anchors.length === expectedCount;
+  };
+  if (!readAnchors()) {
+    await new Promise(resolve => {
+      const observer = new MutationObserver(() => {
+        if (readAnchors()) { observer.disconnect(); resolve(); }
+      });
+      observer.observe(details, { childList: true, subtree: true, characterData: true });
+      setTimeout(() => { observer.disconnect(); readAnchors(); resolve(); }, 10000);
+    });
   }
   const number = s => Number(s.replace(/[−–]/g, "-").replace(/\s/g, "").replace(",", "."));
   function parseRow(anchor) {

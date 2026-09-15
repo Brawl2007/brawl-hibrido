@@ -3,6 +3,7 @@ import { captureProfile } from "./capture.js";
 
 const STATE = "brawl-v54-queue";
 const ALARM = "brawl-v54-next";
+const PAGE_READY_DELAY_MS = 500;
 let busy = false;
 const read = async () => (await chrome.storage.local.get(STATE))[STATE];
 const write = state => chrome.storage.local.set({ [STATE]: state });
@@ -11,7 +12,7 @@ const schedule = async () => {
   clearTimeout(nextTimer);
   // Alarms are a durable watchdog, not the normal page-to-page clock.
   await chrome.alarms.create(ALARM, { when: Date.now() + 30000 });
-  nextTimer = setTimeout(() => void tick(), 2000);
+  nextTimer = setTimeout(() => void tick(), PAGE_READY_DELAY_MS);
 };
 chrome.tabs.onUpdated.addListener((tabId, change) => {
   if (change.status !== "complete") return;
