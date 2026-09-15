@@ -1,7 +1,7 @@
 Brawl Híbrido v59 — recolha rápida e importação em lote
 
 1. Publica este projeto v58 no teu alojamento habitual.
-2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta client/public/brawlscope-helper deste projeto.
+2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
 3. Entra como dono no site. No Draft, abre Estado das fontes e Importação em lote. Escolhe o percurso (todas as vistas ou uma vista) e exporta a fila pendente.
 4. Clica no ícone da extensão, carrega brawlscope-fila.json e clica Iniciar. A extensão visita uma página de cada vez, abre Every matchup somente se estiver fechada, verifica a quantidade de linhas e guarda os números publicados e as listas literais.
 5. Mantém o Chrome aberto. Podes usar outros separadores. Pausar interrompe a fila; um reinício do Chrome deixa-a pausada para retomar. O progresso fica no armazenamento local da extensão (não depende desta conversa nem do Render).
