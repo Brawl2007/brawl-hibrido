@@ -1,4 +1,4 @@
-Brawl Híbrido v59 — recolha rápida e importação em lote
+Brawl Híbrido v60 — recolha rápida e importação em lote
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -23,8 +23,8 @@ Atualizar a extensão existente
 - Substitui os ficheiros na MESMA pasta da extensão e clica Recarregar em chrome://extensions. Não removas a extensão: isso pode apagar o progresso.
 - Só atualizar o ZIP do site no Render não atualiza a extensão instalada no Chrome.
 
-Rapidez v59
-- Uma página de cada vez, com avanço 500 ms depois do carregamento; a tabela dinâmica é observada em vez de verificada a cada 250 ms.
+Rapidez v60
+- Uma página de cada vez, com avanço 250 ms depois do carregamento; a tabela dinâmica é observada em vez de verificada por intervalos fixos.
 - O limite de segurança continua a ser 10 segundos para uma tabela que não termina de carregar; bloqueios e verificações continuam a pausar a fila.
 - Importação de até 20 fichas por gravação confirmada.
 - Publicar fichas utiliza os resultados importados, sem consultar novamente as fontes externas.

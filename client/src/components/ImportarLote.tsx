@@ -82,8 +82,8 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
   return <details className="paste-box">
     <summary>Importação em lote · {VERSAO_DO_SITE}</summary>
     <p className="paste-help">Use a fila pendente para completar o site. Use Atualizar todas para recolher de novo os valores atuais, inclusive fichas já importadas.</p>
-    <p className="paste-help">v59: a extensão usa avanço mais rápido e observa a tabela dinâmica para reduzir o tempo de recolha. A importação confirma até 20 fichas por gravação.</p>
-    <p><a href="/brawlscope-helper.zip" download>Baixar extensão v59 rápida</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
+    <p className="paste-help">v60: a extensão usa avanço de 250 ms e observa a tabela dinâmica para reduzir o tempo de recolha. A importação confirma até 20 fichas por gravação.</p>
+    <p><a href="/brawlscope-helper.zip" download>Baixar extensão v60 rápida</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
     <div className="paste-actions">
       <button type="button" disabled={running || !pendingUrls.length} onClick={() => downloadJson("brawlscope-fila-pendente.json", { format: "brawlhibrido-queue-v1", urls: pendingUrls })}>Exportar {pendingUrls.length} fichas pendentes</button>
       <button type="button" disabled={running || !refreshUrls.length} onClick={() => downloadJson("brawlscope-fila-atualizar-todas.json", { format: "brawlhibrido-queue-v1", urls: refreshUrls })}>Atualizar todas ({refreshUrls.length})</button>
