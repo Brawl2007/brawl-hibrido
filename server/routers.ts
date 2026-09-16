@@ -304,13 +304,17 @@ export const appRouter = router({
      *
      * Cada uma no seu campo: não há nada que se sobreponha a nada.
      */
-    colagemFeita: publicProcedure.query(() => ({
-      feitas: getBrawlScopeColagemFeita(),
-      cobertura: getBrawlScopeMatchupCoverage(),
-    })),
+    colagemFeita: publicProcedure.query(async () => {
+      await restoreBrawlScopeMatchupMatrices();
+      return {
+        feitas: getBrawlScopeColagemFeita(),
+        cobertura: getBrawlScopeMatchupCoverage(),
+      };
+    }),
     matchups: publicProcedure
       .input(z.object({ view: z.string().trim().min(1).max(32).optional() }).optional())
       .query(async ({ input }) => {
+        await restoreBrawlScopeMatchupMatrices();
         // Devolve-se a vista JÁ normalizada: é com esta chave que o cliente
         // guarda a matriz, e é por esta que depois a procura.
         const view = normalizarVistaBrawlScope(input?.view ?? "overall");
