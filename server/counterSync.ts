@@ -1707,8 +1707,12 @@ export async function publishImportedCaptures() {
     const capturedAt = new Date().toISOString();
     const payload = applyCapturedProfiles(previous, captures, capturedAt);
     const version = `browser-${Date.now()}`;
+    // As fichas completas são uma fila temporária. Depois de incorporadas às
+    // relações e à matriz, removê-las da snapshot final evita uma gravação
+    // gigante no MySQL e permite publicar lotes grandes com segurança.
+    const { browserCaptures: _temporaryCaptures, matchupMatrices: _oldMatrices, ...publishedPayload } = payload;
     const saved = await upsertCounterSyncSnapshot({ ...stored, version, capturedAt: new Date(capturedAt), relationCount: payload.relations.length, brawlScopeStatus: payload.sourceStates.brawlscope.status,
-      payload: JSON.stringify({ ...payload, browserCaptures: captures, matchupMatrices: encodeMatchupMatrices(getBrawlScopeMatchupMatrices(), brawlScopeMatricesCapturedAt) }),
+      payload: JSON.stringify({ ...publishedPayload, matchupMatrices: encodeMatchupMatrices(getBrawlScopeMatchupMatrices(), brawlScopeMatricesCapturedAt) }),
     });
     let confirmed = saved;
     for (let attempt = 0; attempt < 3 && confirmed?.version !== version; attempt += 1) {
