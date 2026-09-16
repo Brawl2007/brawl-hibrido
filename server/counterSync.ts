@@ -158,7 +158,10 @@ export async function restoreBrawlScopeMatchupMatrices() {
     const capturedProfiles = parseSnapshotPayload(snapshot.payload)?.browserCaptures;
     if (Array.isArray(capturedProfiles)) for (const input of capturedProfiles) {
       const parsed = brawlScopeCaptureSchema.safeParse(input);
-      if (parsed.success && !browserCaptures.has(`${parsed.data.view}:${parsed.data.brawler}`) && !brawlScopeViewCache.get(parsed.data.view)?.brawlers.includes(parsed.data.brawler)) importBrawlScopeCapture(parsed.data);
+      // A matriz e a fila de fichas são estados diferentes. A matriz pode já
+      // estar restaurada enquanto browserCaptures continua vazia; nesse caso
+      // ainda precisamos restaurar a ficha para o botão Publicar encontrá-la.
+      if (parsed.success && !browserCaptures.has(`${parsed.data.view}:${parsed.data.brawler}`)) importBrawlScopeCapture(parsed.data);
     }
 
     let pairs = 0;
