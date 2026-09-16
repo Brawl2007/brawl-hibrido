@@ -79,6 +79,35 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     }
   }
 
+  async function republishLoaded() {
+    if (busy.current || loading || !profiles.length) return;
+    busy.current = true; stop.current = false; setRunning(true);
+    try {
+      // A fila pode existir apenas no estado local deste navegador. Reenvia-la
+      // em grupos idempotentes garante que Publicar não dependa de memória de
+      // uma instância anterior da Vercel.
+      for (let i = 0; i < profiles.length && !stop.current; i += 20) {
+        const group = profiles.slice(i, i + 20);
+        setStatus(`A reenviar fichas ${i + 1}–${i + group.length} de ${profiles.length}…`);
+        const result = await importer.mutateAsync(group);
+        if (!result.ok || !result.persisted || result.confirmed !== group.length) throw new Error("Reenvio não confirmado. O grupo fica pendente.");
+        setIndex(Math.max(index, i + group.length));
+      }
+      if (stop.current) {
+        setStatus("Reenvio pausado. As fichas já enviadas continuam guardadas.");
+        return;
+      }
+      setStatus("A publicar as fichas reenviadas…");
+      await publisher.mutateAsync();
+      await Promise.all([utils.counterSync.snapshot.invalidate(), utils.counterSync.colagemFeita.invalidate(), utils.counterSync.matchups.invalidate()]);
+      setStatus("Publicação concluída.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui publicar as fichas.");
+    } finally {
+      busy.current = false; setRunning(false);
+    }
+  }
+
   return <details className="paste-box">
     <summary>Importação em lote · {VERSAO_DO_SITE}</summary>
     <p className="paste-help">Use a fila pendente para completar o site. Use Atualizar todas para recolher de novo os valores atuais, inclusive fichas já importadas.</p>
@@ -97,7 +126,7 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     <div className="paste-actions">
       <button type="button" disabled={running || loading || index >= profiles.length} onClick={() => void run()}>{index ? "Retomar importação" : "Importar lote"}</button>
       <button type="button" disabled={!running} onClick={() => { stop.current = true; setStatus("A pausar após a gravação em curso…"); }}>Pausar</button>
-      <button type="button" disabled={running || loading || publisher.isPending} onClick={() => void publisher.mutateAsync().then(async () => { await utils.counterSync.snapshot.invalidate(); setStatus("Publicação concluída."); }).catch(e => setStatus(String(e)))}>Publicar fichas</button>
+      <button type="button" disabled={running || loading || publisher.isPending || !profiles.length} onClick={() => void republishLoaded()}>Reenviar e publicar fichas</button>
     </div>
     <p className="paste-help">Mantém esta página aberta durante a importação. Se fechar, reabre o mesmo ficheiro para retomar. A extensão pode ser retomada separadamente. Não contorna 403 nem verificações.</p>
   </details>;
