@@ -1710,7 +1710,12 @@ export async function publishImportedCaptures() {
     const saved = await upsertCounterSyncSnapshot({ ...stored, version, capturedAt: new Date(capturedAt), relationCount: payload.relations.length, brawlScopeStatus: payload.sourceStates.brawlscope.status,
       payload: JSON.stringify({ ...payload, browserCaptures: captures, matchupMatrices: encodeMatchupMatrices(getBrawlScopeMatchupMatrices(), brawlScopeMatricesCapturedAt) }),
     });
-    if (!saved?.payload) throw new Error("Publicação não confirmada pela base de dados.");
+    let confirmed = saved;
+    for (let attempt = 0; attempt < 3 && confirmed?.version !== version; attempt += 1) {
+      await dormir(250 * (attempt + 1));
+      confirmed = await getCounterSyncSnapshot();
+    }
+    if (confirmed?.version !== version || !confirmed.payload) throw new Error("Publicação não confirmada pela base de dados após 3 tentativas.");
     delete payload.browserCaptures; delete payload.matchupMatrices;
     broadcastCounterSnapshot({ version, capturedAt, payload });
     return { ok: true as const, version, profiles: captures.length };
