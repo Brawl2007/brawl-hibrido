@@ -1587,6 +1587,10 @@ export async function getPublicCounterSyncSnapshot() {
 }
 
 export async function syncCounterData(trigger: SyncTrigger) {
+  // A instância Vercel pode reiniciar entre ciclos; carregar primeiro o que foi
+  // gravado evita que uma sincronização sem acesso ao BrawlScope sobrescreva
+  // as matrizes importadas pelo navegador com uma matriz vazia.
+  await restoreBrawlScopeMatchupMatrices();
   const runId = await createCounterSyncRun(trigger);
   const startedAt = new Date();
   await updateCounterSyncConfig({ lastStatus: "running", lastStartedAt: startedAt, lastError: null });

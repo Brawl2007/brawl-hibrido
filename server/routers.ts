@@ -371,6 +371,7 @@ export const appRouter = router({
       }),
 
     status: publicProcedure.query(async () => {
+      await restoreBrawlScopeMatchupMatrices();
       const [config, snapshot, runs] = await Promise.all([
         getCounterSyncConfig(),
         getPublicCounterSyncSnapshot(),
