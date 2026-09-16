@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && node scripts/precompress.mjs && if [ \"$VERCEL\" = \"1\" ]; then cp dist/index.js api/bundle.js && node scripts/prepare-vercel-public.mjs; else node scripts/ensure-build.mjs --stamp; fi",
+    "build": "vite build && if [ \"$VERCEL\" = \"1\" ]; then esbuild server/_core/index.vercel.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js; else esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js; fi && node scripts/precompress.mjs && if [ \"$VERCEL\" = \"1\" ]; then cp dist/index.js api/bundle.js && node scripts/prepare-vercel-public.mjs; else node scripts/ensure-build.mjs --stamp; fi",
     "start": "node scripts/ensure-build.mjs && NODE_ENV=production node dist/index.js",
     "verify:build": "node scripts/ensure-build.mjs",
     "check": "tsc --noEmit && node scripts/check-imports.mjs && node scripts/check-css-tokens.mjs",
