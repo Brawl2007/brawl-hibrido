@@ -1146,14 +1146,36 @@ export async function persistMatchupMatricesNow() {
 // overwrite captures that arrived while its network requests were running.
 let snapshotWriteQueue: Promise<unknown> = Promise.resolve();
 function saveCounterSnapshotWithCurrentMatrices(snapshot: Parameters<typeof upsertCounterSyncSnapshot>[0]) {
-  const job = snapshotWriteQueue.then(() => upsertCounterSyncSnapshot({
-    ...snapshot,
-    payload: JSON.stringify({
-      ...JSON.parse(snapshot.payload),
-      matchupMatrices: encodeMatchupMatrices(getBrawlScopeMatchupMatrices(), brawlScopeMatricesCapturedAt),
-      browserCaptures: Array.from(browserCaptures.values()),
-    }),
-  }));
+  const job = snapshotWriteQueue.then(async () => {
+    const localMatrices = getBrawlScopeMatchupMatrices();
+    const current = await getCounterSyncSnapshot();
+    const currentPayload = parseSnapshotPayload(current?.payload);
+    const storedMatrices = currentPayload?.matchupMatrices
+      ? decodeMatchupMatrices(currentPayload.matchupMatrices)
+      : {};
+    const views = new Set([...Object.keys(storedMatrices), ...Object.keys(localMatrices)]);
+    const mergedMatrices = Object.fromEntries(Array.from(views, (view) => {
+      const owners = new Set([
+        ...Object.keys(storedMatrices[view] ?? {}),
+        ...Object.keys(localMatrices[view] ?? {}),
+      ]);
+      return [view, Object.fromEntries(Array.from(owners, (owner) => [owner, {
+        ...(storedMatrices[view]?.[owner] ?? {}),
+        ...(localMatrices[view]?.[owner] ?? {}),
+      }]))];
+    }));
+    const storedCaptures = currentPayload?.browserCaptures ?? [];
+    const captureMap = new Map(storedCaptures.map((capture) => [`${capture.view}:${capture.brawler}`, capture]));
+    for (const capture of browserCaptures.values()) captureMap.set(`${capture.view}:${capture.brawler}`, capture);
+    return upsertCounterSyncSnapshot({
+      ...snapshot,
+      payload: JSON.stringify({
+        ...JSON.parse(snapshot.payload),
+        matchupMatrices: encodeMatchupMatrices(mergedMatrices, brawlScopeMatricesCapturedAt ?? currentPayload?.matchupMatrices?.capturedAt),
+        browserCaptures: Array.from(captureMap.values()),
+      }),
+    });
+  });
   snapshotWriteQueue = job.catch(() => undefined);
   return job;
 }
