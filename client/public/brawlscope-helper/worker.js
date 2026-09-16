@@ -4,6 +4,8 @@ import { captureProfile } from "./capture.js";
 const STATE = "brawl-v54-queue";
 const ALARM = "brawl-v54-next";
 const PAGE_READY_DELAY_MS = 250;
+const MAX_PAGE_WAIT_MS = 180000;
+const MAX_CAPTURE_RETRIES = 3;
 let busy = false;
 const read = async () => (await chrome.storage.local.get(STATE))[STATE];
 const write = state => chrome.storage.local.set({ [STATE]: state });
@@ -45,7 +47,7 @@ async function tick() {
     }
     // Never navigate past a redirect/challenge. Human intervention pauses this queue.
     if (source.status !== "complete") {
-      if (Date.now() - state.waitSince > 60000) { state.running = false; state.message = "Carregamento demorou mais de 60 segundos. Retoma quando a página estiver pronta."; await write(state); }
+      if (Date.now() - state.waitSince > MAX_PAGE_WAIT_MS) { state.running = false; state.message = "Carregamento demorou mais de 3 minutos. Verifica a página antes de retomar."; await write(state); }
       await schedule(); return;
     }
     if (source.url !== url) { state.running = false; state.message = "O endereço mudou. Verifica a página antes de retomar."; await write(state); return; }
@@ -55,8 +57,17 @@ async function tick() {
     if (!latest?.running || latest.id !== state.id) return; // pause/cancel won the race
     state = latest;
     if (result?.blocked) { state.running = false; state.message = result.error; await write(state); await chrome.alarms.clear(ALARM); return; }
-    if (result?.profile) { state.profiles[url] = result.profile; delete state.errors[url]; state.consecutiveErrors = 0; }
-    else { state.errors[url] = result?.error || "Não foi possível ler a página."; state.consecutiveErrors = (state.consecutiveErrors || 0) + 1; }
+    if (result?.profile) { state.profiles[url] = result.profile; delete state.errors[url]; state.consecutiveErrors = 0; state.pageRetries = 0; }
+    else {
+      state.pageRetries = (state.pageRetries || 0) + 1;
+      if (state.pageRetries < MAX_CAPTURE_RETRIES) {
+        state.message = `Aguardando a tabela… nova tentativa ${state.pageRetries + 1}/${MAX_CAPTURE_RETRIES}.`;
+        await write(state); await schedule(); return;
+      }
+      state.pageRetries = 0;
+      state.errors[url] = result?.error || "Não foi possível ler a página.";
+      state.consecutiveErrors = (state.consecutiveErrors || 0) + 1;
+    }
     state.cursor += 1;
     state.needsNavigation = true;
     state.message = result?.profile ? `Recolhida: ${result.profile.brawler} · ${result.profile.view}` : state.errors[url];
@@ -67,7 +78,7 @@ async function tick() {
       const still = await read(); if (!still?.running || still.id !== state.id) return;
       await chrome.tabs.update(source.id, { url: state.urls[state.cursor] });
       // Save only the navigation timer; preserve a concurrent pause.
-      const current = await read(); if (current?.id === state.id) await write({ ...current, needsNavigation: false, waitSince: Date.now() });
+      const current = await read(); if (current?.id === state.id) await write({ ...current, needsNavigation: false, waitSince: Date.now(), pageRetries: 0 });
     }
     if (state.cursor >= state.urls.length) {
       const current = await read();

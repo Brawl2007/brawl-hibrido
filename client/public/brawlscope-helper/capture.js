@@ -28,7 +28,7 @@ export async function captureProfile() {
         if (readAnchors()) { observer.disconnect(); resolve(); }
       });
       observer.observe(details, { childList: true, subtree: true, characterData: true });
-      setTimeout(() => { observer.disconnect(); readAnchors(); resolve(); }, 10000);
+      setTimeout(() => { observer.disconnect(); readAnchors(); resolve(); }, 30000);
     });
   }
   const number = s => Number(s.replace(/[−–]/g, "-").replace(/\s/g, "").replace(",", "."));
