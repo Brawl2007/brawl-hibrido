@@ -19,6 +19,8 @@ import {
   counterSyncRelationEvidence,
   counterSyncRuns,
   counterSyncSnapshots,
+  brawlScopeCaptures,
+  InsertBrawlScopeCapture,
   observedBattles,
   observedMatchCollectionConfig,
   observedMatchCollectionRuns,
@@ -446,6 +448,57 @@ export async function insertCounterSyncEvidence(rows: CounterSyncEvidenceInput[]
       set: { observedAt: sql`VALUES(observed_at)`, sourceUrl: sql`VALUES(source_url)` },
     });
   }
+}
+
+/**
+ * Grava as fichas de UM grupo, e só esse grupo.
+ *
+ * É esta a diferença que torna a importação em lote viável: antes, confirmar
+ * vinte fichas reescrevia a snapshot inteira — todas as fichas anteriores
+ * incluídas. Aqui escrevem-se vinte linhas, independentemente de já lá estarem
+ * setecentas.
+ */
+export async function upsertBrawlScopeCaptures(rows: InsertBrawlScopeCapture[]) {
+  const db = await getDb();
+  if (!db || rows.length === 0) return 0;
+
+  // O mesmo recorte da evidência: um grupo grande nunca vira um pacote MySQL
+  // grande de mais. Aqui os grupos são de vinte, mas a migração das fichas
+  // antigas passa por cá com centenas.
+  const CHUNK_SIZE = 50;
+  for (let index = 0; index < rows.length; index += CHUNK_SIZE) {
+    await db.insert(brawlScopeCaptures).values(rows.slice(index, index + CHUNK_SIZE)).onDuplicateKeyUpdate({
+      set: {
+        view: sql`VALUES(\`view\`)`,
+        brawler: sql`VALUES(brawler)`,
+        capturedAt: sql`VALUES(captured_at)`,
+        payload: sql`VALUES(payload)`,
+      },
+    });
+  }
+  return rows.length;
+}
+
+/**
+ * A fila completa, para o arranque a recuperar.
+ *
+ * Isto continua a ser uma leitura grande — mas uma por instância fria, não uma
+ * por cada grupo de vinte fichas.
+ */
+export async function listBrawlScopeCaptures() {
+  const db = await getDb();
+  if (!db) return [];
+  return lerDaBase("listBrawlScopeCaptures", () => db.select().from(brawlScopeCaptures), []);
+}
+
+/** Quantas fichas estão na fila, sem trazer nenhuma. */
+export async function countBrawlScopeCaptures() {
+  const db = await getDb();
+  if (!db) return 0;
+  return lerDaBase("countBrawlScopeCaptures", async () => {
+    const [linha] = await db.select({ total: count() }).from(brawlScopeCaptures);
+    return Number(linha?.total ?? 0);
+  }, 0);
 }
 
 export async function getProdigyLinks() {

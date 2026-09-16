@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import { brawlScopeCaptureSchema, brawlScopeCaptureFileSchema, reviewCaptureBatch, type BrawlScopeCapture } from "../shared/brawlScopeCapture";
 
-const db = vi.hoisted(() => ({ payload: "", persist: true }));
+// A fila de fichas tem tabela própria: `filas` faz de `brawlscope_captures`.
+const db = vi.hoisted(() => ({ payload: "", persist: true, filas: new Map<string, { id: string; payload: string }>() }));
 vi.mock("./db", () => ({
   getCounterSyncSnapshot: vi.fn(async () => ({ id: 1, payload: db.payload, version: "test" })),
   upsertCounterSyncSnapshot: vi.fn(async (snapshot) => { if (!db.persist) return undefined; db.payload = snapshot.payload; return snapshot; }),
+  upsertBrawlScopeCaptures: vi.fn(async (rows: { id: string; payload: string }[]) => { for (const linha of rows) db.filas.set(linha.id, linha); return rows.length; }),
+  listBrawlScopeCaptures: vi.fn(async () => Array.from(db.filas.values())),
 }));
-import { clearImportedBrawlScope, getBrawlScopeMatchupMatrix, getPublicCounterSyncSnapshot, importBrawlScopeCapture, persistMatchupMatricesNow, restoreBrawlScopeMatchupMatrices, toPublicCounterSnapshotPayload } from "./counterSync";
+import { clearImportedBrawlScope, getBrawlScopeMatchupMatrix, getPublicCounterSyncSnapshot, getFilaDeFichasImportadas, importBrawlScopeCapture, persistCaptures, persistMatchupMatricesNow, restoreBrawlScopeMatchupMatrices, resetRestoreParaTestes, toPublicCounterSnapshotPayload } from "./counterSync";
 
 const profile = (): BrawlScopeCapture => ({
   url: "https://brawlscope.com/counters/bibi", brawler: "Bibi", view: "overall", capturedAt: "2026-09-13T01:00:00.000Z", expectedCount: 3,
@@ -17,7 +20,7 @@ const profile = (): BrawlScopeCapture => ({
     { opponent: "Wendy", rate: 49.1, average: 59.6, delta: -10.5 },
   ], counteredBy: [{ brawler: "Bea", delta: 5.5 }], targets: [{ brawler: "Wendy", delta: -10.5 }], synergies: [{ brawler: "Amber", delta: 10.1 }],
 });
-beforeEach(() => { clearImportedBrawlScope(); db.persist = true; db.payload = JSON.stringify({ schemaVersion: 2, capturedAt: "2026-09-13", relations: [], sourceStates: {} }); });
+beforeEach(() => { clearImportedBrawlScope(); resetRestoreParaTestes(); db.persist = true; db.filas.clear(); db.payload = JSON.stringify({ schemaVersion: 2, capturedAt: "2026-09-13", relations: [], sourceStates: {} }); });
 describe("v54 capture integrity", () => {
   it("separates a damaged profile without changing the valid ones", () => {
     const bad = profile(); bad.rows[0].delta = 99;
@@ -35,15 +38,15 @@ describe("v54 capture integrity", () => {
     const parsed = brawlScopeCaptureFileSchema.parse(input);
     expect(parsed.profiles).toEqual(input.profiles);
     for (const p of parsed.profiles) importBrawlScopeCapture(p);
+    expect((await persistCaptures(parsed.profiles)).saved).toBe(true);
     expect((await persistMatchupMatricesNow()).saved).toBe(true);
     const saved = db.payload;
-    clearImportedBrawlScope(); db.payload = saved;
+    clearImportedBrawlScope(); resetRestoreParaTestes(); db.payload = saved;
     await restoreBrawlScopeMatchupMatrices();
     for (const p of parsed.profiles) {
       expect(getBrawlScopeMatchupMatrix(p.view)?.[p.brawler]).toEqual(Object.fromEntries(p.rows.map(r => [r.opponent, r.delta])));
     }
-    const stored = JSON.parse(saved).browserCaptures;
-    expect(stored).toEqual(parsed.profiles);
+    expect(Array.from(db.filas.values()).map(linha => JSON.parse(linha.payload))).toEqual(parsed.profiles);
   });
   it("preserves literal lists even when their deltas have the opposite sign", () => {
     const p = profile();
@@ -84,28 +87,52 @@ describe("v54 capture integrity", () => {
   });
   it("persists captures and preserves old matrix rows on restart", async () => {
     importBrawlScopeCapture(profile());
+    expect((await persistCaptures([profile()])).saved).toBe(true);
     expect((await persistMatchupMatricesNow()).saved).toBe(true);
     const saved = db.payload;
-    clearImportedBrawlScope(); db.payload = saved;
+    clearImportedBrawlScope(); resetRestoreParaTestes(); db.payload = saved;
     await restoreBrawlScopeMatchupMatrices();
     expect(getBrawlScopeMatchupMatrix("overall")?.Bibi.Wendy).toBe(-10.5);
+    // A ficha completa — sinergias incluídas — sobrevive na sua própria linha.
+    expect(JSON.parse(db.filas.get("overall:Bibi")!.payload).synergies).toEqual([{ brawler: "Amber", delta: 10.1 }]);
+    // E deixou de pesar na snapshot, que é o que fazia a gravação rebentar.
     await persistMatchupMatricesNow();
-    expect(JSON.parse(db.payload).browserCaptures[0].synergies).toEqual([{ brawler: "Amber", delta: 10.1 }]);
+    expect(JSON.parse(db.payload)).not.toHaveProperty("browserCaptures");
     expect(toPublicCounterSnapshotPayload(JSON.parse(db.payload))).not.toHaveProperty("browserCaptures");
   });
   it("restores saved captures even when matrices were restored first", async () => {
     importBrawlScopeCapture(profile());
+    await persistCaptures([profile()]);
     await persistMatchupMatricesNow();
     const saved = db.payload;
-    clearImportedBrawlScope();
-    const matricesOnly = JSON.parse(saved);
-    delete matricesOnly.browserCaptures;
-    db.payload = JSON.stringify(matricesOnly);
+    const fila = new Map(db.filas);
+
+    // Primeiro arranque: a matriz está gravada, a fila ainda não chegou.
+    clearImportedBrawlScope(); resetRestoreParaTestes();
+    db.filas.clear(); db.payload = saved;
     await restoreBrawlScopeMatchupMatrices();
-    db.payload = saved;
+
+    // A fila aparece a seguir: tem de ser recuperada à mesma, ou o botão
+    // Publicar não encontra as fichas que estão guardadas.
+    resetRestoreParaTestes();
+    db.filas = fila;
     await restoreBrawlScopeMatchupMatrices();
-    await persistMatchupMatricesNow();
-    expect(JSON.parse(db.payload).browserCaptures).toEqual([profile()]);
+    expect(getFilaDeFichasImportadas()).toEqual([profile()]);
+  });
+
+  /**
+   * Quem já tinha fila guardada dentro da snapshot não a pode perder na
+   * atualização: a recuperação lê-a de lá e passa-a para a tabela.
+   */
+  it("migrates a queue stored inside the old snapshot payload", async () => {
+    const antiga = JSON.parse(db.payload);
+    antiga.browserCaptures = [profile()];
+    db.payload = JSON.stringify(antiga);
+    clearImportedBrawlScope(); resetRestoreParaTestes();
+    await restoreBrawlScopeMatchupMatrices();
+    expect(getBrawlScopeMatchupMatrix("overall")?.Bibi.Wendy).toBe(-10.5);
+    expect(getFilaDeFichasImportadas()).toEqual([profile()]);
+    expect(JSON.parse(db.filas.get("overall:Bibi")!.payload)).toEqual(profile());
   });
   it("does not report persistence when the database returns no snapshot", async () => {
     importBrawlScopeCapture(profile()); db.persist = false;

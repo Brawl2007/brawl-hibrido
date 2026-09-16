@@ -214,3 +214,13 @@ CREATE TABLE IF NOT EXISTS `counter_sync_snapshots` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `counter_sync_snapshots_id` PRIMARY KEY(`id`)
 );
+
+CREATE TABLE IF NOT EXISTS `brawlscope_captures` (
+	`id` varchar(128) NOT NULL,
+	`view` varchar(32) NOT NULL,
+	`brawler` varchar(64) NOT NULL,
+	`captured_at` timestamp NOT NULL DEFAULT (now()),
+	`payload` longtext NOT NULL,
+	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `brawlscope_captures_id` PRIMARY KEY(`id`)
+);

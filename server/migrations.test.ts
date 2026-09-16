@@ -61,7 +61,7 @@ describe("criação da base de dados", () => {
   it("o esquema continua a declarar as tabelas todas", () => {
     const schema = readFileSync(resolve(raiz, "drizzle/schema.ts"), "utf8");
     const tabelas = schema.match(/mysqlTable\(/g) ?? [];
-    expect(tabelas.length).toBeGreaterThanOrEqual(14);
+    expect(tabelas.length).toBeGreaterThanOrEqual(15);
   });
 
   it("a razão da mudança fica escrita onde quem tropeçar a encontra", () => {
@@ -88,9 +88,9 @@ describe("instalador da base de dados", () => {
   const script = readFileSync(resolve(raiz, "scripts/db-setup.mjs"), "utf8");
   const sql = readFileSync(resolve(raiz, "drizzle/criar-tabelas.sql"), "utf8");
 
-  it("cria as 14 tabelas e nenhuma a mais", () => {
+  it("cria as 15 tabelas e nenhuma a mais", () => {
     const tabelas = sql.match(/CREATE TABLE IF NOT EXISTS `[a-z_]+`/g) ?? [];
-    expect(tabelas).toHaveLength(14);
+    expect(tabelas).toHaveLength(15);
   });
 
   it("nunca altera nem apaga o que já existe", () => {
