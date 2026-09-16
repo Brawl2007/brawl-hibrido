@@ -1,0 +1,9 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>Brawl Híbrido · Recolha v61 rápida</title><link rel="stylesheet" href="panel.css"></head>
+<body><main><p>BRAWL HÍBRIDO · V61 RÁPIDA</p><h1>Recolher fichas sem copiar e colar</h1>
+<p>Carrega a fila exportada pelo site. Mantém o Chrome aberto: uma página de cada vez, com progresso guardado. A recolha para perante verificações ou bloqueios.</p>
+<label>Ficheiro da fila <input id="queue" type="file" accept=".json"></label>
+<p id="status" role="status">A ler o progresso…</p><progress id="progress" max="1" value="0"></progress>
+<div><button id="start">Iniciar / retomar</button><button id="pause">Pausar</button><button id="export">Exportar resultados</button><button id="retry">Preparar repetição dos erros</button></div>
+<p id="error" role="alert"></p><p>Depois de exportar, abre o Draft → Estado das fontes → Importação em lote e escolhe o ficheiro de resultados.</p>
+<p>Não transmite palavras-passe, cookies ou dados de conta. Exporta apenas as fichas recolhidas. Ao carregar outra fila, exporta primeiro os resultados atuais.</p>
+<details><summary>Fichas sem resultado</summary><pre id="errors"></pre></details></main><script type="module" src="panel.js"></script></body></html>

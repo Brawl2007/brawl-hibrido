@@ -8,6 +8,17 @@
  * configuração do projeto, mas o `vite build` **falha** — ou seja, o site não
  * compilava de todo, e isso só se descobria no momento da publicação.
  *
+ * Verifica também que o ficheiro de destino SOBREVIVE ao `.vercelignore`.
+ *
+ * Esse é o segundo caso, e custou um deploy: o `shared/plProdigyCounterData.ts`
+ * importa `../reports/prodigy-counter-import.json`, e o `.vercelignore` excluía
+ * a pasta `/reports/` inteira. O ficheiro existe no repositório, portanto a
+ * verificação de cima passava e o build local passava — mas na Vercel a pasta
+ * nem sequer é enviada, e o `vite build` morria com "Could not resolve".
+ *
+ * Um import só é seguro se o ficheiro existir E for publicado. São as duas
+ * perguntas, e só ambas juntas é que garantem que o site compila lá.
+ *
  * É uma verificação de segundos que evita um deploy falhado. Corre com:
  *   pnpm check:imports
  */
@@ -39,16 +50,61 @@ function* walk(dir) {
   }
 }
 
+/** O ficheiro que o import resolve, ou null. Devolve o caminho, não só um sim. */
 function resolves(target) {
   for (const extension of EXTENSIONS) {
     const candidate = `${target}${extension}`;
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return true;
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
   }
   for (const index of ["index.ts", "index.tsx", "index.js"]) {
-    if (fs.existsSync(path.join(target, index))) return true;
+    const candidate = path.join(target, index);
+    if (fs.existsSync(candidate)) return candidate;
   }
-  return false;
+  return null;
 }
+
+/**
+ * As regras do `.vercelignore` que sabemos ler, e o que cada forma significa.
+ *
+ * Deliberadamente conservador: uma regra com forma que não reconheçamos é
+ * ignorada, e não inventada. Um falso alarme aqui trava um deploy bom, que é
+ * pior do que deixar passar uma regra exótica que ninguém escreveu ainda.
+ */
+function lerRegrasIgnoradas() {
+  let conteudo;
+  try {
+    conteudo = fs.readFileSync(path.join(ROOT, ".vercelignore"), "utf-8");
+  } catch {
+    return []; // sem ficheiro não há nada excluído
+  }
+  return conteudo
+    .split(/\r?\n/)
+    .map((linha) => linha.trim())
+    .filter((linha) => linha && !linha.startsWith("#") && !linha.startsWith("!"));
+}
+
+/** Um glob simples (`*` e `?`) aplicado a um único segmento do caminho. */
+function globCasa(padrao, texto) {
+  const expressao = padrao
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, "[^/]*")
+    .replace(/\?/g, "[^/]");
+  return new RegExp(`^${expressao}$`).test(texto);
+}
+
+/** O caminho (relativo à raiz, com `/`) seria removido do envio para a Vercel? */
+function ehIgnorado(relativo, regras) {
+  const base = path.posix.basename(relativo);
+  return regras.some((regra) => {
+    if (regra.startsWith("**/")) return globCasa(regra.slice(3), base);
+    if (regra.startsWith("/") && regra.endsWith("/")) return relativo.startsWith(regra.slice(1));
+    if (regra.includes("*") || regra.includes("?")) return globCasa(regra, base);
+    const limpa = regra.replace(/^\/+|\/+$/g, "");
+    return relativo === limpa || relativo.startsWith(`${limpa}/`);
+  });
+}
+
+const REGRAS_IGNORADAS = lerRegrasIgnoradas();
 
 const IMPORT_PATTERN = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
 
@@ -78,16 +134,22 @@ for (const base of SCAN) {
       if (!target) continue; // pacote externo — resolvido pelo gestor de pacotes
 
       verificados += 1;
-      if (!resolves(target)) {
-        problemas.push({ file: path.relative(ROOT, file), specifier });
+      const destino = resolves(target);
+      if (!destino) {
+        problemas.push({ file: path.relative(ROOT, file), specifier, razao: "não existe" });
+        continue;
+      }
+      const relativo = path.relative(ROOT, destino).split(path.sep).join("/");
+      if (ehIgnorado(relativo, REGRAS_IGNORADAS)) {
+        problemas.push({ file: path.relative(ROOT, file), specifier, razao: `existe, mas o .vercelignore não o publica (${relativo})` });
       }
     }
   }
 }
 
 if (problemas.length) {
-  console.error(`\n${problemas.length} import(s) apontam para ficheiros que não existem:\n`);
-  for (const problema of problemas) console.error(`  ${problema.file}\n    → ${problema.specifier}`);
+  console.error(`\n${problemas.length} import(s) não vão resolver no build publicado:\n`);
+  for (const problema of problemas) console.error(`  ${problema.file}\n    → ${problema.specifier}  [${problema.razao}]`);
   console.error("\nO `vite build` vai falhar com estes. Corrigir antes de publicar.\n");
   process.exit(1);
 }
