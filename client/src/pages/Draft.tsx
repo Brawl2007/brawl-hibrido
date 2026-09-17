@@ -174,6 +174,16 @@ export function getActiveDraftBonuses(signal: DraftSignal, role: ReturnType<type
             .join(" · ")
         : signal.bonusSources.synergyAllies.length ? `com ${signal.bonusSources.synergyAllies.join(", ")}` : undefined,
     },
+    {
+      // A segunda fonte tem chip próprio: os pontos dela entram no total, e
+      // tudo o que entra no total tem de estar à vista para se poder auditar.
+      label: `Sinergia · ${signal.scoreBreakdown.synergySegundaFonteSource ?? "2.ª fonte"} (2.ª)`,
+      rate: signal.scoreBreakdown.synergySegundaFonteRate * 100,
+      points: signal.scoreBreakdown.synergySegundaFontePoints,
+      source: signal.scoreBreakdown.synergySegundaFonteAllies.length
+        ? `com ${signal.scoreBreakdown.synergySegundaFonteAllies.join(", ")}`
+        : undefined,
+    },
 	  ].filter((bonus) => bonus.points > 0);
 
   if (signal.scoreBreakdown.counterPoints < 0) {
@@ -1675,6 +1685,13 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
     fields: [
       { key: "synergyPick1", label: "Pick 1" }, { key: "synergyPick2", label: "Pick 2" }, { key: "synergyPick3", label: "Pick 3" },
       { key: "synergyPick4", label: "Pick 4" }, { key: "synergyPick5", label: "Pick 5" }, { key: "synergyPick6", label: "Pick 6" },
+    ],
+  },
+  {
+    title: "Sinergia da 2.ª fonte",
+    description: "O BrawlScope e o Brawl Planet leem páginas diferentes e medem em populações diferentes. A fonte com prioridade dá a fatia cheia; a outra acrescenta a dela por todos os aliados que publica, mesmo os que a primeira também publica — são duas medições da mesma dupla, e uma não anula a outra. Aqui escolhe-se quanto vale essa segunda fatia: 50% vale metade, 100% vale o mesmo, 0% desliga.",
+    fields: [
+      { key: "synergySegundaFonte", label: "Peso da 2.ª fonte" },
     ],
   },
   {
