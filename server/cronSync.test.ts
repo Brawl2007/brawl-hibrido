@@ -90,6 +90,18 @@ describe("recolha periódica na Vercel", () => {
   it("o cron está declarado e aponta para a rota que existe", () => {
     const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8"));
     expect(vercel.crons).toEqual([{ path: "/api/cron/sync", schedule: "0 5 * * *" }]);
+
+    /**
+     * `functions` no topo INVALIDA a configuração deste projeto.
+     *
+     * Num projeto com `services`, essa propriedade pertence a dentro de cada
+     * serviço. Posta no topo, a Vercel recusa o ficheiro e falha o deploy antes
+     * sequer de o criar: o painel diz "Deployment failed" e a lista de deploys
+     * fica vazia, como se nada tivesse sido tentado. Custou horas a encontrar
+     * precisamente porque não deixa rasto onde se procura primeiro.
+     */
+    expect(vercel).not.toHaveProperty("functions");
+    expect(vercel.services).toBeDefined();
     // As DUAS entradas servem a rota: a de sempre e a da Vercel.
     for (const entrada of ["server/_core/index.ts", "server/_core/index.vercel.ts"]) {
       expect(readFileSync(resolve(process.cwd(), entrada), "utf8")).toContain('app.get("/api/cron/sync", handleCronSync)');

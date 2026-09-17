@@ -36,7 +36,7 @@ adivinhar o segredo caractere a caractere.
 ## Porque os counters ficam de fora
 
 Só a rotação Ranked corre sempre. São cerca de vinte páginas com duas em
-paralelo — cabe folgadamente nos 60 segundos da função.
+paralelo — cabe folgadamente no tempo de uma função.
 
 Uma recolha completa de counters são centenas de páginas espaçadas no tempo:
 **minutos**. Não cabe, e cortada a meio não grava nada, porque a função é morta
@@ -68,4 +68,23 @@ carregamento do site gasta mais do que isso.
 |---|---|---|
 | `CRON_SECRET` | autorizar o cron | a rota responde 503 e nada recolhe |
 | `CRON_SYNC_COUNTERS` | incluir counters | só corre a rotação Ranked |
-| `CRON_SYNC_BUDGET_MS` | orçamento de tempo (por omissão 50000) | 50 segundos, com margem para os 60 da função |
+| `CRON_SYNC_BUDGET_MS` | orçamento de tempo (por omissão 50000) | 50 segundos |
+
+## Uma armadilha do `vercel.json`, paga com horas
+
+Este projeto usa `services` no `vercel.json`. Nessa forma, a propriedade
+`functions` — a que define `maxDuration` — vive **dentro de cada serviço**, não
+no topo do ficheiro.
+
+Pô-la no topo invalida a configuração inteira. E a Vercel falha **antes de criar
+o deploy**: o painel mostra "Deployment failed", a lista de deploys fica vazia
+como se nada tivesse sido tentado, e o site continua a servir a versão anterior
+sem nada indicar que algo mudou.
+
+Foi exatamente o que aconteceu, e o rasto apontava para todo o lado menos para o
+ficheiro: parecia projeto em pausa, parecia ligação ao GitHub partida, parecia
+exigência de commits assinados.
+
+Por isso o `maxDuration` **não** é declarado aqui. O tempo máximo é o que a
+plataforma der, e quem precisar de apertar o orçamento da recolha usa
+`CRON_SYNC_BUDGET_MS`. Há um teste que recusa `functions` no topo.
