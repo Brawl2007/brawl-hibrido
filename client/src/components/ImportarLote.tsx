@@ -20,6 +20,9 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
   const stop = useRef(false);
   const busy = useRef(false);
   const importer = trpc.counterSync.importCapturesBatch.useMutation();
+  const [mapasEstado, setMapasEstado] = useState("");
+  const filaDeMapas = trpc.rankedSync.filaDeMapas.useQuery(undefined, { retry: false });
+  const importarMapas = trpc.rankedSync.importarPaginas.useMutation();
   const publisher = trpc.counterSync.publishCaptures.useMutation();
   const utils = trpc.useUtils();
 
@@ -108,6 +111,46 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     }
   }
 
+  /**
+   * Os mapas do TopBrawl, lidos pela extensão.
+   *
+   * O `topbrawl.com` responde 403 a pedidos vindos do alojamento — e das outras
+   * redes de nuvem que foram testadas com os mesmos cabeçalhos de um navegador.
+   * O mesmo pedido funcionava na plataforma onde o site esteve antes, por isso
+   * o que fica de fora é a origem da rede.
+   *
+   * As páginas vão em grupos pequenos porque cada uma traz o texto por
+   * interpretar, que é grande. Quem interpreta é o servidor: dois
+   * interpretadores acabariam por divergir em silêncio quando a fonte mudasse o
+   * formato, e os números continuariam a aparecer, só que errados.
+   */
+  async function importarFicheiroDeMapas(file?: File) {
+    if (!file || busy.current) return;
+    busy.current = true; setRunning(true); setMapasEstado("A ler o ficheiro…");
+    try {
+      const lido = JSON.parse(await file.text()) as { format?: string; maps?: unknown[] };
+      if (lido.format !== "brawlhibrido-ranked-paginas-v1" || !Array.isArray(lido.maps) || !lido.maps.length) {
+        throw new Error("Este ficheiro não é o dos mapas. Procura o topbrawl-mapas.json.");
+      }
+      const paginas = lido.maps as { map: string }[];
+      let guardados = 0;
+      const recusados: string[] = [];
+      for (let i = 0; i < paginas.length; i += 5) {
+        const grupo = paginas.slice(i, i + 5);
+        setMapasEstado(`A guardar mapas ${i + 1}–${i + grupo.length} de ${paginas.length}…`);
+        const resultado = await importarMapas.mutateAsync({ format: "brawlhibrido-ranked-paginas-v1", maps: grupo as never });
+        guardados += resultado.mapas;
+        recusados.push(...resultado.recusados);
+      }
+      setMapasEstado(`${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Carrega em Atualizar agora para os usar.`);
+      await utils.rankedSync.snapshot.invalidate();
+    } catch (error) {
+      setMapasEstado(error instanceof Error ? error.message : "Não consegui importar os mapas.");
+    } finally {
+      busy.current = false; setRunning(false);
+    }
+  }
+
   return <details className="paste-box">
     <summary>Importação em lote · {VERSAO_DO_SITE}</summary>
     <p className="paste-help">Use a fila pendente para completar o site. Use Atualizar todas para recolher de novo os valores atuais, inclusive fichas já importadas.</p>
@@ -118,6 +161,16 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
       <button type="button" disabled={running || !refreshUrls.length} onClick={() => downloadJson("brawlscope-fila-atualizar-todas.json", { format: "brawlhibrido-queue-v1", urls: refreshUrls })}>Atualizar todas ({refreshUrls.length})</button>
     </div>
     <p className="paste-help">Antes de carregar outra fila na extensão, exporte os resultados em andamento. A nova coleta substitui uma ficha somente quando você importar o novo resultado confirmado.</p>
+    <hr style={{ marginBlock: 16, border: 0, borderTop: "1px solid var(--bh-surface-3)" }} />
+    <p className="paste-help"><strong>Mapas do TopBrawl.</strong> A fonte recusa pedidos vindos do site — foram testadas duas redes diferentes e as duas levaram 403 —, mas as páginas abrem no teu navegador. São {filaDeMapas.data?.urls.length ?? 26} mapas, cerca de um minuto a correr sozinha.</p>
+    <div className="paste-actions">
+      <button type="button" disabled={running || !filaDeMapas.data} onClick={() => filaDeMapas.data && downloadJson("topbrawl-fila-mapas.json", filaDeMapas.data)}>Exportar fila de {filaDeMapas.data?.urls.length ?? 0} mapas</button>
+    </div>
+    <label style={{ display: "block", marginBlock: 12 }}>Importar topbrawl-mapas.json
+      <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running} onChange={e => void importarFicheiroDeMapas(e.target.files?.[0])} />
+    </label>
+    {mapasEstado && <p aria-live="polite" className="paste-help">{mapasEstado}</p>}
+    <hr style={{ marginBlock: 16, border: 0, borderTop: "1px solid var(--bh-surface-3)" }} />
     <label style={{ display: "block", marginBlock: 12 }}>1. Escolha brawlscope-resultados.json
       <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running || loading} onChange={e => void openFile(e.target.files?.[0])} />
     </label>
