@@ -37,6 +37,20 @@ function createSnapshot(): CounterSyncSnapshotPayload {
         attacker: "Bibi",
         defender: "Surge",
         source: "brawlscope",
+        /**
+         * A percentagem publicada, sem a qual esta relação não vale nada.
+         *
+         * O Score deixou de dar um bónus fixo por "counterar" e passou a contar
+         * o número que a fonte publica. Uma relação sem `delta` continua a
+         * aparecer na lista de confrontos e não mexe na pontuação — que era
+         * exatamente o que fazia este teste falhar, com o Score igual antes e
+         * depois de a snapshot chegar.
+         *
+         * O sinal é o das fichas: em `targets` o delta é NEGATIVO, porque mede
+         * o adversário contra a média dele. Com -6.5 o Score sobe de 79.4 para
+         * 82.9; com +6.5 desceria.
+         */
+        delta: -6.5,
         sourceUrl: "https://brawlscope.com/counters?brawler=bibi",
       },
     ],

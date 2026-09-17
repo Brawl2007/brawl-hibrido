@@ -78,16 +78,19 @@ describe("sinergia Brawl Planet por mapa", () => {
       defaultDraftRuleSettings.synergyPick6,
     ];
     /**
-     * A taxa publicada ganha à escada por pick — e é esse o assunto do teste.
+     * A taxa publicada ganha à escada por pick — mas só quando existe.
      *
-     * Este assert pedia a escada (3%, 3%, 4%, …) em `synergyBonusRate` e passou
-     * a falhar quando a fonte começou a publicar a percentagem do par: com
-     * "Pair with" publicado, é esse número que vale no Score, igual em todos os
-     * picks. A escada continua a existir como recurso para quando não há
-     * percentagem publicada, e é exposta em `configuredSynergyBonusRate`.
+     * Este assert pedia uma taxa CONSTANTE, o que vale quando a fonte publica a
+     * percentagem do par ("Pair with"). Esta composição não publica nenhuma: é
+     * uma equipa de mapa do Brawl Planet, com taxa de vitória da equipa e sem
+     * percentagem por par. Sem número publicado, a taxa efetiva é a escada —
+     * que é exatamente o que as duas asserções seguintes confirmam, e por isso
+     * exigir uma taxa constante aqui contradizia o resto do próprio teste.
+     *
+     * A taxa publicada tem cobertura própria no teste do par acima.
      */
     const taxasEfetivas = signals.map((signal) => signal.scoreBreakdown.synergyBonusRate);
-    expect(new Set(taxasEfetivas).size).toBe(1);
+    expect(taxasEfetivas).toEqual(expectedRates);
     expect(signals.map((signal) => signal.scoreBreakdown.configuredSynergyBonusRate)).toEqual(expectedRates);
     expectedRates.forEach((rate, index) => {
       expect(signals[index].scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(signals[index].scoreBreakdown.hybridPoints * rate);
