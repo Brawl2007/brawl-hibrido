@@ -97,3 +97,45 @@ describe("sinergia da segunda fonte", () => {
     expect(desligada.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
   });
 });
+
+describe("composição do mapa e sinergia, lado a lado", () => {
+  afterEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: true }));
+
+  /**
+   * O caso real: no Beach Ball, o Brawl Planet publica "El Primo · Gus · Shade"
+   * e a ficha do Shade no BrawlScope publica "El Primo +5,0%".
+   *
+   * A composição apagava a sinergia, por ser mais específica. Mas são duas
+   * medições diferentes da mesma escolha, e nenhuma anula a outra: o valor
+   * publicado para a dupla existe, e deixava de entrar no Score só porque
+   * outra fonte também tinha falado do trio.
+   */
+  it("conta as duas, cada uma com a sua taxa", () => {
+    setCounterSyncSnapshot(snapshotDuasFontes());
+    const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
+    const comComposicao = calculateDraftSignal(nori, {
+      mapModeId: "knockout",
+      mapName: "Flaring Phoenix",
+      allyRows: [gus, pearl],
+      mapTeams: composicao as never,
+    });
+
+    expect(comComposicao.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
+    expect(comComposicao.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
+    expect(comComposicao.bonusSources.synergySource).toBe("BrawlScope");
+  });
+
+  it("a composição acrescenta pontos em vez de os substituir", () => {
+    setCounterSyncSnapshot(snapshotDuasFontes());
+    const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
+    const semComposicao = calculateDraftSignal(nori, { mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl] });
+    const comComposicao = calculateDraftSignal(nori, {
+      mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl], mapTeams: composicao as never,
+    });
+
+    // A sinergia vale o mesmo nos dois casos: a composição já não lhe toca.
+    expect(comComposicao.scoreBreakdown.synergyPoints).toBeCloseTo(semComposicao.scoreBreakdown.synergyPoints, 6);
+    expect(comComposicao.scoreBreakdown.rawContextualBonusPoints)
+      .toBeGreaterThan(semComposicao.scoreBreakdown.rawContextualBonusPoints);
+  });
+});
