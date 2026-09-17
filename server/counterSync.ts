@@ -40,6 +40,8 @@ import {
   updateCounterSyncConfig,
   updateCounterSyncRun,
   upsertCounterSyncSnapshot,
+  upsertBrawlScopeCaptures,
+  listBrawlScopeCaptures,
 } from "./db";
 import { broadcastCounterSnapshot } from "./realtime";
 import { decodeMatchupMatrices, encodeMatchupMatrices } from "../shared/matchupMatrixCodec";
@@ -150,19 +152,70 @@ export function readStoredMatchupMatrices(rawPayload?: string) {
  * snapshot guardou, que é muito melhor do que nada. Devolve o que recuperou,
  * para o arranque o poder registar.
  */
+let recuperacaoEmCurso: Promise<{ views: number; pairs: number }> | null = null;
+
+/** Só para os testes: obriga a próxima chamada a ir outra vez à base. */
+export function resetRestoreParaTestes() {
+  recuperacaoEmCurso = null;
+}
+
+/**
+ * Recupera o estado guardado — UMA vez por instância.
+ *
+ * POR QUE O GUARDA EXISTE
+ *
+ * Isto corria no início de cada grupo de vinte fichas. Cada passagem relia a
+ * snapshot inteira e voltava a validar, com zod, TODAS as fichas já guardadas —
+ * às 741 fichas são 741 validações completas, cada uma a conferir perto de
+ * noventa linhas, por cada vinte fichas novas. O trabalho repetido crescia com
+ * o número de fichas e não produzia nada de novo a partir da segunda vez.
+ *
+ * A recuperação é idempotente e o processo é o mesmo, portanto basta uma. As
+ * chamadas seguintes recebem a promessa já resolvida.
+ */
 export async function restoreBrawlScopeMatchupMatrices() {
+  if (!recuperacaoEmCurso) {
+    recuperacaoEmCurso = recuperarEstadoGuardado().catch((erro) => {
+      // Uma falha não pode ficar memorizada como "já recuperado": a próxima
+      // chamada tem de poder tentar outra vez.
+      recuperacaoEmCurso = null;
+      throw erro;
+    });
+  }
+  return recuperacaoEmCurso;
+}
+
+async function recuperarEstadoGuardado() {
   try {
     const snapshot = await getCounterSyncSnapshot();
     if (!snapshot?.payload) return { views: 0, pairs: 0 };
     const { matrices, capturedAt } = readStoredMatchupMatrices(snapshot.payload);
-    const capturedProfiles = parseSnapshotPayload(snapshot.payload)?.browserCaptures;
-    if (Array.isArray(capturedProfiles)) for (const input of capturedProfiles) {
+
+    /**
+     * A fila de fichas vem da sua própria tabela. As fichas que ficaram no
+     * `browserCaptures` da snapshot são de antes desta mudança: continuam a ser
+     * lidas, e a primeira gravação passa-as para a tabela. Ninguém perde a fila
+     * que já tinha por publicar.
+     */
+    const guardadas = await listBrawlScopeCaptures();
+    const daTabela = guardadas.map((linha) => { try { return JSON.parse(linha.payload) as unknown; } catch { return null; } });
+    const antigas = parseSnapshotPayload(snapshot.payload)?.browserCaptures;
+    const porMigrar: BrawlScopeCapture[] = [];
+
+    for (const input of [...daTabela, ...(Array.isArray(antigas) ? antigas : [])]) {
+      if (!input) continue;
       const parsed = brawlScopeCaptureSchema.safeParse(input);
       // A matriz e a fila de fichas são estados diferentes. A matriz pode já
       // estar restaurada enquanto browserCaptures continua vazia; nesse caso
       // ainda precisamos restaurar a ficha para o botão Publicar encontrá-la.
-      if (parsed.success && !browserCaptures.has(`${parsed.data.view}:${parsed.data.brawler}`)) importBrawlScopeCapture(parsed.data);
+      if (!parsed.success || browserCaptures.has(`${parsed.data.view}:${parsed.data.brawler}`)) continue;
+      importBrawlScopeCapture(parsed.data);
+      porMigrar.push(parsed.data);
     }
+
+    // As que vieram da snapshot antiga passam para a tabela. As que já lá
+    // estavam são reescritas com o mesmo conteúdo, o que não custa nada.
+    if (Array.isArray(antigas) && antigas.length) await persistCaptures(porMigrar).catch(() => undefined);
 
     let pairs = 0;
     for (const [view, profiles] of Object.entries(matrices)) {
@@ -929,6 +982,16 @@ const MIN_CONFRONTOS_COLADOS = 8;
 
 const browserCaptures = new Map<string, BrawlScopeCapture>();
 
+/**
+ * A fila de fichas por publicar que esta instância tem em memória.
+ *
+ * É o que o botão Publicar consome. Ter um leitor torna verificável a coisa que
+ * interessa depois de um arranque frio: as fichas guardadas voltaram mesmo.
+ */
+export function getFilaDeFichasImportadas(): BrawlScopeCapture[] {
+  return Array.from(browserCaptures.values());
+}
+
 export function importBrawlScopeCapture(input: BrawlScopeCapture): BrawlScopeImportResult {
   const profile = brawlScopeCaptureSchema.parse(input);
   const mode = brawlScopeModes.find(m => m.id === profile.view) ?? null;
@@ -1122,11 +1185,29 @@ export function clearImportedBrawlScope(viewId?: string) {
  * manual é muito pior do que perder uma recolha automática, que se repete
  * sozinha.
  */
+export async function persistCaptures(captures: readonly BrawlScopeCapture[]) {
+  if (!captures.length) return { saved: true as const, confirmed: 0 };
+  const confirmed = await upsertBrawlScopeCaptures(captures.map((ficha) => ({
+    id: `${ficha.view}:${ficha.brawler}`,
+    view: ficha.view,
+    brawler: ficha.brawler,
+    capturedAt: new Date(ficha.capturedAt),
+    payload: JSON.stringify(ficha),
+  })));
+  return { saved: confirmed === captures.length, confirmed };
+}
+
 export async function persistMatchupMatricesNow() {
   const guardada = await getCounterSyncSnapshot();
   const payload = parseSnapshotPayload(guardada?.payload);
   if (!guardada || !payload) return { saved: false as const, reason: "ainda não existe snapshot para atualizar" };
 
+  /**
+   * A fila de fichas já NÃO viaja aqui dentro — tem tabela própria. Enquanto
+   * viajava, gravar a matriz obrigava a reescrever as setecentas fichas junto,
+   * e era esse peso, e não a matriz, que fazia a gravação falhar.
+   */
+  const { browserCaptures: _naSnapshotJaNao, ...semFila } = payload;
   const saved = await saveCounterSnapshotWithCurrentMatrices({
     id: 1,
     version: guardada.version,
@@ -1136,11 +1217,10 @@ export async function persistMatchupMatricesNow() {
     calculatorStatus: guardada.calculatorStatus,
     planetStatus: guardada.planetStatus,
     sourceNotes: guardada.sourceNotes,
-    payload: JSON.stringify({
-      ...payload,
-      browserCaptures: Array.from(browserCaptures.values()),
+    payload: {
+      ...semFila,
       matchupMatrices: encodeMatchupMatrices(getBrawlScopeMatchupMatrices(), brawlScopeMatricesCapturedAt),
-    }),
+    },
   });
   return { saved: Boolean(saved?.payload) };
 }
@@ -1148,7 +1228,16 @@ export async function persistMatchupMatricesNow() {
 // Serialize snapshot writes in this server process. An hourly sync must not
 // overwrite captures that arrived while its network requests were running.
 let snapshotWriteQueue: Promise<unknown> = Promise.resolve();
-function saveCounterSnapshotWithCurrentMatrices(snapshot: Parameters<typeof upsertCounterSyncSnapshot>[0]) {
+type SnapshotSemPayload = Omit<Parameters<typeof upsertCounterSyncSnapshot>[0], "payload">;
+
+/**
+ * Recebe o payload como OBJETO, não como texto.
+ *
+ * Antes recebia-o já em JSON e a primeira coisa que fazia era voltar a lê-lo
+ * com `JSON.parse` para lhe mexer. Numa estrutura de megabytes, isso era uma
+ * serialização e uma desserialização inteiras deitadas fora em cada gravação.
+ */
+function saveCounterSnapshotWithCurrentMatrices(snapshot: SnapshotSemPayload & { payload: Record<string, unknown> }) {
   const job = snapshotWriteQueue.then(async () => {
     const localMatrices = getBrawlScopeMatchupMatrices();
     const current = await getCounterSyncSnapshot();
@@ -1167,15 +1256,11 @@ function saveCounterSnapshotWithCurrentMatrices(snapshot: Parameters<typeof upse
         ...(localMatrices[view]?.[owner] ?? {}),
       }]))];
     }));
-    const storedCaptures = currentPayload?.browserCaptures ?? [];
-    const captureMap = new Map(storedCaptures.map((capture) => [`${capture.view}:${capture.brawler}`, capture]));
-    for (const capture of browserCaptures.values()) captureMap.set(`${capture.view}:${capture.brawler}`, capture);
     return upsertCounterSyncSnapshot({
       ...snapshot,
       payload: JSON.stringify({
-        ...JSON.parse(snapshot.payload),
+        ...snapshot.payload,
         matchupMatrices: encodeMatchupMatrices(mergedMatrices, brawlScopeMatricesCapturedAt ?? currentPayload?.matchupMatrices?.capturedAt),
-        browserCaptures: Array.from(captureMap.values()),
       }),
     });
   });
@@ -1647,7 +1732,6 @@ export async function syncCounterData(trigger: SyncTrigger) {
      */
     const storedPayload: CounterSyncSnapshotPayload = {
       ...payload,
-      browserCaptures: Array.from(browserCaptures.values()),
       matchupMatrices: encodeMatchupMatrices(getBrawlScopeMatchupMatrices(), brawlScopeMatricesCapturedAt),
     };
 
@@ -1660,7 +1744,7 @@ export async function syncCounterData(trigger: SyncTrigger) {
       calculatorStatus: payload.sourceStates.calculator.status,
       planetStatus: payload.sourceStates.planet.status,
       sourceNotes: [payload.sourceStates.brawlscope.note, payload.sourceStates.prodigy.note, payload.sourceStates.calculator.note, payload.sourceStates.planet.note].filter(Boolean).join(" | ") || null,
-      payload: JSON.stringify(storedPayload),
+      payload: storedPayload as unknown as Record<string, unknown>,
     });
     await insertCounterSyncEvidence(payload.relations.filter(relation => !relation.pendingRemoval).map(relation => ({
       snapshotVersion: version,

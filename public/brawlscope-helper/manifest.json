@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Brawl Híbrido — Recolha v61 rápida",
+  "version": "61.0.0",
+  "description": "Recolhe fichas públicas acessíveis no navegador e exporta um lote para o teu Brawl Híbrido.",
+  "permissions": ["storage", "alarms", "scripting"],
+  "host_permissions": ["https://brawlscope.com/*"],
+  "background": { "service_worker": "worker.js", "type": "module" },
+  "action": { "default_title": "Abrir recolha Brawl Híbrido" }
+}

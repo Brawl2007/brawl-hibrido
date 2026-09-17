@@ -202,6 +202,35 @@ export const counterSyncSnapshots = mysqlTable("counter_sync_snapshots", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * Fila de fichas coladas do BrawlScope, uma linha por ficha.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * A fila vivia dentro do `payload` da snapshot, num campo `browserCaptures`.
+ * Como a snapshot é uma linha só, guardar mais uma ficha obrigava a reescrever
+ * TODAS as outras: aos 20 lotes já eram centenas de KB por gravação, e às 741
+ * fichas eram mais de 5 MB — em cada grupo de vinte. O custo da importação
+ * crescia com o quadrado do número de fichas, e a última gravação, a maior de
+ * todas, era a que rebentava.
+ *
+ * Com uma linha por ficha, um grupo de vinte grava vinte linhas e mais nada. O
+ * custo passa a ser constante, e o tamanho do lote deixa de ter limite prático.
+ */
+export const brawlScopeCaptures = mysqlTable("brawlscope_captures", {
+  /** `${view}:${brawler}` — a mesma chave que a fila usa em memória. */
+  id: varchar("id", { length: 128 }).primaryKey(),
+  view: varchar("view", { length: 32 }).notNull(),
+  brawler: varchar("brawler", { length: 64 }).notNull(),
+  capturedAt: timestamp("captured_at").defaultNow().notNull(),
+  /** A ficha validada, tal como a extensão a exportou. */
+  payload: longtext("payload").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BrawlScopeCaptureRow = typeof brawlScopeCaptures.$inferSelect;
+export type InsertBrawlScopeCapture = typeof brawlScopeCaptures.$inferInsert;
+
 export type CounterSyncSnapshot = typeof counterSyncSnapshots.$inferSelect;
 export type InsertCounterSyncSnapshot = typeof counterSyncSnapshots.$inferInsert;
 

@@ -9,7 +9,12 @@ public
 # Documentação, auditorias e pesquisas não usadas no build
 /docs/
 /research/
-/reports/
+# `/reports/` NÃO entra aqui: o `shared/plProdigyCounterData.ts` importa
+# `../reports/prodigy-counter-import.json`, e excluir a pasta fazia o
+# `vite build` falhar na Vercel com "Could not resolve" — o build passava
+# na máquina de quem publica e só rebentava lá, onde a pasta não existe.
+# A prosa lá dentro continua a ficar de fora pela regra `*.md` abaixo.
+# O `pnpm check:imports` agora recusa um import para um ficheiro ignorado.
 *.md
 *.patch
 *.bak

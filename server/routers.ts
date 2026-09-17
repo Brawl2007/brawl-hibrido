@@ -39,7 +39,7 @@ import { getNextRefreshAt, getPublicRankedSnapshot, syncRankedData } from "./ran
 import { getBrawlPlanetMapTeamBoard } from "@shared/brawlPlanetMapTeams";
 import { getSnapshotSynergies } from "@shared/counterSyncSnapshot";
 import { brawlScopeSynergyData, normalizeBrawlScopeSynergyList } from "@shared/brawlScopeSynergyData";
-import { getBrawlScopeColagemFeita, normalizarVistaBrawlScope, getBrawlScopeMatchupCoverage, getBrawlScopeMatchupMatrix, getPublicCounterSyncSnapshot, getSourceHealth, clearImportedBrawlScope, importBrawlScopePage, limparBloqueio, persistMatchupMatricesNow, syncCounterData } from "./counterSync";
+import { getBrawlScopeColagemFeita, normalizarVistaBrawlScope, getBrawlScopeMatchupCoverage, getBrawlScopeMatchupMatrix, getPublicCounterSyncSnapshot, getSourceHealth, clearImportedBrawlScope, importBrawlScopePage, limparBloqueio, persistMatchupMatricesNow, persistCaptures, syncCounterData } from "./counterSync";
 import { fetchOfficialEvents, fetchOfficialRankings, isOfficialApiConfigured } from "./brawlStarsApi";
 import { normalizeObservedMode, resolveObservedMapId } from "./observedMatchCollection";
 
@@ -427,14 +427,18 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         exigirDono(ctx, "importar um lote");
         try { return await saveCaptureBatch(input); }
-        catch (error) { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível confirmar a gravação do grupo. O progresso foi mantido; verifica a base de dados e retoma.", cause: error }); }
+        // Os grupos já confirmados estão gravados, cada um nas suas linhas. Só
+        // este ficou por gravar, e retomar daqui repete-o sem duplicar nada.
+        catch (error) { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Este grupo não ficou gravado. Os grupos anteriores estão confirmados; carrega em Retomar importação para repetir a partir deste.", cause: error }); }
       }),
     importCapture: protectedProcedure.input(brawlScopeCaptureSchema)
       .mutation(async ({ ctx, input }) => {
         exigirDono(ctx, "importar um lote");
         await restoreBrawlScopeMatchupMatrices();
         const result = importBrawlScopeCapture(input);
-        const persisted = await persistMatchupMatricesNow();
+        // A ficha tem linha própria, como as do lote. Não se reescreve a
+        // snapshot inteira para guardar uma ficha.
+        const persisted = await persistCaptures([input]);
         if (!persisted.saved) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Ficha apenas em memória. Persistência falhou; retoma o lote quando a base de dados estiver disponível." });
         return { ...result, persisted: true };
       }),
