@@ -121,6 +121,16 @@ export function startSyncJob(
   entry.result = null;
   entry.progress = "a começar";
 
+  /**
+   * O arranque também se regista.
+   *
+   * Só o fim era registado, e um trabalho que congela a meio nunca tem fim: os
+   * registos ficavam completamente vazios, exatamente como se o botão não
+   * tivesse sido carregado. Duas explicações opostas — "não arrancou" e
+   * "arrancou e não acabou" — davam o mesmo silêncio.
+   */
+  console.log(`[Sync] ${name} arrancou.`);
+
   const terminar = (outcome: SyncJobState["outcome"], detalhe: { error?: string; result?: unknown }) => {
     // Só o primeiro a chegar decide: se o watchdog já fechou o trabalho, um
     // resultado tardio não o pode reabrir nem reescrever.
@@ -167,8 +177,21 @@ export function startSyncJob(
   return { started: true, alreadyRunning: false, state: getSyncJobState(name) };
 }
 
-/** Tempo que um pedido interativo espera pelo trabalho antes de responder. */
-export const ESPERA_INTERATIVA_MS = Number(process.env.REFRESH_WAIT_MS ?? 25_000);
+/**
+ * Tempo que um pedido interativo espera pelo trabalho antes de responder.
+ *
+ * Começou nos 25 segundos, escolhidos às cegas por não se saber o limite da
+ * plataforma. Era pouco: a rotação Ranked não cabia, a função congelava a meio,
+ * e o trabalho ficava marcado como "a correr" sem nunca terminar — nem bem nem
+ * mal. Quem carregava não via mensagem nenhuma, e os registos não tinham uma
+ * única linha, porque nada tinha chegado ao fim para as escrever.
+ *
+ * O limite real apareceu num erro dos registos: "Task timed out after 300
+ * seconds". Com isso, 90 segundos dão folga de sobra à rotação Ranked e ainda
+ * ficam a boa distância do corte da plataforma — uma resposta cortada a meio é
+ * pior do que uma resposta honesta a dizer "ainda vou a meio".
+ */
+export const ESPERA_INTERATIVA_MS = Number(process.env.REFRESH_WAIT_MS ?? 90_000);
 
 /**
  * Arranca o trabalho e espera por ele — até um limite.
