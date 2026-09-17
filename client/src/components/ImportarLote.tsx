@@ -26,13 +26,40 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
   const publisher = trpc.counterSync.publishCaptures.useMutation();
   const utils = trpc.useUtils();
 
-  async function openFile(file?: File) {
+  /**
+   * Um ficheiro entra pelo formato que traz dentro, não pelo campo onde caiu.
+   *
+   * São dois campos porque são duas recolhas diferentes, mas quem exporta da
+   * extensão fica com os dois ficheiros na mesma pasta de transferências, com
+   * nomes parecidos. Trocá-los devolvia o erro cru do validador — uma lista de
+   * caminhos e tipos esperados, que diz o que está mal e não diz o que fazer a
+   * seguir. O formato está escrito no ficheiro: ler esse campo e encaminhar o
+   * conteúdo custa uma linha e apaga o engano.
+   */
+  async function receberFicheiro(file: File | undefined, campo: "fichas" | "mapas") {
     if (!file || busy.current) return;
-    busy.current = true; setLoading(true); setStatus("Validando o arquivo…");
+    busy.current = true;
     try {
-      if (file.size > 50 * 1024 * 1024) throw new Error("O lote excede 50 MB.");
-      const text = await file.text();
-      const parsed = reviewCaptureBatch(JSON.parse(text));
+      if (file.size > 50 * 1024 * 1024) throw new Error("O ficheiro excede 50 MB.");
+      const dados = JSON.parse(await file.text()) as { format?: string };
+      const saoMapas = dados.format === "brawlhibrido-ranked-paginas-v1";
+      // Quem trocou os campos fica a saber para onde foi o ficheiro.
+      if (saoMapas && campo === "fichas") setStatus("Este é o ficheiro dos mapas — foi para a secção do TopBrawl, aqui em cima.");
+      if (!saoMapas && campo === "mapas") setMapasEstado("Este é o ficheiro das fichas — foi para a importação em lote, aqui em baixo.");
+      if (saoMapas) await carregarMapas(dados as { maps?: unknown[] });
+      else await carregarFichas(dados);
+    } catch (error) {
+      const dizer = campo === "mapas" ? setMapasEstado : setStatus;
+      dizer(error instanceof Error ? error.message : "Não consegui ler o ficheiro.");
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  async function carregarFichas(dados: unknown) {
+    setLoading(true); setStatus("Validando o arquivo…");
+    try {
+      const parsed = reviewCaptureBatch(dados);
       setRejected(parsed.rejected);
       // O checkpoint pertence à sequência validada, que pode mudar após uma correção.
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(parsed.profiles))))).map(v => v.toString(16).padStart(2, "0")).join("");
@@ -45,7 +72,7 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     } catch (error) {
       setProfiles([]); setIndex(0); setRejected([]); setStatus(error instanceof Error ? error.message : "Não consegui abrir o lote.");
     } finally {
-      busy.current = false; setLoading(false);
+      setLoading(false);
     }
   }
 
@@ -124,13 +151,11 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
    * interpretadores acabariam por divergir em silêncio quando a fonte mudasse o
    * formato, e os números continuariam a aparecer, só que errados.
    */
-  async function importarFicheiroDeMapas(file?: File) {
-    if (!file || busy.current) return;
-    busy.current = true; setRunning(true); setMapasEstado("A ler o ficheiro…");
+  async function carregarMapas(lido: { maps?: unknown[] }) {
+    setRunning(true); setMapasEstado("A ler o ficheiro…");
     try {
-      const lido = JSON.parse(await file.text()) as { format?: string; maps?: unknown[] };
-      if (lido.format !== "brawlhibrido-ranked-paginas-v1" || !Array.isArray(lido.maps) || !lido.maps.length) {
-        throw new Error("Este ficheiro não é o dos mapas. Procura o topbrawl-mapas.json.");
+      if (!Array.isArray(lido.maps) || !lido.maps.length) {
+        throw new Error("O ficheiro dos mapas está vazio. Corre a fila na extensão antes de exportar.");
       }
       const paginas = lido.maps as { map: string }[];
       let guardados = 0;
@@ -147,15 +172,15 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     } catch (error) {
       setMapasEstado(error instanceof Error ? error.message : "Não consegui importar os mapas.");
     } finally {
-      busy.current = false; setRunning(false);
+      setRunning(false);
     }
   }
 
   return <details className="paste-box">
     <summary>Importação em lote · {VERSAO_DO_SITE}</summary>
     <p className="paste-help">Use a fila pendente para completar o site. Use Atualizar todas para recolher de novo os valores atuais, inclusive fichas já importadas.</p>
-    <p className="paste-help">v61: a extensão usa avanço de 250 ms, espera páginas lentas e tenta novamente leituras temporárias. A importação confirma até 20 fichas por gravação.</p>
-    <p><a href="/brawlscope-helper.zip" download>Baixar extensão v61 rápida</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
+    <p className="paste-help">v62: a extensão lê também os mapas do TopBrawl. Mantém o avanço de 250 ms, espera páginas lentas e repete leituras temporárias. A importação confirma até 20 fichas por gravação.</p>
+    <p><a href="/brawlscope-helper.zip" download>Baixar extensão v62</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
     <div className="paste-actions">
       <button type="button" disabled={running || !pendingUrls.length} onClick={() => downloadJson("brawlscope-fila-pendente.json", { format: "brawlhibrido-queue-v1", urls: pendingUrls })}>Exportar {pendingUrls.length} fichas pendentes</button>
       <button type="button" disabled={running || !refreshUrls.length} onClick={() => downloadJson("brawlscope-fila-atualizar-todas.json", { format: "brawlhibrido-queue-v1", urls: refreshUrls })}>Atualizar todas ({refreshUrls.length})</button>
@@ -166,13 +191,13 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     <div className="paste-actions">
       <button type="button" disabled={running || !filaDeMapas.data} onClick={() => filaDeMapas.data && downloadJson("topbrawl-fila-mapas.json", filaDeMapas.data)}>Exportar fila de {filaDeMapas.data?.urls.length ?? 0} mapas</button>
     </div>
-    <label style={{ display: "block", marginBlock: 12 }}>Importar topbrawl-mapas.json
-      <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running} onChange={e => void importarFicheiroDeMapas(e.target.files?.[0])} />
+    <label style={{ display: "block", marginBlock: 12 }}>Importar topbrawl-mapas.json (os mapas)
+      <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running} onChange={e => void receberFicheiro(e.target.files?.[0], "mapas")} />
     </label>
     {mapasEstado && <p aria-live="polite" className="paste-help">{mapasEstado}</p>}
     <hr style={{ marginBlock: 16, border: 0, borderTop: "1px solid var(--bh-surface-3)" }} />
-    <label style={{ display: "block", marginBlock: 12 }}>1. Escolha brawlscope-resultados.json
-      <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running || loading} onChange={e => void openFile(e.target.files?.[0])} />
+    <label style={{ display: "block", marginBlock: 12 }}>1. Escolha brawlscope-resultados.json (as fichas)
+      <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running || loading} onChange={e => void receberFicheiro(e.target.files?.[0], "fichas")} />
     </label>
     <p aria-live="polite">{index} / {profiles.length} fichas confirmadas. {status}</p>
     {rejected.length > 0 && <details><summary>{rejected.length} fichas com erro, separadas da importação</summary><p>O arquivo original mantém todas as fichas. Só as válidas serão importadas.</p><ul>{rejected.map((error, i) => <li key={i}>{error}</li>)}</ul></details>}
