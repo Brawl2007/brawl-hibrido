@@ -1,0 +1,61 @@
+# Corre o que um contribuidor corre antes de publicar.
+#
+# POR QUE ISTO EXISTE
+#
+# O único check nos PRs era o deploy da Vercel, e um deploy passar não diz nada
+# sobre o comportamento: a build compila na mesma com um teste vermelho. Os 741
+# testes só corriam quando alguém se lembrava de os correr à mão.
+#
+# Num só dia isso deixou passar quatro testes que pediam o contrário do que o
+# código fazia, e dois que defendiam regras entretanto revogadas. Nenhum deles
+# seria apanhado sozinho.
+#
+# Nada aqui toca em rede externa. É de propósito: o `brawlscope.com` e o
+# `topbrawl.com` respondem 403 a pedidos vindos de datacentros, e uma
+# verificação que dependesse deles falharia sempre, por razões que nada têm a
+# ver com o código.
+name: Testes
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Um PR que recebe vários envios seguidos cancela as corridas anteriores: só
+# interessa o resultado do último commit.
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Testes, tipos e imports
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # A mesma versão que a Vercel usa, para um erro de versão aparecer
+          # aqui e não só depois de publicar.
+          node-version: 24
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Tipos, imports e tokens de CSS
+        run: pnpm run check
+
+      - name: Testes
+        run: pnpm test
+
+      # A build entra porque já falhou uma vez só na Vercel, por um import para
+      # uma pasta que o `.vercelignore` retirava. Compilar aqui apanha isso
+      # antes de custar um deploy.
+      - name: Build
+        run: pnpm run build

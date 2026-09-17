@@ -182,9 +182,35 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     <p className="paste-help">v62: a extensão lê também os mapas do TopBrawl. Mantém o avanço de 250 ms, espera páginas lentas e repete leituras temporárias. A importação confirma até 20 fichas por gravação.</p>
     <p><a href="/brawlscope-helper.zip" download>Baixar extensão v62</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
     <div className="paste-actions">
+      {/*
+        Uma passagem, as duas fontes.
+        As duas levam 403 a partir do alojamento, e por isso ambas dependem
+        desta recolha. Fazê-las em corridas separadas obrigava a montar a
+        extensão duas vezes para o mesmo fim, e a segunda era fácil de adiar —
+        com o BrawlScope a envelhecer em silêncio, que é o pior dos casos,
+        porque um número velho parece um número bom.
+        A extensão já aceita as duas origens na mesma fila; só faltava juntá-las.
+      */}
+      <button
+        type="button"
+        disabled={running || (!refreshUrls.length && !filaDeMapas.data?.urls.length)}
+        title="Uma só corrida da extensão que atualiza as fichas do BrawlScope e os mapas do TopBrawl."
+        onClick={() => downloadJson("brawl-hibrido-fila-completa.json", {
+          format: "brawlhibrido-queue-v1",
+          urls: [...refreshUrls, ...(filaDeMapas.data?.urls ?? [])],
+        })}
+      >
+        Fila completa · {refreshUrls.length} fichas + {filaDeMapas.data?.urls.length ?? 0} mapas
+      </button>
       <button type="button" disabled={running || !pendingUrls.length} onClick={() => downloadJson("brawlscope-fila-pendente.json", { format: "brawlhibrido-queue-v1", urls: pendingUrls })}>Exportar {pendingUrls.length} fichas pendentes</button>
       <button type="button" disabled={running || !refreshUrls.length} onClick={() => downloadJson("brawlscope-fila-atualizar-todas.json", { format: "brawlhibrido-queue-v1", urls: refreshUrls })}>Atualizar todas ({refreshUrls.length})</button>
     </div>
+    <p className="paste-help">
+      <strong>A fila completa é a que mantém o site fresco.</strong> O BrawlScope e o TopBrawl respondem
+      403 a pedidos vindos do alojamento, por isso nenhum dos dois se atualiza sozinho. Uma corrida traz
+      os dois, e no fim a extensão exporta dois ficheiros — as fichas e os mapas — que se importam aqui
+      em baixo, cada um no seu campo.
+    </p>
     <p className="paste-help">Antes de carregar outra fila na extensão, exporte os resultados em andamento. A nova coleta substitui uma ficha somente quando você importar o novo resultado confirmado.</p>
     <hr style={{ marginBlock: 16, border: 0, borderTop: "1px solid var(--bh-surface-3)" }} />
     <p className="paste-help"><strong>Mapas do TopBrawl.</strong> A fonte recusa pedidos vindos do site — foram testadas duas redes diferentes e as duas levaram 403 —, mas as páginas abrem no teu navegador. São {filaDeMapas.data?.urls.length ?? 26} mapas, cerca de um minuto a correr sozinha.</p>

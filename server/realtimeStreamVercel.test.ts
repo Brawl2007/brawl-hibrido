@@ -24,8 +24,21 @@ describe("stream de tempo real no alojamento sem processo", () => {
     expect(vercel).not.toContain("heartbeat");
     expect(vercel).not.toContain("addRankedClient");
     expect(vercel).not.toContain("addCounterClient");
-    // Um por endpoint.
-    expect(vercel.match(/res\.end\(\);/g) ?? []).toHaveLength(2);
+    /*
+     * Contar ocorrências era frágil: o fecho antecipado de quem já tem a
+     * versão publicada acrescentou uma terceira, e o teste passou a falhar por
+     * uma mudança que não tem nada a ver com o que ele guarda. O que interessa
+     * é que cada endpoint FECHA e nenhum fica a segurar a ligação.
+     */
+    expect(vercel).not.toContain("setInterval");
+    // Cada bloco vai do seu `app.get` até ao registo seguinte: delimitar pelo
+    // primeiro `});` cortava dentro do `res.set({...})`, antes do fecho.
+    const blocos = vercel.split(/app\.(?:get|post|use)\(/);
+    for (const endpoint of ["/api/realtime/ranked", "/api/realtime/counters"]) {
+      const corpo = blocos.find((bloco) => bloco.startsWith(`"${endpoint}"`));
+      expect(corpo, endpoint).toBeDefined();
+      expect(corpo, endpoint).toContain("res.end()");
+    }
   });
 
   it("diz ao navegador quando voltar, para o fecho não virar chuva de pedidos", () => {
