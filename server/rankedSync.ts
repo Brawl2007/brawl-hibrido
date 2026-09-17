@@ -8,6 +8,7 @@ import {
   upsertRankedSyncSnapshot,
 } from "./db";
 import { fetchOfficialBrawlers } from "./brawlStarsApi";
+import { fetchText as lerPagina } from "./counterSync";
 import type { BrawlPlanetMapTeam } from "@shared/brawlPlanetMapTeams";
 import type { OfficialBrawlerSnapshot, RankedSnapshotEvent } from "../shared/rankedSyncSnapshot";
 import { broadcastRankedSnapshot } from "./realtime";
@@ -160,22 +161,26 @@ function asNumber(value: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * A leitura de páginas passa a ser a mesma que as outras fontes já usavam.
+ *
+ * Esta tinha um pedido próprio, mais cru: anunciava-se como
+ * `Brawl-Hibrido-Sync/1.0` e não enviava nenhum dos cabeçalhos que um
+ * navegador envia sempre. O TopBrawl respondia-lhe 403 Forbidden — as mesmas
+ * páginas abrem sem problema num browser.
+ *
+ * O projeto já tinha resolvido isto para o BrawlScope, com cuidados que esta
+ * cópia não tinha: espaçamento entre pedidos ao mesmo site com variação
+ * aleatória, e recuo automático quando uma origem responde 403 em vez de
+ * insistir contra quem recusa. Ter duas maneiras de pedir uma página era o que
+ * mantinha esses cuidados de fora daqui.
+ *
+ * Não há garantia de que passe a funcionar: quem recusa pode voltar a recusar,
+ * e nesse caso o caminho é o mesmo do BrawlScope — ler as páginas no navegador
+ * de quem usa o site, com a extensão.
+ */
 async function fetchText(url: string) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Brawl-Hibrido-Sync/1.0 (+https://brawl-hibrido.manus.space)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-    });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-    return response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
+  return lerPagina(url);
 }
 
 export function parseTopBrawl(html: string, mapName: string): Map<string, Partial<SyncRow>> {
