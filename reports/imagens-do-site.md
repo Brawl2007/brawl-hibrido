@@ -14,11 +14,31 @@ Não era só uma questão de aspeto: cada um destes pedidos é uma invocação d
 função. São quatro a cinco por cada carregamento de página, todas a falhar, e o
 navegador volta a tentar. Gastava-se quota a servir erros.
 
-## Como resolver de vez
+## O que ficou feito
 
-Põe os ficheiros em `client/public/manus-storage/`, com estes nomes exatos:
+O histórico do repositório foi verificado: estes ficheiros **nunca** cá
+entraram, por isso não há de onde os recuperar.
 
-| Ficheiro | Onde aparece |
+Dos cinco, só um aparecia partido: o logótipo, por ser uma `<img>` — um ícone
+de imagem falhada em todas as páginas e no separador do navegador. Passou a
+apontar para `client/public/marca/logo-provisorio.svg`, um monograma que existe
+aqui, servido como recurso estático. Não pretende ser a marca final; serve para
+o site deixar de parecer avariado.
+
+Os outros quatro eram decorativos e estavam sempre por baixo de um gradiente
+que já sustenta o aspeto sozinho. Ficaram desligados: o gradiente é o que se vê,
+e poupam-se quatro pedidos falhados por cada carregamento de página.
+
+Os endereços estavam repetidos em quatro páginas, no `index.html` e no
+`index.css`. Passaram a viver num sítio só: `client/src/lib/imagens.ts`.
+
+## Quando houver os originais
+
+Põe os ficheiros em `client/public/` e troca os endereços em
+`client/src/lib/imagens.ts`. É o único ficheiro que precisa de mudar. Os nomes
+que a plataforma anterior usava eram estes:
+
+| Ficheiro | Onde aparecia |
 |---|---|
 | `brawl-hibrido-logo_6c9584aa.png` | logótipo, em quase todas as páginas |
 | `brawl-hibrido-hero_c38f757c.jpg` | imagem principal da entrada |
@@ -26,26 +46,11 @@ Põe os ficheiros em `client/public/manus-storage/`, com estes nomes exatos:
 | `brawl-hibrido-texture_3661e183.jpg` | textura de fundo |
 | `brawl-stars-draft-background_4a31ad8d.webp` | fundo do tabuleiro de Draft |
 
-São servidos como qualquer outro recurso estático: sem chave, sem API e sem
-invocação de função. É o caminho mais barato e o único que não depende de uma
-plataforma que já não se usa.
+Os nomes deixaram de ser obrigatórios: como só há um sítio a apontar para eles,
+qualquer nome serve.
 
-Os nomes têm de ser estes porque são os que o código pede. Mudar o nome obriga
-a mudar `Home.tsx`, `Draft.tsx`, `BrawlerDetail.tsx` e o `index.css`.
+## O proxy de armazenamento
 
-## Enquanto não houver ficheiros
-
-A resposta passou a ser **404 com um dia de cache**, em vez de 500. O navegador
-percebe que não existe e deixa de insistir — um 500 convida à repetição, um 404
-encerra o assunto.
-
-Quem ainda tiver as variáveis da plataforma antiga pode defini-las: o
-reencaminhamento continua a funcionar como recurso, e é tentado quando não há
-ficheiro local.
-
-## Onde estavam as originais
-
-Segundo `reports/draft-background-asset.md`, o fundo do Draft veio de
-`/home/ubuntu/webdev-static-assets/brawl-stars-draft-background.webp` — uma
-máquina da plataforma anterior. Se não houver cópia dessa pasta, as imagens têm
-de ser refeitas ou substituídas.
+Continua a responder **404 com um dia de cache** a `/manus-storage/...`, para o
+caso de algum endereço antigo sobreviver num marcador ou numa cache. Um 500
+convida à repetição; um 404 encerra o assunto.

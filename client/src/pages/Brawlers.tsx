@@ -1,3 +1,4 @@
+import { LOGO } from "@/lib/imagens";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
 import { useMemo, useState, useEffect } from "react";
@@ -49,7 +50,7 @@ import {
 } from "@shared/draft";
 import { BRAWL_PLANET_ATTACK_RANGE_SOURCE_URL, getBrawlerAttackRangeBand, type AttackRangeBand } from "@shared/brawlerAttackRangeBands";
 
-const LOGO_URL = "/manus-storage/brawl-hibrido-logo_6c9584aa.png";
+const LOGO_URL = LOGO;
 
 type TierFilter = "Todos" | Tier;
 type MatchupFilter = "Todos" | "has-counters" | "countered-by";

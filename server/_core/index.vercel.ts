@@ -1,4 +1,5 @@
 import { VERSAO_DO_SITE } from "@shared/version";
+import { INTERVALO_DE_RELIGACAO_MS } from "@shared/realtimeStream";
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
@@ -13,7 +14,6 @@ import { handleCronSync } from "../cronSync";
 import { handleObservedMatchCollectionScheduled } from "../observedMatchScheduled";
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
-import { addCounterClient, addRankedClient } from "../realtime";
 import { getLiveSyncState } from "../liveSync";
 import { garantirArranque } from "../arranque";
 
@@ -53,6 +53,9 @@ export function createApp() {
       "X-Accel-Buffering": "no",
     });
     res.flushHeaders();
+    // Quando voltar. Sem isto o navegador religa-se em ~3 s, o que trocaria uma
+    // ligação presa por uma chuva de invocações — pior do que o problema.
+    res.write(`retry: ${INTERVALO_DE_RELIGACAO_MS}\n\n`);
     let disconnected = false;
     res.once("close", () => { disconnected = true; });
     const snapshot = await getPublicRankedSnapshot();
@@ -68,9 +71,15 @@ export function createApp() {
       rowCount: snapshot.rowCount,
       payload: snapshot.payload,
     })}\n\n`);
-    const removeClient = addRankedClient(res);
-    const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 25_000);
-    res.on("close", () => { clearInterval(heartbeat); removeClient(); });
+    /**
+     * Entregue o que havia, a ligação fecha.
+     *
+     * Guardar a resposta para empurrar mais tarde é o que o servidor de pé faz,
+     * e aqui não pode funcionar: a sincronização corre noutra invocação, com
+     * outra cópia da lista de ligados. Ficar à espera só consumia tempo de
+     * função. Ver `shared/realtimeStream.ts`.
+     */
+    res.end();
   });
   app.get("/api/realtime/counters", async (_req, res) => {
     res.status(200).set({
@@ -80,14 +89,15 @@ export function createApp() {
       "X-Accel-Buffering": "no",
     });
     res.flushHeaders();
+    // Quando voltar. Sem isto o navegador religa-se em ~3 s, o que trocaria uma
+    // ligação presa por uma chuva de invocações — pior do que o problema.
+    res.write(`retry: ${INTERVALO_DE_RELIGACAO_MS}\n\n`);
     let disconnected = false;
     res.once("close", () => { disconnected = true; });
     const snapshot = await getPublicCounterSyncSnapshot();
     if (disconnected) return;
     if (snapshot) res.write(`event: counter_snapshot\ndata: ${JSON.stringify({ version: snapshot.version, capturedAt: snapshot.capturedAt, payload: snapshot.payload })}\n\n`);
-    const removeClient = addCounterClient(res);
-    const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 25_000);
-    res.on("close", () => { clearInterval(heartbeat); removeClient(); });
+    res.end();
   });
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
   serveStatic(app);

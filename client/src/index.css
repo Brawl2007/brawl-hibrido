@@ -1585,7 +1585,7 @@ main { max-width: 1600px; margin: 0 auto; }
 .draft-shell .draft-intel-grid,
 .draft-shell .draft-arena-reference { display: none; }
 .draft-shell .draft-main { max-width: 1520px; margin: 0 auto; padding: 24px 28px 48px; }
-.draft-shell .draft-arena { width: 100%; margin: 0; padding: 0; border: 1px solid var(--bh-surface-3); border-top: 3px solid var(--bh-violet); background: linear-gradient(100deg, rgba(7, 14, 24, .94), rgba(10, 19, 31, .8), rgba(7, 14, 24, .94)), url("/manus-storage/brawl-stars-draft-background_4a31ad8d.webp") center / cover no-repeat !important; box-shadow: none; }
+.draft-shell .draft-arena { width: 100%; margin: 0; padding: 0; border: 1px solid var(--bh-surface-3); border-top: 3px solid var(--bh-violet); background: linear-gradient(100deg, rgba(7, 14, 24, .94), rgba(10, 19, 31, .8), rgba(7, 14, 24, .94)) !important; box-shadow: none; }
 .draft-shell .draft-arena-header { align-items: center; gap: 16px; padding: 16px 18px; border-bottom-color: var(--bh-surface-3); background: var(--bh-surface); }
 .draft-shell .draft-arena-header .section-kicker { color: var(--bh-text-dim); }
 .draft-shell .draft-arena-header h2 { margin: 4px 0 0; font-size: clamp(30px, 3vw, 42px); }

@@ -3,6 +3,7 @@
  * Style reminder: Championship Arena — dark carbon surfaces, electric violet,
  * cyan telemetry, amber S-tier emphasis, asymmetric data-first composition.
  */
+import { LOGO, IMAGEM_PRINCIPAL, FUNDO_DE_MAPA, TEXTURA, fundoCom } from "@/lib/imagens";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -62,10 +63,7 @@ import { buildMapsTsv } from "@shared/mapTsv";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
 
-const LOGO_URL = "/manus-storage/brawl-hibrido-logo_6c9584aa.png";
-const HERO_URL = "/manus-storage/brawl-hibrido-hero_c38f757c.jpg";
-const MAP_BG_URL = "/manus-storage/brawl-hibrido-map-bg_531ad86a.jpg";
-const TEXTURE_URL = "/manus-storage/brawl-hibrido-texture_3661e183.jpg";
+const LOGO_URL = LOGO;
 
 const modeIcons: Record<string, typeof Target> = {
   bounty: Crosshair,
@@ -141,7 +139,12 @@ const mapAssetIds: Record<string, string> = {
 
 function mapImageFor(mapName: string) {
   const mapId = mapAssetIds[mapName];
-  return mapId ? `https://cdn.brawlify.com/maps/regular/${mapId}.png` : MAP_BG_URL;
+  return mapId ? `https://cdn.brawlify.com/maps/regular/${mapId}.png` : FUNDO_DE_MAPA;
+}
+
+/** Sem imagem publicada, o cartão fica só com o fundo do tema. */
+function fundoDeMapa(imagem: string | null) {
+  return imagem ? { backgroundImage: `url(${imagem})` } : undefined;
 }
 
 function brawlerImageFor(brawler: string, brawlerId?: number | null) {
@@ -307,7 +310,7 @@ function Topbar({ onMenu, capturedAt, lastStatus, liveState, onRefresh, isRefres
 
 function Hero({ selectedMap, onExplore }: { selectedMap: MapSummary; onExplore: () => void }) {
   return (
-    <section className="hero-panel" style={{ backgroundImage: `url(${HERO_URL})` }}>
+    <section className="hero-panel" style={IMAGEM_PRINCIPAL ? { backgroundImage: `url(${IMAGEM_PRINCIPAL})` } : undefined}>
       <div className="hero-overlay" />
       <div className="hero-content">
         <div className="eyebrow"><span className="eyebrow-line" /> Competitive intelligence <span className="eyebrow-dot" /></div>
@@ -422,7 +425,7 @@ function MapSelector({
               key={map.name}
               className={`map-card ${selected ? "is-selected" : ""}`}
               onClick={() => onSelect(map)}
-              style={{ backgroundImage: `linear-gradient(135deg, rgba(13,16,26,.78), rgba(22,15,43,.42)), url(${selected ? mapImageFor(map.name) : MAP_BG_URL})` }}
+              style={{ backgroundImage: fundoCom("linear-gradient(135deg, rgba(13,16,26,.78), rgba(22,15,43,.42))", selected ? mapImageFor(map.name) : FUNDO_DE_MAPA) }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24, delay: index * 0.025 }}
@@ -432,7 +435,7 @@ function MapSelector({
                 <b>#{String(index + 1).padStart(2, "0")}</b>
               </span>
               <span className="map-card-name">
-                <span className="map-card-thumb" style={{ backgroundImage: `url(${mapImageFor(map.name)})` }} />
+                <span className="map-card-thumb" style={fundoDeMapa(mapImageFor(map.name))} />
                 {map.name}
               </span>
               {melhor ? (
@@ -922,7 +925,7 @@ export default function Home() {
   };
 
   return (
-    <div className="app-shell" style={{ backgroundImage: `linear-gradient(rgba(11,14,20,.92), rgba(11,14,20,.96)), url(${TEXTURE_URL})` }}>
+    <div className="app-shell" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.92), rgba(11,14,20,.96))", TEXTURA) }}>
       <Sidebar activeSection={activeSection} onSectionChange={scrollTo} open={mobileSidebar} onClose={() => setMobileSidebar(false)} capturedAt={capturedAt} />
       <div className="app-main">
         <Topbar onMenu={() => setMobileSidebar(true)} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
