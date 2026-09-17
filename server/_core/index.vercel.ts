@@ -14,10 +14,19 @@ import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
 import { addCounterClient, addRankedClient } from "../realtime";
 import { getLiveSyncState } from "../liveSync";
+import { garantirArranque } from "../arranque";
 
 export function createApp() {
   const app = express();
   const server = createServer(app);
+
+  /**
+   * Sem processo que fique de pé, o trabalho de arranque viaja no primeiro
+   * pedido que cada instância atender: criar as tabelas em falta e carregar a
+   * chave da API guardada. É memorizado, por isso os pedidos seguintes desta
+   * instância não pagam nada.
+   */
+  app.use((_req, _res, next) => { void garantirArranque().finally(() => next()); });
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

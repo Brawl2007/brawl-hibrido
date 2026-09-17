@@ -18,7 +18,7 @@ describe("chave da API oficial definida pelo site", () => {
   const settings = readFileSync(resolve(raiz, "server/appSettings.ts"), "utf8");
   const api = readFileSync(resolve(raiz, "server/brawlStarsApi.ts"), "utf8");
   const routers = readFileSync(resolve(raiz, "server/routers.ts"), "utf8");
-  const liveSync = readFileSync(resolve(raiz, "server/liveSync.ts"), "utf8");
+  const arranque = readFileSync(resolve(raiz, "server/arranque.ts"), "utf8");
   const draft = readFileSync(resolve(raiz, "client/src/pages/Draft.tsx"), "utf8");
 
   it("o ambiente continua a ter prioridade sobre a base de dados", () => {
@@ -28,11 +28,11 @@ describe("chave da API oficial definida pelo site", () => {
 
   it("a tabela é criada sozinha: a situação que isto resolve é não se poder correr comandos", () => {
     expect(settings).toContain("CREATE TABLE IF NOT EXISTS app_settings");
-    expect(liveSync).toContain("ensureAppSettingsTable()");
+    expect(arranque).toContain("ensureAppSettingsTable()");
   });
 
   it("a chave é carregada no arranque, antes do primeiro ciclo", () => {
-    expect(liveSync).toMatch(/ensureAppSettingsTable\(\)[\s\S]{0,200}getStoredApiKey\(\)[\s\S]{0,200}setRuntimeApiKey/);
+    expect(arranque).toMatch(/ensureAppSettingsTable\(\)[\s\S]{0,200}getStoredApiKey\(\)[\s\S]{0,200}setRuntimeApiKey/);
   });
 
   it("a interface nunca recebe a chave, só uma pista", () => {
