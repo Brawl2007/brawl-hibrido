@@ -162,7 +162,21 @@ export function resetSyncJobsForTests() {
   jobs.clear();
 }
 
-/** Só para testes: espera pelo fim do trabalho em curso, se houver. */
-export async function awaitSyncJobForTests(name: string) {
+/**
+ * Espera pelo fim do trabalho em curso, se houver.
+ *
+ * Isto era só para testes, e passou a ser preciso a sério. O feitio normal
+ * deste módulo — o pedido ARRANCA o trabalho e responde já — supõe um servidor
+ * que fica de pé a trabalhar depois de responder. Numa função sem processo, a
+ * resposta congela tudo: quem arranca e responde nunca vê o trabalho acabar.
+ *
+ * Uma recolha periódica nesse alojamento tem de esperar antes de responder, e é
+ * para isso que isto serve. O estado continua a ser publicado da mesma maneira,
+ * por isso o ecrã não muda.
+ */
+export async function esperarPeloTrabalho(name: string) {
   await jobs.get(name)?.promise;
 }
+
+/** @deprecated Usa `esperarPeloTrabalho`. Mantido pelos testes que já o chamam. */
+export const awaitSyncJobForTests = esperarPeloTrabalho;

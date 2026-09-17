@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic } from "./static";
 import { handleCounterSyncScheduled, handleRankedSyncScheduled } from "../scheduled";
+import { handleCronSync } from "../cronSync";
 import { handleObservedMatchCollectionScheduled } from "../observedMatchScheduled";
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
@@ -32,6 +33,14 @@ export function createApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  /**
+   * A recolha periódica do cron da Vercel, declarada no `vercel.json`.
+   *
+   * As rotas `/api/scheduled/*` abaixo são da plataforma anterior: pedem
+   * autenticação do SDK dela e ninguém as chama desde a mudança. Esta é a que
+   * funciona aqui, protegida pelo `CRON_SECRET`.
+   */
+  app.get("/api/cron/sync", handleCronSync);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);
   app.post("/api/scheduled/observedMatchCollection", handleObservedMatchCollectionScheduled);
