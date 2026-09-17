@@ -205,7 +205,7 @@ export function getPLProdigyLiteralCounterRelations(attacker: string, defender: 
  * live tem prioridade; o catálogo estático só responde quando o fallback
  * offline está explicitamente ativo, tal como nos counters.
  */
-export function getBrawlScopeSynergyTeammates(brawler: string, modeId?: string): SourcedCounterRelation[] {
+export function getBrawlScopeSynergyTeammates(brawler: string, modeId?: string, allowStatic = false): SourcedCounterRelation[] {
   const normalizedModeId = normalizeBrawlScopeModeId(modeId);
   const synced = getSnapshotSynergies(activeCounterSyncSnapshot, brawler, "brawlscope", normalizedModeId);
   if (synced.length) {
@@ -217,8 +217,25 @@ export function getBrawlScopeSynergyTeammates(brawler: string, modeId?: string):
     }));
   }
 
-  // O catálogo geral só está disponível em modo offline explícito, sem snapshot.
-  if (activeCounterSyncSnapshot || normalizedModeId || !offlineCounterFallbackEnabled) return [];
+  /**
+   * O catálogo completa um perfil que a leitura em direto já sustenta.
+   *
+   * É a mesma regra que o Brawl Planet segue há mais tempo, e que o BrawlScope
+   * não seguia: com uma snapshot ativa recusava o catálogo por inteiro. Como a
+   * recolha lê uma vista por ciclo e pode falhar a ficha de um brawler, isso
+   * deixava o Draft sem a lista "Pair with" de alguns candidatos — havendo 105
+   * fichas recolhidas em disco.
+   *
+   * O limite continua a ser o mesmo das outras fontes, e é o que importa: o
+   * catálogo NUNCA cria um perfil sozinho. Se a leitura em direto não sustenta
+   * o brawler, não há nada a completar.
+   */
+  if (activeCounterSyncSnapshot) return allowStatic ? staticBrawlScopeSynergies(brawler) : [];
+  if (normalizedModeId || !offlineCounterFallbackEnabled) return [];
+  return staticBrawlScopeSynergies(brawler);
+}
+
+function staticBrawlScopeSynergies(brawler: string): SourcedCounterRelation[] {
   const entry = findByBrawler<BrawlScopeSynergyEntry>(brawlScopeSynergyData, brawler);
   if (!entry) return [];
   return normalizeBrawlScopeSynergyList(entry.teammates, entry.brawler).map((teammate) => ({
@@ -302,7 +319,7 @@ function getSyncedCounterSourceProfiles(brawler: string, modeId?: string): Count
             worstTeammates: group ? staticPlanetTeams(brawler).worstTeammates : [],
           }
         : source === "brawlscope"
-          ? { bestTeammates: getBrawlScopeSynergyTeammates(brawler, normalizedModeId), worstTeammates: [] as SourcedCounterRelation[] }
+          ? { bestTeammates: getBrawlScopeSynergyTeammates(brawler, normalizedModeId, Boolean(group)), worstTeammates: [] as SourcedCounterRelation[] }
           : { bestTeammates: [] as SourcedCounterRelation[], worstTeammates: [] as SourcedCounterRelation[] };
       // Uma fonte que publicou apenas sinergia continua a ter perfil: as duas
       // leituras são independentes e a ausência de counters não pode apagar a

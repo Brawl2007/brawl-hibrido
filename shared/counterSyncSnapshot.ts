@@ -146,7 +146,23 @@ export function getSnapshotSynergies(
   if (!mine.length) return [];
   const modeKey = (value?: string) => normalizeBrawlScopeModeId(value) ?? value;
   const scoped = modeId ? mine.filter((entry) => modeKey(entry.modeId) === modeKey(modeId)) : mine.filter((entry) => !entry.modeId);
-  const chosen = source === "brawlscope" ? scoped : scoped.length ? scoped : modeId ? mine.filter((entry) => !entry.modeId) : [];
+  /**
+   * A regra é a mesma para todas as fontes.
+   *
+   * O BrawlScope estava de fora: pedida uma lista por modo, devolvia-se o que
+   * esse modo tivesse e mais nada. Só que a recolha lê UMA das sete vistas por
+   * ciclo, por isso um modo ainda não lido não tem lista nenhuma — e a sinergia
+   * do BrawlScope, que é a principal, desaparecia do Draft sem aviso, em uns
+   * brawlers sim e noutros não, consoante a vista que tivesse entrado.
+   *
+   * Era também o contrário do que esta função promete acima, e do que as outras
+   * fontes já faziam.
+   *
+   * Recorrer à leitura geral não inventa nada: é uma lista que a fonte publicou,
+   * na página do titular. O que continua proibido é o inverso — a leitura geral
+   * nunca junta listas de modo, porque essas valem no modo delas.
+   */
+  const chosen = scoped.length ? scoped : modeId ? mine.filter((entry) => !entry.modeId) : [];
   const seen = new Set<string>();
   return chosen
     .slice()

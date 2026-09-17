@@ -79,7 +79,17 @@ describe("leitura da sinergia literal BrawlScope", () => {
       "Colt",
     ]);
     expect(getSnapshotSynergies(snapshot(), "Nori", "brawlscope", "knockout").map((entry) => entry.teammate)).toEqual(["Gus", "Poco"]);
-    expect(getSnapshotSynergies(snapshot(), "Nori", "brawlscope", "gemgrab")).toEqual([]);
+    /**
+     * Um modo que ainda não foi lido recorre à leitura geral, como a própria
+     * função promete e como as outras fontes já faziam. A recolha lê uma vista
+     * por ciclo: exigir vazio aqui era exigir que a sinergia desaparecesse do
+     * Draft enquanto a vista do modo não entrasse.
+     */
+    expect(getSnapshotSynergies(snapshot(), "Nori", "brawlscope", "gemgrab").map((entry) => entry.teammate)).toEqual([
+      "Melodie",
+      "8-Bit",
+      "Colt",
+    ]);
     expect(getSnapshotSynergies(snapshot(), "Nori", "planet").map((entry) => entry.teammate)).toEqual(["Pearl"]);
   });
 
@@ -156,7 +166,8 @@ describe("bónus de sinergia BrawlScope no Draft", () => {
       expect(signal.scoreBreakdown.hasPublishedSynergyRate).toBe(true);
       expect(signal.scoreBreakdown.synergyBonusRate).toBeCloseTo(delta / 100);
       expect(getBrawlScopeSynergyTeammates("Nori")[0].delta).toBe(9);
-      expect(getBrawlScopeSynergyTeammates("Nori", "heist")).toEqual([]);
+      // Sem lista própria, o modo mostra a leitura geral — que aqui é o 9 do topo.
+      expect(getBrawlScopeSynergyTeammates("Nori", "heist")[0].delta).toBe(9);
     }
     setBrawlScopeReading("overall");
     expect(calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] }).scoreBreakdown.synergyBonusRate).toBeCloseTo(0.09);
