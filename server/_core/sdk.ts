@@ -32,13 +32,29 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
+    /**
+     * O `OAUTH_SERVER_URL` aponta para o servidor de contas da plataforma
+     * anterior. Fora dela não existe — e não faz falta para o que o site usa:
+     * o acesso do dono é assinado e verificado aqui, com o segredo local, sem
+     * chamar ninguém.
+     *
+     * Isto gritava ERROR em cada arranque frio. Num alojamento sem processo de
+     * pé são dezenas de vezes por dia, sobre uma funcionalidade que ninguém
+     * está a usar — e um registo cheio de erros que não são erros é um registo
+     * onde o erro verdadeiro passa despercebido.
+     *
+     * Passa a dizer-se uma vez, e a dizer o que está mesmo em causa.
+     */
+    if (ENV.oAuthServerUrl) {
+      console.log("[OAuth] Servidor de contas:", ENV.oAuthServerUrl);
+      return;
     }
+    console.warn(
+      "[OAuth] Sem OAUTH_SERVER_URL: o início de sessão pela plataforma anterior está indisponível. " +
+      "O acesso do dono por palavra-passe não depende disto e continua a funcionar."
+    );
   }
+
 
   private decodeState(state: string): string {
     return decodeOAuthState(state).redirectUri;
