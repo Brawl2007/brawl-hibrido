@@ -516,6 +516,22 @@ export async function upsertRankedMapCaptures(rows: InsertRankedMapCapture[]) {
   return rows.length;
 }
 
+/**
+ * Quantos mapas há guardados, sem trazer os conteúdos.
+ *
+ * A sincronização precisa de saber se tem com que trabalhar ANTES de decidir
+ * se desiste. Contar com `listRankedMapCaptures` obrigaria a carregar o HTML
+ * dos 26 mapas só para ler um número.
+ */
+export async function countRankedMapCaptures() {
+  const db = await getDb();
+  if (!db) return 0;
+  return lerDaBase("countRankedMapCaptures", async () => {
+    const [linha] = await db.select({ total: count() }).from(rankedMapCaptures);
+    return Number(linha?.total ?? 0);
+  }, 0);
+}
+
 /** Tudo o que foi recolhido fora, para a sincronização usar. */
 export async function listRankedMapCaptures() {
   const db = await getDb();

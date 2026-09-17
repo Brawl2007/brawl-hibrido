@@ -6,6 +6,7 @@ import {
   updateRankedSyncConfig,
   updateRankedSyncRun,
   upsertRankedSyncSnapshot,
+  countRankedMapCaptures,
   listRankedMapCaptures,
 } from "./db";
 import { fetchOfficialBrawlers } from "./brawlStarsApi";
@@ -609,7 +610,25 @@ export async function syncRankedData(trigger: "scheduled" | "manual" | "bootstra
     const discovered = await collectRankedRotation();
     const prior = await getRankedSyncSnapshot();
     const priorPayload = prior?.payload ? JSON.parse(prior.payload) as SnapshotPayload : undefined;
-    if (!discovered.complete && priorPayload?.rows.length) throw new Error("Índice da rotação incompleto; última rotação e dados preservados.");
+    /**
+     * Um índice ilegível só é motivo para desistir se não houver mais nada.
+     *
+     * A guarda existe para que a ausência de resposta não seja lida como
+     * "saíram mapas da rotação", e isso continua a valer. Mas ela desistia
+     * ANTES de olhar para o que já estava guardado — e o `topbrawl.com`
+     * responde 403 ao índice a partir daqui de forma permanente, por ser um
+     * alojamento na nuvem. Resultado: com os 26 mapas recolhidos no navegador
+     * e gravados na base, a sincronização morria na primeira linha e os
+     * valores no ecrã nunca mudavam, sem nada nos registos a seguir ao aviso
+     * do 403.
+     *
+     * A rotação não se perde por seguir em frente: `mergeRotationSources` cai
+     * na lista do projeto e marca a leitura como incompleta, que é
+     * exatamente o que essa marca existe para dizer.
+     */
+    const mapasGuardados = await countRankedMapCaptures();
+    if (!discovered.complete && !mapasGuardados && priorPayload?.rows.length) throw new Error("Índice da rotação incompleto e sem recolha externa; última rotação e dados preservados.");
+    if (!discovered.complete && mapasGuardados) console.log(`[RankedSync] Índice indisponível, mas há ${mapasGuardados} mapas recolhidos no navegador: a sincronização segue com a rotação do projeto.`);
     const rotation = mergeRotationSources(RANKED_MAP_SOURCES, discovered);
     if (rotation.note) console.log(`[RankedSync] Rotação: ${rotation.note}`);
 

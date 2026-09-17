@@ -12,6 +12,7 @@ const dbMocks = vi.hoisted(() => ({
    * Vazia por omissão: estes testes cobrem a recolha em direto.
    */
   listRankedMapCaptures: vi.fn().mockResolvedValue([]),
+  countRankedMapCaptures: vi.fn().mockResolvedValue(0),
   upsertRankedMapCaptures: vi.fn().mockResolvedValue(0),
 }));
 
@@ -29,6 +30,7 @@ describe("ranked synchronization", () => {
     dbMocks.updateRankedSyncConfig.mockResolvedValue(undefined);
     dbMocks.updateRankedSyncRun.mockResolvedValue(undefined);
     dbMocks.listRankedMapCaptures.mockResolvedValue([]);
+    dbMocks.countRankedMapCaptures.mockResolvedValue(0);
     dbMocks.upsertRankedSyncSnapshot.mockResolvedValue(undefined);
   });
 
@@ -98,6 +100,44 @@ describe("ranked synchronization", () => {
       1,
       expect.objectContaining({ status: "failed" }),
     );
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * O caso real: 26 mapas recolhidos no navegador, gravados na base, e os
+   * valores no ecrã na mesma parados.
+   *
+   * A sincronização lia o índice do TopBrawl primeiro e, como daqui esse
+   * pedido leva 403, desistia à segunda linha — antes de olhar para o que
+   * estava guardado. Nos registos ficava o aviso do 403 e mais nada, o que
+   * fazia a procura começar sempre pela recolha, que estava boa.
+   */
+  it("uses the browser-collected maps when the index is blocked", async () => {
+    dbMocks.getRankedSyncSnapshot.mockResolvedValue({
+      version: "live-previous",
+      rowCount: 2835,
+      payload: JSON.stringify({ rows: [{ map: "Hard Rock Mine", brawler: "Griff" }] }),
+    });
+    dbMocks.countRankedMapCaptures.mockResolvedValue(26);
+    dbMocks.listRankedMapCaptures.mockResolvedValue([{
+      mapId: "15000007",
+      map: "Hard Rock Mine",
+      capturedAt: new Date(),
+      payload: JSON.stringify([
+        { brawler: "Griff", brawlerId: 16000042, topBrawlWinRate: 51.37, topBrawlUseRate: 8.1, topBrawlScore: 74.2 },
+      ]),
+    }]);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("403 Forbidden")));
+
+    const result = await syncRankedData("manual");
+
+    // Não basta a guarda deixar passar: o mapa guardado tem de chegar à snapshot.
+    expect(result.error ?? "").not.toContain("Índice da rotação incompleto");
+    expect(dbMocks.upsertRankedSyncSnapshot).toHaveBeenCalled();
+    const gravada = dbMocks.upsertRankedSyncSnapshot.mock.calls[0][0] as { payload: string };
+    const griff = (JSON.parse(gravada.payload) as { rows: { map: string; brawler: string; topBrawlWinRate?: number | null }[] })
+      .rows.find((row) => row.map === "Hard Rock Mine" && row.brawler === "Griff");
+    expect(griff?.topBrawlWinRate).toBe(51.37);
     vi.unstubAllGlobals();
   });
 });
