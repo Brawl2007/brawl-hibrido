@@ -123,15 +123,32 @@ export function useSyncRefresh() {
     setRequestedAt(Date.now());
     toast.info("A atualizar…", { description: "Podes continuar a usar o site." });
 
+    /**
+     * "Terminou" não é o mesmo que "correu bem".
+     *
+     * Uma recolha que rebenta — a fonte recusou, o índice veio incompleto —
+     * também termina, e a falha fica no estado do trabalho, não nos registos.
+     * Anunciar "atualizado" nesse caso é o mesmo erro que este hook existe para
+     * corrigir: dizer que aconteceu uma coisa que não aconteceu. Pior ainda,
+     * esconde a razão de quem precisa dela para perceber porque é que os
+     * números não mudaram.
+     */
+    const contar = (etiqueta: string, resultado?: { concluido?: boolean; state?: SyncJobState }) => {
+      if (!resultado?.concluido) return false;
+      const estado = resultado.state;
+      if (estado?.outcome === "success") { toast.success(`${etiqueta}: atualizado.`); return true; }
+      if (estado?.outcome === "timeout") toast.warning(`${etiqueta}: demorou demasiado.`, { description: estado.error ?? undefined });
+      else toast.error(`${etiqueta}: não foi concluída.`, { description: estado?.error ?? undefined });
+      return true;
+    };
+
     void rankedRefresh.mutateAsync()
-      .then((resultado) => {
-        if (resultado?.concluido) toast.success("Ranked: atualizado.");
-      })
+      .then((resultado) => { contar("Ranked", resultado); })
       .catch(() => undefined);
 
     void counterRefresh.mutateAsync()
       .then((resultado) => {
-        if (resultado?.concluido) return;
+        if (contar("Counters", resultado)) return;
         toast.info("Counters: recolha a meio.", {
           description: "São centenas de fichas e não cabem num pedido. O que foi lido ficou guardado; carrega outra vez para continuar.",
         });
