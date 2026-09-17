@@ -154,6 +154,51 @@ export function startSyncJob(
   return { started: true, alreadyRunning: false, state: getSyncJobState(name) };
 }
 
+/** Tempo que um pedido interativo espera pelo trabalho antes de responder. */
+export const ESPERA_INTERATIVA_MS = Number(process.env.REFRESH_WAIT_MS ?? 25_000);
+
+/**
+ * Arranca o trabalho e espera por ele — até um limite.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * O botão "Atualizar agora" arrancava a recolha e respondia já, deixando o
+ * trabalho a correr em segundo plano. Num servidor que fica de pé isso é o
+ * correto, e foi para isso que este módulo foi escrito.
+ *
+ * Num alojamento sem processo, a resposta CONGELA a instância. O trabalho
+ * parava no instante em que o botão dizia "Atualização iniciada", e só avançava
+ * aos soluços, quando por acaso um pedido seguinte acordasse a mesma instância.
+ * Quem carregava via o botão a girar e, muitas vezes, nada a mudar.
+ *
+ * Aqui o pedido fica aberto a trabalhar, até ao orçamento. O que couber, fica
+ * feito de verdade. O que não couber continua a ser reportado pelo estado, como
+ * antes — quem chama fica a saber se acabou ou se ficou a meio.
+ *
+ * O orçamento é bem menor do que o tempo máximo de uma função: uma resposta
+ * cortada a meio pela plataforma é pior do que uma resposta honesta a dizer
+ * "ainda vou a meio".
+ */
+export async function arrancarEEsperar(
+  name: string,
+  run: () => Promise<unknown>,
+  orcamentoMs: number = ESPERA_INTERATIVA_MS,
+) {
+  const arranque = startSyncJob(name, run);
+  let alarme: ReturnType<typeof setTimeout> | undefined;
+  const tempoEsgotado = new Promise<void>((resolve) => {
+    alarme = setTimeout(resolve, orcamentoMs);
+    (alarme as unknown as { unref?: () => void })?.unref?.();
+  });
+  try {
+    await Promise.race([esperarPeloTrabalho(name), tempoEsgotado]);
+  } finally {
+    if (alarme) clearTimeout(alarme);
+  }
+  const state = getSyncJobState(name);
+  return { ...arranque, state, concluido: !state.running };
+}
+
 /** Só para testes: esquece todo o estado acumulado. */
 export function resetSyncJobsForTests() {
   for (const entry of jobs.values()) {

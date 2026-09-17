@@ -8,6 +8,7 @@ import {
   resetSyncJobsForTests,
   startSyncJob,
   getProcessHealth,
+  ESPERA_INTERATIVA_MS,
 } from "./syncJobs";
 
 /**
@@ -101,17 +102,34 @@ describe("trabalhos de sincronização em segundo plano", () => {
   });
 });
 
-describe("o botão de atualizar não pode esperar dentro do pedido", () => {
-  it("os endpoints de refresh arrancam um trabalho em vez de esperar pela recolha", () => {
+describe("o botão de atualizar espera, mas nunca sem limite", () => {
+  /**
+   * Este teste guardava "arrancar e nunca esperar", que era a resposta certa
+   * para um servidor que fica de pé. Num alojamento sem processo passou a ser a
+   * resposta errada: a resposta congela a instância, o trabalho para, e o botão
+   * anunciava uma atualização que não acontecia.
+   *
+   * O que continua proibido — e é o que prendeu o botão da primeira vez — é
+   * esperar pela recolha CRUA, sem limite, dentro da mutação. Uma recolha de
+   * counters são minutos, e nenhum gateway mantém um pedido aberto tanto tempo.
+   *
+   * A garantia passa a ser: espera-se, mas sempre com orçamento.
+   */
+  it("os endpoints de refresh esperam com orçamento, nunca pela recolha crua", () => {
     const routers = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
 
-    expect(routers).toContain("startSyncJob(RANKED_SYNC_JOB");
-    expect(routers).toContain("startSyncJob(COUNTER_SYNC_JOB");
-    // Esperar pela recolha dentro da mutação foi exatamente o que prendeu o botão.
+    expect(routers).toContain("arrancarEEsperar(RANKED_SYNC_JOB");
+    expect(routers).toContain("arrancarEEsperar(COUNTER_SYNC_JOB");
+    // O que prendeu o botão: esperar a recolha crua dentro da mutação.
     expect(routers).not.toMatch(/return\s+syncCounterData\("manual"\)/);
     expect(routers).not.toMatch(/return\s+syncRankedData\("manual"\)/);
     // E tem de haver por onde perguntar o estado.
     expect(routers).toContain("syncJobs: router(");
+  });
+
+  it("o orçamento existe mesmo, e é bem menor que o tempo de uma função", () => {
+    expect(ESPERA_INTERATIVA_MS).toBeGreaterThan(0);
+    expect(ESPERA_INTERATIVA_MS).toBeLessThanOrEqual(30_000);
   });
 
   it("as três páginas usam o mesmo hook — foi a cópia que deixou duas para trás", () => {

@@ -105,12 +105,38 @@ export function useSyncRefresh() {
     || counterRefresh.isPending
     || (requestedAt !== null && !expired && running);
 
+  /**
+   * O que o botão promete tem de ser o que acontece.
+   *
+   * Antes dizia sempre "Atualização iniciada · corre em segundo plano". Num
+   * alojamento sem processo isso era falso com frequência: a resposta congelava
+   * a instância e o trabalho não avançava. Quem carregava ficava à espera de
+   * uma coisa que não estava a acontecer.
+   *
+   * Agora o servidor trabalha enquanto o pedido está aberto e diz se acabou. A
+   * rotação Ranked cabe e acaba. Os counters são mais de duzentas fichas
+   * espaçadas — não cabem — e nesse caso diz-se isso, em vez de anunciar uma
+   * conclusão que não houve.
+   */
   const start = () => {
     if (isRefreshing) return;
     setRequestedAt(Date.now());
-    rankedRefresh.mutate();
-    counterRefresh.mutate();
-    toast.info("Atualização iniciada.", { description: "Corre em segundo plano; podes continuar a usar o site." });
+    toast.info("A atualizar…", { description: "Podes continuar a usar o site." });
+
+    void rankedRefresh.mutateAsync()
+      .then((resultado) => {
+        if (resultado?.concluido) toast.success("Ranked: atualizado.");
+      })
+      .catch(() => undefined);
+
+    void counterRefresh.mutateAsync()
+      .then((resultado) => {
+        if (resultado?.concluido) return;
+        toast.info("Counters: recolha a meio.", {
+          description: "São centenas de fichas e não cabem num pedido. O que foi lido ficou guardado; carrega outra vez para continuar.",
+        });
+      })
+      .catch(() => undefined);
   };
 
   return { isRefreshing, progress, start, jobs, processHealth };

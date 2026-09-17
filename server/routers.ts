@@ -12,7 +12,7 @@ import { checkOwnerPassword, isOwnerPasswordConfigured, isOwnerPasswordStrongEno
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { COUNTER_SYNC_JOB, RANKED_SYNC_JOB } from "./syncJobNames";
-import { getProcessHealth, listSyncJobStates, startSyncJob } from "./syncJobs";
+import { getProcessHealth, listSyncJobStates, startSyncJob, arrancarEEsperar } from "./syncJobs";
 import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
@@ -199,9 +199,17 @@ export const appRouter = router({
      * minutos; à espera dela, o pedido morria no gateway e o botão ficava a
      * girar para sempre. O progresso lê-se em `syncJobs.state`.
      */
+    /**
+     * A rotação Ranked cabe num pedido, por isso é esperada.
+     *
+     * São cerca de vinte páginas com duas em paralelo. Esperar por elas faz o
+     * botão dizer a verdade: quando responde, está feito. Antes respondia já e
+     * o trabalho ficava congelado com a instância, que é como quem diz, o botão
+     * anunciava uma atualização que muitas vezes não acontecia.
+     */
     refresh: protectedProcedure.mutation(async ({ ctx }) => {
       exigirDono(ctx, "forçar uma atualização");
-      return startSyncJob(RANKED_SYNC_JOB, () => syncRankedData("manual"));
+      return arrancarEEsperar(RANKED_SYNC_JOB, () => syncRankedData("manual"));
     }),
   }),
   syncJobs: router({
@@ -406,9 +414,21 @@ export const appRouter = router({
         runs,
       };
     }),
+    /**
+     * Os counters NÃO cabem num pedido, e isso é dito em vez de escondido.
+     *
+     * Só o Brawl Planet são mais de cem fichas, espaçadas para não abusar da
+     * fonte; com o PL Prodigy e o Brawl Calculator são minutos. Nenhuma função
+     * vive tanto tempo.
+     *
+     * Espera-se à mesma pelo orçamento, porque o que couber fica feito de
+     * verdade — antes o trabalho parava no instante da resposta. O que sobra
+     * fica assinalado em `concluido: false`, e quem chama mostra isso a quem
+     * carregou no botão, em vez de anunciar uma atualização que não aconteceu.
+     */
     refresh: protectedProcedure.mutation(async ({ ctx }) => {
       exigirDono(ctx, "forçar uma atualização");
-      return startSyncJob(COUNTER_SYNC_JOB, () => syncCounterData("manual"));
+      return arrancarEEsperar(COUNTER_SYNC_JOB, () => syncCounterData("manual"));
     }),
     /**
      * Importa uma ficha do BrawlScope colada à mão.
