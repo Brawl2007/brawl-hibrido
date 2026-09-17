@@ -12,5 +12,14 @@
  * e deixa de se perder tempo a corrigir um problema que já estava corrigido.
  *
  * SOBE SEMPRE que sai uma versão nova.
+ *
+ * "Versão nova" é CADA alteração publicada, não um conjunto delas. Duas
+ * correções seguidas com o mesmo número deixam quem está ao computador sem
+ * maneira de saber qual das duas está no ar — e foi exatamente isso que
+ * aconteceu: várias correções subiram com o número parado, e a única forma de
+ * confirmar o que estava publicado passou a ser ir ver registos de build, que é
+ * precisamente o trabalho que este número existe para poupar.
+ *
+ * Se o que mudou chega para publicar, chega para subir o número.
  */
-export const VERSAO_DO_SITE = "v74";
+export const VERSAO_DO_SITE = "v75";
