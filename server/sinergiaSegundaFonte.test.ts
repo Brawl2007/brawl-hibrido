@@ -44,6 +44,8 @@ describe("sinergia da segunda fonte", () => {
 
     expect(comAsDuas.scoreBreakdown.synergySegundaFonteSource).toBe("Brawl Planet");
     expect(comAsDuas.scoreBreakdown.synergySegundaFonteAllies).toEqual(["Pearl"]);
+    // O Gus não entra aqui porque o Brawl Planet não o publica — e não por ser
+    // repetido. Repetidos contam, como o teste seguinte verifica.
     // 6% publicados pelo Brawl Planet, a metade que o peso por omissão define.
     expect(comAsDuas.scoreBreakdown.synergySegundaFonteRate).toBeCloseTo(0.06 * defaultDraftRuleSettings.synergySegundaFonte, 6);
     expect(comAsDuas.scoreBreakdown.synergyPoints).toBeCloseTo(soAPrimeira.scoreBreakdown.synergyPoints, 6);
@@ -61,7 +63,12 @@ describe("sinergia da segunda fonte", () => {
       .toBeGreaterThan(soAPrimeira.scoreBreakdown.rawContextualBonusPoints);
   });
 
-  it("um par publicado nas duas fontes conta uma vez só", () => {
+  /**
+   * As duas fontes medem em populações diferentes. Quando publicam o mesmo
+   * par, são duas medições independentes da mesma dupla — e uma não anula a
+   * outra: cada uma traz o seu bónus, com o seu peso.
+   */
+  it("um par publicado nas duas fontes recebe o bónus das duas", () => {
     const snapshot = snapshotDuasFontes();
     // Agora o Brawl Planet publica o MESMO aliado que o BrawlScope.
     snapshot.synergies = [
@@ -71,8 +78,11 @@ describe("sinergia da segunda fonte", () => {
     setCounterSyncSnapshot(snapshot);
     const sinal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
 
-    expect(sinal.scoreBreakdown.synergySegundaFontePoints).toBe(0);
     expect(sinal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
+    expect(sinal.scoreBreakdown.synergySegundaFonteAllies).toEqual(["Gus"]);
+    // Os 6% do Brawl Planet, ao peso da segunda fonte, além dos 10% do BrawlScope.
+    expect(sinal.scoreBreakdown.synergySegundaFonteRate).toBeCloseTo(0.06 * defaultDraftRuleSettings.synergySegundaFonte, 6);
+    expect(sinal.scoreBreakdown.synergySegundaFontePoints).toBeGreaterThan(0);
   });
 
   it("peso a zero repõe exatamente o comportamento de fatia única", () => {

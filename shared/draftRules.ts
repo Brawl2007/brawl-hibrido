@@ -62,10 +62,13 @@ export type DraftRuleSettings = {
    * publique — e as duas leem páginas diferentes, por isso cobrem pares
    * diferentes.
    *
-   * Agora a segunda fonte acrescenta a sua fatia, e só pelos aliados que a
-   * primeira NÃO cobriu: um par publicado nas duas continua a contar uma vez.
-   * Este peso é o que a distingue — 0,5 vale metade, 1 vale o mesmo, 0 desliga
-   * a segunda fonte e repõe o comportamento anterior.
+   * Agora a segunda fonte acrescenta a sua fatia por todos os aliados que
+   * publica, incluindo os que a primeira também publica: são duas medições
+   * independentes da mesma dupla, feitas em populações diferentes, e uma não
+   * anula a outra.
+   *
+   * Este peso é o que as distingue — 0,5 vale metade, 1 vale o mesmo, 0
+   * desliga a segunda fonte e repõe o comportamento de fatia única.
    */
   synergySegundaFonte: number;
   synergyPick1: number;

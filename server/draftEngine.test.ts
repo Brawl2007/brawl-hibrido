@@ -1357,6 +1357,9 @@ describe("draft engine", () => {
       + signal.scoreBreakdown.banPoints
       + signal.scoreBreakdown.openingLongRangePoints
       + signal.scoreBreakdown.synergyPoints
+      // A fatia da 2.ª fonte entra no total, por isso entra nesta soma: é
+      // exatamente isto que o teste guarda — nenhum ponto invisível.
+      + signal.scoreBreakdown.synergySegundaFontePoints
       - signal.scoreBreakdown.enemyCounterPenaltyPoints
       - signal.scoreBreakdown.sameClassPenaltyPoints
       - signal.scoreBreakdown.worstTeammatePenaltyPoints;

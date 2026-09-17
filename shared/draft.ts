@@ -1052,20 +1052,23 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       ?? brawlScopeProfile?.sourceUrl
     : brawlPlanetProfile?.sourceUrl;
   /**
-   * A segunda fonte, pelos aliados que a primeira não cobriu.
+   * A segunda fonte, com o bónus dela.
    *
-   * O BrawlScope e o Brawl Planet leem páginas diferentes e publicam pares
-   * diferentes; ficar só com a fonte prioritária deitava fora o que a outra
-   * tinha de próprio. Um par publicado nas duas continua a contar uma vez —
-   * quem já entrou pela primeira fonte não volta a entrar aqui.
+   * O BrawlScope e o Brawl Planet leem páginas diferentes e medem em
+   * populações diferentes. Quando as duas publicam o mesmo par, são duas
+   * medições independentes da mesma dupla — e uma não anula a outra: cada uma
+   * traz o seu próprio bónus, com o seu próprio peso.
+   *
+   * Uma versão anterior descontava o par repetido, para não o contar duas
+   * vezes. Isso fazia com que a leitura do Brawl Planet fosse deitada fora só
+   * porque o BrawlScope também tinha falado da mesma dupla, que é o contrário
+   * de aproveitar duas fontes.
    */
   const relacoesDaSegundaFonte = synergySource === "BrawlScope"
     ? brawlPlanetProfile?.bestTeammates ?? []
     : synergySource === "Brawl Planet" ? brawlScopeSynergyTeammates : [];
-  const aliadosJaContados = new Set(activeSynergyAllies.map(counterKey));
   const relacoesSegundaAtivas = relacoesDaSegundaFonte.filter((relation) =>
-    !aliadosJaContados.has(counterKey(relation.brawler))
-    && allyRows.some((ally) => counterKey(ally.brawler) === counterKey(relation.brawler)));
+    allyRows.some((ally) => counterKey(ally.brawler) === counterKey(relation.brawler)));
   const hasSynergy = !hasMapTeamSynergy && activeSynergyAllies.length > 0;
   const synergy = hasSynergy ? 100 : 0;
   const directCounters = enemyRows
