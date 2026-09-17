@@ -7,6 +7,12 @@ const dbMocks = vi.hoisted(() => ({
   updateRankedSyncConfig: vi.fn().mockResolvedValue(undefined),
   updateRankedSyncRun: vi.fn().mockResolvedValue(undefined),
   upsertRankedSyncSnapshot: vi.fn().mockResolvedValue(undefined),
+  /**
+   * A recolha do TopBrawl feita fora do alojamento, que daqui leva 403.
+   * Vazia por omissão: estes testes cobrem a recolha em direto.
+   */
+  listRankedMapCaptures: vi.fn().mockResolvedValue([]),
+  upsertRankedMapCaptures: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("./db", () => dbMocks);
@@ -22,6 +28,7 @@ describe("ranked synchronization", () => {
     dbMocks.getRankedSyncSnapshot.mockResolvedValue({ version: "live-previous", rowCount: 2835 });
     dbMocks.updateRankedSyncConfig.mockResolvedValue(undefined);
     dbMocks.updateRankedSyncRun.mockResolvedValue(undefined);
+    dbMocks.listRankedMapCaptures.mockResolvedValue([]);
     dbMocks.upsertRankedSyncSnapshot.mockResolvedValue(undefined);
   });
 

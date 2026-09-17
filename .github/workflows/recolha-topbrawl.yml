@@ -1,0 +1,36 @@
+# Recolha do TopBrawl, feita fora do alojamento.
+#
+# O `topbrawl.com` responde 403 a pedidos vindos da Vercel — não pelo pedido,
+# que funcionava na plataforma anterior, mas pela origem da rede. Aqui corre
+# noutra rede e envia o resultado para o site.
+name: Recolha TopBrawl
+
+on:
+  schedule:
+    # 05:20 UTC, pouco depois do cron do site, para os dados já lá estarem.
+    - cron: "20 5 * * *"
+  # Para poder ser corrida à mão, que é como se confirma que funciona.
+  workflow_dispatch:
+
+# Duas recolhas ao mesmo tempo pediriam as mesmas páginas em dobro.
+concurrency:
+  group: recolha-topbrawl
+  cancel-in-progress: false
+
+jobs:
+  recolher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Ler as páginas e enviar para o site
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          RANKED_IMPORT_SECRET: ${{ secrets.RANKED_IMPORT_SECRET }}
+        run: pnpm exec tsx scripts/recolher-topbrawl.ts

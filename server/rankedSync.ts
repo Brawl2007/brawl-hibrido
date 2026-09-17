@@ -6,9 +6,40 @@ import {
   updateRankedSyncConfig,
   updateRankedSyncRun,
   upsertRankedSyncSnapshot,
+  listRankedMapCaptures,
 } from "./db";
 import { fetchOfficialBrawlers } from "./brawlStarsApi";
 import { fetchText as lerPagina } from "./counterSync";
+import { lerPaginaTopBrawl, type TopBrawlRow } from "../shared/topBrawlParser";
+import { RANKED_MAP_SOURCES } from "../shared/rankedMaps";
+export { RANKED_MAP_SOURCES };
+
+/** Recalcula os cartões de mapa a partir da snapshot efetivamente sincronizada. */
+export function deriveMapSummaries(rows: RankedRow[]): MapSummary[] {
+  const grouped = new Map<string, RankedRow[]>();
+  for (const row of rows) {
+    const current = grouped.get(row.map) ?? [];
+    current.push(row);
+    grouped.set(row.map, current);
+  }
+
+  return Array.from(grouped, ([name, entries]) => {
+    const base = { name, mode: entries[0].mode, modeId: entries[0].modeId, brawlerCount: 0, topScore: 0 };
+    const mapRows = grouped.get(base.name) ?? [];
+    const scores = mapRows.flatMap((row) => typeof row.score === "number" ? [row.score] : []);
+    const tiers: MapSummary["tiers"] = { S: 0, A: 0, B: 0 };
+    for (const row of mapRows) {
+      if (row.tier && row.tier in tiers) tiers[row.tier] += 1;
+    }
+    return {
+      ...base,
+      brawlerCount: mapRows.length || base.brawlerCount,
+      topScore: scores.length ? Math.max(...scores) : base.topScore,
+      tiers,
+    };
+  });
+}
+
 import type { BrawlPlanetMapTeam } from "@shared/brawlPlanetMapTeams";
 import type { OfficialBrawlerSnapshot, RankedSnapshotEvent } from "../shared/rankedSyncSnapshot";
 import { broadcastRankedSnapshot } from "./realtime";
@@ -100,60 +131,7 @@ export function normalizeSnapshotPayload(payload: SnapshotPayload): SnapshotPayl
     officialBrawlers: payload.officialBrawlers ?? [] };
 }
 
-/** Recalcula os cartões de mapa a partir da snapshot efetivamente sincronizada. */
-export function deriveMapSummaries(rows: RankedRow[]): MapSummary[] {
-  const grouped = new Map<string, RankedRow[]>();
-  for (const row of rows) {
-    const current = grouped.get(row.map) ?? [];
-    current.push(row);
-    grouped.set(row.map, current);
-  }
 
-  return Array.from(grouped, ([name, entries]) => {
-    const base = { name, mode: entries[0].mode, modeId: entries[0].modeId, brawlerCount: 0, topScore: 0 };
-    const mapRows = grouped.get(base.name) ?? [];
-    const scores = mapRows.flatMap((row) => typeof row.score === "number" ? [row.score] : []);
-    const tiers: MapSummary["tiers"] = { S: 0, A: 0, B: 0 };
-    for (const row of mapRows) {
-      if (row.tier && row.tier in tiers) tiers[row.tier] += 1;
-    }
-    return {
-      ...base,
-      brawlerCount: mapRows.length || base.brawlerCount,
-      topScore: scores.length ? Math.max(...scores) : base.topScore,
-      tiers,
-    };
-  });
-}
-
-export const RANKED_MAP_SOURCES = [
-  ["Hard Rock Mine", "15000007", "hardrockmine_gemgrab"],
-  ["Gem Fort", "15000010", "gemfort_gemgrab"],
-  ["Hideout", "15000022", "hideout_bounty"],
-  ["Hot Potato", "15000053", "hotpotato_heist"],
-  ["Bridge Too Far", "15000072", "bridgetoofar_heist"],
-  ["Layer Cake", "15000082", "layercake_bounty"],
-  ["Dry Season", "15000083", "dryseason_bounty"],
-  ["Double Swoosh", "15000115", "doubleswoosh_gemgrab"],
-  ["Pinball Dreams", "15000118", "pinballdreams_brawlball"],
-  ["Center Stage", "15000132", "centerstage_brawlball"],
-  ["Open Business", "15000292", "openbusiness_hotzone"],
-  ["Parallel Plays", "15000293", "parallelplays_hotzone"],
-  ["Dueling Beetles", "15000306", "duelingbeetles_hotzone"],
-  ["Belle's Rock", "15000368", "bellesrock_knockout"],
-  ["Flaring Phoenix", "15000440", "flaringphoenix_knockout"],
-  ["Out in the Open", "15000548", "outintheopen_knockout"],
-  ["Undermine", "15000011", "undermine_gemgrab"],
-  ["Kaboom Canyon", "15000018", "kaboomcanyon_heist"],
-  ["Safe Zone", "15000019", "safezone_heist"],
-  ["Shooting Star", "15000005", "shootingstar_bounty"],
-  ["Sneaky Fields", "15000050", "sneakyfields_brawlball"],
-  ["Spiraling Out", "15001021", "spiralingout_brawlball"],
-  ["Triple Dribble", "15000025", "tripledribble_brawlball"],
-  ["Ring of Fire", "15000300", "ringoffire_hotzone"],
-  ["New Horizons", "15000703", "newhorizons_knockout"],
-  ["Beach Ball", "15000143", "beachball_brawlball"],
-] as const;
 
 function asNumber(value: string | null | undefined) {
   if (!value || value === "null") return null;
@@ -183,23 +161,28 @@ async function fetchText(url: string) {
   return lerPagina(url);
 }
 
+/**
+ * As linhas de uma página de mapa, no formato que a sincronização usa.
+ *
+ * O trabalho de interpretar a página mudou-se para `shared/topBrawlParser.ts`,
+ * porque deixou de ser só o servidor a lê-la: o `topbrawl.com` responde 403 a
+ * pedidos vindos do alojamento, e a recolha passou a correr fora, onde a porta
+ * está aberta. Aqui fica só a tradução para o formato interno.
+ */
 export function parseTopBrawl(html: string, mapName: string): Map<string, Partial<SyncRow>> {
+  return linhasParaSyncRows(lerPaginaTopBrawl(html), mapName);
+}
+
+/** A mesma tradução, a partir de linhas já lidas noutro sítio. */
+export function linhasParaSyncRows(linhas: readonly TopBrawlRow[], mapName: string): Map<string, Partial<SyncRow>> {
   const rows = new Map<string, Partial<SyncRow>>();
-  const normalized = html.replaceAll('\\"', '"');
-  const pattern = /"brawlerId":(\d+),"brawlerName":"((?:\\.|[^"\\])+)"[\s\S]{0,220}?"winRate":(null|[-+0-9.eE]+),"useRate":(null|[-+0-9.eE]+),"effectivityRate":(null|[-+0-9.eE]+)/g;
-  for (const match of Array.from(normalized.matchAll(pattern))) {
-    const brawlerId = Number(match[1]);
-    const brawler = decodeJsonString(match[2]);
-    const topBrawlWinRate = asNumber(match[3]);
-    const topBrawlUseRate = asNumber(match[4]);
-    const effectivityRate = asNumber(match[5]);
-    if (!brawler) continue;
-    rows.set(brawler, {
+  for (const linha of linhas) {
+    rows.set(linha.brawler, {
       map: mapName,
-      brawlerId,
-      topBrawlWinRate: topBrawlWinRate === null ? null : topBrawlWinRate * 100,
-      topBrawlUseRate: topBrawlUseRate === null ? null : topBrawlUseRate * 100,
-      topBrawlScore: effectivityRate === null ? null : effectivityRate * 20,
+      brawlerId: linha.brawlerId,
+      topBrawlWinRate: linha.topBrawlWinRate,
+      topBrawlUseRate: linha.topBrawlUseRate,
+      topBrawlScore: linha.topBrawlScore,
     });
   }
   return rows;
@@ -357,7 +340,36 @@ async function collectRankedRotation() {
 
 async function collectTopBrawl(rotation: readonly DiscoveredRankedMap[]): Promise<SourceResult> {
   const rows = new Map<string, Partial<SyncRow>>();
-  const results = await mapLimited(rotation, 2, async ({ name: mapName, id: mapId }) => {
+
+  /**
+   * O que foi recolhido fora vem primeiro, e não se volta a pedir.
+   *
+   * O `topbrawl.com` responde 403 a pedidos vindos daqui — o mesmo pedido
+   * funcionava na plataforma anterior, por isso o que incomoda não é o pedido,
+   * é a origem da rede. A recolha passou a correr onde a porta está aberta e a
+   * enviar o resultado para cá.
+   *
+   * Pedir na mesma o que já se tem seria insistir contra quem recusa, sem nada
+   * a ganhar. Um mapa só é pedido em direto quando não houver recolha dele — e
+   * se essa porta estiver fechada, falha depressa e a recolha de fora cobre o
+   * que importa.
+   */
+  const guardadas = await listRankedMapCaptures();
+  const porMapa = new Map(guardadas.map((linha) => [linha.mapId, linha]));
+  const emFalta: DiscoveredRankedMap[] = [];
+  for (const mapa of rotation) {
+    const guardada = porMapa.get(mapa.id);
+    if (!guardada) { emFalta.push(mapa); continue; }
+    try {
+      const linhas = JSON.parse(guardada.payload) as TopBrawlRow[];
+      for (const [brawler, linha] of linhasParaSyncRows(linhas, mapa.name)) rows.set(`${mapa.name}::${brawler}`, linha);
+    } catch {
+      emFalta.push(mapa);
+    }
+  }
+  if (guardadas.length) console.log(`[RankedSync] TopBrawl: ${guardadas.length} mapas vindos de recolha externa, ${emFalta.length} por pedir em direto.`);
+
+  const results = await mapLimited(emFalta, 2, async ({ name: mapName, id: mapId }) => {
       try {
         const html = await fetchText(`https://topbrawl.com/rankeds/${mapId}?rows=106`);
         return { mapName, parsed: parseTopBrawl(html, mapName), error: null };
@@ -370,12 +382,27 @@ async function collectTopBrawl(rotation: readonly DiscoveredRankedMap[]): Promis
   for (const result of results) {
     for (const [brawler, row] of Array.from(result.parsed.entries())) rows.set(`${result.mapName}::${brawler}`, row);
   }
-  const successful = results.filter(result => result.parsed.size > 0).length;
+  // Um mapa recolhido fora conta como lido: se não contasse, uma recolha
+  // completa por essa via aparecia como falha total e a snapshot era recusada.
+  const successful = results.filter(result => result.parsed.size > 0).length + (rotation.length - emFalta.length);
   return {
     status: successful === rotation.length ? "success" : successful > 0 ? "partial" : "failed",
     rows,
-    /** Quantas linhas cada mapa trouxe — é a prova que tira um mapa novo da quarentena. */
-    rowsByMap: new Map(results.map((result) => [result.mapName, result.parsed.size])),
+    /**
+     * Quantas linhas cada mapa trouxe — é a prova que tira um mapa novo da
+     * quarentena. Um mapa vindo de recolha externa tem de contar aqui: se não
+     * contasse, ficaria com zero linhas e seria tratado como mapa sem leitura,
+     * que é o oposto do que aconteceu.
+     */
+    rowsByMap: new Map([
+      ...rotation
+        .filter((mapa) => !emFalta.some((falta) => falta.id === mapa.id))
+        .map((mapa): [string, number] => [
+          mapa.name,
+          Array.from(rows.keys()).filter((chave) => chave.startsWith(`${mapa.name}::`)).length,
+        ]),
+      ...results.map((result): [string, number] => [result.mapName, result.parsed.size]),
+    ]),
     note: errors.length
       ? errors.slice(0, 3).join(" | ")
       : successful === 0

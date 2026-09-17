@@ -21,6 +21,8 @@ import {
   counterSyncSnapshots,
   brawlScopeCaptures,
   InsertBrawlScopeCapture,
+  rankedMapCaptures,
+  InsertRankedMapCapture,
   observedBattles,
   observedMatchCollectionConfig,
   observedMatchCollectionRuns,
@@ -499,6 +501,26 @@ export async function countBrawlScopeCaptures() {
     const [linha] = await db.select({ total: count() }).from(brawlScopeCaptures);
     return Number(linha?.total ?? 0);
   }, 0);
+}
+
+/** Guarda as páginas de mapa recolhidas fora, uma linha por mapa. */
+export async function upsertRankedMapCaptures(rows: InsertRankedMapCapture[]) {
+  const db = await getDb();
+  if (!db || rows.length === 0) return 0;
+  const CHUNK_SIZE = 25;
+  for (let index = 0; index < rows.length; index += CHUNK_SIZE) {
+    await db.insert(rankedMapCaptures).values(rows.slice(index, index + CHUNK_SIZE)).onDuplicateKeyUpdate({
+      set: { map: sql`VALUES(\`map\`)`, capturedAt: sql`VALUES(captured_at)`, payload: sql`VALUES(payload)` },
+    });
+  }
+  return rows.length;
+}
+
+/** Tudo o que foi recolhido fora, para a sincronização usar. */
+export async function listRankedMapCaptures() {
+  const db = await getDb();
+  if (!db) return [];
+  return lerDaBase("listRankedMapCaptures", () => db.select().from(rankedMapCaptures), []);
 }
 
 export async function getProdigyLinks() {
