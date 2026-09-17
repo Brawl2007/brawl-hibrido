@@ -44,9 +44,32 @@ describe("instalador das tabelas no arranque", () => {
   });
 
   it("o arranque chama o instalador antes de qualquer recolha", () => {
+    const arranque = readFileSync(resolve(process.cwd(), "server/arranque.ts"), "utf-8");
+    expect(arranque).toContain("ensureTables()");
+    expect(arranque.indexOf("ensureTables()")).toBeLessThan(arranque.indexOf("getStoredApiKey()"));
+  });
+
+  /**
+   * A falha que este teste existe para impedir.
+   *
+   * Criar as tabelas estava só no `startLiveSync()`, e o `startLiveSync()` só é
+   * chamado pelo servidor de sempre. A entrada da Vercel é outra e nunca lá
+   * chegava: uma tabela nova no instalador nunca era criada em produção, e a
+   * primeira gravação que dela dependesse falhava com um erro de SQL — depois
+   * de o site ter subido e de parecer estar bem.
+   *
+   * As DUAS entradas têm de chegar ao mesmo arranque. Não basta uma.
+   */
+  it("as duas entradas do servidor garantem o arranque, não só a de sempre", () => {
+    const vercel = readFileSync(resolve(process.cwd(), "server/_core/index.vercel.ts"), "utf-8");
+    const sempre = readFileSync(resolve(process.cwd(), "server/_core/index.ts"), "utf-8");
     const liveSync = readFileSync(resolve(process.cwd(), "server/liveSync.ts"), "utf-8");
-    expect(liveSync).toContain("ensureTables()");
-    expect(liveSync.indexOf("ensureTables()")).toBeLessThan(liveSync.indexOf("runLiveSyncCycle(\"bootstrap\")"));
+
+    // A Vercel não tem processo de pé: pendura o arranque no primeiro pedido.
+    expect(vercel).toContain("garantirArranque()");
+    // O servidor de sempre chega lá pelo startLiveSync().
+    expect(sempre).toContain("startLiveSync()");
+    expect(liveSync).toContain("garantirArranque()");
   });
 });
 

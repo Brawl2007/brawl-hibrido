@@ -3,9 +3,8 @@ import { RANKED_SYNC_JOB } from "./syncJobNames";
 import { restoreBrawlScopeMatchupMatrices, syncCounterData } from "./counterSync";
 import { syncRankedData } from "./rankedSync";
 import { collectObservedRankedMatches } from "./observedMatchCollection";
-import { isOfficialApiConfigured, setRuntimeApiKey } from "./brawlStarsApi";
-import { ensureAppSettingsTable, getStoredApiKey } from "./appSettings";
-import { ensureTables } from "./ensureTables";
+import { isOfficialApiConfigured } from "./brawlStarsApi";
+import { garantirArranque } from "./arranque";
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const MIN_INTERVAL_MS = 60 * 1000;
@@ -119,18 +118,11 @@ export function startLiveSync() {
    * ciclo para a recolha de batalhas não arrancar cega.
    */
   /**
-   * As tabelas primeiro. Num alojamento sem terminal não há quem corra
-   * `pnpm db:push`, e sem tabelas tudo o que se recolha a seguir perde-se.
+   * As tabelas e a chave guardada, pelo mesmo caminho que a Vercel usa. Ter
+   * duas cópias deste arranque foi precisamente o que deixou a entrada da
+   * Vercel para trás quando uma tabela nova apareceu no instalador.
    */
-  void ensureTables().catch(() => undefined);
-
-  void ensureAppSettingsTable()
-    .then(() => getStoredApiKey())
-    .then(({ key, origin }) => {
-      setRuntimeApiKey(key || null);
-      if (key) console.log(`[LiveSync] Chave da API oficial carregada (origem: ${origin}).`);
-    })
-    .catch(() => undefined);
+  void garantirArranque();
 
   void restoreBrawlScopeMatchupMatrices()
     .then(({ views, pairs }) => {
