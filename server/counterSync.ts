@@ -501,7 +501,15 @@ export async function fetchText(url: string, tentativa = 0, options?: { ignoreBl
         "sec-ch-ua-platform": '"Windows"',
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": process.env.BRAWLSCOPE_REFERER ?? "https://brawlscope.com/counters",
+        /**
+         * O Referer tem de ser do PRÓPRIO site que está a ser pedido.
+         *
+         * Estava fixo no BrawlScope. Bastava enquanto só ele era lido daqui —
+         * mas pedir uma página do TopBrawl a dizer que se vem do BrawlScope é
+         * incoerente, e a incoerência entre cabeçalhos é precisamente o que um
+         * filtro de bots procura. Agora sai a raiz do endereço pedido.
+         */
+        "Referer": process.env.BRAWLSCOPE_REFERER ?? `https://${host}/`,
         /**
          * `Accept-Encoding` NÃO é enviado de propósito.
          *
