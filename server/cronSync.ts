@@ -33,8 +33,14 @@ import { garantirArranque } from "./arranque";
  * terminava. Por isso esta rota espera pelo fim antes de responder.
  */
 
-/** Quanto tempo a recolha pode ocupar antes de a função ser cortada. */
-const ORCAMENTO_MS = Number(process.env.CRON_SYNC_BUDGET_MS ?? 50_000);
+/**
+ * Quanto tempo a recolha pode ocupar antes de a função ser cortada.
+ *
+ * O limite da plataforma são 300 segundos — apurado num erro dos registos,
+ * "Task timed out after 300 seconds". Aqui ninguém está à espera de resposta,
+ * por isso usa-se quase todo, com margem para a gravação final.
+ */
+const ORCAMENTO_MS = Number(process.env.CRON_SYNC_BUDGET_MS ?? 240_000);
 
 /**
  * Comparação que não denuncia o segredo pelo tempo que demora.

@@ -68,7 +68,7 @@ carregamento do site gasta mais do que isso.
 |---|---|---|
 | `CRON_SECRET` | autorizar o cron | a rota responde 503 e nada recolhe |
 | `CRON_SYNC_COUNTERS` | incluir counters | só corre a rotação Ranked |
-| `CRON_SYNC_BUDGET_MS` | orçamento de tempo (por omissão 50000) | 50 segundos |
+| `CRON_SYNC_BUDGET_MS` | orçamento de tempo (por omissão 240000) | 240 segundos, com margem para os 300 da plataforma |
 
 ## Uma armadilha do `vercel.json`, paga com horas
 

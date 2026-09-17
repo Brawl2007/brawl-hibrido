@@ -127,9 +127,20 @@ describe("o botão de atualizar espera, mas nunca sem limite", () => {
     expect(routers).toContain("syncJobs: router(");
   });
 
-  it("o orçamento existe mesmo, e é bem menor que o tempo de uma função", () => {
-    expect(ESPERA_INTERATIVA_MS).toBeGreaterThan(0);
-    expect(ESPERA_INTERATIVA_MS).toBeLessThanOrEqual(30_000);
+  /**
+   * O orçamento tem de caber entre duas falhas opostas.
+   *
+   * Curto de mais e a recolha não acaba: a função congela a meio, o trabalho
+   * fica marcado como "a correr" sem nunca terminar, e não se escreve uma única
+   * linha nos registos. Foi o que aconteceu com 25 segundos.
+   *
+   * Longo de mais e é a plataforma que corta o pedido — "Task timed out after
+   * 300 seconds" — o que é pior do que responder a dizer "ainda vou a meio".
+   */
+  it("o orçamento cabe entre acabar a recolha e não ser cortado pela plataforma", () => {
+    const LIMITE_DA_PLATAFORMA_MS = 300_000;
+    expect(ESPERA_INTERATIVA_MS).toBeGreaterThanOrEqual(60_000);
+    expect(ESPERA_INTERATIVA_MS).toBeLessThan(LIMITE_DA_PLATAFORMA_MS * 0.8);
   });
 
   it("as três páginas usam o mesmo hook — foi a cópia que deixou duas para trás", () => {
