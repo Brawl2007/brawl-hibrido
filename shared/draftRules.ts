@@ -28,6 +28,26 @@ export type DraftRuleSettings = {
   counterPickMultiplier4: number;
   counterPickMultiplier5: number;
   counterPickMultiplier6: number;
+  /**
+   * Repartição entre taxa de vitória e taxa de uso, por pick.
+   *
+   * O Score Híbrido pesa 70% vitória e 30% uso. Esse par é único para o site
+   * todo, e no Draft isso trata os seis picks como se fossem o mesmo momento —
+   * e não são. No primeiro pick escolhe-se às cegas, e a taxa de uso diz algo
+   * que a de vitória não diz: que o brawler é flexível e funciona em muitas
+   * composições, que é precisamente o que protege quem ainda não sabe o que
+   * vem a seguir. No último pick já não há nada a adivinhar, e o que interessa
+   * é ganhar o confronto que está à frente.
+   *
+   * O valor é o peso da VITÓRIA, de 0 a 1. O uso fica com o resto: 0.7 é
+   * 70/30, 0.8 é 80/20. Não há como os dois deixarem de somar 100.
+   */
+  winRatePick1: number;
+  winRatePick2: number;
+  winRatePick3: number;
+  winRatePick4: number;
+  winRatePick5: number;
+  winRatePick6: number;
   counterPick1: number;
   counterPick2: number;
   counterPick3: number;
@@ -67,6 +87,22 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   counterPickMultiplier4: 1,
   counterPickMultiplier5: 1,
   counterPickMultiplier6: 1,
+  /**
+   * A escada que o Draft usa por omissão: 70/30 no primeiro pick, subindo cinco
+   * pontos a cada pick até 95/5 no último.
+   *
+   * Ao contrário dos multiplicadores de Counter, que ficam neutros por omissão,
+   * esta escada vem ligada: o 70/30 fixo também é uma opinião — a de que o
+   * momento do draft não conta — e é a única das duas que não se podia
+   * desligar. Quem preferir o valor único põe os seis iguais, e o botão ao lado
+   * faz isso de uma vez.
+   */
+  winRatePick1: 0.7,
+  winRatePick2: 0.75,
+  winRatePick3: 0.8,
+  winRatePick4: 0.85,
+  winRatePick5: 0.9,
+  winRatePick6: 0.95,
   // Matriz gradual: um sinal isolado informa, mas não ultrapassa o ranking do mapa.
   // Respostas aos picks 2/4/6 têm peso ligeiramente maior, por serem contrapartidas reais.
   counterPick1: 0.05,
@@ -162,6 +198,36 @@ export function normalizeDraftRuleSettings(value?: Partial<DraftRuleSettings> | 
  * Multiplicador em vigor para um pick. Fora do intervalo 1–6 vale o do primeiro
  * pick, que é o mesmo critério usado no resto do motor.
  */
+/**
+ * Peso da taxa de vitória em vigor para um pick, de 0 a 1.
+ *
+ * Fora do intervalo 1–6 vale o do primeiro pick, pelo mesmo critério que o
+ * resto do motor já usa: antes de o draft começar, o que está à frente é a
+ * situação do primeiro pick.
+ */
+export function getWinRatePickWeight(pickNumber: number | undefined, settings: DraftRuleSettings) {
+  const byPick: Record<number, number> = {
+    1: settings.winRatePick1,
+    2: settings.winRatePick2,
+    3: settings.winRatePick3,
+    4: settings.winRatePick4,
+    5: settings.winRatePick5,
+    6: settings.winRatePick6,
+  };
+  const pick = typeof pickNumber === "number" && Number.isFinite(pickNumber) ? Math.trunc(pickNumber) : 1;
+  return byPick[pick] ?? settings.winRatePick1;
+}
+
+/** As chaves da escada, na ordem dos picks, para a interface não as repetir à mão. */
+export const winRatePickKeys = [
+  "winRatePick1",
+  "winRatePick2",
+  "winRatePick3",
+  "winRatePick4",
+  "winRatePick5",
+  "winRatePick6",
+] as const satisfies readonly (keyof DraftRuleSettings)[];
+
 export function getCounterPickMultiplier(pickNumber: number | undefined, settings: DraftRuleSettings) {
   const byPick: Record<number, number> = {
     1: settings.counterPickMultiplier1,

@@ -1,3 +1,4 @@
+import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
@@ -47,6 +48,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { allMapSummaries, allRankedRows, buildActiveRankedMapCatalog, normalizeRankedRows, resolveRankedMapSelection, type MapSummary, type RankedRow } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
 import { useHybridWeights } from "@/lib/hybridWeights";
+import { getWinRatePickWeight, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
 import { analyzeDraftComposition, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
@@ -1722,6 +1724,9 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
   liveCoverage?: Record<string, { profiles: number; pairs: number }>;
   liveCapturedAt?: string | null;
 }) {
+  // O peso que o resto do site usa, para o atalho de igualar a escada a ele.
+  const { weights: pesosGlobais } = useHybridWeights();
+  const pesoGlobalDeVitoria = pesosGlobais.winRate;
   /**
    * Cobertura por modo, juntando as duas origens.
    *
@@ -1785,6 +1790,57 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
               ? `Por modo: ${modesComDados.map(([mode, dados]) => `${mode} ${dados.perfis}/${totalBrawlers} fichas${dados.live ? " em direto" : ""}`).join(" · ")}. Os restantes pares usam a tabela geral — cada confronto indica de onde veio o valor.`
               : "Por modo escolhido, mas ainda não há tabelas por modo recolhidas — todos os pares usam o valor geral até a sincronização as trazer. A recolha lê uma vista por ciclo, por isso as seis podem demorar a aparecer num servidor acabado de arrancar."
             : "Geral: um único valor por confronto, somando todos os modos."}</small>
+        </fieldset>
+        <fieldset className="draft-rules-section counter-multiplier">
+          <legend>Vitória / Uso por Pick</legend>
+          <p>
+            Como o Score reparte o peso entre <strong>taxa de vitória</strong> e <strong>taxa de uso</strong>, pick a pick.
+            No primeiro pick escolhe-se às cegas, e a taxa de uso diz o que a de vitória não diz: que o brawler é
+            flexível e funciona em muitas composições — que é o que protege quem ainda não sabe o que vem a seguir.
+            No último pick já não há nada a adivinhar, e o que interessa é ganhar o confronto que está à frente.
+          </p>
+          <div className="counter-pick-grid">
+            {winRatePickKeys.map((key, indice) => {
+              const vitoria = preference[key];
+              return (
+                <div className="counter-pick-row" key={key}>
+                  <span className="counter-pick-label">Pick {indice + 1}</span>
+                  <div>
+                    <input
+                      type="number" min="0" max="100" step="1" inputMode="decimal"
+                      aria-label={`Peso da taxa de vitória no pick ${indice + 1}`}
+                      value={vitoria}
+                      onChange={(event) => {
+                        const lido = Number(event.target.value);
+                        if (!Number.isFinite(lido)) return;
+                        onChange({ ...preference, [key]: Math.min(100, Math.max(0, lido)) });
+                      }}
+                    />
+                    <span className="rule-unit">% vitória</span>
+                  </div>
+                  {/* O uso nunca se escreve: é o resto, e assim não há como os dois deixarem de somar 100. */}
+                  <span className="counter-pick-effect">{Number(vitoria.toFixed(0))} / {Number((100 - vitoria).toFixed(0))}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="counter-pick-presets">
+            <span>Atalhos:</span>
+            <button
+              type="button"
+              title="Os seis picks com o mesmo peso que o resto do site usa."
+              onClick={() => onChange(winRatePickKeys.reduce((seguinte, key) => ({ ...seguinte, [key]: pesoGlobalDeVitoria }), { ...preference }))}
+            >
+              Todos a {pesoGlobalDeVitoria}/{100 - pesoGlobalDeVitoria} (peso global)
+            </button>
+            <button
+              type="button"
+              title="Sobe cinco pontos por pick: a taxa de uso pesa mais quando ainda há muito por decidir."
+              onClick={() => onChange(winRatePickKeys.reduce((seguinte, key, indice) => ({ ...seguinte, [key]: 70 + indice * 5 }), { ...preference }))}
+            >
+              Escada 70 → 95
+            </button>
+          </div>
         </fieldset>
         <fieldset className="draft-rules-section counter-multiplier">
           <legend>Counter por Pick · ajuste separado</legend>
@@ -1929,14 +1985,6 @@ export default function Draft() {
   const [rosterPage, setRosterPage] = useState(1);
   const analysisRefreshFrameRef = useRef<number | null>(null);
 
-  const currentRows = useMemo(() => liveRows.filter((row) => row.map === selectedMap?.name), [liveRows, selectedMap?.name, roleVersion]);
-  // Matrizes completas vindas da sincronização: a geral e, na leitura por modo, a do mapa ativo.
-  const liveMatchups = useBrawlScopeLiveMatchups(
-    brawlScopeReading === "byMode" && selectedMap?.modeId ? [selectedMap.modeId] : [],
-    counterSnapshotVersion,
-  );
-  const mapTeams = useMemo(() => (rankedSync.snapshot?.mapTeams ?? []).filter((team) => team.map === selectedMap?.name), [rankedSync.snapshot?.mapTeams, selectedMap?.name]);
-  const rosterNames = useMemo(() => currentRows.map((row) => row.brawler), [currentRows]);
   const firstPendingStepIndex = choices.findIndex((choice, index) => choice === null && !skipped[index]);
   const activeStepIndex = selectedStepIndex !== null && choices[selectedStepIndex] === null && !skipped[selectedStepIndex]
     ? selectedStepIndex
@@ -1949,6 +1997,29 @@ export default function Draft() {
     : analysisFirstPendingStepIndex === -1 ? null : analysisFirstPendingStepIndex;
   const analysisDraftStep = analysisActiveStepIndex === null ? null : draftSequence[analysisActiveStepIndex];
   const analysisGlobalPickNumber = getGlobalPickNumber(draftSequence, analysisActiveStepIndex);
+  /**
+   * O peso do pick em que o draft está agora.
+   *
+   * O catálogo de mapas continua a ser lido com o peso global: a lista de mapas
+   * não pertence a nenhum pick. O que muda por pick é a pontuação dos
+   * candidatos DESTE mapa, que é o que o motor usa para recomendar.
+   */
+  const pesoDeVitoriaDoPick = getWinRatePickWeight(analysisGlobalPickNumber, draftRuleSettings);
+  const currentRows = useMemo(() => {
+    const doMapa = liveRows.filter((row) => row.map === selectedMap?.name);
+    // Sem diferença para o peso global não se recalcula nada: além de poupar
+    // trabalho, mantém as linhas idênticas por identidade e os memos a jusante
+    // não se invalidam à toa.
+    if (pesoDeVitoriaDoPick === winRateWeight) return doMapa;
+    return calculateHybridScoresByMap(doMapa, pesoDeVitoriaDoPick, topBrawlWeight);
+  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, winRateWeight, topBrawlWeight]);
+  // Matrizes completas vindas da sincronização: a geral e, na leitura por modo, a do mapa ativo.
+  const liveMatchups = useBrawlScopeLiveMatchups(
+    brawlScopeReading === "byMode" && selectedMap?.modeId ? [selectedMap.modeId] : [],
+    counterSnapshotVersion,
+  );
+  const mapTeams = useMemo(() => (rankedSync.snapshot?.mapTeams ?? []).filter((team) => team.map === selectedMap?.name), [rankedSync.snapshot?.mapTeams, selectedMap?.name]);
+  const rosterNames = useMemo(() => currentRows.map((row) => row.brawler), [currentRows]);
   const analysisCompletedPickCount = useMemo(
     () => draftSequence.reduce((count, step, index) => count + (step.kind === "pick" && Boolean(analysisChoices[index]) ? 1 : 0), 0),
     [analysisChoices, draftSequence],
