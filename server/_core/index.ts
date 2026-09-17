@@ -10,7 +10,6 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleCounterSyncScheduled, handleRankedSyncScheduled } from "../scheduled";
 import { handleCronSync } from "../cronSync";
-import { handleRankedImport } from "../rankedImport";
 import { handleObservedMatchCollectionScheduled } from "../observedMatchScheduled";
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
@@ -34,12 +33,6 @@ export function createApp() {
    * funciona aqui, protegida pelo `CRON_SECRET`.
    */
   app.get("/api/cron/sync", handleCronSync);
-
-  /**
-   * A recolha do TopBrawl feita fora, porque daqui responde 403.
-   * Protegida por `RANKED_IMPORT_SECRET`, como o cron.
-   */
-  app.post("/api/ranked/import", handleRankedImport);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);
   app.post("/api/scheduled/observedMatchCollection", handleObservedMatchCollectionScheduled);

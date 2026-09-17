@@ -13,6 +13,8 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { COUNTER_SYNC_JOB, RANKED_SYNC_JOB } from "./syncJobNames";
 import { getProcessHealth, listSyncJobStates, startSyncJob, arrancarEEsperar } from "./syncJobs";
+import { rankedPaginasSchema, guardarPaginasRanked } from "./rankedImport";
+import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
@@ -211,6 +213,38 @@ export const appRouter = router({
       exigirDono(ctx, "forçar uma atualização");
       return arrancarEEsperar(RANKED_SYNC_JOB, () => syncRankedData("manual"));
     }),
+
+    /**
+     * A fila de mapas para a extensão percorrer.
+     *
+     * O `topbrawl.com` responde 403 a pedidos vindos daqui — e das outras redes
+     * de nuvem que foram testadas. As páginas abrem no navegador de quem usa o
+     * site, e é de lá que passam a ser lidas.
+     */
+    filaDeMapas: protectedProcedure.query(({ ctx }) => {
+      exigirDono(ctx, "exportar a fila de mapas");
+      return {
+        format: "brawlhibrido-queue-v1" as const,
+        urls: RANKED_MAP_SOURCES.map(([, id]) => `https://topbrawl.com/rankeds/${id}?rows=106`),
+      };
+    }),
+
+    /**
+     * Recebe as páginas lidas pela extensão. O texto vem por interpretar: há um
+     * interpretador só, e é o do servidor. Ver `server/rankedImport.ts`.
+     */
+    importarPaginas: protectedProcedure.input(rankedPaginasSchema)
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "importar mapas do TopBrawl");
+        try { return await guardarPaginasRanked(input); }
+        catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "Não foi possível guardar os mapas.",
+            cause: error,
+          });
+        }
+      }),
   }),
   syncJobs: router({
     /** Estado das sincronizações em segundo plano; é isto que move o botão. */

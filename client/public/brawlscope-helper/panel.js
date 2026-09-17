@@ -8,12 +8,15 @@ async function action(action, extra = {}) {
   } catch (error) { $("error").textContent = error.message; }
 }
 function render() {
-  $("status").textContent = state ? `${state.cursor}/${state.urls.length} páginas processadas · ${Object.keys(state.profiles).length} fichas recolhidas · ${Object.keys(state.errors).length} erros. ${state.message}` : "Carrega a fila exportada no site.";
+  const mapas = Object.keys(state?.rankedMaps || {}).length;
+  $("status").textContent = state
+    ? `${state.cursor}/${state.urls.length} páginas processadas · ${Object.keys(state.profiles).length} fichas${mapas ? ` · ${mapas} mapas` : ""} · ${Object.keys(state.errors).length} erros. ${state.message}`
+    : "Carrega a fila exportada no site.";
   $("progress").max = state?.urls.length || 1; $("progress").value = state?.cursor || 0;
   $("start").disabled = !state || state.running || state.cursor >= state.urls.length;
   $("pause").disabled = !state?.running; $("retry").disabled = !state || state.running || !Object.keys(state.errors).length;
   $("queue").disabled = !!state?.running;
-  $("export").disabled = !state || !Object.keys(state.profiles).length;
+  $("export").disabled = !state || (!Object.keys(state.profiles).length && !Object.keys(state.rankedMaps || {}).length);
   $("errors").textContent = Object.entries(state?.errors || {}).map(([url, error]) => `${url}: ${error}`).join("\n");
 }
 $("queue").onchange = async event => {
@@ -25,9 +28,23 @@ $("queue").onchange = async event => {
   } catch (error) { $("error").textContent = error.message; }
 };
 for (const name of ["start", "pause", "retry"]) $(name).onclick = () => action(name);
+/**
+ * Um ficheiro por tipo de recolha.
+ *
+ * As fichas do BrawlScope e os mapas do TopBrawl entram no site por portas
+ * diferentes, e um ficheiro que misturasse os dois obrigaria quem importa a
+ * saber qual é qual. Exporta-se o que houver: numa fila só de mapas sai só o
+ * ficheiro dos mapas.
+ */
+function descarregar(nome, conteudo) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(conteudo)], { type: "application/json" }));
+  const a = document.createElement("a"); a.href = url; a.download = nome; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 $("export").onclick = () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ format: "brawlhibrido-captures-v1", profiles: Object.values(state.profiles), errors: state.errors })], { type: "application/json" }));
-  const a = document.createElement("a"); a.href = url; a.download = "brawlscope-resultados.json"; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const fichas = Object.values(state.profiles || {});
+  const mapas = Object.values(state.rankedMaps || {});
+  if (fichas.length) descarregar("brawlscope-resultados.json", { format: "brawlhibrido-captures-v1", profiles: fichas, errors: state.errors });
+  if (mapas.length) descarregar("topbrawl-mapas.json", { format: "brawlhibrido-ranked-paginas-v1", maps: mapas, errors: state.errors });
 };
 chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes["brawl-v54-queue"]) { state = changes["brawl-v54-queue"].newValue; render(); } });
 await action("status");

@@ -1,7 +1,13 @@
 # Material de desenvolvimento que não é necessário no runtime
 node_modules
 dist
-public
+# `/public` com barra: só a pasta de saída do build, na raiz.
+#
+# Sem a barra, a regra apanha QUALQUER pasta com este nome — incluindo
+# `client/public`, que é de onde vêm a extensão, o seu ficheiro .zip e as
+# imagens do site. Excluída, a extensão deixaria de existir no site publicado
+# e o botão de a descarregar daria 404, sem nada a explicar porquê.
+/public
 .vercel
 .manus-logs
 .git
@@ -19,6 +25,9 @@ public
 *.patch
 *.bak
 *.txt
+# As instruções da extensão são servidas pelo site, e o botão "Como instalar"
+# aponta para elas. Sem esta linha, a regra `*.txt` acima dava-lhe 404.
+!client/public/brawlscope-helper/README.txt
 
 # Fixtures e testes não necessários para compilar ou executar
 **/*.test.ts

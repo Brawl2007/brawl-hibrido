@@ -1,9 +1,48 @@
-/** Injected in a normal, visible Chrome tab; no requests, cookies or hidden APIs. */
+/**
+ * Injected in a normal, visible Chrome tab; no requests, cookies or hidden APIs.
+ *
+ * Uma função só, porque é assim que ela viaja: o `executeScript` serializa-a
+ * inteira para dentro da página e lá dentro não há imports. Por isso a
+ * ramificação por origem vive aqui, no princípio.
+ */
 export async function captureProfile() {
   const visible = element => Boolean(element && element.getClientRects().length);
+  const bloqueado = texto => /verify you are human|checking your browser|just a moment|access denied|request blocked|unusual traffic|captcha|403\s*forbidden|too many requests/i.test(texto);
+
+  /**
+   * O TopBrawl é lido de outra maneira, e de propósito NÃO é interpretado aqui.
+   *
+   * A página traz os números em JSON dentro das suas etiquetas de script, não na
+   * tabela visível. Trazer esse texto tal e qual, e deixar o servidor
+   * interpretá-lo com o mesmo código de sempre, evita a coisa que mais estraga
+   * este tipo de recolha: duas leituras da mesma página, uma de cada lado, a
+   * divergirem em silêncio quando a fonte mudar o formato. Os números
+   * continuariam a aparecer, só que errados.
+   *
+   * Vêm só as etiquetas de script, não a página toda: é onde os dados estão, e
+   * é uma fração do tamanho.
+   */
+  if (location.hostname === "topbrawl.com" || location.hostname === "www.topbrawl.com") {
+    const corpo = document.body?.innerText || "";
+    if (bloqueado(corpo) || document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]')) {
+      return { blocked: true, error: "O TopBrawl pediu verificação ou bloqueou o acesso. A fila foi pausada." };
+    }
+    const mapId = location.pathname.match(/^\/rankeds\/(\d+)/)?.[1];
+    if (!mapId) return { error: "Endereço sem id de mapa; não foi importado." };
+
+    const guiao = Array.from(document.querySelectorAll("script")).map(s => s.textContent || "").join("\n");
+    // Sem o bloco de dados não há nada para ler, e um mapa vazio é pior do que
+    // mapa nenhum: passaria por recolha feita e apagaria a leitura anterior.
+    if (!/"brawlerId"\s*:\s*\d+/.test(guiao) && !/\\"brawlerId\\"\s*:\s*\d+/.test(guiao)) {
+      return { error: "Página sem o bloco de dados dos brawlers; possível alteração do formato." };
+    }
+    const titulo = (document.querySelector("h1")?.innerText || "").replace(/\s+/g, " ").trim();
+    return { rankedMap: { mapId, map: titulo || `Mapa ${mapId}`, url: location.href, capturedAt: new Date().toISOString(), scripts: guiao } };
+  }
+
   const clean = element => (element?.innerText || "").replace(/\s+/g, " ").trim();
   const page = document.body?.innerText || "";
-  if (/verify you are human|checking your browser|just a moment|access denied|request blocked|unusual traffic|captcha|403\s*forbidden|too many requests/i.test(page) || document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]')) {
+  if (bloqueado(page) || document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]')) {
     return { blocked: true, error: "O BrawlScope pediu verificação ou bloqueou o acesso. A fila foi pausada." };
   }
   const title = clean(document.querySelector("h1"));
