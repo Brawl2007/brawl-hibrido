@@ -203,7 +203,20 @@ describe("bónus de sinergia BrawlScope no Draft", () => {
     expect(signal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
   });
 
-  it("mantém a composição do mapa como evidência prioritária, sem bónus duplicado", () => {
+  /**
+   * A composição do mapa acumula com a sinergia, em vez de a substituir.
+   *
+   * A regra era o contrário, e deliberada: a composição, por medir o trio
+   * naquele mapa, contava sozinha para não haver "bónus duplicado". Foi
+   * invertida por decisão de quem usa o site, pela mesma razão já aplicada
+   * entre as duas fontes — são medições diferentes da mesma escolha, e uma não
+   * anula a outra.
+   *
+   * O caso que o mostrou: no Beach Ball, a ficha do Shade publica "El Primo
+   * +5,0%" e o Brawl Planet publica o trio "El Primo · Gus · Shade". O valor
+   * da dupla existe e não entrava no Score.
+   */
+  it("acumula a composição do mapa com a sinergia publicada", () => {
     setCounterSyncSnapshot(snapshot());
     const mapTeams = [
       { map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58.1, sourceUrl: "https://www.brawlplanet.com/maps/flaring-phoenix" },
@@ -211,7 +224,7 @@ describe("bónus de sinergia BrawlScope no Draft", () => {
     const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], mapTeams, mapName: "Flaring Phoenix" });
 
     expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
-    expect(signal.scoreBreakdown.synergyPoints).toBe(0);
+    expect(signal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
     expect(signal.bonusSources.mapTeamBoard?.map((team) => team.rank)).toEqual([1]);
   });
 });

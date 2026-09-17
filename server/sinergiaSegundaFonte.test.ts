@@ -98,42 +98,44 @@ describe("sinergia da segunda fonte", () => {
   });
 });
 
-describe("sinergia substituída pela composição do mapa", () => {
+describe("composição do mapa e sinergia, lado a lado", () => {
   afterEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: true }));
 
   /**
-   * O caso real: no Beach Ball, o Brawl Planet publica "El Primo · Gus · Shade".
-   * Com o El Primo em campo, essa composição coincide e passa a ser ela a
-   * contar — mede o trio naquele mapa, e não a dupla em geral.
+   * O caso real: no Beach Ball, o Brawl Planet publica "El Primo · Gus · Shade"
+   * e a ficha do Shade no BrawlScope publica "El Primo +5,0%".
    *
-   * A sinergia deixava então de aparecer sem qualquer explicação, e quem a
-   * procurava não tinha como saber se faltava, se estava avariada, ou se era
-   * esta regra a funcionar. Os pontos não mudam; o que muda é dizer-se porquê.
+   * A composição apagava a sinergia, por ser mais específica. Mas são duas
+   * medições diferentes da mesma escolha, e nenhuma anula a outra: o valor
+   * publicado para a dupla existe, e deixava de entrar no Score só porque
+   * outra fonte também tinha falado do trio.
    */
-  it("não conta os pontos, mas diz que existe e porque foi substituída", () => {
+  it("conta as duas, cada uma com a sua taxa", () => {
     setCounterSyncSnapshot(snapshotDuasFontes());
     const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
-    const sinal = calculateDraftSignal(nori, {
+    const comComposicao = calculateDraftSignal(nori, {
       mapModeId: "knockout",
       mapName: "Flaring Phoenix",
       allyRows: [gus, pearl],
       mapTeams: composicao as never,
     });
 
-    expect(sinal.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
-    expect(sinal.scoreBreakdown.synergyPoints).toBe(0);
-    expect(sinal.scoreBreakdown.synergySegundaFontePoints).toBe(0);
-    // O que passa a estar à vista: que existia, e quanto valia.
-    expect(sinal.scoreBreakdown.synergySubstituidaPorEquipaDoMapa).toBe(true);
-    expect(sinal.scoreBreakdown.synergySubstituidaRate).toBeGreaterThan(0);
-    expect(sinal.bonusSources.synergyAllies).toContain("Gus");
+    expect(comComposicao.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
+    expect(comComposicao.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
+    expect(comComposicao.bonusSources.synergySource).toBe("BrawlScope");
   });
 
-  it("sem composição a coincidir, não há nada a assinalar como substituído", () => {
+  it("a composição acrescenta pontos em vez de os substituir", () => {
     setCounterSyncSnapshot(snapshotDuasFontes());
-    const sinal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus, pearl] });
+    const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
+    const semComposicao = calculateDraftSignal(nori, { mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl] });
+    const comComposicao = calculateDraftSignal(nori, {
+      mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl], mapTeams: composicao as never,
+    });
 
-    expect(sinal.scoreBreakdown.synergySubstituidaPorEquipaDoMapa).toBe(false);
-    expect(sinal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
+    // A sinergia vale o mesmo nos dois casos: a composição já não lhe toca.
+    expect(comComposicao.scoreBreakdown.synergyPoints).toBeCloseTo(semComposicao.scoreBreakdown.synergyPoints, 6);
+    expect(comComposicao.scoreBreakdown.rawContextualBonusPoints)
+      .toBeGreaterThan(semComposicao.scoreBreakdown.rawContextualBonusPoints);
   });
 });

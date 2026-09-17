@@ -526,9 +526,6 @@ export type DraftSignal = {
     banBonusPick: number;
 	    openingLongRangePoints: number;
 	    synergyPoints: number;
-	    /** A sinergia existia, mas a composição do mapa é que contou. Não são pontos. */
-	    synergySubstituidaPorEquipaDoMapa: boolean;
-	    synergySubstituidaRate: number;
 	    synergySegundaFontePoints: number;
 	    synergySegundaFonteRate: number;
 	    synergySegundaFonteSource?: CounterSourceName;
@@ -1072,7 +1069,21 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     : synergySource === "Brawl Planet" ? brawlScopeSynergyTeammates : [];
   const relacoesSegundaAtivas = relacoesDaSegundaFonte.filter((relation) =>
     allyRows.some((ally) => counterKey(ally.brawler) === counterKey(relation.brawler)));
-  const hasSynergy = !hasMapTeamSynergy && activeSynergyAllies.length > 0;
+  /**
+   * A composição do mapa deixou de apagar a sinergia.
+   *
+   * A regra anterior dizia que a composição, por ser mais específica — mede o
+   * trio naquele mapa, e não a dupla em geral —, substituía a sinergia em vez
+   * de acumular com ela. Isso fazia desaparecer um sinal que existe e está
+   * publicado: no Beach Ball, a ficha do Shade dá "El Primo +5,0%", e esse
+   * valor não entrava no Score só porque o Brawl Planet também publicava um
+   * trio com os dois.
+   *
+   * São duas medições diferentes da mesma escolha, e nenhuma anula a outra:
+   * cada uma traz o seu bónus, com a sua taxa. É a mesma regra já adotada
+   * entre o BrawlScope e o Brawl Planet.
+   */
+  const hasSynergy = activeSynergyAllies.length > 0;
   const synergy = hasSynergy ? 100 : 0;
   const directCounters = enemyRows
     .map((enemy) => getCounterMatchup(row.brawler, enemy.brawler, context.reciprocalCounterScores, context.mapModeId))
@@ -1279,28 +1290,12 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ? relacoesSegundaAtivas.reduce((sum, relation) => (typeof relation.delta === "number" && Number.isFinite(relation.delta) ? sum + relation.delta / 100 : sum), 0)
     : relacoesSegundaAtivas.length ? synergyBonusRate : 0;
   const taxaSegundaFonte = taxaBrutaSegundaFonte * ruleSettings.synergySegundaFonte;
-  // A composição do mapa continua a mandar sobre o aliado global, como já
-  // mandava sobre a primeira fonte: é a evidência mais específica que há.
-  const pontosSegundaFonte = hasMapTeamSynergy ? 0 : hybridPoints * taxaSegundaFonte;
+  const pontosSegundaFonte = hybridPoints * taxaSegundaFonte;
   const aliadosSegundaFonte = relacoesSegundaAtivas.map((relation) => relation.brawler);
   const segundaFonteNome: CounterSourceName | null = pontosSegundaFonte
     ? (synergySource === "BrawlScope" ? "Brawl Planet" : "BrawlScope")
     : null;
   const mapTeamSynergyPoints = hasMapTeamSynergy ? hybridPoints * mapTeamSynergyRate : 0;
-  /**
-   * A sinergia que a composição do mapa substituiu.
-   *
-   * Quando o Brawl Planet publica uma composição que inclui o candidato com os
-   * aliados já escolhidos, essa é a evidência mais específica — mede o trio
-   * naquele mapa, e não a dupla em geral — por isso é ela que conta, e a
-   * sinergia não acumula por cima.
-   *
-   * O que faltava era dizê-lo. A sinergia desaparecia do ecrã sem explicação, e
-   * quem a procurava não tinha como saber se a fonte não a publicava, se havia
-   * um defeito, ou se era esta regra a funcionar. Isto não muda pontos
-   * nenhuns: só põe à vista o que foi substituído, e porquê.
-   */
-  const sinergiaSubstituidaPorEquipaDoMapa = hasMapTeamSynergy && activeSynergyAllies.length > 0;
   const enemyCounterDeltaRate = 0;
   const enemyCounterPenaltyPoints = 0;
   const enemyCounterPenaltyPercent = 0;
@@ -1481,8 +1476,6 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       counterBonusPick,
       counterPickMultiplier,
       isTop30CounterBonusEligible,
-      synergySubstituidaPorEquipaDoMapa: sinergiaSubstituidaPorEquipaDoMapa,
-      synergySubstituidaRate: sinergiaSubstituidaPorEquipaDoMapa ? effectiveSynergyRate + taxaSegundaFonte : 0,
       synergySegundaFontePoints: pontosSegundaFonte,
       synergySegundaFonteRate: taxaSegundaFonte,
       synergySegundaFonteSource: segundaFonteNome ?? undefined,
