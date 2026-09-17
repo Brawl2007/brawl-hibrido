@@ -167,7 +167,7 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
         guardados += resultado.mapas;
         recusados.push(...resultado.recusados);
       }
-      setMapasEstado(`${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Carrega em Atualizar agora para os usar.`);
+      setMapasEstado(`${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Agora carrega em "Atualizar agora", na barra do topo da página, ao lado do perfil.`);
       await utils.rankedSync.snapshot.invalidate();
     } catch (error) {
       setMapasEstado(error instanceof Error ? error.message : "Não consegui importar os mapas.");
