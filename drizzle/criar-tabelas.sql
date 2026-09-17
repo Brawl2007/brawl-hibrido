@@ -224,3 +224,12 @@ CREATE TABLE IF NOT EXISTS `brawlscope_captures` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `brawlscope_captures_id` PRIMARY KEY(`id`)
 );
+
+CREATE TABLE IF NOT EXISTS `ranked_map_captures` (
+	`map_id` varchar(32) NOT NULL,
+	`map` varchar(128) NOT NULL,
+	`captured_at` timestamp NOT NULL DEFAULT (now()),
+	`payload` longtext NOT NULL,
+	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `ranked_map_captures_map_id` PRIMARY KEY(`map_id`)
+);

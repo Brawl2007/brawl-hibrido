@@ -228,6 +228,32 @@ export const brawlScopeCaptures = mysqlTable("brawlscope_captures", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * Páginas de mapa do TopBrawl recolhidas fora do alojamento.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * O `topbrawl.com` responde 403 a pedidos vindos daqui. Não é o pedido que
+ * incomoda — o mesmo pedido funcionava na plataforma anterior — é a origem da
+ * rede: gamas de centro de dados ficam de fora, e o alojamento novo está nelas.
+ *
+ * A recolha mudou-se para onde a porta está aberta e envia o resultado para
+ * cá. Cada mapa tem a sua linha, pela mesma razão que as fichas coladas têm:
+ * guardar um mapa não pode obrigar a reescrever os outros cento e trinta e três.
+ */
+export const rankedMapCaptures = mysqlTable("ranked_map_captures", {
+  /** O id do mapa no TopBrawl, que é o que o endereço usa. */
+  mapId: varchar("map_id", { length: 32 }).primaryKey(),
+  map: varchar("map", { length: 128 }).notNull(),
+  capturedAt: timestamp("captured_at").defaultNow().notNull(),
+  /** As linhas lidas na página, já interpretadas. */
+  payload: longtext("payload").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RankedMapCaptureRow = typeof rankedMapCaptures.$inferSelect;
+export type InsertRankedMapCapture = typeof rankedMapCaptures.$inferInsert;
+
 export type BrawlScopeCaptureRow = typeof brawlScopeCaptures.$inferSelect;
 export type InsertBrawlScopeCapture = typeof brawlScopeCaptures.$inferInsert;
 
