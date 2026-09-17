@@ -90,9 +90,14 @@ export async function handleCronSync(req: Request, res: Response) {
   /**
    * A rotação Ranked primeiro, e é a única que corre sempre.
    *
-   * São cerca de vinte páginas com duas em paralelo: cabe folgadamente no
-   * tempo de uma função. É também a fonte do TopBrawl, que alimenta as taxas
-   * de vitória e de uso publicadas.
+   * São cerca de vinte páginas com duas em paralelo, o que cabe folgadamente
+   * no tempo de uma função. É também a fonte do TopBrawl, que alimenta as
+   * taxas de vitória e de uso publicadas.
+   *
+   * O tempo máximo é o que a plataforma der: não é declarado no `vercel.json`,
+   * porque num projeto com `services` a propriedade `functions` não vive no
+   * topo do ficheiro e pô-la lá invalida a configuração inteira. Quem precisar
+   * de apertar o orçamento usa `CRON_SYNC_BUDGET_MS`.
    */
   const ranked = await dentroDoOrcamento("Ranked", fim, async () => {
     startSyncJob(RANKED_SYNC_JOB, () => syncRankedData("scheduled"));

@@ -13,4 +13,4 @@
  *
  * SOBE SEMPRE que sai uma versão nova.
  */
-export const VERSAO_DO_SITE = "v73";
+export const VERSAO_DO_SITE = "v74";
