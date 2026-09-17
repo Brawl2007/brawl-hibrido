@@ -54,23 +54,6 @@ export type DraftRuleSettings = {
   counterPick4: number;
   counterPick5: number;
   counterPick6: number;
-  /**
-   * Quanto vale a sinergia da SEGUNDA fonte, em relação à primeira.
-   *
-   * O bónus de sinergia era uma fatia só, da fonte com prioridade: BrawlScope
-   * à frente do Brawl Planet. Isso ignora um aliado que só a segunda fonte
-   * publique — e as duas leem páginas diferentes, por isso cobrem pares
-   * diferentes.
-   *
-   * Agora a segunda fonte acrescenta a sua fatia por todos os aliados que
-   * publica, incluindo os que a primeira também publica: são duas medições
-   * independentes da mesma dupla, feitas em populações diferentes, e uma não
-   * anula a outra.
-   *
-   * Este peso é o que as distingue — 0,5 vale metade, 1 vale o mesmo, 0
-   * desliga a segunda fonte e repõe o comportamento de fatia única.
-   */
-  synergySegundaFonte: number;
   synergyPick1: number;
   synergyPick2: number;
   synergyPick3: number;
@@ -128,8 +111,6 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   counterPick4: 0.06,
   counterPick5: 0.05,
   counterPick6: 0.06,
-  // Metade: confirma sem mandar. A fonte principal é a que decide.
-  synergySegundaFonte: 0.5,
   synergyPick1: 0.03,
   synergyPick2: 0.03,
   synergyPick3: 0.04,
