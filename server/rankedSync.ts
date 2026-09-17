@@ -26,7 +26,20 @@ import { brawlerClassCatalog } from "@shared/draft";
 import { mainAttackRanges } from "@shared/brawlerAttackRanges";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 25_000;
+/**
+ * Quanto se espera por UM pedido antes de desistir.
+ *
+ * Eram 25 segundos, e isso é demais quando a fonte não responde de todo. São
+ * 134 mapas com dois pedidos em paralelo: a 25 segundos cada, uma origem
+ * silenciosa levava mais de vinte e cinco minutos a desistir de todos. A
+ * recolha nunca chegava ao fim, a função era cortada a meio, e o trabalho
+ * ficava marcado como "a correr" sem nunca terminar — nem bem nem mal, e sem
+ * uma linha nos registos a dizer porquê.
+ *
+ * Dez segundos são de sobra para uma página que responde, e fazem uma origem
+ * morta falhar depressa e ser REPORTADA, que é o que interessa.
+ */
+const REQUEST_TIMEOUT_MS = Number(process.env.RANKED_REQUEST_TIMEOUT_MS ?? 10_000);
 
 type SyncRow = Record<string, unknown> & {
   map: string;
@@ -315,12 +328,24 @@ export function parseBrawlPlanetTeams(html: string, mapName: string, sourceUrl: 
 async function collectRankedRotation() {
   try {
     const html = await fetchText("https://topbrawl.com/rankeds");
-    return parseRankedRotationIndex(html);
+    const lido = parseRankedRotationIndex(html);
+    console.log(`[RankedSync] Índice do TopBrawl lido: ${lido.maps.length} mapas, ${lido.complete ? "completo" : "incompleto"}.`);
+    return lido;
   } catch (error) {
+    /**
+     * Esta falha ficava só numa nota dentro da snapshot.
+     *
+     * É a primeira coisa que a recolha faz e a que decide tudo o resto. Quando
+     * o TopBrawl não responde, era aqui que se percebia — mas só quem fosse ler
+     * a nota no painel. Nos registos não havia nada, e a procura pela razão de
+     * os números não mudarem começava sempre pelo sítio errado.
+     */
+    const detalhe = error instanceof Error ? error.message : "erro";
+    console.warn(`[RankedSync] Índice do TopBrawl inacessível: ${detalhe}`);
     return {
       maps: [],
       complete: false,
-      note: `Índice de rankeds inacessível: ${error instanceof Error ? error.message : "erro"}`,
+      note: `Índice de rankeds inacessível: ${detalhe}`,
     };
   }
 }
@@ -560,6 +585,7 @@ export async function syncRankedData(trigger: "scheduled" | "manual" | "bootstra
       collectTopBrawl(rotation.maps),
       collectBrawlPlanet(rotation.maps),
     ]);
+    console.log(`[RankedSync] TopBrawl: ${topBrawl.status} · Brawl Planet: ${brawlPlanet.status} · ${rotation.maps.length} mapas pedidos.`);
     const rows = mergeRows(topBrawl, brawlPlanet, rotation.maps);
     const hasLiveSource = topBrawl.status !== "failed" || brawlPlanet.status !== "failed";
     if (!hasLiveSource) throw new Error("As duas fontes falharam; a última snapshot válida foi preservada.");
