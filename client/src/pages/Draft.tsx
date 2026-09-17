@@ -1348,6 +1348,22 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
         <span className="recommendation-bonus-breakdown" aria-label={`Fatores ativos: ${activeBonusItems.length ? activeBonusItems.map((bonus) => `${bonus.label} ${bonus.points >= 0 ? "mais" : "menos"} ${Math.abs(bonus.points).toFixed(2)} pontos${bonus.source ? `, ${bonus.source}` : ""}`).join(", ") : "nenhum"}`}>
           <small className="recommendation-bonus-heading">FATORES ATIVOS</small>
           {activeBonusItems.length ? activeBonusItems.map((bonus) => { const normalizedPoints = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints); return <small className={`recommendation-bonus-chip ${bonus.points < 0 ? "is-penalty" : ""}`} key={bonus.label}><span className="recommendation-bonus-label">{bonus.label}</span> <b>{normalizedPoints >= 0 ? `+${normalizedPoints.toFixed(2)}` : normalizedPoints.toFixed(2)} pts</b> <em>({bonus.rate >= 0 ? `+${formatRulePercentage(bonus.rate)}%` : `${formatRulePercentage(bonus.rate)}%`})</em>{bonus.source && <span className="recommendation-bonus-source">{bonus.source}</span>}</small>; }) : <small className="recommendation-bonus-empty">Nenhum neste cenário</small>}
+        {signal.scoreBreakdown.synergySubstituidaPorEquipaDoMapa && (
+          /*
+           * A sinergia existe, mas não é ela que conta aqui.
+           *
+           * Sem esta linha, ela desaparecia do ecrã sem explicação, e quem a
+           * procurava não sabia se a fonte não a publicava, se havia um
+           * defeito, ou se era esta regra a funcionar. Não são pontos: os
+           * pontos estão no chip "Equipa do mapa", acima.
+           */
+          <small className="recommendation-bonus-chip is-replaced">
+            <span className="recommendation-bonus-label">Sinergia · não contabilizada</span>
+            {" "}<b>{signal.scoreBreakdown.synergySubstituidaRate >= 0 ? "+" : ""}{formatRulePercentage(signal.scoreBreakdown.synergySubstituidaRate * 100)}%</b>
+            {" "}<em>com {signal.bonusSources.synergyAllies.join(", ")}</em>
+            <span className="recommendation-bonus-source">substituída pela composição do mapa, que mede este trio neste mapa em vez da dupla em geral</span>
+          </small>
+        )}
         </span>
         <span className="recommendation-counter-audit" aria-label={`Auditoria de counters de ${row.brawler}. Janela Counter Top: Top ${topCounterWindowSize}. Enemy Counter direto: menos ${directEnemyCounterRate} por cento. Pressão Enemy Counter: menos ${repeatedPressureRate} por cento. Counter Top: menos ${topCounterRate} por cento.`}>
           <small className="recommendation-counter-audit-heading"><Shield size={10} /> AUDITORIA DE COUNTERS</small>

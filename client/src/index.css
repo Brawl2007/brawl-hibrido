@@ -1663,6 +1663,19 @@ main { max-width: 1600px; margin: 0 auto; }
 .recommendation-bonus-source { flex-basis: 100%; color: var(--bh-text-muted); font-size: .58rem; font-style: normal; font-weight: 600; line-height: 1.28; white-space: normal; }
 .matchup-score-rise-bonus-source { display: block; flex-basis: 100%; margin-top: .16rem; color: var(--bh-text-muted); font-size: .59rem; font-style: normal; font-weight: 600; line-height: 1.25; }
 
+/*
+ * A sinergia que existe mas não conta aqui: fica apagada e riscada, para se
+ * distinguir de um bónus ativo sem deixar de ser legível.
+ */
+.recommendation-bonus-chip.is-replaced {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--bh-surface-3);
+  color: var(--bh-text-muted);
+}
+
+.recommendation-bonus-chip.is-replaced b { text-decoration: line-through; }
+
 .recommendation-bonus-chip.is-penalty {
   background: oklch(0.6 0.22 25 / 20%);
   color: oklch(0.85 0.2 25);

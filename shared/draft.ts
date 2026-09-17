@@ -526,6 +526,9 @@ export type DraftSignal = {
     banBonusPick: number;
 	    openingLongRangePoints: number;
 	    synergyPoints: number;
+	    /** A sinergia existia, mas a composição do mapa é que contou. Não são pontos. */
+	    synergySubstituidaPorEquipaDoMapa: boolean;
+	    synergySubstituidaRate: number;
 	    synergySegundaFontePoints: number;
 	    synergySegundaFonteRate: number;
 	    synergySegundaFonteSource?: CounterSourceName;
@@ -1284,6 +1287,20 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ? (synergySource === "BrawlScope" ? "Brawl Planet" : "BrawlScope")
     : null;
   const mapTeamSynergyPoints = hasMapTeamSynergy ? hybridPoints * mapTeamSynergyRate : 0;
+  /**
+   * A sinergia que a composição do mapa substituiu.
+   *
+   * Quando o Brawl Planet publica uma composição que inclui o candidato com os
+   * aliados já escolhidos, essa é a evidência mais específica — mede o trio
+   * naquele mapa, e não a dupla em geral — por isso é ela que conta, e a
+   * sinergia não acumula por cima.
+   *
+   * O que faltava era dizê-lo. A sinergia desaparecia do ecrã sem explicação, e
+   * quem a procurava não tinha como saber se a fonte não a publicava, se havia
+   * um defeito, ou se era esta regra a funcionar. Isto não muda pontos
+   * nenhuns: só põe à vista o que foi substituído, e porquê.
+   */
+  const sinergiaSubstituidaPorEquipaDoMapa = hasMapTeamSynergy && activeSynergyAllies.length > 0;
   const enemyCounterDeltaRate = 0;
   const enemyCounterPenaltyPoints = 0;
   const enemyCounterPenaltyPercent = 0;
@@ -1464,6 +1481,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       counterBonusPick,
       counterPickMultiplier,
       isTop30CounterBonusEligible,
+      synergySubstituidaPorEquipaDoMapa: sinergiaSubstituidaPorEquipaDoMapa,
+      synergySubstituidaRate: sinergiaSubstituidaPorEquipaDoMapa ? effectiveSynergyRate + taxaSegundaFonte : 0,
       synergySegundaFontePoints: pontosSegundaFonte,
       synergySegundaFonteRate: taxaSegundaFonte,
       synergySegundaFonteSource: segundaFonteNome ?? undefined,

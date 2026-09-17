@@ -97,3 +97,43 @@ describe("sinergia da segunda fonte", () => {
     expect(desligada.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
   });
 });
+
+describe("sinergia substituída pela composição do mapa", () => {
+  afterEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: true }));
+
+  /**
+   * O caso real: no Beach Ball, o Brawl Planet publica "El Primo · Gus · Shade".
+   * Com o El Primo em campo, essa composição coincide e passa a ser ela a
+   * contar — mede o trio naquele mapa, e não a dupla em geral.
+   *
+   * A sinergia deixava então de aparecer sem qualquer explicação, e quem a
+   * procurava não tinha como saber se faltava, se estava avariada, ou se era
+   * esta regra a funcionar. Os pontos não mudam; o que muda é dizer-se porquê.
+   */
+  it("não conta os pontos, mas diz que existe e porque foi substituída", () => {
+    setCounterSyncSnapshot(snapshotDuasFontes());
+    const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
+    const sinal = calculateDraftSignal(nori, {
+      mapModeId: "knockout",
+      mapName: "Flaring Phoenix",
+      allyRows: [gus, pearl],
+      mapTeams: composicao as never,
+    });
+
+    expect(sinal.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
+    expect(sinal.scoreBreakdown.synergyPoints).toBe(0);
+    expect(sinal.scoreBreakdown.synergySegundaFontePoints).toBe(0);
+    // O que passa a estar à vista: que existia, e quanto valia.
+    expect(sinal.scoreBreakdown.synergySubstituidaPorEquipaDoMapa).toBe(true);
+    expect(sinal.scoreBreakdown.synergySubstituidaRate).toBeGreaterThan(0);
+    expect(sinal.bonusSources.synergyAllies).toContain("Gus");
+  });
+
+  it("sem composição a coincidir, não há nada a assinalar como substituído", () => {
+    setCounterSyncSnapshot(snapshotDuasFontes());
+    const sinal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus, pearl] });
+
+    expect(sinal.scoreBreakdown.synergySubstituidaPorEquipaDoMapa).toBe(false);
+    expect(sinal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
+  });
+});
