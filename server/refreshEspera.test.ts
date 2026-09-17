@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { arrancarEEsperar, getSyncJobState, resetSyncJobsForTests } from "./syncJobs";
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -51,5 +53,27 @@ describe("o botão espera pelo trabalho", () => {
     expect(corridas).toBe(1);
     expect(primeiro.concluido && segundo.concluido).toBe(true);
     expect(getSyncJobState("repetido").outcome).toBe("success");
+  });
+});
+
+/**
+ * A falha tem de ser dita a quem carregou no botão.
+ *
+ * "Terminou" não é "correu bem". Uma recolha que rebenta também termina, e
+ * anunciar "atualizado" nesse caso esconde a razão de quem precisa dela para
+ * perceber porque é que os números não mudaram.
+ */
+describe("o ecrã não pode anunciar o que não aconteceu", () => {
+  const hook = readFileSync(resolve(process.cwd(), "client/src/lib/useSyncRefresh.ts"), "utf8");
+
+  it("só festeja quando o resultado é mesmo sucesso", () => {
+    // Um `concluido` verdadeiro sozinho não chega para dizer "atualizado".
+    expect(hook).toContain('estado?.outcome === "success"');
+    expect(hook).not.toMatch(/if \(resultado\?\.concluido\) toast\.success/);
+  });
+
+  it("mostra a razão da falha, que é o que explica os números parados", () => {
+    expect(hook).toContain("toast.error");
+    expect(hook).toMatch(/description:\s*estado\??\.?error/);
   });
 });

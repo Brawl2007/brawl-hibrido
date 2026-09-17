@@ -133,6 +133,19 @@ export function startSyncJob(
     entry.progress = null;
     if (entry.watchdog) clearTimeout(entry.watchdog);
     entry.watchdog = undefined;
+
+    /**
+     * Uma recolha que rebenta tem de deixar rasto onde se procura.
+     *
+     * A falha ficava só no estado do trabalho, que se lê pelo ecrã. Nos
+     * registos do alojamento não aparecia nada: o pedido respondia 200, sem uma
+     * linha a dizer o que tinha corrido mal. Quem fosse aos registos perceber
+     * porque é que os números não mudaram não encontrava absolutamente nada — e
+     * a ausência de erro parece, enganosamente, ausência de problema.
+     */
+    if (outcome === "error" || outcome === "timeout") {
+      console.warn(`[Sync] ${name} terminou em ${outcome}: ${detalhe.error ?? "sem detalhe"}`);
+    }
   };
 
   entry.watchdog = setTimeout(() => {
