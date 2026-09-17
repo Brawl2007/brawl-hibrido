@@ -319,7 +319,7 @@ function getSyncedCounterSourceProfiles(brawler: string, modeId?: string): Count
             worstTeammates: group ? staticPlanetTeams(brawler).worstTeammates : [],
           }
         : source === "brawlscope"
-          ? { bestTeammates: getBrawlScopeSynergyTeammates(brawler, normalizedModeId, Boolean(group)), worstTeammates: [] as SourcedCounterRelation[] }
+          ? { bestTeammates: getBrawlScopeSynergyTeammates(brawler, normalizedModeId, true), worstTeammates: [] as SourcedCounterRelation[] }
           : { bestTeammates: [] as SourcedCounterRelation[], worstTeammates: [] as SourcedCounterRelation[] };
       // Uma fonte que publicou apenas sinergia continua a ter perfil: as duas
       // leituras são independentes e a ausência de counters não pode apagar a
@@ -359,24 +359,40 @@ export function getCounterSourceProfiles(brawler: string, modeId?: string): Coun
   const profiles: CounterSourceProfile[] = [];
 
   const brawlScope = findByBrawler(brawlScopeCounterData, brawler);
-  if (brawlScope) {
-    const { targets: brawlScopeTargets, counteredBy: brawlScopeCounteredBy } = getBrawlScopeRelations(brawlScope);
+  /**
+   * As duas leituras da mesma página são independentes.
+   *
+   * O perfil exigia uma ficha no catálogo de COUNTERS. O Shade mostra porque
+   * isso está errado: está no catálogo de sinergia, com "El Primo +5,0%"
+   * publicado, e não está no de counters. Sem counters não havia perfil, e sem
+   * perfil a lista de aliados que existe era deitada fora — o Draft passava a
+   * ter só a do Brawl Planet, e a do BrawlScope desaparecia sem explicação.
+   *
+   * É a mesma regra que o caminho em direto já aplica, escrita lá assim: "a
+   * ausência de counters não pode apagar a lista de aliados que a mesma página
+   * expõe". Faltava aqui.
+   */
+  const brawlScopeAliados = getBrawlScopeSynergyTeammates(brawler, modeId, true);
+  if (brawlScope || brawlScopeAliados.length) {
+    const { targets: brawlScopeTargets, counteredBy: brawlScopeCounteredBy } = brawlScope
+      ? getBrawlScopeRelations(brawlScope)
+      : { targets: [] as string[], counteredBy: [] as string[] };
 
     profiles.push({
       source: "BrawlScope",
-      sourceUrl: brawlScope.sourceUrl,
+      sourceUrl: brawlScope?.sourceUrl ?? brawlScopeAliados[0]?.sourceUrl ?? "",
       modeId,
       targets: brawlScopeTargets.map((target) => ({
         brawler: target,
         source: "BrawlScope",
-        sourceUrl: brawlScope.sourceUrl,
+        sourceUrl: brawlScope?.sourceUrl ?? "",
       })),
       counteredBy: brawlScopeCounteredBy.map((counter) => ({
         brawler: counter,
         source: "BrawlScope",
-        sourceUrl: brawlScope.sourceUrl,
+        sourceUrl: brawlScope?.sourceUrl ?? "",
       })),
-      bestTeammates: getBrawlScopeSynergyTeammates(brawler, modeId),
+      bestTeammates: brawlScopeAliados,
       worstTeammates: [],
     });
   }

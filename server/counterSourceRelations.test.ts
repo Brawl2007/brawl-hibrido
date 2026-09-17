@@ -213,9 +213,18 @@ describe("counter source relations", () => {
     expect(hotZone?.targets).toEqual([]);
     expect(hotZone?.counteredBy).toEqual([]);
     expect(hotZone?.bestTeammates.length).toBeGreaterThan(0);
-    // Nenhuma das duas relações foi publicada como geral, por isso o BrawlScope
-    // não tem perfil geral nenhum — a de Fute-Brawl vale em Fute-Brawl.
-    expect(getCounterSourceProfiles("Bolt").find((profile) => profile.source === "BrawlScope")).toBeUndefined();
+    /**
+     * Nenhuma das duas relações foi publicada como geral, por isso na vista
+     * geral o BrawlScope não tem counters nenhuns — a de Fute-Brawl vale em
+     * Fute-Brawl.
+     *
+     * O perfil existe à mesma, porque a mesma página publica uma lista "Pair
+     * with" e as duas leituras são independentes. O que aqui se verifica é que
+     * nenhuma relação de modo passou para a vista geral.
+     */
+    const geral = getCounterSourceProfiles("Bolt").find((profile) => profile.source === "BrawlScope");
+    expect(geral?.targets).toEqual([]);
+    expect(geral?.counteredBy).toEqual([]);
   });
 
   it("combines current global counters with the selected BrawlScope mode and ignores pending removals", () => {

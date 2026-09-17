@@ -88,9 +88,31 @@ describe("catálogo do BrawlScope a completar a leitura em direto", () => {
     expect(perfil?.bestTeammates.length).toBeGreaterThan(0);
   });
 
-  it("não inventa um perfil para quem a leitura em direto não sustenta", () => {
-    // O limite que não se atravessa: o catálogo completa, nunca cria sozinho.
+  /**
+   * O Shade é o caso que mostrou que exigir counters estava errado.
+   *
+   * Está no catálogo de sinergia do BrawlScope, com "El Primo +5,0%" publicado,
+   * e NÃO está no catálogo de counters. Enquanto o perfil dependeu de haver
+   * counters, essa lista era deitada fora: o Draft mostrava só a do Brawl
+   * Planet, e a do BrawlScope desaparecia sem explicação.
+   *
+   * As duas leituras saem da mesma página e são independentes — é o que o
+   * caminho em direto já dizia, por escrito, e o que faltava aqui.
+   */
+  it("mostra a sinergia de quem tem Pair with publicado mas não tem ficha de counters", () => {
+    setCounterSyncSnapshot(undefined, { allowOfflineFallback: true });
+    const perfil = getCounterSourceProfiles("Shade").find((entry) => entry.source === "BrawlScope");
+
+    expect(perfil?.bestTeammates.map((aliado) => aliado.brawler)).toContain("El Primo");
+    // A snapshot de produção confirma o cenário: o BrawlScope não publicou nada
+    // em direto sobre o Shade — nem sinergia nem counters — e a lista só pode
+    // vir do catálogo.
+    expect(perfil?.bestTeammates.find((aliado) => aliado.brawler === "El Primo")?.delta).toBe(5);
+  });
+
+  it("não cria perfil para quem não tem nada publicado em nenhuma das listas", () => {
+    // O limite continua a existir: sem counters E sem aliados, não há perfil.
     setCounterSyncSnapshot(comCountersSemSinergia("Amber"));
-    expect(getCounterSourceProfiles("Angelo").find((entry) => entry.source === "BrawlScope")).toBeUndefined();
+    expect(getCounterSourceProfiles("Brawler Inexistente").find((entry) => entry.source === "BrawlScope")).toBeUndefined();
   });
 });
