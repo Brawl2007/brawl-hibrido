@@ -1678,6 +1678,13 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
     ],
   },
   {
+    title: "Sinergia da 2.ª fonte",
+    description: "O BrawlScope e o Brawl Planet leem páginas diferentes e publicam pares diferentes. A fonte com prioridade dá a fatia cheia; a outra acrescenta a dela, e só pelos aliados que a primeira não cobriu — um par publicado nas duas conta uma vez só. Aqui escolhe-se quanto vale essa segunda fatia: 50% vale metade, 100% vale o mesmo, 0% desliga.",
+    fields: [
+      { key: "synergySegundaFonte", label: "Peso da 2.ª fonte" },
+    ],
+  },
+  {
     title: "Counter banido",
     description: "Percentagem por counter direto removido em cada posição do Draft.",
     fields: [

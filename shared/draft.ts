@@ -526,6 +526,10 @@ export type DraftSignal = {
     banBonusPick: number;
 	    openingLongRangePoints: number;
 	    synergyPoints: number;
+	    synergySegundaFontePoints: number;
+	    synergySegundaFonteRate: number;
+	    synergySegundaFonteSource?: CounterSourceName;
+	    synergySegundaFonteAllies: string[];
 	    /** Taxa aplicada: percentagem publicada pela fonte, quando existe. */
 	    configuredSynergyBonusRate?: number;
 	    hasPublishedSynergyRate?: boolean;
@@ -1047,6 +1051,21 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ? brawlScopeSynergyTeammates.find((relation) => counterKey(relation.brawler) === counterKey(activeSynergyAllies[0] ?? ""))?.sourceUrl
       ?? brawlScopeProfile?.sourceUrl
     : brawlPlanetProfile?.sourceUrl;
+  /**
+   * A segunda fonte, pelos aliados que a primeira não cobriu.
+   *
+   * O BrawlScope e o Brawl Planet leem páginas diferentes e publicam pares
+   * diferentes; ficar só com a fonte prioritária deitava fora o que a outra
+   * tinha de próprio. Um par publicado nas duas continua a contar uma vez —
+   * quem já entrou pela primeira fonte não volta a entrar aqui.
+   */
+  const relacoesDaSegundaFonte = synergySource === "BrawlScope"
+    ? brawlPlanetProfile?.bestTeammates ?? []
+    : synergySource === "Brawl Planet" ? brawlScopeSynergyTeammates : [];
+  const aliadosJaContados = new Set(activeSynergyAllies.map(counterKey));
+  const relacoesSegundaAtivas = relacoesDaSegundaFonte.filter((relation) =>
+    !aliadosJaContados.has(counterKey(relation.brawler))
+    && allyRows.some((ally) => counterKey(ally.brawler) === counterKey(relation.brawler)));
   const hasSynergy = !hasMapTeamSynergy && activeSynergyAllies.length > 0;
   const synergy = hasSynergy ? 100 : 0;
   const directCounters = enemyRows
@@ -1249,6 +1268,18 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const hasPublishedSynergyRate = activeSynergyRelations.some(relation => typeof relation.delta === "number" && Number.isFinite(relation.delta));
   const effectiveSynergyRate = hasPublishedSynergyRate ? publishedSynergyRate : synergyBonusRate;
   const synergyPoints = hasSynergy ? hybridPoints * effectiveSynergyRate : 0;
+  const segundaFontePublicaTaxa = relacoesSegundaAtivas.some((relation) => typeof relation.delta === "number" && Number.isFinite(relation.delta));
+  const taxaBrutaSegundaFonte = segundaFontePublicaTaxa
+    ? relacoesSegundaAtivas.reduce((sum, relation) => (typeof relation.delta === "number" && Number.isFinite(relation.delta) ? sum + relation.delta / 100 : sum), 0)
+    : relacoesSegundaAtivas.length ? synergyBonusRate : 0;
+  const taxaSegundaFonte = taxaBrutaSegundaFonte * ruleSettings.synergySegundaFonte;
+  // A composição do mapa continua a mandar sobre o aliado global, como já
+  // mandava sobre a primeira fonte: é a evidência mais específica que há.
+  const pontosSegundaFonte = hasMapTeamSynergy ? 0 : hybridPoints * taxaSegundaFonte;
+  const aliadosSegundaFonte = relacoesSegundaAtivas.map((relation) => relation.brawler);
+  const segundaFonteNome: CounterSourceName | null = pontosSegundaFonte
+    ? (synergySource === "BrawlScope" ? "Brawl Planet" : "BrawlScope")
+    : null;
   const mapTeamSynergyPoints = hasMapTeamSynergy ? hybridPoints * mapTeamSynergyRate : 0;
   const enemyCounterDeltaRate = 0;
   const enemyCounterPenaltyPoints = 0;
@@ -1275,7 +1306,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ? hybridPoints * ruleSettings.worstTeammatePenalty * activeWorstTeammates.length
     : 0;
 
-  const rawContextualBonusPoints = Math.max(0, counterPoints) + missingMidPoints + missingSidePoints + banPoints + openingLongRangePoints + synergyPoints + mapTeamSynergyPoints;
+  const rawContextualBonusPoints = Math.max(0, counterPoints) + missingMidPoints + missingSidePoints + banPoints + openingLongRangePoints + synergyPoints + pontosSegundaFonte + mapTeamSynergyPoints;
   const rawContextualPenaltyPoints = Math.max(0, -counterPoints) + enemyCounterPenaltyPoints + repeatedEnemyCounterPressurePoints + topTwentyCounterPenaltyPoints + sameClassPenaltyPoints + worstTeammatePenaltyPoints;
   const contextualCaps = getContextualAdjustmentCaps(
     context.pickNumber,
@@ -1302,6 +1333,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ...(openingLongRangePoints ? [`Alcance ≥${openingRangeThreshold} blocos +${ruleSettings.openingLongRange * 100}% (pick ${context.pickNumber})`] : []),
     ...(mapTeamSynergyPoints && mapTeamSynergy ? [`Composição do mapa +${mapTeamSynergyRate * 100}% (pick ${synergyBonusPick} · ${mapTeamSynergy.brawlers.join(" · ")} · ${mapTeamSynergy.winRate.toFixed(1)}% WR)`] : []),
     ...(synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${activeSynergyAllies.join(", ")})`] : []),
+    ...(pontosSegundaFonte ? [`${segundaFonteNome === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} (2.ª fonte) ${taxaSegundaFonte > 0 ? "+" : ""}${Number((taxaSegundaFonte * 100).toFixed(2))}% (${segundaFontePublicaTaxa ? "percentagem publicada" : `taxa do pick ${synergyBonusPick}`} × ${Number((ruleSettings.synergySegundaFonte * 100).toFixed(0))}% · ${aliadosSegundaFonte.join(", ")})`] : []),
     ...(enemyCounterPenaltyPoints ? [`Desbônus Enemy Counter -${enemyCounterPenaltyPercent}% (${activeEnemyCounters.length} counter${activeEnemyCounters.length === 1 ? "" : "s"})`] : []),
     ...(repeatedEnemyCounterPressurePoints ? [`Pressão Enemy Counter -${repeatedEnemyCounterPressurePercent}% (${repeatedEnemyCounterPressures.map((pressure) => `${pressure.enemy}: ${pressure.counteredAllies.join(", ")}`).join(" · ")})`] : []),
     ...(topTwentyCounterPenaltyPoints ? [`Desbônus Counter no Top ${topCounterWindowSize} -${topTwentyCounterPenaltyPercent}% (${topTwentyCounters.length} counter${topTwentyCounters.length === 1 ? "" : "s"}: ${topTwentyCounters.join(", ")})`] : []),
@@ -1429,6 +1461,10 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       counterBonusPick,
       counterPickMultiplier,
       isTop30CounterBonusEligible,
+      synergySegundaFontePoints: pontosSegundaFonte,
+      synergySegundaFonteRate: taxaSegundaFonte,
+      synergySegundaFonteSource: segundaFonteNome ?? undefined,
+      synergySegundaFonteAllies: aliadosSegundaFonte,
       missingMidPoints,
       missingSidePoints,
       banPoints,
