@@ -396,7 +396,14 @@ describe("atualização prioritária do Draft", () => {
     const cssSource = readFileSync(resolve(process.cwd(), "client/src/index.css"), "utf8");
     expect(cssSource).toContain('content-visibility: auto');
     expect(cssSource).toContain('contain-intrinsic-size: auto 420px');
-    expect(draftSource).toContain('useEffect(() => { setRosterPage(1); }, [rankedDraftEntries, query, roleFilter]);');
+    // A lista de dependências cresce quando aparece um filtro novo — a última a
+    // entrar foi a ordenação. O que este teste guarda é a propriedade, não a
+    // lista literal: mudar o que se vê volta a pôr a paginação no início.
+    const resetDaPagina = /useEffect\(\(\) => \{ setRosterPage\(1\); \}, \[([^\]]*)\]\);/.exec(draftSource);
+    expect(resetDaPagina).not.toBeNull();
+    for (const dependencia of ["rankedDraftEntries", "query", "roleFilter"]) {
+      expect(resetDaPagina![1]).toContain(dependencia);
+    }
     expect(draftSource).toMatch(/const assignBrawler[\s\S]*?setRosterPage\(1\);\s*setChoices\(nextChoices\)/);
     expect(draftSource).toContain('completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights');
     expect(draftSource).toContain('pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights');

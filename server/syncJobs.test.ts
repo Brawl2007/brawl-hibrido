@@ -204,7 +204,9 @@ describe("o servidor não pode cair por causa da recolha", () => {
     const boot = readFileSync(resolve(process.cwd(), "server/_core/index.ts"), "utf8");
     // Sem servidor não há nada para servir: falhar claramente é melhor do que
     // ficar meio de pé a responder erros.
-    expect(boot).toMatch(/startServer\(\)\.catch\([\s\S]{0,300}process\.exit\(1\)/);
+    // Os parênteses aceitam argumento: o arranque passou a receber o servidor.
+    // O que este teste guarda é a falha ser fatal, não a forma da chamada.
+    expect(boot).toMatch(/startServer\([^)]*\)\.catch\([\s\S]{0,300}process\.exit\(1\)/);
   });
 
   it("reporta o tempo de vida do processo, que é o que denuncia um ciclo de reinícios", () => {

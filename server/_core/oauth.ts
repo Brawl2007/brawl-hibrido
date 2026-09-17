@@ -4,6 +4,7 @@ import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { ENV } from "./env";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -30,6 +31,16 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
     res.clearCookie(OAUTH_STATE_COOKIE, { path: "/", secure: true, sameSite: "none" });
+
+    /**
+     * Sem servidor de contas não há troca de código possível. Dizer isso é
+     * melhor do que deixar o pedido bater num endereço vazio e devolver uma
+     * falha de rede que não explica nada a quem está a tentar entrar.
+     */
+    if (!ENV.oAuthServerUrl) {
+      res.status(503).json({ error: "oauth server not configured", detalhe: "Entra com a palavra-passe do dono." });
+      return;
+    }
 
     try {
       const tokenResponse = await sdk.exchangeCodeForToken(code, state);
