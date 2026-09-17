@@ -1,3 +1,4 @@
+import { vigiarStream } from "@/lib/vigiarStream";
 import { applyRankedSnapshotPush, type RankedSnapshotEvent, type RankedSnapshotPayload } from "@shared/rankedSyncSnapshot";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -48,8 +49,7 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const source = new EventSource("/api/realtime/ranked");
-    source.onopen = () => setConnectionState("live");
-    source.onerror = () => setConnectionState("offline");
+    const pararDeVigiar = vigiarStream(source, setConnectionState);
     const handleSnapshot = (message: MessageEvent<string>) => {
       try {
         const next = JSON.parse(message.data) as RankedSnapshotEvent;
@@ -64,6 +64,7 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
     source.addEventListener("ranked_snapshot", handleSnapshot);
     return () => {
       source.removeEventListener("ranked_snapshot", handleSnapshot);
+      pararDeVigiar();
       source.close();
       setConnectionState("offline");
     };

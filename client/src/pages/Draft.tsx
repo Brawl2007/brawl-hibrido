@@ -1,3 +1,4 @@
+import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
@@ -65,10 +66,9 @@ import type { DraftRuleSettings } from "@shared/draftRules";
 import "./draftRules.css";
 import { MobileNav } from "@/components/MobileNav";
 
-const LOGO_URL = "/manus-storage/brawl-hibrido-logo_6c9584aa.png";
-const TEXTURE_URL = "/manus-storage/brawl-hibrido-texture_3661e183.jpg";
-const MAP_BG_URL = "/manus-storage/brawl-hibrido-map-bg_531ad86a.jpg";
-const DRAFT_ARENA_BG_URL = "/manus-storage/brawl-stars-draft-background_4a31ad8d.webp";
+const LOGO_URL = LOGO;
+const TEXTURE_URL = TEXTURA;
+const DRAFT_ARENA_BG_URL = ARENA;
 
 type TeamId = DraftTeam;
 type VoiceCaptureState = "idle" | "listening" | "processing";
@@ -305,10 +305,6 @@ export function getDuelTeamScoreLeader(summary: ReturnType<typeof calculateDuelT
 function brawlerImageFor(row: RankedRow) {
   const id = row.brawlerId ?? additionalBrawlerAssetIds[row.brawler];
   return id ? `https://cdn.brawlify.com/brawlers/borderless/${id}.png` : null;
-}
-
-function mapImageFor(map: MapSummary) {
-  return MAP_BG_URL;
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -2230,7 +2226,7 @@ export default function Draft() {
   };
 
   return (
-    <div className="app-shell draft-shell" style={{ backgroundImage: `linear-gradient(rgba(11,14,20,.94), rgba(11,14,20,.98)), url(${TEXTURE_URL})` }}>
+    <div className="app-shell draft-shell" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.94), rgba(11,14,20,.98))", TEXTURE_URL) }}>
       <DraftSidebar active="draft" />
       <div className="app-main">
         <DraftTopbar
@@ -2274,7 +2270,7 @@ export default function Draft() {
             </div>
           </section>
           <div className="draft-content">
-            <section className="draft-arena" aria-label="Simulador Azul versus Vermelha" style={{ backgroundImage: `linear-gradient(105deg, rgba(5,12,23,.96) 0%, rgba(9,17,31,.88) 47%, rgba(26,9,22,.9) 100%), url(${DRAFT_ARENA_BG_URL})` }}>
+            <section className="draft-arena" aria-label="Simulador Azul versus Vermelha" style={{ backgroundImage: fundoCom("linear-gradient(105deg, rgba(5,12,23,.96) 0%, rgba(9,17,31,.88) 47%, rgba(26,9,22,.9) 100%)", DRAFT_ARENA_BG_URL) }}>
               <header className="draft-arena-header">
                 <div>
                   <div className="section-kicker"><Swords size={13} /> Ranked Draft <span>AZUL VS VERMELHA</span></div>

@@ -1,3 +1,4 @@
+import { LOGO } from "@/lib/imagens";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
 import { getMatchupValue, getPublishedMatchupValue, describeMatchupValue, formatMatchupPercent, getBrawlScopeCoverage } from "@shared/counterMatchupValue";
@@ -19,7 +20,7 @@ import { draftRoleLabels } from "@shared/draft";
 import { brawlScopeModes } from "@shared/brawlScopeModes";
 import { trpc } from "@/lib/trpc";
 
-const LOGO_URL = "/manus-storage/brawl-hibrido-logo_6c9584aa.png";
+const LOGO_URL = LOGO;
 const BRAWL_PLANET_URL = "https://www.brawlplanet.com/brawlers";
 const PL_PRODIGY_URL = "https://powerleagueprodigy.com";
 const BRAWLSCOPE_URL = "https://brawlscope.com/counters";

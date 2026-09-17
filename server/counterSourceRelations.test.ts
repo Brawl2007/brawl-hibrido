@@ -64,7 +64,23 @@ describe("counter source relations", () => {
     };
     setCounterSyncSnapshot(snapshot);
     const general = getCounterSourceProfiles("Bolt", "global");
-    expect(general.flatMap(p => p.targets.map(r => r.brawler))).toEqual(expect.arrayContaining(["Source Only", "Ash", "Fang"]));
+    const alvosGerais = general.flatMap(p => p.targets.map(r => r.brawler));
+    /**
+     * A Geral lê a Geral, e mais nada.
+     *
+     * `Source Only` vem de uma relação sem modo, e por isso pertence aqui. `Ash`
+     * e `Fang` são leituras do BrawlScope em Fute-Brawl e Zona Estratégica: cada
+     * uma vale no seu modo e nenhuma foi publicada como geral.
+     *
+     * Juntá-las aqui seria inventar uma leitura geral a partir da união dos
+     * modos — e o BrawlScope publica a sua própria vista Overall, que é uma
+     * leitura distinta e não essa soma. Um brawler pode ganhar no geral e perder
+     * num modo. Enquanto a Overall não for lida, a resposta certa é não ter nada
+     * a dizer.
+     */
+    expect(alvosGerais).toContain("Source Only");
+    expect(alvosGerais).not.toContain("Ash");
+    expect(alvosGerais).not.toContain("Fang");
     for (const [mode, included, excluded] of [["brawl-ball", "Ash", "Fang"], ["hotZone", "Fang", "Ash"]]) {
       const profiles = getCounterSourceProfiles("Bolt", mode);
       const targets = profiles.flatMap(p => p.targets.map(r => r.brawler));
@@ -179,6 +195,13 @@ describe("counter source relations", () => {
         { owner: "Bolt", direction: "targets", attacker: "Bolt", defender: "Ash", source: "brawlscope", sourceUrl: "https://brawlscope.com/counters/bolt?mode=brawlBall", modeId: "brawlBall", mode: "Fute-Brawl" },
         { owner: "Bolt", direction: "targets", attacker: "Bolt", defender: "Old Brawler", source: "brawlscope", sourceUrl: "https://brawlscope.com/counters/bolt?mode=hotZone", modeId: "hotZone", mode: "Zona Estratégica" },
       ],
+      // A sinergia da mesma página, no mesmo modo. Tem de vir na snapshot: com
+      // uma snapshot ativa o catálogo estático não é consultado, e para um modo
+      // nunca é — ele é a vista Overall, e usá-lo aqui seria dar por lida uma
+      // leitura de modo que a fonte não publicou.
+      synergies: [
+        { owner: "Bolt", teammate: "Ash", source: "brawlscope", sourceUrl: "https://brawlscope.com/counters/bolt?mode=hotZone", rank: 1, modeId: "hotZone", mode: "Zona Estratégica" },
+      ],
     });
 
     expect(getCounterSourceProfiles("Bolt", "brawlBall").find((profile) => profile.source === "BrawlScope")?.targets.map((relation) => relation.brawler)).toEqual(["Ash"]);
@@ -190,7 +213,9 @@ describe("counter source relations", () => {
     expect(hotZone?.targets).toEqual([]);
     expect(hotZone?.counteredBy).toEqual([]);
     expect(hotZone?.bestTeammates.length).toBeGreaterThan(0);
-    expect(getCounterSourceProfiles("Bolt").find((profile) => profile.source === "BrawlScope")?.targets.map((relation) => relation.brawler)).toEqual(["Ash"]);
+    // Nenhuma das duas relações foi publicada como geral, por isso o BrawlScope
+    // não tem perfil geral nenhum — a de Fute-Brawl vale em Fute-Brawl.
+    expect(getCounterSourceProfiles("Bolt").find((profile) => profile.source === "BrawlScope")).toBeUndefined();
   });
 
   it("combines current global counters with the selected BrawlScope mode and ignores pending removals", () => {
@@ -218,7 +243,10 @@ describe("counter source relations", () => {
     const generalTargets = getCounterSourceProfiles("Bolt").flatMap((profile) => profile.targets.map((relation) => relation.brawler));
     expect(brawlBallTargets).toEqual(expect.arrayContaining(["Ash", "Fang"]));
     expect(brawlBallTargets).not.toContain("Shelly");
-    expect(generalTargets).toEqual(expect.arrayContaining(["Ash", "Fang"]));
+    // `Ash` é a relação global do Brawl Planet e fica. `Fang` é do BrawlScope em
+    // Fute-Brawl: aparece na vista desse modo, acima, e não na geral.
+    expect(generalTargets).toContain("Ash");
+    expect(generalTargets).not.toContain("Fang");
     expect(generalTargets).not.toContain("Shelly");
   });
 

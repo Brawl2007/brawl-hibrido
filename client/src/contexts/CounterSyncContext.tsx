@@ -1,3 +1,4 @@
+import { vigiarStream } from "@/lib/vigiarStream";
 import { setCounterSyncSnapshot } from "@shared/counterSourceRelations";
 import { applyCounterSnapshotToClientState, type CounterSyncClientState } from "@shared/counterSyncClient";
 import { parseCounterSnapshotEvent, type CounterSnapshotSseEvent } from "@shared/counterSyncSnapshot";
@@ -41,8 +42,7 @@ export function CounterSyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const source = new EventSource("/api/realtime/counters");
-    source.onopen = () => setConnectionState("live");
-    source.onerror = () => setConnectionState("offline");
+    const pararDeVigiar = vigiarStream(source, setConnectionState);
     const handleSnapshot = (event: MessageEvent<string>) => {
       try {
         const next = parseCounterSnapshotEvent(event.data);
@@ -55,6 +55,7 @@ export function CounterSyncProvider({ children }: { children: ReactNode }) {
     source.addEventListener("counter_snapshot", handleSnapshot);
     return () => {
       source.removeEventListener("counter_snapshot", handleSnapshot);
+      pararDeVigiar();
       source.close();
       setConnectionState("offline");
     };
