@@ -17,6 +17,29 @@ import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
 import { getLiveSyncState } from "../liveSync";
 import { garantirArranque } from "../arranque";
 
+/**
+ * O navegador já tem esta versão?
+ *
+ * A snapshot dos counters pesa cerca de 5,4 MB, e o cliente JÁ a busca por
+ * `counterSync.snapshot`. A stream entregava-a outra vez: ao abrir a página
+ * eram 5,4 MB a dobrar, e depois mais 5,4 MB a cada religação, de cinco em
+ * cinco minutos — dezenas de megabytes por visitante para repetir dados que
+ * não mudaram.
+ *
+ * O protocolo SSE já resolve isto. O servidor marca cada evento com `id:`, e o
+ * navegador devolve essa marca em `Last-Event-ID` quando se religa. Se a marca
+ * for a versão que está publicada, não há nada de novo a dizer: fecha-se sem
+ * corpo, e o cliente fica com o que já tinha.
+ *
+ * Quando a versão muda, o `Last-Event-ID` deixa de bater certo e a snapshot
+ * segue por inteiro, como antes.
+ */
+function versaoJaConhecida(req: { headers: Record<string, unknown> }, versao: string | undefined) {
+  const recebido = req.headers["last-event-id"];
+  const marca = Array.isArray(recebido) ? recebido[0] : recebido;
+  return Boolean(versao) && typeof marca === "string" && marca === versao;
+}
+
 export function createApp() {
   const app = express();
   const server = createServer(app);
@@ -45,7 +68,7 @@ export function createApp() {
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);
   app.post("/api/scheduled/observedMatchCollection", handleObservedMatchCollectionScheduled);
   app.get("/api/realtime/status", (_req, res) => res.json(getLiveSyncState()));
-  app.get("/api/realtime/ranked", async (_req, res) => {
+  app.get("/api/realtime/ranked", async (req, res) => {
     res.status(200).set({
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
@@ -60,8 +83,10 @@ export function createApp() {
     res.once("close", () => { disconnected = true; });
     const snapshot = await getPublicRankedSnapshot();
     if (disconnected) return;
+    // Já tem esta versão: não se reenvia a snapshot inteira. Ver `versaoJaConhecida`.
+    if (versaoJaConhecida(req, snapshot.version)) return void res.end();
     const capturedAt = snapshot.capturedAt ? new Date(snapshot.capturedAt) : null;
-    res.write(`event: ranked_snapshot\ndata: ${JSON.stringify({
+    res.write(`id: ${snapshot.version}\nevent: ranked_snapshot\ndata: ${JSON.stringify({
       version: snapshot.version,
       capturedAt: snapshot.capturedAt,
       syncState: snapshot.version === "bundled-static" ? "bundled" : "success",
@@ -81,7 +106,7 @@ export function createApp() {
      */
     res.end();
   });
-  app.get("/api/realtime/counters", async (_req, res) => {
+  app.get("/api/realtime/counters", async (req, res) => {
     res.status(200).set({
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
@@ -96,7 +121,9 @@ export function createApp() {
     res.once("close", () => { disconnected = true; });
     const snapshot = await getPublicCounterSyncSnapshot();
     if (disconnected) return;
-    if (snapshot) res.write(`event: counter_snapshot\ndata: ${JSON.stringify({ version: snapshot.version, capturedAt: snapshot.capturedAt, payload: snapshot.payload })}\n\n`);
+    if (snapshot && !versaoJaConhecida(req, snapshot.version)) {
+      res.write(`id: ${snapshot.version}\nevent: counter_snapshot\ndata: ${JSON.stringify({ version: snapshot.version, capturedAt: snapshot.capturedAt, payload: snapshot.payload })}\n\n`);
+    }
     res.end();
   });
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));

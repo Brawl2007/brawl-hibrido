@@ -278,11 +278,33 @@ export async function updateRankedSyncConfig(
   return getRankedSyncConfig();
 }
 
+/**
+ * O id da linha acabada de inserir.
+ *
+ * O driver do MySQL devolve `[ResultSetHeader, campos]`, e o id vive no
+ * PRIMEIRO elemento. Ler `result.insertId` diretamente do array dá `undefined`,
+ * que caía no `?? 0` — e o zero atravessava tudo em silêncio, porque os
+ * `updateXSyncRun` começam por `if (!db || !id) return`.
+ *
+ * O efeito era visível no painel: as execuções eram criadas, apareciam como "a
+ * correr", e NUNCA fechavam. O histórico ficava cheio de corridas eternas,
+ * mesmo as que tinham terminado bem — e uma sincronização com problemas era
+ * indistinguível de uma bem sucedida.
+ *
+ * Aceita as duas formas por segurança: se algum dia o driver passar a devolver
+ * o cabeçalho sem o array, continua a funcionar.
+ */
+export function idInserido(result: unknown): number {
+  const cabecalho = Array.isArray(result) ? result[0] : result;
+  const id = (cabecalho as { insertId?: number } | undefined)?.insertId;
+  return Number.isFinite(id) ? Number(id) : 0;
+}
+
 export async function createRankedSyncRun(trigger: "scheduled" | "manual" | "bootstrap") {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.insert(rankedSyncRuns).values({ trigger, status: "running" });
-  return Number((result as { insertId?: number }).insertId ?? 0);
+  return idInserido(result);
 }
 
 export async function updateRankedSyncRun(
@@ -380,7 +402,7 @@ export async function createCounterSyncRun(trigger: "scheduled" | "manual" | "bo
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.insert(counterSyncRuns).values({ trigger, status: "running" });
-  return Number((result as { insertId?: number }).insertId ?? 0);
+  return idInserido(result);
 }
 
 export async function updateCounterSyncRun(id: number, patch: Partial<InsertCounterSyncRun>) {
@@ -770,7 +792,7 @@ export async function createObservedMatchCollectionRun(trigger: "scheduled" | "m
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.insert(observedMatchCollectionRuns).values({ trigger, status: "running" });
-  return Number((result as { insertId?: number }).insertId ?? 0);
+  return idInserido(result);
 }
 
 export async function updateObservedMatchCollectionRun(
