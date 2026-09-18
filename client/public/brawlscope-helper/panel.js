@@ -34,6 +34,20 @@ function render() {
   $("export").disabled = !state || (!Object.keys(state.profiles).length && !Object.keys(state.rankedMaps || {}).length && !state.rankedRotation);
   $("errors").textContent = Object.entries(state?.errors || {}).map(([url, error]) => `${url}: ${error}`).join("\n");
 
+  /**
+   * A espera depois de uma verificação tem de ser visível.
+   *
+   * Sem isto, uma extensão a esperar dois minutos é indistinguível de uma
+   * extensão encravada — e quem está à frente dela carrega em Pausar,
+   * desistindo de uma recolha que ia continuar sozinha.
+   */
+  const esperaAte = state?.esperarAte && state.esperarAte > Date.now() ? state.esperarAte : 0;
+  if (esperaAte) {
+    const segundos = Math.ceil((esperaAte - Date.now()) / 1000);
+    const emMin = Math.floor(segundos / 60);
+    $("status").textContent += ` · retoma daqui a ${emMin ? `${emMin} min ${segundos % 60}s` : `${segundos}s`}`;
+  }
+
   // Um botão cinzento sem explicação parece um botão avariado.
   const porque = semFila
     ? "Iniciar está desativado porque ainda não há fila carregada. Escolhe o ficheiro exportado pelo site na caixa acima. Se ao escolhê-lo aparecer um erro a vermelho, a extensão está mais antiga do que o site: descarrega o ZIP outra vez e carrega Recarregar em chrome://extensions."
@@ -47,7 +61,24 @@ function render() {
 
   $("bloco-rejeitados").hidden = !rejeitados.length;
   $("rejeitados").textContent = rejeitados.map(({ url, motivo }) => `${url}: ${motivo}`).join("\n");
+
+  // A última verificação, com o sinal exato. É o que permite dizer se foi a
+  // fonte a recusar ou o nosso leitor a enganar-se.
+  const bloqueio = state?.ultimoBloqueio;
+  $("bloco-bloqueio").hidden = !bloqueio;
+  $("bloqueio").textContent = bloqueio
+    ? `${bloqueio.quando}\n${bloqueio.url}\nsinal encontrado na página: ${bloqueio.sinal ?? "(não registado)"}`
+    : "";
 }
+
+/**
+ * Enquanto uma espera decorre, o painel volta a desenhar-se sozinho.
+ *
+ * A contagem decrescente que não conta é pior do que não haver contagem: parece
+ * que parou. O estado só muda quando a recolha retoma, por isso o redesenho tem
+ * de vir daqui.
+ */
+setInterval(() => { if (state?.esperarAte && state.esperarAte > Date.now()) render(); }, 1000);
 $("queue").onchange = async event => {
   try {
     if (state && Object.keys(state.profiles).length && !confirm("Exportaste os resultados atuais? Carregar outra fila substitui o progresso local da extensão.")) return;

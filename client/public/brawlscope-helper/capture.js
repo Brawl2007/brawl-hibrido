@@ -7,7 +7,22 @@
  */
 export async function captureProfile() {
   const visible = element => Boolean(element && element.getClientRects().length);
-  const bloqueado = texto => /verify you are human|checking your browser|just a moment|access denied|request blocked|unusual traffic|captcha|403\s*forbidden|too many requests/i.test(texto);
+  /**
+   * Devolve QUAL foi o sinal, e não apenas que houve um.
+   *
+   * O aviso dizia "pediu verificação ou bloqueou o acesso" e mais nada. Com
+   * isso não há como distinguir uma verificação da Cloudflare de um limite de
+   * pedidos, nem sequer de uma frase inocente numa página que calhasse conter
+   * uma destas expressões. A recolha parava e ficava-se sem saber porquê nem
+   * onde — e com o quê tentar a seguir.
+   */
+  const sinalDeBloqueio = texto => {
+    for (const padrao of [/verify you are human/i, /checking your browser/i, /just a moment/i, /access denied/i, /request blocked/i, /unusual traffic/i, /captcha/i, /403\s*forbidden/i, /too many requests/i]) {
+      const encontrado = texto.match(padrao);
+      if (encontrado) return encontrado[0];
+    }
+    return null;
+  };
 
   /**
    * O TopBrawl é lido de outra maneira, e de propósito NÃO é interpretado aqui.
@@ -24,8 +39,9 @@ export async function captureProfile() {
    */
   if (location.hostname === "topbrawl.com" || location.hostname === "www.topbrawl.com") {
     const corpo = document.body?.innerText || "";
-    if (bloqueado(corpo) || document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]')) {
-      return { blocked: true, error: "O TopBrawl pediu verificação ou bloqueou o acesso. A fila foi pausada." };
+    const sinal = sinalDeBloqueio(corpo) || (document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]') ? "desafio da Cloudflare" : null);
+    if (sinal) {
+      return { blocked: true, sinal, error: `O TopBrawl respondeu com "${sinal}" em ${location.pathname}.` };
     }
     /**
      * O índice da rotação: quais são os mapas de agora.
@@ -60,8 +76,9 @@ export async function captureProfile() {
 
   const clean = element => (element?.innerText || "").replace(/\s+/g, " ").trim();
   const page = document.body?.innerText || "";
-  if (bloqueado(page) || document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]')) {
-    return { blocked: true, error: "O BrawlScope pediu verificação ou bloqueou o acesso. A fila foi pausada." };
+  const sinalScope = sinalDeBloqueio(page) || (document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]') ? "desafio da Cloudflare" : null);
+  if (sinalScope) {
+    return { blocked: true, sinal: sinalScope, error: `O BrawlScope respondeu com "${sinalScope}" em ${location.pathname}.` };
   }
   const title = clean(document.querySelector("h1"));
   const brawler = title.match(/^(.+?) counters$/i)?.[1];

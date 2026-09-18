@@ -1,4 +1,4 @@
-Brawl Híbrido v96 — recolha rápida, importação em lote e rotação automática
+Brawl Híbrido v97 — recolha, importação em lote e rotação automática
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -14,6 +14,13 @@ A rotação Ranked entra sozinha (novo)
 - Não tens de fazer nada de diferente: corre a fila como sempre. A rotação viaja no MESMO ficheiro dos mapas (topbrawl-mapas.json) e é aplicada quando o importas.
 - Quando entram mapas novos, eles aparecem na fila SEGUINTE. Por isso, numa rotação nova, vale a pena correr a fila duas vezes: a primeira aprende a rotação, a segunda recolhe os mapas novos.
 - Uma leitura do índice com poucos mapas é recusada e a rotação anterior mantém-se. Isso é de propósito: um parser partido lê zero mapas, e zero mapas tomado por verdade significaria "a rotação acabou".
+
+Se a fonte pedir verificação
+- O TopBrawl e o BrawlScope podem pedir verificação a meio de uma corrida. A extensão NÃO contorna isso, e não é para isso que serve.
+- O que faz agora: espera e tenta a MESMA página outra vez, daqui a 2 minutos, depois 5, depois 10. Deixa o Chrome aberto e o painel mostra a contagem. Antes parava logo à primeira, o que numa fila de 27 páginas significou parar na terceira.
+- Ao fim das três tentativas desiste e diz-te. Exporta o que já foi recolhido — nada se perde — e tenta mais tarde.
+- O painel guarda a última verificação em "Última verificação pedida pela fonte", com a página e a frase exata que apareceu. É isso que permite distinguir uma recusa a sério de um engano do leitor.
+- O ritmo dos pedidos ao TopBrawl é mais lento do que ao BrawlScope, de propósito: pede-se menos, em vez de se disfarçar. A extensão continua sem tocar em IP, identificação ou cookies, e não pede essas permissões.
 
 Se o botão Iniciar aparecer cinzento
 - Iniciar só fica ativo depois de uma fila carregar. Se escolheste o ficheiro e ele ficou cinzento na mesma, a fila não carregou — o painel diz porquê, por baixo dos botões.

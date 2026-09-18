@@ -105,6 +105,54 @@ describe("a rotação passa a vir da extensão", () => {
     expect(html).not.toMatch(/v6\d/i);
   });
 
+  /**
+   * O ritmo tem de ser mais lento para o TopBrawl do que para o BrawlScope.
+   *
+   * 250 ms entre páginas é o que o BrawlScope sempre aguentou; a mesma cadência
+   * contra o TopBrawl levou com uma verificação à TERCEIRA página de uma fila de
+   * 27. Quatro navegações por segundo é um ritmo que nenhum humano tem.
+   *
+   * Abrandar é pedir menos, não é disfarçar: a extensão continua sem mexer em
+   * IP, identificação ou cookies, e uma recusa persistente continua a parar a
+   * recolha.
+   */
+  it("pede mais devagar ao TopBrawl do que ao BrawlScope", () => {
+    const worker = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/worker.js"), "utf8");
+    const pausa = Number(worker.match(/"https:\/\/topbrawl\.com":\s*(\d+)/)?.[1]);
+    const base = Number(worker.match(/const PAGE_READY_DELAY_MS = (\d+)/)?.[1]);
+    expect(base).toBe(250);
+    expect(pausa).toBeGreaterThanOrEqual(1000);
+
+    /**
+     * E nada disto pode virar disfarce.
+     *
+     * A verificação é sobre o que a extensão PODE fazer, não sobre as palavras
+     * que aparecem no ficheiro — a primeira versão deste teste falhou por causa
+     * de um comentário meu que dizia "não mexe em cookies". O manifesto é a
+     * autoridade: sem a permissão, a API não existe.
+     */
+    const manifesto = JSON.parse(readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/manifest.json"), "utf8")) as { permissions: string[] };
+    for (const perigosa of ["cookies", "webRequest", "declarativeNetRequest", "webRequestBlocking", "proxy"]) {
+      expect(manifesto.permissions).not.toContain(perigosa);
+    }
+    for (const chamada of ["chrome.cookies", "chrome.webRequest", "chrome.proxy", "navigator.userAgent"]) {
+      expect(worker).not.toContain(chamada);
+    }
+  });
+
+  /**
+   * Um bloqueio passa a ser esperado, não fatal — mas a espera tem de ser de
+   * minutos. Uma "espera" de segundos seria insistir, não recuar.
+   */
+  it("espera minutos depois de uma verificação, e desiste ao fim de três", () => {
+    const worker = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/worker.js"), "utf8");
+    const esperas = worker.match(/ESPERAS_APOS_BLOQUEIO_MS = \[([^\]]+)\]/)?.[1] ?? "";
+    const minutos = [...esperas.matchAll(/(\d+)\s*\*\s*60\s*\*\s*1000/g)].map((m) => Number(m[1]));
+    expect(minutos).toEqual([2, 5, 10]);
+    // Cada espera é maior do que a anterior: insiste menos de cada vez.
+    expect(minutos).toEqual([...minutos].sort((a, b) => a - b));
+  });
+
   /** Um botão cinzento sem explicação é indistinguível de um botão avariado. */
   it("o painel explica porque é que Iniciar está desativado", () => {
     const panel = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/panel.js"), "utf8");

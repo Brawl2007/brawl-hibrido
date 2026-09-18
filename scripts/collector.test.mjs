@@ -24,9 +24,48 @@ test('durable queue captures one profile, advances and can resume after restart'
   await send({action:'start'});scriptResult=async()=>({profile:{brawler:'Lou',view:'overall',rows:[]}});await tick();await tick();
   assert.equal(state().running,false);assert.equal(state().cursor,2);assert.equal(Object.keys(state().profiles).length,2);
 });
-test('403 pauses without advancing or navigating to another source page',async()=>{
-  await reset();await send({action:'start'});await tick();scriptResult=async()=>({blocked:true,error:'403'});await tick();
-  assert.equal(state().running,false);assert.equal(state().cursor,0);assert.equal(tabs.get(state().tabId).url,urls[0]);await tick();assert.equal(executions,1);
+/**
+ * Uma verificação da fonte é um "agora não", e não o fim da recolha.
+ *
+ * Antes parava tudo à primeira. Numa fila de 27 páginas isso significou parar
+ * na terceira e não recolher mais nada nessa sessão, com a recolha à espera de
+ * alguém voltar ao computador.
+ *
+ * O que NÃO pode mudar, e é o que este teste guarda: depois de um bloqueio
+ * nunca se passa à página seguinte, nunca se navega para outro lado, e não se
+ * tenta outra vez já a seguir. Espera-se.
+ */
+test('403 waits on the same page instead of advancing or navigating away',async()=>{
+  await reset();await send({action:'start'});await tick();scriptResult=async()=>({blocked:true,sinal:'just a moment',error:'403'});await tick();
+  // Não avançou, não mudou de página, e registou o sinal exato.
+  assert.equal(state().cursor,0);
+  assert.equal(tabs.get(state().tabId).url,urls[0]);
+  assert.equal(state().ultimoBloqueio.sinal,'just a moment');
+  // Fica à espera, em vez de desistir — e a espera é real.
+  assert.equal(state().running,true);
+  assert.ok(state().esperarAte>Date.now()+60000,'a espera tem de ser de minutos, não de segundos');
+  // E enquanto espera não bate outra vez à porta.
+  const antes=executions; await tick(); await tick();
+  assert.equal(executions,antes,'tentou de novo durante a espera');
+  await send({action:'pause'});
+});
+
+/** Três recusas seguidas são para levar a sério: aí sim, a recolha para. */
+test('repeated blocks eventually stop the run instead of retrying forever',async()=>{
+  await reset();await send({action:'start'});await tick();
+  scriptResult=async()=>({blocked:true,sinal:'just a moment',error:'403'});
+  // Cada ciclo de bloqueio gasta dois ticks: um para recarregar a página, outro
+  // para a ler. Adianta-se o relógio da espera para não esperar minutos a sério.
+  let ciclos=0;
+  while(state().running && ciclos++<20){
+    const s=state();
+    if(s.esperarAte){stored['brawl-v54-queue']={...s,esperarAte:Date.now()-1};}
+    await tick();
+  }
+  assert.ok(ciclos<20,'a recolha nunca parou');
+  assert.equal(state().running,false);
+  assert.equal(state().cursor,0);
+  assert.match(state().message,/Exporta o que já foi recolhido/);
 });
 test('pause during capture prevents committing or starting next page',async()=>{
   await reset();await send({action:'start'});await tick();let finish;scriptResult=()=>new Promise(resolve=>finish=resolve);
