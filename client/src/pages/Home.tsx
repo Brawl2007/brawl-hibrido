@@ -62,6 +62,7 @@ import { officialSourceBalance, useSourceBalance, type SourceBalancePreference }
 import { buildMapsTsv } from "@shared/mapTsv";
 import { avisoDaRecolha } from "@shared/recolhaAutomatica";
 import { avaliarConfianca, explicarConfianca } from "@shared/amostraPequena";
+import { LIMITE_DE_CONFIANCA_MS, descreverFrescura } from "@shared/idadeDosDados";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
 
@@ -903,6 +904,20 @@ export default function Home() {
    * números velhos sem ninguém reparar. Quando falha, diz-se aqui.
    */
   const avisoDaAutomatica = avisoDaRecolha(statusQuery.data?.ultimaRecolhaAutomatica ?? null);
+  /**
+   * A idade dos dados, para quem chega ao site e não sabe nada disto.
+   *
+   * O módulo existe desde a v94 e só estava a ser usado no Draft. Quem cai na
+   * página principal — um amigo a quem foi passado o link — via uma data e mais
+   * nada: nenhuma forma de saber se estava a olhar para números de hoje ou de
+   * há duas semanas.
+   *
+   * Mede a leitura MAIS ANTIGA das fontes, e não a mais recente: a idade dos
+   * dados é a da parte mais velha deles. E é a leitura na FONTE, que não é o
+   * mesmo que a hora a que a sincronização correu — uma sincronização de agora
+   * pode estar a servir uma leitura de há uma semana.
+   */
+  const frescura = descreverFrescura(statusQuery.data?.sourceReadAt ?? null);
   const handleRefresh = startRefresh;
 
   const currentRows = useMemo(() => mapDisplayRows.filter((row) => row.map === selectedMap.name), [mapDisplayRows, selectedMap.name]);
@@ -973,7 +988,14 @@ export default function Home() {
                 <h2>O meta, sem ruído.</h2>
                 <p>Seleciona um mapa para cruzar o ranking completo com a métrica que criámos para separar popularidade de performance.</p>
               </div>
-              <div className="intro-badge"><Flame size={16} /><span>{lastStatus === "running" ? "Sincronização em curso" : "Meta snapshot"}</span><strong>{formatSyncDate(capturedAt)}</strong></div>
+              <div className={`intro-badge ${frescura.velho ? "is-velho" : ""}`} title={frescura.velho
+                ? `As fontes não são lidas há mais de ${Math.round(LIMITE_DE_CONFIANCA_MS / 3600000)} horas. Os números não estão errados — são apenas de antes.`
+                : undefined}>
+                <Flame size={16} />
+                <span>{lastStatus === "running" ? "Sincronização em curso" : "Meta snapshot"}</span>
+                <strong>{formatSyncDate(capturedAt)}</strong>
+                <em className="intro-badge-idade">{frescura.rotulo}</em>
+              </div>
             </div>
             <div className="stats-grid">
               <StatCard icon={Trophy} label="Melhor score" value={formatScore(stats.top)} detail={`${currentRows[0]?.brawler ?? "—"} lidera o mapa`} accent="accent-amber" />

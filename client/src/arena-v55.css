@@ -187,3 +187,42 @@
   white-space: nowrap;
   cursor: help;
 }
+
+/*
+ * v107: a idade dos dados para quem chega ao site.
+ *
+ * Um amigo a quem foi passado o link não sabe que existe uma extensão, nem que
+ * alguém tem de a correr. Via uma data e mais nada — e uma data sozinha não
+ * responde à única pergunta que importa: isto é de agora?
+ */
+/*
+ * A base do `.intro-badge` é `flex` com `nowrap`, pensada para uma linha só.
+ * A idade precisa da linha dela: `flex-basis: 100%` quebra sem desfazer o
+ * alinhamento do que já lá estava, e o `normal` desfaz o `nowrap` herdado para
+ * a frase poder partir em ecrã estreito.
+ */
+.intro-badge {
+  flex-wrap: wrap;
+}
+
+.intro-badge-idade {
+  flex-basis: 100%;
+  margin-top: 4px;
+  color: var(--bh-text-dim);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+/*
+ * Passadas as 48 horas, deixa de ser um pormenor. Continua sem ser um erro —
+ * os números não estão errados, são de antes — por isso avisa em vez de gritar.
+ */
+.intro-badge.is-velho {
+  border-color: var(--bh-warning);
+}
+
+.intro-badge.is-velho .intro-badge-idade {
+  color: var(--bh-warning);
+}
