@@ -17,7 +17,7 @@ const fichas = ["shade", "el-primo", "amber"].map((slug) => `https://brawlscope.
  */
 describe("fila completa: as duas fontes numa passagem", () => {
   it("o validador da extensão aceita as duas origens na mesma fila", () => {
-    const aceites = validateQueue({ format: "brawlhibrido-queue-v1", urls: [...fichas, ...mapas] });
+    const { urls: aceites } = validateQueue({ format: "brawlhibrido-queue-v1", urls: [...fichas, ...mapas] });
 
     expect(aceites).toHaveLength(fichas.length + mapas.length);
     expect(aceites.some((url: string) => url.startsWith("https://brawlscope.com/"))).toBe(true);
@@ -34,7 +34,13 @@ describe("fila completa: as duas fontes numa passagem", () => {
 
   it("continua a recusar endereços que a recolha não sabe ler", () => {
     for (const mau of ["https://exemplo.test/counters/shade", "https://brawlscope.com/outra/coisa"]) {
+      // Sozinho não sobra nada para visitar, por isso atira.
       expect(() => validateQueue({ format: "brawlhibrido-queue-v1", urls: [mau] })).toThrow();
+      // Acompanhado, é posto de lado — e a recolha do resto segue.
+      const { urls, rejeitados } = validateQueue({ format: "brawlhibrido-queue-v1", urls: [mau, ...mapas] });
+      expect(urls).not.toContain(mau);
+      expect(urls).toHaveLength(mapas.length);
+      expect(rejeitados.map((r) => r.url)).toEqual([mau]);
     }
   });
 });

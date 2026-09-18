@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Brawl Híbrido — Recolha v95",
-  "version": "95.0.0",
+  "name": "Brawl Híbrido — Recolha v96",
+  "version": "96.0.0",
   "description": "Recolhe a rotação Ranked, os mapas do TopBrawl e as fichas do BrawlScope acessíveis no navegador, e exporta um lote para o teu Brawl Híbrido.",
   "permissions": [
     "storage",

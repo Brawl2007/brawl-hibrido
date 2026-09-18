@@ -37,11 +37,30 @@ test('unexpected redirect pauses rather than navigating around it',async()=>{
   await reset();await send({action:'start'});await tick();tabs.get(state().tabId).url='https://brawlscope.com/challenge';await tick();assert.equal(state().running,false);assert.equal(executions,0);
 });
 
+/**
+ * O que este teste quer provar: uma página que acaba de carregar acorda a
+ * recolha SEM esperar pelo alarme de 30 segundos.
+ *
+ * Media-o contando execuções e exigindo exatamente uma ao fim de 2,2 segundos.
+ * Isso nunca podia funcionar: a pausa entre páginas são 250 ms, por isso a
+ * recolha avança legitimamente para a página seguinte muito antes disso, e a
+ * segunda execução é a página 2 — comportamento certo, contado como falha.
+ *
+ * Confirmei-o instrumentando o capturador: as duas execuções visitam páginas
+ * diferentes, a primeira e a segunda da fila. Não havia captura repetida.
+ *
+ * Agora mede-se o que interessa: quanto TEMPO passou até a recolha avançar. Se
+ * tivesse esperado pelo alarme, teria demorado 30 segundos.
+ */
 test('completed page wakes collection without waiting for an alarm',async()=>{
   await reset(); scriptResult=async()=>({profile:{brawler:'Bibi',view:'overall',rows:[]}});
   await send({action:'start'}); await tick();
+  const comecou=Date.now();
   listeners.updated(state().tabId,{status:'complete'});
-  await new Promise(resolve=>setTimeout(resolve,2200));
-  assert.equal(state().cursor,1); assert.equal(executions,1);
+  await new Promise(resolve=>setTimeout(resolve,600));
+  assert.ok(state().cursor>=1,`a recolha não avançou: cursor ${state().cursor}`);
+  assert.ok(Date.now()-comecou<5000,'avançou, mas só depois de esperar pelo alarme');
+  // E nenhuma página foi capturada duas vezes: uma execução por página visitada.
+  assert.ok(executions<=state().cursor+1,`execuções a mais: ${executions} para cursor ${state().cursor}`);
   await send({action:'pause'});
 });

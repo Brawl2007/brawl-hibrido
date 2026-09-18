@@ -54,6 +54,14 @@ jobs:
       - name: Testes
         run: pnpm test
 
+      # O simulador da extensão corre à parte do vitest: monta um `chrome` falso
+      # e importa o worker tal como o Chrome o carrega. Ficou meses sem ninguém
+      # o correr, e com um teste vermelho lá dentro — um teste que existe mas
+      # que nada corre é um teste que não existe, com a agravante de parecer que
+      # existe.
+      - name: Simulador da extensão
+        run: node scripts/collector.test.mjs
+
       # A build entra porque já falhou uma vez só na Vercel, por um import para
       # uma pasta que o `.vercelignore` retirava. Compilar aqui apanha isso
       # antes de custar um deploy.

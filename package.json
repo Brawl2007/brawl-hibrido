@@ -13,6 +13,7 @@
     "check:css": "node scripts/check-css-tokens.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:extensao": "node scripts/collector.test.mjs",
     "import:prodigy": "node server/scripts/import-prodigy-counters.mjs",
     "import:brawlscope-synergies": "node server/scripts/import-brawlscope-synergies.mjs",
     "rebuild:brawlscope-counters": "node server/scripts/rebuild-brawlscope-counters.mjs",
