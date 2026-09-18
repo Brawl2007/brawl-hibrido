@@ -1,5 +1,5 @@
 import { OWNER_LOGIN_OPEN_ID } from "@shared/ownerLogin";
-import { and, count, desc, eq, isNull, or, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import {
@@ -344,6 +344,42 @@ export async function getRankedSyncSnapshot() {
       .limit(1);
     return result[0];
   }, undefined);
+}
+
+/**
+ * Fecha execuções que ficaram eternamente "a correr".
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * Numa função sem processo de pé, um trabalho que passe do tempo máximo é
+ * MORTO sem aviso: não há erro, não há `catch`, não há linha final. A execução
+ * fica gravada como "a correr" e assim fica para sempre, e o painel passa a
+ * mostrar uma sincronização em curso que já não existe há dias — o que é pior
+ * do que mostrar uma falha, porque uma falha convida a olhar e um "a correr"
+ * convida a esperar.
+ *
+ * Qualquer coisa parada há mais do que o tempo máximo de uma função já não está
+ * a correr em lado nenhum. Marcá-la como falhada não perde informação: diz o
+ * que aconteceu de facto.
+ */
+export async function fecharExecucoesAbandonadas(limiteMs: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const limite = new Date(Date.now() - limiteMs);
+  const motivo = "Execução interrompida: a função foi terminada antes do fim e nunca gravou o resultado.";
+  return lerDaBase("fecharExecucoesAbandonadas", async () => {
+    let fechadas = 0;
+    for (const tabela of [rankedSyncRuns, counterSyncRuns]) {
+      const presas = await db.select({ id: tabela.id }).from(tabela)
+        .where(and(eq(tabela.status, "running"), lt(tabela.startedAt, limite)));
+      if (!presas.length) continue;
+      await db.update(tabela)
+        .set({ status: "failed", completedAt: new Date(), error: motivo })
+        .where(inArray(tabela.id, presas.map((linha) => linha.id)));
+      fechadas += presas.length;
+    }
+    return fechadas;
+  }, 0);
 }
 
 export async function listRankedSyncRuns(limit = 10) {

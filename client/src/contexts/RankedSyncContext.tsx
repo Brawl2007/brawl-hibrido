@@ -7,7 +7,10 @@ type RankedSyncClientState = {
   snapshot?: RankedSnapshotPayload;
   event?: RankedSnapshotEvent;
   version?: string;
+  /** Hora em que a sincronização correu — NÃO é a idade dos dados. */
   capturedAt?: string | null;
+  /** Quando cada fonte foi mesmo lida. Ver `shared/idadeDosDados.ts`. */
+  sourceReadAt?: RankedSnapshotEvent["sourceReadAt"];
   syncState: RankedSnapshotEvent["syncState"];
   nextRefreshAt?: string | null;
   source: "sse" | "query" | "bundled" | "none";
@@ -42,6 +45,7 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
       nextRefreshAt: data.nextRefreshAt ? new Date(data.nextRefreshAt).toISOString() : null,
       sourceStatus: data.sourceStatus,
       sourceNotes: data.sourceNotes,
+      sourceReadAt: data.sourceReadAt,
       rowCount: data.rowCount,
       payload: data.payload,
     });
@@ -75,6 +79,7 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
     event,
     version: event?.version,
     capturedAt: event?.capturedAt,
+    sourceReadAt: event?.sourceReadAt ?? event?.payload?.sourceReadAt,
     syncState: event?.syncState ?? "bundled",
     nextRefreshAt: event?.nextRefreshAt,
     source: event ? (hasPushRef.current ? "sse" : event.version === "bundled-static" ? "bundled" : "query") : "none",

@@ -11,6 +11,7 @@ import {
 } from "./db";
 import { fetchOfficialBrawlers } from "./brawlStarsApi";
 import { fetchText as lerPagina } from "./counterSync";
+import type { LeituraPorFonte } from "../shared/idadeDosDados";
 import { lerPaginaTopBrawl, type TopBrawlRow } from "../shared/topBrawlParser";
 import { RANKED_MAP_SOURCES } from "../shared/rankedMaps";
 export { RANKED_MAP_SOURCES };
@@ -100,6 +101,19 @@ export type SourceResult = {
   rowsByMap?: Map<string, number>;
   mapTeams?: BrawlPlanetMapTeam[];
   note?: string;
+  /**
+   * Quando os dados MAIS ANTIGOS desta fonte foram mesmo lidos na origem.
+   *
+   * Não é a hora da sincronização: uma sincronização que só republica capturas
+   * de ontem acontece hoje, mas os números que publica são de ontem. É essa
+   * diferença que este campo existe para não deixar desaparecer.
+   *
+   * Usa-se o mais antigo, e não o mais recente, porque a pergunta que interessa
+   * é "há quanto tempo é que alguma coisa do que estou a ver deixou de ser
+   * verificada" — e um mapa fresco no meio de vinte e cinco velhos não torna o
+   * conjunto fresco.
+   */
+  lidoEm?: string | null;
 };
 
 export type SnapshotPayload = {
@@ -117,6 +131,13 @@ export type SnapshotPayload = {
   rosterChanges?: RosterChange[];
   updatedAt: string;
   sourceStatus: { topBrawl: string; brawlPlanet: string };
+  /**
+   * Quando cada fonte foi mesmo lida na origem — distinto de `updatedAt`, que é
+   * a hora a que esta sincronização correu. Ver `shared/idadeDosDados.ts`.
+   * Opcional: as snapshots gravadas antes disto não o têm, e a ausência
+   * significa "não se sabe", nunca "foi agora".
+   */
+  sourceReadAt?: LeituraPorFonte;
 };
 
 /** Aplica a fonte única de modos também a snapshots antigas já persistidas. */
@@ -358,12 +379,16 @@ async function collectTopBrawl(rotation: readonly DiscoveredRankedMap[]): Promis
   const guardadas = await listRankedMapCaptures();
   const porMapa = new Map(guardadas.map((linha) => [linha.mapId, linha]));
   const emFalta: DiscoveredRankedMap[] = [];
+  /** A hora a que cada mapa aproveitado foi mesmo lido no TopBrawl. */
+  const leituras: number[] = [];
   for (const mapa of rotation) {
     const guardada = porMapa.get(mapa.id);
     if (!guardada) { emFalta.push(mapa); continue; }
     try {
       const linhas = JSON.parse(guardada.payload) as TopBrawlRow[];
       for (const [brawler, linha] of linhasParaSyncRows(linhas, mapa.name)) rows.set(`${mapa.name}::${brawler}`, linha);
+      const lido = guardada.capturedAt ? new Date(guardada.capturedAt).getTime() : NaN;
+      if (Number.isFinite(lido)) leituras.push(lido);
     } catch {
       emFalta.push(mapa);
     }
@@ -386,8 +411,12 @@ async function collectTopBrawl(rotation: readonly DiscoveredRankedMap[]): Promis
   // Um mapa recolhido fora conta como lido: se não contasse, uma recolha
   // completa por essa via aparecia como falha total e a snapshot era recusada.
   const successful = results.filter(result => result.parsed.size > 0).length + (rotation.length - emFalta.length);
+  // Um mapa pedido agora e respondido agora foi lido agora; a recolha guardada
+  // foi lida quando o navegador a fez. O mais antigo dos dois manda.
+  if (results.some((result) => result.parsed.size > 0)) leituras.push(Date.now());
   return {
     status: successful === rotation.length ? "success" : successful > 0 ? "partial" : "failed",
+    lidoEm: leituras.length ? new Date(Math.min(...leituras)).toISOString() : null,
     rows,
     /**
      * Quantas linhas cada mapa trouxe — é a prova que tira um mapa novo da
@@ -432,6 +461,9 @@ async function collectBrawlPlanet(rotation: readonly DiscoveredRankedMap[]): Pro
   const successful = results.filter(result => result.parsed.size > 0).length;
   return {
     status: successful === rotation.length ? "success" : successful > 0 ? "partial" : "failed",
+    // O Brawl Planet responde a partir daqui, por isso o que vier foi lido
+    // nesta execução. Sem nada lido não há data nenhuma a declarar.
+    lidoEm: successful > 0 ? new Date().toISOString() : null,
     rows,
     rowsByMap: new Map(results.map((result) => [result.mapName, result.parsed.size])),
     mapTeams: results.flatMap((result) => result.teams),
@@ -576,6 +608,9 @@ export async function getPublicRankedSnapshot() {
       capturedAt: null,
       rowCount: allRankedRows.length,
       sourceStatus: { topBrawl: "bundled", brawlPlanet: "bundled" },
+      // Catálogo do repositório: nunca foi lido de uma fonte nesta instalação,
+      // por isso não há data de leitura a declarar. Nula é a resposta honesta.
+      sourceReadAt: { topBrawl: null, brawlPlanet: null },
       sourceNotes: "Ainda não foi executada uma sincronização live; a interface usa a base incluída no projeto.",
       payload: buildFallbackPayload(),
     };
@@ -592,6 +627,13 @@ export async function getPublicRankedSnapshot() {
     capturedAt: snapshot.capturedAt,
     rowCount: normalizedPayload.rows.length,
     sourceStatus: { topBrawl: snapshot.topBrawlStatus, brawlPlanet: snapshot.brawlPlanetStatus },
+    /**
+     * Snapshots gravadas antes de isto existir não trazem o campo. Nesse caso
+     * não se devolve a hora da sincronização no lugar dele: dizer "não se sabe"
+     * é correto, dizer "foi agora" seria exatamente a mentira que isto veio
+     * corrigir.
+     */
+    sourceReadAt: normalizedPayload.sourceReadAt ?? { topBrawl: null, brawlPlanet: null },
     sourceNotes: snapshot.sourceNotes,
     payload: normalizedPayload,
   };
@@ -696,6 +738,13 @@ export async function syncRankedData(trigger: "scheduled" | "manual" | "bootstra
       rosterChanges: evaluation.changes,
       updatedAt: capturedAt.toISOString(),
       sourceStatus: { topBrawl: topBrawl.status, brawlPlanet: brawlPlanet.status },
+      /**
+       * A hora desta sincronização fica em `updatedAt`; aqui fica quando cada
+       * fonte foi MESMO lida. Quando o TopBrawl entra por capturas do
+       * navegador, esta sincronização acontece hoje mas os números são do dia
+       * da captura — e é essa a data que o ecrã tem de mostrar.
+       */
+      sourceReadAt: { topBrawl: topBrawl.lidoEm ?? null, brawlPlanet: brawlPlanet.lidoEm ?? null },
     };
     const sourceNotes = [topBrawl.note, brawlPlanet.note, rotation.note].filter(Boolean).join(" | ") || null;
     const savedSnapshot = await upsertRankedSyncSnapshot({
@@ -716,6 +765,7 @@ export async function syncRankedData(trigger: "scheduled" | "manual" | "bootstra
       nextRefreshAt: getNextRefreshAt(capturedAt)?.toISOString() ?? null,
       sourceStatus: payload.sourceStatus,
       sourceNotes,
+      sourceReadAt: payload.sourceReadAt,
       rowCount: rows.length,
       payload: normalizeSnapshotPayload(payload),
     };

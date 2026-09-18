@@ -38,6 +38,7 @@ import { z } from "zod";
 import { brawlScopeCaptureSchema } from "@shared/brawlScopeCapture";
 import { importBrawlScopeCapture, getWreqStatus } from "./counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot, syncRankedData } from "./rankedSync";
+import { AGENDAMENTO_DA_RECOLHA } from "@shared/agendamento";
 import { getBrawlPlanetMapTeamBoard } from "@shared/brawlPlanetMapTeams";
 import { getSnapshotSynergies } from "@shared/counterSyncSnapshot";
 import { brawlScopeSynergyData, normalizeBrawlScopeSynergyList } from "@shared/brawlScopeSynergyData";
@@ -158,8 +159,12 @@ export const appRouter = router({
         listRankedSyncRuns(8),
       ]);
       return {
-        enabled: Boolean(config?.enabled),
-        cronExpression: config?.cronExpression ?? "0 0 * * * *",
+        /**
+         * O agendamento a sério, e não a coluna morta da base. Ver
+         * `shared/agendamento.ts`: o que está na base sobrou da plataforma
+         * anterior e não manda em nada.
+         */
+        agendamento: AGENDAMENTO_DA_RECOLHA,
         lastStatus: config?.lastStatus ?? "idle",
         lastStartedAt: config?.lastStartedAt ?? null,
         lastCompletedAt: config?.lastCompletedAt ?? null,
@@ -169,6 +174,11 @@ export const appRouter = router({
         nextRefreshAt: getNextRefreshAt(snapshot.capturedAt ? new Date(snapshot.capturedAt) : null),
         rowCount: snapshot.rowCount,
         sourceStatus: snapshot.sourceStatus,
+        /**
+         * Quando cada fonte foi mesmo lida — que não é `capturedAt`, a hora a
+         * que esta sincronização correu. Ver `shared/idadeDosDados.ts`.
+         */
+        sourceReadAt: snapshot.sourceReadAt,
         runs,
       };
     }),
@@ -420,8 +430,12 @@ export const appRouter = router({
         listCounterSyncRuns(8),
       ]);
       return {
-        enabled: Boolean(config?.enabled),
-        cronExpression: config?.cronExpression ?? "0 0 * * * *",
+        /**
+         * O agendamento a sério, e não a coluna morta da base. Ver
+         * `shared/agendamento.ts`: o que está na base sobrou da plataforma
+         * anterior e não manda em nada.
+         */
+        agendamento: AGENDAMENTO_DA_RECOLHA,
         lastStatus: config?.lastStatus ?? "idle",
         lastStartedAt: config?.lastStartedAt ?? null,
         lastCompletedAt: config?.lastCompletedAt ?? null,
@@ -575,8 +589,12 @@ export const appRouter = router({
         listObservedMatchCollectionRuns(5),
       ]);
       return {
-        enabled: Boolean(config?.enabled),
-        cronExpression: config?.cronExpression ?? "0 5 * * * *",
+        /**
+         * O agendamento a sério, e não a coluna morta da base. Ver
+         * `shared/agendamento.ts`: o que está na base sobrou da plataforma
+         * anterior e não manda em nada.
+         */
+        agendamento: AGENDAMENTO_DA_RECOLHA,
         lastStatus: config?.lastStatus ?? "idle",
         lastCompletedAt: config?.lastCompletedAt ?? null,
         lastError: config?.lastError ?? null,

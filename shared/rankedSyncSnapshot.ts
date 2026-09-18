@@ -1,4 +1,5 @@
 import type { BrawlPlanetMapTeam } from "./brawlPlanetMapTeams";
+import type { LeituraPorFonte } from "./idadeDosDados";
 import type { RosterChange, RosterState } from "./rosterDiscovery";
 
 export type RankedSyncState = "bundled" | "running" | "success" | "partial" | "failed";
@@ -59,6 +60,13 @@ export type RankedSnapshotPayload = {
   rosterChanges?: RosterChange[];
   updatedAt: string;
   sourceStatus: { topBrawl: string; brawlPlanet: string };
+  /**
+   * Quando cada fonte foi mesmo lida na origem — que não é a hora desta
+   * sincronização. Ver `shared/idadeDosDados.ts`. Ausente nas snapshots
+   * gravadas antes disto existir: quem lê trata a ausência como "não se sabe",
+   * nunca como "foi agora".
+   */
+  sourceReadAt?: LeituraPorFonte;
 };
 
 export type RankedSnapshotEvent = {
@@ -68,6 +76,8 @@ export type RankedSnapshotEvent = {
   nextRefreshAt: string | null;
   sourceStatus: { topBrawl: string; brawlPlanet: string };
   sourceNotes?: string | null;
+  /** Ver `RankedSnapshotPayload.sourceReadAt`. */
+  sourceReadAt?: LeituraPorFonte;
   rowCount: number;
   payload: RankedSnapshotPayload;
 };

@@ -140,6 +140,50 @@ describe("ranked synchronization", () => {
     expect(griff?.topBrawlWinRate).toBe(51.37);
     vi.unstubAllGlobals();
   });
+
+  /**
+   * A sincronização acontece hoje; os números podem ser de ontem.
+   *
+   * O TopBrawl recusa pedidos vindos do alojamento, por isso os números dele
+   * entram por capturas feitas no navegador. A recolha automática volta a
+   * publicar essas mesmas capturas e carimbava-as com a hora de agora — o ecrã
+   * dizia "Dados agora mesmo" sobre leituras do dia anterior, e ia continuar a
+   * dizê-lo indefinidamente. Esta é a linha que o impede.
+   */
+  it("grava quando a fonte foi mesmo lida, e não a hora da sincronização", async () => {
+    const ontem = new Date(Date.now() - 30 * 3600_000);
+    dbMocks.getRankedSyncSnapshot.mockResolvedValue({
+      version: "live-previous",
+      rowCount: 2835,
+      payload: JSON.stringify({ rows: [{ map: "Hard Rock Mine", brawler: "Griff" }] }),
+    });
+    dbMocks.countRankedMapCaptures.mockResolvedValue(26);
+    dbMocks.listRankedMapCaptures.mockResolvedValue([{
+      mapId: "15000007",
+      map: "Hard Rock Mine",
+      capturedAt: ontem,
+      payload: JSON.stringify([
+        { brawler: "Griff", brawlerId: 16000042, topBrawlWinRate: 51.37, topBrawlUseRate: 8.1, topBrawlScore: 74.2 },
+      ]),
+    }]);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("403 Forbidden")));
+
+    await syncRankedData("manual");
+
+    const gravada = dbMocks.upsertRankedSyncSnapshot.mock.calls[0][0] as { capturedAt: Date; payload: string };
+    const payload = JSON.parse(gravada.payload) as {
+      updatedAt: string;
+      sourceReadAt?: { topBrawl: string | null; brawlPlanet: string | null };
+    };
+
+    // A leitura declarada é a da captura, não a de agora.
+    expect(payload.sourceReadAt?.topBrawl).toBe(ontem.toISOString());
+    // E a hora da sincronização continua lá, à parte, porque também interessa.
+    expect(new Date(payload.updatedAt).getTime()).toBeGreaterThan(ontem.getTime());
+    // Com as duas fontes em baixo não se inventa uma leitura para a outra.
+    expect(payload.sourceReadAt?.brawlPlanet).toBeNull();
+    vi.unstubAllGlobals();
+  });
 });
 
 
