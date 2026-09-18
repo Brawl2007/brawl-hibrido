@@ -60,6 +60,7 @@ import { additionalBrawlerAssetIds, additionalMapAssetIds } from "@/data/additio
 import { useHybridWeights } from "@/lib/hybridWeights";
 import { officialSourceBalance, useSourceBalance, type SourceBalancePreference } from "@/lib/sourceBalance";
 import { buildMapsTsv } from "@shared/mapTsv";
+import { avisoDaRecolha } from "@shared/recolhaAutomatica";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
 
@@ -883,6 +884,11 @@ export default function Home() {
 
   const capturedAt = rankedSync.capturedAt ?? statusQuery.data?.capturedAt ?? null;
   const lastStatus = statusQuery.data?.lastStatus ?? "idle";
+  /**
+   * A recolha automática falha calada, e isso já custou um dia inteiro de
+   * números velhos sem ninguém reparar. Quando falha, diz-se aqui.
+   */
+  const avisoDaAutomatica = avisoDaRecolha(statusQuery.data?.ultimaRecolhaAutomatica ?? null);
   const handleRefresh = startRefresh;
 
   const currentRows = useMemo(() => mapDisplayRows.filter((row) => row.map === selectedMap.name), [mapDisplayRows, selectedMap.name]);
@@ -943,6 +949,9 @@ export default function Home() {
         <main>
           <Hero selectedMap={selectedMap} onExplore={() => scrollTo("maps")} />
           <div className="main-content">
+            {avisoDaAutomatica ? (
+              <p className="aviso-recolha" role="status">{avisoDaAutomatica}</p>
+            ) : null}
             <div className="intro-row" id="dashboard">
               <div className="intro-copy">
                 <div className="section-kicker">Painel de controlo <span>Season 06 / 2026</span></div>
