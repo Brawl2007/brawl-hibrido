@@ -55,10 +55,11 @@ Atualizar a extensão existente
 - Substitui os ficheiros na MESMA pasta da extensão e clica Recarregar em chrome://extensions. Não removas a extensão: isso pode apagar o progresso.
 - Só descarregar o ZIP novo do site não atualiza a extensão instalada no Chrome: tens de substituir os ficheiros e carregar Recarregar.
 
-Ritmo v99
+Ritmo v100
 - Uma página de cada vez. No BrawlScope o avanço é de 250 ms depois do carregamento; no TopBrawl é de cerca de 1,2 s, com variação, porque a fonte estava a responder com pedidos de verificação. Isso é pedir menos, não é disfarçar-se: a extensão não mexe em cookies, nem no user-agent, nem em nada que sirva para contornar um bloqueio.
 - Se o TopBrawl pedir verificação, a mesma página é tentada de novo daqui a 2, 5 e 10 minutos. Ao fim das três, a fila pausa e o que já foi recolhido pode ser exportado.
 - Um mapa que saiu da rotação responde com um desvio dentro do próprio site: essa página fica marcada como erro e a recolha segue para a seguinte. Um desvio para fora do site continua a parar tudo, e três desvios seguidos também.
+- Um mapa que ENTROU na rotação entra na fila durante a própria corrida. O índice vai à frente e diz quais são os mapas de agora; os que a fila não pedia são acrescentados a ela nesse momento. Antes disto era preciso correr duas vezes — uma para o site aprender a rotação, outra para ir buscar os mapas novos — e a segunda não se fazia.
 - A tabela dinâmica é observada em vez de verificada por intervalos fixos.
 - Páginas lentas podem carregar até 3 minutos; falhas temporárias de leitura são tentadas automaticamente até 3 vezes. Bloqueios e verificações continuam a pausar a fila.
 - Importação de até 20 fichas por gravação confirmada.

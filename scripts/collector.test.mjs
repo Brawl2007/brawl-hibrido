@@ -156,3 +156,60 @@ test('completed page wakes collection without waiting for an alarm',async()=>{
   assert.ok(executions<=state().cursor+1,`execuções a mais: ${executions} para cursor ${state().cursor}`);
   await send({action:'pause'});
 });
+
+/**
+ * Um mapa que ENTROU na rotação é recolhido na mesma corrida.
+ *
+ * O outro lado da moeda do Beach Ball, e o que aconteceu a seguir: a rotação
+ * nova entrou no site, certinha, e os dois mapas novos ficaram sem uma única
+ * linha do TopBrawl. Só tinham os números do BrawlPlanet, que vêm por outro
+ * caminho.
+ *
+ * A razão é a ordem das coisas. A fila é construída pelo site a partir da
+ * rotação que ele CONHECE, e ele só a conhece depois de alguém lha importar.
+ * No dia em que a rotação muda, a fila pede os mapas que saíram e não pede os
+ * que entraram — sempre, por construção.
+ *
+ * Isso obrigava a duas corridas. A segunda não se faz: a primeira já disse
+ * "Recolha concluída", e quem está ao computador foi à sua vida.
+ *
+ * O índice vai à frente da fila. Quando é lido, a extensão já sabe quais são os
+ * mapas de agora — e é aí que os acrescenta à sua própria fila.
+ */
+test('a map that entered the rotation is collected in the same run',async()=>{
+  stored={};tabs.clear();executions=0;
+  // A fila que o site exportou: o índice, e um mapa que já lá estava.
+  await send({action:'load',queue:{format:'brawlhibrido-queue-v1',urls:[
+    'https://topbrawl.com/rankeds',
+    'https://topbrawl.com/rankeds/15000007?rows=106',
+  ]}});
+  assert.equal(state().urls.length,2);
+  await send({action:'start'});await tick();
+  // O índice responde com dois mapas que a fila não pedia.
+  scriptResult=async()=>({rankedRotation:{url:'https://topbrawl.com/rankeds',capturedAt:new Date().toISOString(),
+    html:'<a href="/rankeds/15000007">Velho</a><a href="/rankeds/15000031">Novo A</a><a href="/rankeds/15000032">Novo B</a>'}});
+  await tick();
+  // Os dois novos entraram na fila; o que já lá estava não foi duplicado.
+  assert.equal(state().urls.length,4,`fila ficou com ${state().urls.length}`);
+  assert.ok(state().urls.includes('https://topbrawl.com/rankeds/15000031?rows=106'),'o mapa novo não entrou na fila');
+  assert.ok(state().urls.includes('https://topbrawl.com/rankeds/15000032?rows=106'),'o segundo mapa novo não entrou na fila');
+  assert.equal(state().urls.filter(u=>u.includes('15000007')).length,1,'duplicou um mapa que já lá estava');
+  assert.match(state().message,/2 mapa\(s\)/);
+  await send({action:'pause'});
+});
+
+/** Se a fila já pedia tudo, não se acrescenta nada — e diz-se isso. */
+test('an unchanged rotation adds nothing to the queue',async()=>{
+  stored={};tabs.clear();executions=0;
+  await send({action:'load',queue:{format:'brawlhibrido-queue-v1',urls:[
+    'https://topbrawl.com/rankeds',
+    'https://topbrawl.com/rankeds/15000007?rows=106',
+  ]}});
+  await send({action:'start'});await tick();
+  scriptResult=async()=>({rankedRotation:{url:'https://topbrawl.com/rankeds',capturedAt:new Date().toISOString(),
+    html:'<a href="/rankeds/15000007">Velho</a>'}});
+  await tick();
+  assert.equal(state().urls.length,2,'acrescentou um mapa que a fila já pedia');
+  assert.match(state().message,/já pedia todos/);
+  await send({action:'pause'});
+});

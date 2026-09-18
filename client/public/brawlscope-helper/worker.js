@@ -23,6 +23,76 @@ const MAX_CAPTURE_RETRIES = 3;
 const PAUSA_POR_ORIGEM = { "https://topbrawl.com": 1200 };
 
 /**
+ * Acima disto a fila deixa de crescer.
+ *
+ * Não é um número de gosto: o servidor recusa uma importação com mais de 40
+ * mapas, por isso pedi-los seria trabalho para deitar fora. Serve também de
+ * travão se o índice um dia mudar de forma e a leitura passar a encontrar
+ * ligações a mais.
+ */
+const MAXIMO_DE_MAPAS = 40;
+
+/**
+ * Os mapas que o índice lista.
+ *
+ * É a MESMA leitura que `lerIndiceTopBrawl` faz no servidor, e é a única coisa
+ * que esta extensão interpreta de uma página — tudo o resto viaja por
+ * interpretar, porque há um interpretador só e é o do servidor. A exceção
+ * paga-se: sem ela, os mapas que entraram na rotação só são recolhidos na
+ * corrida SEGUINTE. `server/indiceNaExtensao.test.ts` obriga as duas leituras
+ * a concordar sobre o mesmo índice.
+ */
+function mapasDoIndice(html) {
+  const ids = new Set();
+  for (const achado of html.matchAll(/topbrawl\.com\/rankeds\/(\d+)/g)) ids.add(achado[1]);
+  for (const achado of html.matchAll(/href="\/rankeds\/(\d+)"/g)) ids.add(achado[1]);
+  return [...ids];
+}
+
+/**
+ * A rotação mudou a meio da corrida? Então a fila muda com ela.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * A fila é construída pelo site a partir da rotação que ele CONHECE, e o site
+ * só conhece a rotação depois de alguém lha importar. Quando dois mapas entram
+ * e dois saem, a fila exportada nesse dia pede os que saíram e não pede os que
+ * entraram — e o resultado é o que se viu: a rotação nova aparece no site,
+ * certinha, e os dois mapas novos ficam sem uma única linha do TopBrawl.
+ *
+ * Isso obrigava a duas corridas: uma para o site aprender a rotação, outra para
+ * ir buscar os mapas que ele entretanto aprendeu. Ninguém corre a segunda —
+ * a primeira já disse "Recolha concluída".
+ *
+ * O índice vai à frente da fila e é lido antes de tudo. Nesse momento a
+ * extensão já sabe quais são os mapas de agora. Acrescentá-los à sua própria
+ * fila fecha o ciclo numa passagem só.
+ */
+function acrescentarMapasNovos(state) {
+  const jaNaFila = new Set();
+  for (const endereco of state.urls) {
+    const id = endereco.match(/^https:\/\/topbrawl\.com\/rankeds\/(\d+)/)?.[1];
+    if (id) jaNaFila.add(id);
+  }
+  const espaco = Math.max(0, MAXIMO_DE_MAPAS - jaNaFila.size);
+  const candidatos = mapasDoIndice(state.rankedRotation?.html || "")
+    .filter((id) => !jaNaFila.has(id))
+    .slice(0, espaco)
+    .map((id) => `https://topbrawl.com/rankeds/${id}?rows=106`);
+  if (!candidatos.length) return 0;
+  /**
+   * Estes endereços são construídos aqui, mas passam pelo mesmo validador que
+   * os do ficheiro. A propriedade a manter é uma só: a extensão nunca visita um
+   * endereço que não tenha sido validado — nem sequer um que ela própria
+   * escreveu, porque o id veio de uma página lá de fora.
+   */
+  const { urls } = validateQueue({ format: "brawlhibrido-queue-v1", urls: candidatos });
+  const novos = urls.filter((endereco) => !state.urls.includes(endereco));
+  state.urls = [...state.urls, ...novos];
+  return novos.length;
+}
+
+/**
  * Um intervalo exatamente igual entre pedidos é, ele próprio, uma assinatura de
  * automatismo. O desvio não esconde nada — só evita o padrão perfeito.
  */
@@ -88,6 +158,7 @@ async function tick() {
     const url = state.urls[state.cursor];
     /** O intervalo até à página seguinte, decidido pela origem dela. */
     let proximaPausa = PAGE_READY_DELAY_MS;
+    let mapasAcrescentados = 0;
     let source;
     if (state.tabId) { try { source = await chrome.tabs.get(state.tabId); } catch { /* manually closed */ } }
     if (!source) {
@@ -201,7 +272,11 @@ async function tick() {
      * a leitura mais recente substitui a anterior. É ele que diz quais são os
      * mapas de agora — sem ele, uma rotação nova passa despercebida.
      */
-    else if (result?.rankedRotation) { state.rankedRotation = result.rankedRotation; delete state.errors[url]; state.consecutiveErrors = 0; state.pageRetries = 0; }
+    else if (result?.rankedRotation) {
+      state.rankedRotation = result.rankedRotation;
+      delete state.errors[url]; state.consecutiveErrors = 0; state.pageRetries = 0;
+      mapasAcrescentados = acrescentarMapasNovos(state);
+    }
     else {
       state.pageRetries = (state.pageRetries || 0) + 1;
       if (state.pageRetries < MAX_CAPTURE_RETRIES) {
@@ -216,7 +291,9 @@ async function tick() {
     state.needsNavigation = true;
     state.message = result?.profile ? `Recolhida: ${result.profile.brawler} · ${result.profile.view}`
       : result?.rankedMap ? `Mapa recolhido: ${result.rankedMap.map}`
-      : result?.rankedRotation ? "Rotação lida: o site fica a saber os mapas de agora."
+      : result?.rankedRotation ? (mapasAcrescentados
+        ? `Rotação lida: ${mapasAcrescentados} mapa(s) que a fila não pedia entraram nela.`
+        : "Rotação lida: a fila já pedia todos os mapas de agora.")
       : state.errors[url];
     if (state.consecutiveErrors >= 3) { state.running = false; state.message = "Três páginas sem leitura válida. Verifica o formato ou a disponibilidade antes de retomar."; }
     await write(state);

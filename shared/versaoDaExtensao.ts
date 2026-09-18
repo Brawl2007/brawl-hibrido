@@ -19,7 +19,7 @@
  * SOBE quando a extensão muda — o teste em `extensaoEmpacotada.test.ts` não
  * deixa este número afastar-se do `manifest.json`.
  */
-export const VERSAO_DA_EXTENSAO = "99.0.0";
+export const VERSAO_DA_EXTENSAO = "100.0.0";
 
 /** Compara `1.2.3` com `10.0.0` por número, e não por ordem alfabética. */
 export function versaoEAnterior(recebida: string | null | undefined, esperada = VERSAO_DA_EXTENSAO) {
