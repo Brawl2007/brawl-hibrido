@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useEhDono } from "@/lib/ehDono";
 import { trpc } from "@/lib/trpc";
 import { useSyncRefresh } from "@/lib/useSyncRefresh";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
@@ -114,12 +115,15 @@ function CatalogSidebar() {
 
 function CatalogTopbar({ onRefresh, isRefreshing, refreshProgress, liveState }: { onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null; liveState: "connecting" | "live" | "offline" }) {
   const label = liveState === "live" ? "Live · SSE" : liveState === "connecting" ? "A ligar…" : "Offline · fallback";
+  // Mandar o servidor ir ler as fontes é um comando do dono; a quem não pode
+  // dar essa ordem, o site respondia com uma recusa depois do clique.
+  const ehDono = useEhDono();
   return (
     <header className="topbar">
       <div className="topbar-crumbs"><span className="crumb-muted">Ranked</span><span>›</span><span className="crumb-muted">Brawl Híbrido</span><span>›</span><span className="crumb-active">Brawlers & Counters</span></div>
       <div className="topbar-actions">
         <span className="live-chip"><span className="live-dot" /> {label}</span>
-        <button className="refresh-button" onClick={onRefresh} disabled={isRefreshing} title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar catálogo"} aria-label="Atualizar catálogo"><Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} /><span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span></button>
+        {ehDono ? <button className="refresh-button" onClick={onRefresh} disabled={isRefreshing} title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar catálogo"} aria-label="Atualizar catálogo"><Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} /><span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span></button> : null}
         <div className="profile-chip"><span className="profile-avatar">BH</span><span className="profile-label">Analista</span></div>
       </div>
     </header>

@@ -41,6 +41,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useEhDono } from "@/lib/ehDono";
 import { trpc } from "@/lib/trpc";
 import { useSyncRefresh, type ProcessHealth } from "@/lib/useSyncRefresh";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
@@ -587,6 +588,7 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
    * segundos — e evita descobrir o problema só ao carregar no botão.
    */
   const meQuery = trpc.auth.me.useQuery(undefined, { staleTime: 60_000 });
+  const ehDono = (meQuery.data as { role?: string } | null | undefined)?.role === "admin";
   /**
    * Estado da base de dados.
    *
@@ -662,7 +664,15 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
   });
   const coberturaQuery = trpc.counterSync.matchups.useQuery({ view: "overall" }, { staleTime: 15_000 });
   const cobertura = (coberturaQuery.data as { views?: Record<string, { profiles: number; pairs: number }> } | undefined)?.views ?? {};
-  const chaveQuery = trpc.syncJobs.apiKeyState.useQuery(undefined, { staleTime: 30_000, retry: false });
+  /**
+   * Esta pergunta é do dono, e era ela que expulsava os visitantes.
+   *
+   * Corria em todos os carregamentos do `/draft`, mesmo com o painel fechado.
+   * Para quem não entrou, o servidor recusa — e o site lia essa recusa como
+   * "esta pessoa quer entrar" e mandava-a para o formulário. `enabled` é o que
+   * garante que a pergunta nem chega a ser feita a quem não é o dono.
+   */
+  const chaveQuery = trpc.syncJobs.apiKeyState.useQuery(undefined, { staleTime: 30_000, retry: false, enabled: ehDono });
   const chaveEstado = chaveQuery.data as { configured: boolean; origin: string; hint: string | null } | undefined;
   const guardarChave = trpc.syncJobs.setApiKey.useMutation({
     onSuccess: async (resultado) => {
@@ -684,6 +694,29 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
       ? `${comProblema.length} de ${entradas.length} fontes sem leitura completa.`
       : `As ${entradas.length} fontes leram por completo.`
     : "Ainda sem leitura nesta sessão.";
+
+  /**
+   * Daqui para baixo é a consola do dono: diagnóstico das fontes, colagem de
+   * fichas, chave da API, limpar a espera. Nada disto é utilizável por um
+   * visitante — o servidor recusa tudo — e mostrá-lo só produzia botões que
+   * respondem com uma recusa. Fica escondido. O Draft em si, que é o que está
+   * acima, continua igual para toda a gente.
+   *
+   * O `return` vem depois de todos os hooks estarem declarados, de propósito:
+   * subi-lo partia a ordem dos hooks entre um dono e um visitante.
+   */
+  if (!ehDono) {
+    // Quem entrou mas não é reconhecido como dono continua a precisar de saber
+    // porquê e o que fazer — esse aviso é a única coisa desta consola que lhe
+    // serve. Quem nunca entrou não vê nada: não é a página dele.
+    return sessao ? (
+      <p className="source-health-owner">
+        Sessão: <b>{sessao.email ?? sessao.name ?? "—"}</b> · perfil <b>utilizador</b> — sem perfil de dono,
+        "Atualizar agora", o diagnóstico e a colagem de fichas não aparecem. Define{" "}
+        <code>OWNER_OPEN_ID={sessao.openId ?? "?"}</code> nas variáveis de ambiente e volta a entrar.
+      </p>
+    ) : null;
+  }
 
   return (
     <FoldPanel
@@ -1028,6 +1061,14 @@ function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observ
   syncState: string;
   blockedSources: string[];
 }) {
+  /**
+   * "Atualizar agora" é um comando do dono: manda o servidor ir ler as fontes.
+   * Para um visitante o pedido é recusado — e recusado a meio de um draft, o
+   * que significava perder os picks já feitos. Quem não pode dar a ordem não
+   * precisa de ver o botão; o estado das fontes, que é informação, continua ao
+   * lado para toda a gente.
+   */
+  const ehDono = useEhDono();
   return (
     <header className="topbar">
       <div className="topbar-crumbs"><span className="crumb-muted">Ranked</span><span>›</span><span className="crumb-muted">Brawl Híbrido</span><span>›</span><span className="crumb-active">Draft</span></div>
@@ -1039,10 +1080,12 @@ function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observ
           durante minutos é indistinguível de um botão avariado; "BrawlScope ·
           vista 3/7" não é.
         */}
-        <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar dados agora"} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
-          <Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} />
-          <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
-        </button>
+        {ehDono ? (
+          <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar dados agora"} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
+            <Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} />
+            <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
+          </button>
+        ) : null}
         <button className="icon-button" title="Limpar draft" onClick={onReset} aria-label="Limpar draft"><RotateCcw size={16} /></button>
         <div className="profile-chip"><span className="profile-avatar">BH</span><span className="profile-label">Analista</span></div>
       </div>
