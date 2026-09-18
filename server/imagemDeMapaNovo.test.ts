@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { deriveMapSummaries } from "./rankedSync";
-import type { RankedRow } from "@shared/rankedTypes";
+import type { RankedRow } from "../client/src/data/rankedData";
 
 /**
  * Um mapa que entrou na rotação tem de ter imagem, sem ninguém editar nada.
