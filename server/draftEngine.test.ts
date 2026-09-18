@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setCounterSyncSnapshot } from "@shared/counterSourceRelations";
 import { allRankedRows } from "../client/src/data/rankedData";
-import { analyzeDraftComposition, brawlerClassCatalog, buildScrimSequence, calculateDraftSignal, calculateLaneMatchup, draftSignalBonuses, draftSteps, estimateDraftWinProbability, getBannedCounterBonusPick, getBannedCounterBonusRate, getBrawlerClass, getContextualAdjustmentCaps, getCounterBonusRate, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getMapTeamSynergyRate, getPositionRecommendation, getSynergyBonusRate, getTopCounterWindowSize, inferDraftRole, isArtilleryBrawler, isOpeningLongRangeEligible, normalizeScrimSequence, officialBrawlerClasses, openingRangeThreshold, rankCounterRows, rankDraftEntries, rankDraftRows, rankHybridUsageRows, remapDraftProgress } from "@shared/draft";
+import { analyzeDraftComposition, brawlerClassCatalog, buildScrimSequence, calculateDraftSignal, calculateLaneMatchup, draftSignalBonuses, draftSteps, estimateDraftWinProbability, getBannedCounterBonusPick, getBannedCounterBonusRate, getBrawlerClass, getCounterBonusRate, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getMapTeamSynergyRate, getPositionRecommendation, getSynergyBonusRate, getTopCounterWindowSize, inferDraftRole, isArtilleryBrawler, isOpeningLongRangeEligible, normalizeScrimSequence, officialBrawlerClasses, openingRangeThreshold, rankCounterRows, rankDraftEntries, rankDraftRows, rankHybridUsageRows, remapDraftProgress } from "@shared/draft";
 import { getCounterSourceProfiles, getLiteralCounterRelations, getResolvedCounterDirection } from "@shared/counterSourceRelations";
 import { defaultDraftRuleSettings, normalizeDraftRuleSettings } from "@shared/draftRules";
 import { brawlScopeCounterData } from "@shared/brawlScopeCounterData";
@@ -111,16 +111,15 @@ describe("draft engine", () => {
     });
 
     // O Counter entra depois da escala: a Base do melhor Score vale 100 pontos e o
-    // delta do matchup é aplicado sobre ela, ainda sujeito ao limite contextual do
-    // estado do draft (1 inimigo escolhido, pick 2).
-    const rawCounterPoints = expectedCounterPoints(brock.score, "Brock", [counterTarget]);
-    const caps = getContextualAdjustmentCaps(2, 0, 1, 0);
-    const appliedCounterPoints = Math.min(rawCounterPoints, brock.score * caps.bonusRate);
+    // delta do matchup é aplicado sobre ela, inteiro. Havia aqui um tecto por
+    // estado de draft que cortava este mesmo valor; saiu, e o que o cartão soma é
+    // o que o Score leva.
+    const counterPoints = expectedCounterPoints(brock.score, "Brock", [counterTarget]);
 
     expect(entry?.row.brawler).toBe("Brock");
     expect(entry?.basePoints).toBeCloseTo(100, 6);
     expect(entry?.finalPoints).toBeGreaterThan(100);
-    expect(entry?.finalPoints).toBeCloseTo((brock.score + appliedCounterPoints) / brock.score * 100, 6);
+    expect(entry?.finalPoints).toBeCloseTo((brock.score + counterPoints) / brock.score * 100, 6);
     expect(entry?.signal.scoreBreakdown.hybridScore).toBeCloseTo(calculateDraftSignal(brock).scoreBreakdown.hybridScore, 6);
   });
 
@@ -1379,13 +1378,20 @@ describe("draft engine", () => {
     expect(signal.scoreBreakdown.sameClassPenaltyPoints).toBeCloseTo(0, 6);
     expect(pointsFromVisibleBonuses).toBeCloseTo(signal.scoreBreakdown.rawContextualBonusPoints, 6);
     expect(signal.scoreBreakdown.rawContextualPenaltyPoints).toBeCloseTo(0, 6);
-    expect(signal.scoreBreakdown.contextualBonusCapRate).toBeCloseTo(0.12, 6);
-    expect(signal.scoreBreakdown.contextualCapApplied).toBe(true);
-    expect(signal.scoreBreakdown.contextualAdjustment).toBeCloseTo(signal.scoreBreakdown.contextualBonusCapPoints, 6);
+    /**
+     * O que os chips somam é o que o Score leva.
+     *
+     * Este cenário era exatamente um dos que o tecto cortava: os fatores visíveis
+     * somavam mais de 12% da Base e o ajuste ficava preso nesse valor. A auditoria
+     * do cartão dizia uma coisa e o Score fazia outra — que é a razão pela qual o
+     * tecto saiu.
+     */
+    expect(signal.scoreBreakdown.contextualAdjustment).toBeCloseTo(pointsFromVisibleBonuses, 6);
+    expect(signal.scoreBreakdown.contextualAdjustment / signal.scoreBreakdown.hybridPoints).toBeGreaterThan(0.12);
     expect(signal.draftScore).toBeCloseTo(signal.scoreBreakdown.hybridPoints + signal.scoreBreakdown.contextualAdjustment, 6);
   });
 
-  it("keeps map ranking dominant with graduated contextual caps and expands the margin only after real picks", () => {
+  it("não corta os fatores contextuais em nenhum estado do draft", () => {
     const row = { brawler: "Brock", score: 80, tier: "S" as const, brawlPlanetWinRate: 58 };
     const directCounter = getCounterProfile(row.brawler).counteredBy[0]!;
     const opening = calculateDraftSignal(row, {
@@ -1399,11 +1405,25 @@ describe("draft engine", () => {
       pickNumber: 5,
     });
 
-    expect(opening.scoreBreakdown.contextualBonusCapRate).toBeCloseTo(0.08, 6);
-    expect(opening.scoreBreakdown.contextualPenaltyCapRate).toBe(0);
-    expect(late.scoreBreakdown.contextualBonusCapRate).toBeCloseTo(0.2, 6);
-    expect(late.scoreBreakdown.contextualPenaltyCapRate).toBeCloseTo(0.14, 6);
-    expect(late.scoreBreakdown.contextualBonusCapRate).toBeGreaterThan(opening.scoreBreakdown.contextualBonusCapRate);
+    /**
+     * Antes, estes dois cenários levavam tectos diferentes: +8% na abertura e
+     * +20% no fecho, sobre a Base híbrida. A ideia era o mapa mandar enquanto o
+     * tabuleiro estivesse vazio; o efeito era as regras do painel do Draft não
+     * valerem o que dizem, e dois candidatos com fatores muito diferentes
+     * encostarem ao mesmo tecto.
+     *
+     * Em qualquer estado do draft, o ajuste é agora a diferença entre a soma dos
+     * bónus e a soma dos desbónus. Nada é cortado.
+     */
+    for (const sinal of [opening, late]) {
+      expect(sinal.scoreBreakdown.contextualAdjustment).toBeCloseTo(
+        sinal.scoreBreakdown.rawContextualBonusPoints - sinal.scoreBreakdown.rawContextualPenaltyPoints,
+        6,
+      );
+      expect(sinal.draftScore).toBeCloseTo(sinal.scoreBreakdown.hybridPoints + sinal.scoreBreakdown.contextualAdjustment, 6);
+    }
+    // Na abertura, o bónus de ban passava do tecto de +8% e era cortado.
+    expect(opening.scoreBreakdown.rawContextualBonusPoints / opening.scoreBreakdown.hybridPoints).toBeGreaterThan(0.08);
   });
 
   it("calculates Draft Score signals with reasons, confidence and objective context", () => {
@@ -1830,8 +1850,13 @@ describe("draft engine", () => {
 
     expect(withOneSide.scoreBreakdown.missingSidePoints).toBeCloseTo(withOneSide.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.missingSide, 6);
     expect(withBothSides.scoreBreakdown.missingSidePoints).toBe(0);
-    expect(withBothSides.scoreBreakdown.contextualPenaltyCapRate).toBeCloseTo(0.08, 6);
     expect(withBothSides.scoreBreakdown.sameClassPenaltyPoints).toBeCloseTo(withBothSides.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.sameClassPenalty * 2, 6);
+    /**
+     * Dois Tanks aliados são −3% cada: −6% no total, que cabia no antigo tecto de
+     * desbónus deste estado (−8%) e não era cortado. O que este teste guarda,
+     * agora, é que o ajuste é a soma — não que o tecto fazia falta aqui.
+     */
+    expect(withBothSides.scoreBreakdown.contextualAdjustment).toBeCloseTo(-withBothSides.scoreBreakdown.sameClassPenaltyPoints, 6);
     expect(withBothSides.draftScore).toBeCloseTo(withBothSides.scoreBreakdown.hybridPoints + withBothSides.scoreBreakdown.contextualAdjustment, 6);
   });
 

@@ -248,22 +248,13 @@ export function getActiveDraftBonuses(signal: DraftSignal, role: ReturnType<type
       source: triggers.length ? `ativado por: ${triggers.join(", ")}${classLabel}` : `ativador não identificado${classLabel}`,
     });
   }
-  // Quando o limite por estado de Draft corta os fatores, os pontos somados nos
-  // chips deixam de bater certo com o ajuste final. Este chip explica a diferença.
-  if (signal.scoreBreakdown.contextualCapApplied) {
-    const bonusTrim = signal.scoreBreakdown.rawContextualBonusPoints - Math.min(signal.scoreBreakdown.rawContextualBonusPoints, signal.scoreBreakdown.contextualBonusCapPoints);
-    const penaltyTrim = signal.scoreBreakdown.rawContextualPenaltyPoints - Math.min(signal.scoreBreakdown.rawContextualPenaltyPoints, signal.scoreBreakdown.contextualPenaltyCapPoints);
-    const parts = [
-      bonusTrim > 0 ? `bónus cortado em ${bonusTrim.toFixed(2)} pts (limite +${formatRulePercentage(signal.scoreBreakdown.contextualBonusCapRate * 100)}% da Base)` : "",
-      penaltyTrim > 0 ? `desbónus cortado em ${penaltyTrim.toFixed(2)} pts (limite −${formatRulePercentage(signal.scoreBreakdown.contextualPenaltyCapRate * 100)}% da Base)` : "",
-    ].filter(Boolean);
-    bonuses.push({
-      label: "Limite contextual",
-      rate: 0,
-      points: 0,
-      source: parts.join(" · ") || "fatores limitados pelo estado do Draft",
-    });
-  }
+  /*
+   * Aqui havia um chip "Limite contextual". Existia para explicar uma diferença
+   * que já não acontece: os fatores somados nos chips não batiam certo com o
+   * ajuste final, porque um tecto por estado de Draft cortava a soma. O tecto
+   * saiu, os números passam a fechar, e o chip que pedia desculpa por eles não
+   * fecharem deixa de ter o que dizer.
+   */
   if (signal.scoreBreakdown.worstTeammatePenaltyPoints > 0) {
     const count = signal.bonusSources.worstTeammatePenalties?.length || 1;
     bonuses.push({
