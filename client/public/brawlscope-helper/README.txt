@@ -1,4 +1,4 @@
-Brawl Híbrido v61 — recolha rápida e importação em lote
+Brawl Híbrido v95 — recolha rápida, importação em lote e rotação automática
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -7,6 +7,13 @@ Brawl Híbrido v61 — recolha rápida e importação em lote
 5. Mantém o Chrome aberto. Podes usar outros separadores. Pausar interrompe a fila; um reinício do Chrome deixa-a pausada para retomar. O progresso fica no armazenamento local da extensão (não depende desta conversa nem do Render).
 6. Exporta brawlscope-resultados.json, mesmo se só parte estiver pronta. No Draft importa esse ficheiro. O site valida brawler, modo, linhas e deltas, envia até 20 fichas por grupo e só avança após confirmação de persistência. Mantém o Draft aberto durante esta etapa. Para retomar, reabre o mesmo JSON.
 7. A matriz atualiza a cada gravação. As listas dos perfis são republicadas no final do lote ou da pausa. Há também Publicar fichas para repetir uma publicação que tenha falhado.
+
+A rotação Ranked entra sozinha (novo)
+- A fila do site traz, à frente dos mapas, a página do índice da rotação: https://topbrawl.com/rankeds
+- É essa página que diz QUAIS são os mapas de agora. Enquanto ela não era lida, a fila saía de uma lista escrita à mão no projeto — e quando a Supercell mudava a rotação, a extensão continuava a recolher os mapas que já tinham saído e nunca pedia os que entraram.
+- Não tens de fazer nada de diferente: corre a fila como sempre. A rotação viaja no MESMO ficheiro dos mapas (topbrawl-mapas.json) e é aplicada quando o importas.
+- Quando entram mapas novos, eles aparecem na fila SEGUINTE. Por isso, numa rotação nova, vale a pena correr a fila duas vezes: a primeira aprende a rotação, a segunda recolhe os mapas novos.
+- Uma leitura do índice com poucos mapas é recusada e a rotação anterior mantém-se. Isso é de propósito: um parser partido lê zero mapas, e zero mapas tomado por verdade significaria "a rotação acabou".
 
 Limites honestos
 - Não resolve nem contorna HTTP 403, CAPTCHA, verificações ou restrições do BrawlScope. A fila pausa se encontrar esses sinais. Não muda IP, fingerprint, user-agent nem extrai cookies.

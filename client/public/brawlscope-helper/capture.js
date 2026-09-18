@@ -27,6 +27,24 @@ export async function captureProfile() {
     if (bloqueado(corpo) || document.querySelector('iframe[src*="captcha"],iframe[src*="challenges.cloudflare"]')) {
       return { blocked: true, error: "O TopBrawl pediu verificação ou bloqueou o acesso. A fila foi pausada." };
     }
+    /**
+     * O índice da rotação: quais são os mapas de agora.
+     *
+     * Vem por interpretar, como as páginas de mapa e pela mesma razão — um
+     * interpretador só, e é o do servidor. Duas leituras da mesma página
+     * divergiriam em silêncio no dia em que a fonte mudasse o formato.
+     *
+     * Só o corpo da página, e nunca mais do que cabe num pedido: é onde as
+     * ligações para cada mapa estão.
+     */
+    if (location.pathname === "/rankeds" || location.pathname === "/rankeds/") {
+      const corpoHtml = document.body?.innerHTML || "";
+      if (!/\/rankeds\/\d+/.test(corpoHtml)) {
+        return { error: "Índice sem ligações para mapas; possível alteração do formato." };
+      }
+      return { rankedRotation: { url: location.href, capturedAt: new Date().toISOString(), html: corpoHtml.slice(0, 2_000_000) } };
+    }
+
     const mapId = location.pathname.match(/^\/rankeds\/(\d+)/)?.[1];
     if (!mapId) return { error: "Endereço sem id de mapa; não foi importado." };
 

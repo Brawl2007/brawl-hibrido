@@ -64,6 +64,12 @@ async function tick() {
      * no mesmo ficheiro sem se confundirem — uma fila pode misturar os dois.
      */
     else if (result?.rankedMap) { state.rankedMaps = { ...(state.rankedMaps || {}), [url]: result.rankedMap }; delete state.errors[url]; state.consecutiveErrors = 0; state.pageRetries = 0; }
+    /**
+     * O índice da rotação é um só, e por isso não é um dicionário por endereço:
+     * a leitura mais recente substitui a anterior. É ele que diz quais são os
+     * mapas de agora — sem ele, uma rotação nova passa despercebida.
+     */
+    else if (result?.rankedRotation) { state.rankedRotation = result.rankedRotation; delete state.errors[url]; state.consecutiveErrors = 0; state.pageRetries = 0; }
     else {
       state.pageRetries = (state.pageRetries || 0) + 1;
       if (state.pageRetries < MAX_CAPTURE_RETRIES) {
@@ -78,6 +84,7 @@ async function tick() {
     state.needsNavigation = true;
     state.message = result?.profile ? `Recolhida: ${result.profile.brawler} · ${result.profile.view}`
       : result?.rankedMap ? `Mapa recolhido: ${result.rankedMap.map}`
+      : result?.rankedRotation ? "Rotação lida: o site fica a saber os mapas de agora."
       : state.errors[url];
     if (state.consecutiveErrors >= 3) { state.running = false; state.message = "Três páginas sem leitura válida. Verifica o formato ou a disponibilidade antes de retomar."; }
     await write(state);
@@ -109,7 +116,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.action === "load") {
       if (busy || state?.running) throw new Error("Pausa a recolha antes de carregar outra fila.");
       const urls = validateQueue(message.queue);
-      state = { id: crypto.randomUUID(), urls, cursor: 0, profiles: {}, rankedMaps: {}, errors: {}, running: false, message: "Fila carregada. Inicia a recolha." };
+      state = { id: crypto.randomUUID(), urls, cursor: 0, profiles: {}, rankedMaps: {}, rankedRotation: null, errors: {}, running: false, message: "Fila carregada. Inicia a recolha." };
       await write(state);
     } else if (message.action === "start") {
       if (!state || busy) throw new Error("Aguarda a operação atual ou carrega uma fila.");

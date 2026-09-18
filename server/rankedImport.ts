@@ -2,6 +2,9 @@ import { z } from "zod";
 import { upsertRankedMapCaptures } from "./db";
 import { garantirArranque } from "./arranque";
 import { lerPaginaTopBrawl } from "../shared/topBrawlParser";
+import { parseRankedRotationIndex } from "@shared/rankedRotationSource";
+import { ROTACAO_GUARDADA_SETTING, type RotacaoGuardada } from "@shared/rotacaoGuardada";
+import { setSetting } from "./appSettings";
 
 /**
  * As páginas do TopBrawl, tal como a extensão as traz.
@@ -32,13 +35,57 @@ export const rankedPaginasSchema = z.object({
     capturedAt: z.string().datetime(),
     /** O conteúdo das etiquetas de script, onde a página guarda os números. */
     scripts: z.string().min(1).max(8_000_000),
-  })).min(1).max(30),
+  })).max(40).default([]),
+  /**
+   * O índice da rotação, quando a extensão o leu.
+   *
+   * É ele que diz QUAIS são os mapas de agora. Sem esta leitura, o site fica
+   * preso à lista escrita à mão no projeto — e quando a Supercell muda a
+   * rotação, continua a pedir os mapas que saíram e nunca pede os que
+   * entraram. Foi exatamente o que aconteceu.
+   */
+  rotation: z.object({
+    capturedAt: z.string().datetime(),
+    html: z.string().min(1).max(4_000_000),
+  }).optional(),
+}).refine((entrada) => entrada.maps.length > 0 || Boolean(entrada.rotation), {
+  message: "O ficheiro não traz mapas nem rotação.",
 });
 
 export type RankedPaginas = z.infer<typeof rankedPaginasSchema>;
 
 export async function guardarPaginasRanked(entrada: RankedPaginas) {
   await garantirArranque();
+
+  /**
+   * A rotação primeiro, porque é ela que decide o resto.
+   *
+   * Guardada mesmo quando não vierem mapas: a leitura do índice sozinha já
+   * corrige a fila da próxima passagem, e é isso que tira este problema do
+   * calendário de alguém.
+   */
+  let rotacao: { mapas: number; capturedAt: string } | null = null;
+  /** A rotação foi tentada, mesmo que a leitura não tenha servido. */
+  let rotacaoTentada = false;
+  if (entrada.rotation) {
+    rotacaoTentada = true;
+    const lida = parseRankedRotationIndex(entrada.rotation.html);
+    if (!lida.complete) {
+      /**
+       * Uma leitura implausível NÃO substitui o que está guardado.
+       *
+       * Um parser partido lê zero mapas, e zero mapas tomado por verdade
+       * significa "a rotação acabou" — o site apagaria a rotação inteira por
+       * causa de uma mudança de formato na fonte.
+       */
+      console.warn(`[RankedImport] Índice da rotação com apenas ${lida.maps.length} mapas: leitura ignorada, a rotação guardada mantém-se.`);
+    } else {
+      const guardada: RotacaoGuardada = { maps: lida.maps, capturedAt: entrada.rotation.capturedAt };
+      await setSetting(ROTACAO_GUARDADA_SETTING, JSON.stringify(guardada));
+      rotacao = { mapas: lida.maps.length, capturedAt: entrada.rotation.capturedAt };
+      console.log(`[RankedImport] Rotação atualizada pela extensão: ${lida.maps.length} mapas.`);
+    }
+  }
 
   const guardar: { mapId: string; map: string; capturedAt: Date; payload: string }[] = [];
   const recusados: string[] = [];
@@ -56,10 +103,21 @@ export async function guardarPaginasRanked(entrada: RankedPaginas) {
   }
 
   if (!guardar.length) {
+    // Uma importação só com a rotação é válida: corrige a fila seguinte.
+    if (rotacao) return { ok: true as const, mapas: 0, recusados, rotacao };
+    /**
+     * Rotação tentada e recusada, sem mapas: nada se perdeu, mas também nada
+     * mudou — e a mensagem tem de dizer isso, e não "nenhuma página deu
+     * linhas", que aponta para o lado errado e faz procurar um problema nos
+     * mapas quando o problema está no índice.
+     */
+    if (rotacaoTentada) {
+      throw new Error("O índice da rotação não trouxe mapas suficientes para ser credível; a rotação anterior manteve-se. Corre a fila outra vez com a página do índice aberta.");
+    }
     throw new Error(`Nenhuma página deu linhas reconhecíveis. ${recusados.slice(0, 3).join(" | ")}`);
   }
 
   const total = await upsertRankedMapCaptures(guardar);
   console.log(`[RankedImport] ${total} mapas guardados da extensão · ${recusados.length} recusados.`);
-  return { ok: true as const, mapas: total, recusados };
+  return { ok: true as const, mapas: total, recusados, rotacao };
 }

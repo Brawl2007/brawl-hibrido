@@ -16,7 +16,7 @@ import { getProcessHealth, listSyncJobStates, startSyncJob, arrancarEEsperar } f
 import { rankedPaginasSchema, guardarPaginasRanked } from "./rankedImport";
 import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { probeAllSources } from "./sourceProbe";
-import { BRAWL_STARS_API_KEY_SETTING, getStoredApiKey, setSetting } from "./appSettings";
+import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
 import {
   addProdigyLink,
@@ -39,6 +39,7 @@ import { brawlScopeCaptureSchema } from "@shared/brawlScopeCapture";
 import { importBrawlScopeCapture, getWreqStatus } from "./counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot, syncRankedData } from "./rankedSync";
 import { AGENDAMENTO_DA_RECOLHA } from "@shared/agendamento";
+import { ROTACAO_GUARDADA_SETTING, lerRotacaoGuardada } from "@shared/rotacaoGuardada";
 import { getBrawlPlanetMapTeamBoard } from "@shared/brawlPlanetMapTeams";
 import { getSnapshotSynergies } from "@shared/counterSyncSnapshot";
 import { brawlScopeSynergyData, normalizeBrawlScopeSynergyList } from "@shared/brawlScopeSynergyData";
@@ -231,11 +232,36 @@ export const appRouter = router({
      * de nuvem que foram testadas. As páginas abrem no navegador de quem usa o
      * site, e é de lá que passam a ser lidas.
      */
-    filaDeMapas: protectedProcedure.query(({ ctx }) => {
+    filaDeMapas: protectedProcedure.query(async ({ ctx }) => {
       exigirDono(ctx, "exportar a fila de mapas");
+      /**
+       * A fila sai da rotação LIDA, e não da lista escrita à mão.
+       *
+       * Enquanto saía da lista do projeto, uma rotação nova não chegava aqui:
+       * a extensão continuava a recolher os mapas que já tinham saído e nunca
+       * pedia os que entraram. E como o índice do TopBrawl responde 403 ao
+       * site, isso não se corrige sozinho — só quando alguém editasse a lista.
+       */
+      const guardada = lerRotacaoGuardada(await getSetting(ROTACAO_GUARDADA_SETTING));
+      const mapas = guardada?.maps.map((mapa) => mapa.id)
+        ?? RANKED_MAP_SOURCES.map(([, id]) => id);
       return {
         format: "brawlhibrido-queue-v1" as const,
-        urls: RANKED_MAP_SOURCES.map(([, id]) => `https://topbrawl.com/rankeds/${id}?rows=106`),
+        /**
+         * O índice vai à frente, e vai SEMPRE.
+         *
+         * É a página que diz quais são os mapas de agora. Pô-la em cada
+         * passagem é o que tira esta atualização do calendário de alguém: a
+         * rotação seguinte entra na fila seguinte, sem ninguém publicar nada.
+         */
+        urls: [
+          "https://topbrawl.com/rankeds",
+          ...mapas.map((id) => `https://topbrawl.com/rankeds/${id}?rows=106`),
+        ],
+        /** De onde veio esta lista, para o ecrã o poder dizer. */
+        rotacao: guardada
+          ? { origem: "extensao" as const, mapas: guardada.maps.length, lidaEm: guardada.capturedAt }
+          : { origem: "projeto" as const, mapas: RANKED_MAP_SOURCES.length, lidaEm: null },
       };
     }),
 
