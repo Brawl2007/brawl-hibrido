@@ -12,6 +12,8 @@ import {
 import { fetchOfficialBrawlers } from "./brawlStarsApi";
 import { fetchText as lerPagina } from "./counterSync";
 import type { LeituraPorFonte } from "../shared/idadeDosDados";
+import { ROTACAO_GUARDADA_SETTING, lerRotacaoGuardada } from "@shared/rotacaoGuardada";
+import { getSetting } from "./appSettings";
 import { lerPaginaTopBrawl, type TopBrawlRow } from "../shared/topBrawlParser";
 import { RANKED_MAP_SOURCES } from "../shared/rankedMaps";
 export { RANKED_MAP_SOURCES };
@@ -49,6 +51,7 @@ import {
   mergeRotationSources,
   parseRankedRotationIndex,
   type DiscoveredRankedMap,
+  type RankedRotationReading,
 } from "@shared/rankedRotationSource";
 import {
   evaluateRoster,
@@ -335,11 +338,28 @@ export function parseBrawlPlanetTeams(html: string, mapName: string, sourceUrl: 
  * lista do projeto trata disso e assinala a leitura como incompleta, o que
  * impede que a ausência de resposta seja lida como "saíram mapas".
  */
-async function collectRankedRotation() {
+/**
+ * A rotação lida no navegador, quando o índice recusar o pedido daqui.
+ *
+ * O `topbrawl.com` responde 403 a esta rede de forma permanente, e é do índice
+ * que vem a lista de mapas de agora. Sem esta via, uma rotação nova só entrava
+ * quando alguém editasse a lista do projeto à mão — e foi assim que o site
+ * ficou a recolher mapas que já tinham saído.
+ */
+async function rotacaoDoNavegador(): Promise<RankedRotationReading | null> {
+  const guardada = lerRotacaoGuardada(await getSetting(ROTACAO_GUARDADA_SETTING));
+  if (!guardada) return null;
+  console.log(`[RankedSync] Rotação vinda da extensão: ${guardada.maps.length} mapas, lida em ${guardada.capturedAt}.`);
+  return { maps: guardada.maps, complete: true, note: `Rotação lida no navegador em ${guardada.capturedAt}.` };
+}
+
+async function collectRankedRotation(): Promise<RankedRotationReading> {
   try {
     const html = await fetchText("https://topbrawl.com/rankeds");
     const lido = parseRankedRotationIndex(html);
     console.log(`[RankedSync] Índice do TopBrawl lido: ${lido.maps.length} mapas, ${lido.complete ? "completo" : "incompleto"}.`);
+    // Um índice ilegível daqui não apaga a leitura boa feita no navegador.
+    if (!lido.complete) return (await rotacaoDoNavegador()) ?? lido;
     return lido;
   } catch (error) {
     /**
@@ -352,6 +372,8 @@ async function collectRankedRotation() {
      */
     const detalhe = error instanceof Error ? error.message : "erro";
     console.warn(`[RankedSync] Índice do TopBrawl inacessível: ${detalhe}`);
+    const doNavegador = await rotacaoDoNavegador();
+    if (doNavegador) return doNavegador;
     return {
       maps: [],
       complete: false,

@@ -18,6 +18,16 @@ const dbMocks = vi.hoisted(() => ({
 
 vi.mock("./db", () => dbMocks);
 
+/**
+ * A rotação guardada pela extensão vive nas definições, e não na snapshot.
+ *
+ * Vazia por omissão: a maior parte destes testes cobre o caminho em que o
+ * índice é lido em direto ou falha. O teste da rotação lida no navegador
+ * preenche-a explicitamente.
+ */
+const definicoes = vi.hoisted(() => ({ getSetting: vi.fn().mockResolvedValue(null) }));
+vi.mock("./appSettings", () => definicoes);
+
 import { buildFallbackPayload, deriveMapSummaries, getNextRefreshAt, normalizeSnapshotPayload, syncRankedData } from "./rankedSync";
 
 describe("ranked synchronization", () => {
@@ -32,6 +42,7 @@ describe("ranked synchronization", () => {
     dbMocks.listRankedMapCaptures.mockResolvedValue([]);
     dbMocks.countRankedMapCaptures.mockResolvedValue(0);
     dbMocks.upsertRankedSyncSnapshot.mockResolvedValue(undefined);
+    definicoes.getSetting.mockResolvedValue(null);
   });
 
   it("keeps the complete fallback catalogue available", () => {

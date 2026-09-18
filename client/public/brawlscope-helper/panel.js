@@ -10,13 +10,13 @@ async function action(action, extra = {}) {
 function render() {
   const mapas = Object.keys(state?.rankedMaps || {}).length;
   $("status").textContent = state
-    ? `${state.cursor}/${state.urls.length} páginas processadas · ${Object.keys(state.profiles).length} fichas${mapas ? ` · ${mapas} mapas` : ""} · ${Object.keys(state.errors).length} erros. ${state.message}`
+    ? `${state.cursor}/${state.urls.length} páginas processadas · ${Object.keys(state.profiles).length} fichas${mapas ? ` · ${mapas} mapas` : ""}${state.rankedRotation ? " · rotação lida" : ""} · ${Object.keys(state.errors).length} erros. ${state.message}`
     : "Carrega a fila exportada no site.";
   $("progress").max = state?.urls.length || 1; $("progress").value = state?.cursor || 0;
   $("start").disabled = !state || state.running || state.cursor >= state.urls.length;
   $("pause").disabled = !state?.running; $("retry").disabled = !state || state.running || !Object.keys(state.errors).length;
   $("queue").disabled = !!state?.running;
-  $("export").disabled = !state || (!Object.keys(state.profiles).length && !Object.keys(state.rankedMaps || {}).length);
+  $("export").disabled = !state || (!Object.keys(state.profiles).length && !Object.keys(state.rankedMaps || {}).length && !state.rankedRotation);
   $("errors").textContent = Object.entries(state?.errors || {}).map(([url, error]) => `${url}: ${error}`).join("\n");
 }
 $("queue").onchange = async event => {
@@ -44,7 +44,21 @@ $("export").onclick = () => {
   const fichas = Object.values(state.profiles || {});
   const mapas = Object.values(state.rankedMaps || {});
   if (fichas.length) descarregar("brawlscope-resultados.json", { format: "brawlhibrido-captures-v1", profiles: fichas, errors: state.errors });
-  if (mapas.length) descarregar("topbrawl-mapas.json", { format: "brawlhibrido-ranked-paginas-v1", maps: mapas, errors: state.errors });
+  /**
+   * A rotação viaja no MESMO ficheiro dos mapas, de propósito.
+   *
+   * Um segundo ficheiro seria um segundo passo, e um segundo passo é um passo
+   * que se esquece — foi assim que a rotação ficou desatualizada sem ninguém
+   * reparar. Quem importa os mapas importa a rotação com eles.
+   */
+  if (mapas.length || state.rankedRotation) {
+    descarregar("topbrawl-mapas.json", {
+      format: "brawlhibrido-ranked-paginas-v1",
+      maps: mapas,
+      ...(state.rankedRotation ? { rotation: state.rankedRotation } : {}),
+      errors: state.errors,
+    });
+  }
 };
 chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes["brawl-v54-queue"]) { state = changes["brawl-v54-queue"].newValue; render(); } });
 await action("status");

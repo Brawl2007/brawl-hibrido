@@ -151,13 +151,28 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
    * interpretadores acabariam por divergir em silêncio quando a fonte mudasse o
    * formato, e os números continuariam a aparecer, só que errados.
    */
-  async function carregarMapas(lido: { maps?: unknown[] }) {
+  async function carregarMapas(lido: { maps?: unknown[]; rotation?: { capturedAt: string; html: string } }) {
     setRunning(true); setMapasEstado("A ler o ficheiro…");
     try {
-      if (!Array.isArray(lido.maps) || !lido.maps.length) {
+      const paginas = Array.isArray(lido.maps) ? lido.maps as { map: string }[] : [];
+      if (!paginas.length && !lido.rotation) {
         throw new Error("O ficheiro dos mapas está vazio. Corre a fila na extensão antes de exportar.");
       }
-      const paginas = lido.maps as { map: string }[];
+
+      /**
+       * A rotação vai primeiro e sozinha, porque é ela que decide a fila
+       * seguinte — e vale mesmo quando não vier mapa nenhum. Foi a sua falta
+       * que deixou o site a pedir mapas que já tinham saído da rotação.
+       */
+      let rotacaoDita = "";
+      if (lido.rotation) {
+        setMapasEstado("A atualizar a rotação…");
+        const resultado = await importarMapas.mutateAsync({ format: "brawlhibrido-ranked-paginas-v1", maps: [], rotation: lido.rotation });
+        rotacaoDita = resultado.rotacao
+          ? `Rotação atualizada: ${resultado.rotacao.mapas} mapas. `
+          : "A leitura da rotação não foi plausível e a anterior manteve-se. ";
+      }
+
       let guardados = 0;
       const recusados: string[] = [];
       for (let i = 0; i < paginas.length; i += 5) {
@@ -167,8 +182,8 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
         guardados += resultado.mapas;
         recusados.push(...resultado.recusados);
       }
-      setMapasEstado(`${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Agora carrega em "Atualizar agora", na barra do topo da página, ao lado do perfil.`);
-      await utils.rankedSync.snapshot.invalidate();
+      setMapasEstado(`${rotacaoDita}${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Agora carrega em "Atualizar agora", na barra do topo da página, ao lado do perfil.`);
+      await Promise.all([utils.rankedSync.snapshot.invalidate(), utils.rankedSync.filaDeMapas.invalidate()]);
     } catch (error) {
       setMapasEstado(error instanceof Error ? error.message : "Não consegui importar os mapas.");
     } finally {
@@ -200,7 +215,7 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
           urls: [...refreshUrls, ...(filaDeMapas.data?.urls ?? [])],
         })}
       >
-        Fila completa · {refreshUrls.length} fichas + {filaDeMapas.data?.urls.length ?? 0} mapas
+        Fila completa · {refreshUrls.length} fichas + {filaDeMapas.data?.rotacao.mapas ?? 0} mapas + rotação
       </button>
       <button type="button" disabled={running || !pendingUrls.length} onClick={() => downloadJson("brawlscope-fila-pendente.json", { format: "brawlhibrido-queue-v1", urls: pendingUrls })}>Exportar {pendingUrls.length} fichas pendentes</button>
       <button type="button" disabled={running || !refreshUrls.length} onClick={() => downloadJson("brawlscope-fila-atualizar-todas.json", { format: "brawlhibrido-queue-v1", urls: refreshUrls })}>Atualizar todas ({refreshUrls.length})</button>
@@ -213,9 +228,23 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
     </p>
     <p className="paste-help">Antes de carregar outra fila na extensão, exporte os resultados em andamento. A nova coleta substitui uma ficha somente quando você importar o novo resultado confirmado.</p>
     <hr style={{ marginBlock: 16, border: 0, borderTop: "1px solid var(--bh-surface-3)" }} />
-    <p className="paste-help"><strong>Mapas do TopBrawl.</strong> A fonte recusa pedidos vindos do site — foram testadas duas redes diferentes e as duas levaram 403 —, mas as páginas abrem no teu navegador. São {filaDeMapas.data?.urls.length ?? 26} mapas, cerca de um minuto a correr sozinha.</p>
+    <p className="paste-help"><strong>Mapas do TopBrawl.</strong> A fonte recusa pedidos vindos do site — foram testadas duas redes diferentes e as duas levaram 403 —, mas as páginas abrem no teu navegador. São {filaDeMapas.data?.rotacao.mapas ?? 26} mapas mais o índice da rotação, cerca de um minuto a correr sozinha.</p>
+    {/*
+      De onde veio esta lista de mapas — porque a resposta muda o que se deve
+      fazer a seguir.
+
+      Enquanto a rotação vier "do projeto", a fila é a lista escrita à mão e
+      pode estar atrasada em relação à rotação a sério: foi o que aconteceu
+      quando entraram mapas novos e o site continuou a pedir os antigos. Basta
+      correr a fila uma vez — ela traz o índice — para passar a vir da leitura.
+    */}
+    <p className="paste-help">
+      {filaDeMapas.data?.rotacao.origem === "extensao"
+        ? `Rotação lida no teu navegador${filaDeMapas.data.rotacao.lidaEm ? ` em ${new Date(filaDeMapas.data.rotacao.lidaEm).toLocaleString("pt-PT")}` : ""}. Entram e saem mapas sozinhos a cada passagem.`
+        : "Rotação ainda vinda da lista do projeto — pode estar atrasada. A primeira passagem desta fila lê o índice e passa a rotação a ser a de agora."}
+    </p>
     <div className="paste-actions">
-      <button type="button" disabled={running || !filaDeMapas.data} onClick={() => filaDeMapas.data && downloadJson("topbrawl-fila-mapas.json", filaDeMapas.data)}>Exportar fila de {filaDeMapas.data?.urls.length ?? 0} mapas</button>
+      <button type="button" disabled={running || !filaDeMapas.data} onClick={() => filaDeMapas.data && downloadJson("topbrawl-fila-mapas.json", { format: filaDeMapas.data.format, urls: filaDeMapas.data.urls })}>Exportar fila de {filaDeMapas.data?.rotacao.mapas ?? 0} mapas + rotação</button>
     </div>
     <label style={{ display: "block", marginBlock: 12 }}>Importar topbrawl-mapas.json (os mapas)
       <input style={{ display: "block", width: "100%", maxWidth: "100%", minWidth: 0 }} type="file" accept=".json,application/json" disabled={running} onChange={e => void receberFicheiro(e.target.files?.[0], "mapas")} />
