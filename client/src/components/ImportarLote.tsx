@@ -151,8 +151,9 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
    * interpretadores acabariam por divergir em silêncio quando a fonte mudasse o
    * formato, e os números continuariam a aparecer, só que errados.
    */
-  async function carregarMapas(lido: { maps?: unknown[]; rotation?: { capturedAt: string; html: string } }) {
+  async function carregarMapas(lido: { maps?: unknown[]; rotation?: { capturedAt: string; html: string }; extensao?: string }) {
     setRunning(true); setMapasEstado("A ler o ficheiro…");
+    let aviso: string | null = null;
     try {
       const paginas = Array.isArray(lido.maps) ? lido.maps as { map: string }[] : [];
       if (!paginas.length && !lido.rotation) {
@@ -167,7 +168,8 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
       let rotacaoDita = "";
       if (lido.rotation) {
         setMapasEstado("A atualizar a rotação…");
-        const resultado = await importarMapas.mutateAsync({ format: "brawlhibrido-ranked-paginas-v1", maps: [], rotation: lido.rotation });
+        const resultado = await importarMapas.mutateAsync({ format: "brawlhibrido-ranked-paginas-v1", maps: [], rotation: lido.rotation, extensao: lido.extensao });
+        aviso = resultado.avisoDeExtensao ?? aviso;
         rotacaoDita = resultado.rotacao
           ? `Rotação atualizada: ${resultado.rotacao.mapas} mapas. `
           : "A leitura da rotação não foi plausível e a anterior manteve-se. ";
@@ -178,11 +180,20 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
       for (let i = 0; i < paginas.length; i += 5) {
         const grupo = paginas.slice(i, i + 5);
         setMapasEstado(`A guardar mapas ${i + 1}–${i + grupo.length} de ${paginas.length}…`);
-        const resultado = await importarMapas.mutateAsync({ format: "brawlhibrido-ranked-paginas-v1", maps: grupo as never });
+        const resultado = await importarMapas.mutateAsync({ format: "brawlhibrido-ranked-paginas-v1", maps: grupo as never, extensao: lido.extensao });
+        aviso = resultado.avisoDeExtensao ?? aviso;
         guardados += resultado.mapas;
         recusados.push(...resultado.recusados);
       }
-      setMapasEstado(`${rotacaoDita}${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Agora carrega em "Atualizar agora", na barra do topo da página, ao lado do perfil.`);
+      /**
+       * O aviso de versão vem PRIMEIRO, e antes do "correu bem".
+       *
+       * Uma extensão desatualizada guarda os dados na mesma, por isso a
+       * mensagem de sucesso é verdadeira — e foi exatamente isso que deixou
+       * passar três corridas seguidas feitas com a versão antiga. O aviso à
+       * frente é o que impede o sucesso de tapar o problema.
+       */
+      setMapasEstado(`${aviso ? `⚠️ ${aviso} ` : ""}${rotacaoDita}${guardados} mapas guardados${recusados.length ? ` · ${recusados.length} recusados: ${recusados.slice(0, 2).join("; ")}` : ""}. Agora carrega em "Atualizar agora", na barra do topo da página, ao lado do perfil.`);
       await Promise.all([utils.rankedSync.snapshot.invalidate(), utils.rankedSync.filaDeMapas.invalidate()]);
     } catch (error) {
       setMapasEstado(error instanceof Error ? error.message : "Não consegui importar os mapas.");

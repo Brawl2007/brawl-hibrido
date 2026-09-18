@@ -103,7 +103,7 @@ function descarregar(nome, conteudo) {
 $("export").onclick = () => {
   const fichas = Object.values(state.profiles || {});
   const mapas = Object.values(state.rankedMaps || {});
-  if (fichas.length) descarregar("brawlscope-resultados.json", { format: "brawlhibrido-captures-v1", profiles: fichas, errors: state.errors });
+  if (fichas.length) descarregar("brawlscope-resultados.json", { format: "brawlhibrido-captures-v1", extensao: VERSAO, profiles: fichas, errors: state.errors });
   /**
    * A rotação viaja no MESMO ficheiro dos mapas, de propósito.
    *
@@ -114,6 +114,15 @@ $("export").onclick = () => {
   if (mapas.length || state.rankedRotation) {
     descarregar("topbrawl-mapas.json", {
       format: "brawlhibrido-ranked-paginas-v1",
+      /**
+       * A versão da extensão viaja com os dados.
+       *
+       * Sem isto não havia como o site saber qual extensão produziu o ficheiro
+       * — e três vezes seguidas o que estava a correr foi a versão antiga, sem
+       * nada em lado nenhum a dizê-lo. Descobriu-se por acaso, ao reparar que
+       * uma mensagem de erro já não existia no código.
+       */
+      extensao: VERSAO,
       maps: mapas,
       ...(state.rankedRotation ? { rotation: state.rankedRotation } : {}),
       errors: state.errors,
