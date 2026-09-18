@@ -6,15 +6,55 @@ const ALARM = "brawl-v54-next";
 const PAGE_READY_DELAY_MS = 250;
 const MAX_PAGE_WAIT_MS = 180000;
 const MAX_CAPTURE_RETRIES = 3;
+
+/**
+ * O ritmo é por origem, porque as fontes não têm a mesma paciência.
+ *
+ * 250 ms entre páginas é o que o BrawlScope sempre aguentou. O TopBrawl não:
+ * uma corrida a esse ritmo levou com uma verificação à terceira página. Quatro
+ * navegações por segundo é um ritmo que nenhum humano tem, e é razoável que a
+ * fonte o trate como o que parece.
+ *
+ * Abrandar não é um truque para não ser apanhado — é pedir menos. Esta extensão
+ * não muda IP, não falsifica identificação nem mexe em cookies, e não é para
+ * aqui que vai começar. Se a fonte quiser mesmo recusar, recusa, e a recolha
+ * para.
+ */
+const PAUSA_POR_ORIGEM = { "https://topbrawl.com": 1200 };
+
+/**
+ * Um intervalo exatamente igual entre pedidos é, ele próprio, uma assinatura de
+ * automatismo. O desvio não esconde nada — só evita o padrão perfeito.
+ */
+const variar = (ms) => Math.round(ms * (1 + Math.random() * 0.4));
+const pausaPara = (url) => {
+  try { return PAUSA_POR_ORIGEM[new URL(url).origin] ?? PAGE_READY_DELAY_MS; }
+  catch { return PAGE_READY_DELAY_MS; }
+};
+
+/**
+ * Quanto esperar depois de uma verificação, antes de tentar a MESMA página.
+ *
+ * Antes não se esperava nada: a primeira verificação parava a recolha inteira e
+ * ficava à espera de alguém voltar ao computador. Numa fila de 27 páginas, isso
+ * significou parar na terceira e não recolher mais nada nessa sessão.
+ *
+ * Esperar mais a cada vez é o comportamento certo dos dois lados: insiste
+ * menos do que insistia e dá tempo real à fonte, em vez de bater outra vez à
+ * porta no segundo seguinte. Três tentativas e desiste — a partir daí a recusa
+ * é para levar a sério.
+ */
+const ESPERAS_APOS_BLOQUEIO_MS = [2 * 60 * 1000, 5 * 60 * 1000, 10 * 60 * 1000];
+const emMinutos = (ms) => Math.round(ms / 60000);
 let busy = false;
 const read = async () => (await chrome.storage.local.get(STATE))[STATE];
 const write = state => chrome.storage.local.set({ [STATE]: state });
 let nextTimer;
-const schedule = async () => {
+const schedule = async (atrasoMs = PAGE_READY_DELAY_MS) => {
   clearTimeout(nextTimer);
   // Alarms are a durable watchdog, not the normal page-to-page clock.
-  await chrome.alarms.create(ALARM, { when: Date.now() + 30000 });
-  nextTimer = setTimeout(() => void tick(), PAGE_READY_DELAY_MS);
+  await chrome.alarms.create(ALARM, { when: Date.now() + Math.max(30000, atrasoMs + 15000) });
+  nextTimer = setTimeout(() => void tick(), atrasoMs);
 };
 chrome.tabs.onUpdated.addListener((tabId, change) => {
   if (change.status !== "complete") return;
@@ -29,10 +69,25 @@ async function tick() {
   try {
     let state = await read();
     if (!state?.running) return;
+
+    /**
+     * A espera depois de uma verificação é respeitada aqui, e não onde foi
+     * decidida — porque há três caminhos que acordam esta função (o alarme, o
+     * temporizador e a página acabar de carregar) e qualquer um deles
+     * atropelaria a espera se ela não fosse verificada no princípio.
+     */
+    if (state.esperarAte && Date.now() < state.esperarAte) {
+      await chrome.alarms.create(ALARM, { when: state.esperarAte });
+      return;
+    }
+    if (state.esperarAte) { state.esperarAte = 0; await write(state); }
+
     // Watchdog resumes a suspended worker. It never changes a blocked state.
     await chrome.alarms.create(ALARM, { when: Date.now() + 30000 });
     if (state.cursor >= state.urls.length) { state.running = false; state.message = "Recolha concluída. Exporta os resultados."; await write(state); await chrome.alarms.clear(ALARM); return; }
     const url = state.urls[state.cursor];
+    /** O intervalo até à página seguinte, decidido pela origem dela. */
+    let proximaPausa = PAGE_READY_DELAY_MS;
     let source;
     if (state.tabId) { try { source = await chrome.tabs.get(state.tabId); } catch { /* manually closed */ } }
     if (!source) {
@@ -56,7 +111,33 @@ async function tick() {
     const latest = await read();
     if (!latest?.running || latest.id !== state.id) return; // pause/cancel won the race
     state = latest;
-    if (result?.blocked) { state.running = false; state.message = result.error; await write(state); await chrome.alarms.clear(ALARM); return; }
+    if (result?.blocked) {
+      /**
+       * Uma verificação não é o fim da recolha — é um "agora não".
+       *
+       * O que NÃO muda: nunca se passa à página seguinte depois de um
+       * bloqueio, e nunca se tenta contorná-lo. Espera-se, e tenta-se outra
+       * vez a MESMA página, cada vez mais tarde.
+       */
+      const jaTentadas = state.blocksSeen || 0;
+      state.ultimoBloqueio = { url, sinal: result.sinal || null, quando: new Date().toISOString() };
+      if (jaTentadas < ESPERAS_APOS_BLOQUEIO_MS.length) {
+        const espera = ESPERAS_APOS_BLOQUEIO_MS[jaTentadas];
+        state.blocksSeen = jaTentadas + 1;
+        state.esperarAte = Date.now() + espera;
+        // Voltar a carregar a mesma página quando a espera acabar.
+        state.needsNavigation = true;
+        state.message = `${result.error} Nova tentativa da mesma página daqui a ${emMinutos(espera)} min (${state.blocksSeen}/${ESPERAS_APOS_BLOQUEIO_MS.length}). Podes deixar o Chrome aberto.`;
+        await write(state);
+        await chrome.alarms.create(ALARM, { when: state.esperarAte });
+        return;
+      }
+      state.running = false; state.blocksSeen = 0; state.esperarAte = 0;
+      state.message = `${result.error} Já esperei ${ESPERAS_APOS_BLOQUEIO_MS.map(emMinutos).join(", ")} minutos e a resposta foi a mesma. Exporta o que já foi recolhido e tenta mais tarde.`;
+      await write(state); await chrome.alarms.clear(ALARM); return;
+    }
+    // Uma leitura boa fecha o assunto: a contagem de bloqueios recomeça.
+    if (result?.profile || result?.rankedMap || result?.rankedRotation) state.blocksSeen = 0;
     if (result?.profile) { state.profiles[url] = result.profile; delete state.errors[url]; state.consecutiveErrors = 0; state.pageRetries = 0; }
     /**
      * Um mapa do TopBrawl vem por outro caminho: texto por interpretar, que o
@@ -94,12 +175,13 @@ async function tick() {
       await chrome.tabs.update(source.id, { url: state.urls[state.cursor] });
       // Save only the navigation timer; preserve a concurrent pause.
       const current = await read(); if (current?.id === state.id) await write({ ...current, needsNavigation: false, waitSince: Date.now(), pageRetries: 0 });
+      proximaPausa = variar(pausaPara(state.urls[state.cursor]));
     }
     if (state.cursor >= state.urls.length) {
       const current = await read();
       if (current?.id === state.id) await write({ ...current, running: false, message: "Recolha concluída. Exporta os resultados." });
       clearTimeout(nextTimer); await chrome.alarms.clear(ALARM);
-    } else await schedule();
+    } else await schedule(proximaPausa);
   } catch (error) {
     const state = await read();
     if (state) await write({ ...state, running: false, message: `Pausado: ${error.message}. Exporta o que já foi recolhido.` });
