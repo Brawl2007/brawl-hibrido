@@ -4,7 +4,7 @@ Brawl Híbrido v99 — recolha, importação em lote e rotação automática
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
 3. Entra como dono no site. No Draft, abre Estado das fontes e Importação em lote. Escolhe o percurso (todas as vistas ou uma vista) e exporta a fila pendente.
 4. Clica no ícone da extensão, carrega brawlscope-fila.json e clica Iniciar. A extensão visita uma página de cada vez, abre Every matchup somente se estiver fechada, verifica a quantidade de linhas e guarda os números publicados e as listas literais.
-5. Mantém o Chrome aberto. Podes usar outros separadores. Pausar interrompe a fila; um reinício do Chrome deixa-a pausada para retomar. O progresso fica no armazenamento local da extensão (não depende desta conversa nem do Render).
+5. Mantém o Chrome aberto. Podes usar outros separadores. Pausar interrompe a fila; um reinício do Chrome deixa-a pausada para retomar. O progresso fica no armazenamento local da extensão (não depende desta conversa nem do site).
 6. Exporta brawlscope-resultados.json, mesmo se só parte estiver pronta. No Draft importa esse ficheiro. O site valida brawler, modo, linhas e deltas, envia até 20 fichas por grupo e só avança após confirmação de persistência. Mantém o Draft aberto durante esta etapa. Para retomar, reabre o mesmo JSON.
 7. A matriz atualiza a cada gravação. As listas dos perfis são republicadas no final do lote ou da pausa. Há também Publicar fichas para repetir uma publicação que tenha falhado.
 
@@ -53,10 +53,13 @@ Limites honestos
 Atualizar a extensão existente
 - Antes de atualizar, exporta os resultados e pausa a fila.
 - Substitui os ficheiros na MESMA pasta da extensão e clica Recarregar em chrome://extensions. Não removas a extensão: isso pode apagar o progresso.
-- Só atualizar o ZIP do site no Render não atualiza a extensão instalada no Chrome.
+- Só descarregar o ZIP novo do site não atualiza a extensão instalada no Chrome: tens de substituir os ficheiros e carregar Recarregar.
 
-Rapidez v61
-- Uma página de cada vez, com avanço 250 ms depois do carregamento; a tabela dinâmica é observada em vez de verificada por intervalos fixos.
+Ritmo v99
+- Uma página de cada vez. No BrawlScope o avanço é de 250 ms depois do carregamento; no TopBrawl é de cerca de 1,2 s, com variação, porque a fonte estava a responder com pedidos de verificação. Isso é pedir menos, não é disfarçar-se: a extensão não mexe em cookies, nem no user-agent, nem em nada que sirva para contornar um bloqueio.
+- Se o TopBrawl pedir verificação, a mesma página é tentada de novo daqui a 2, 5 e 10 minutos. Ao fim das três, a fila pausa e o que já foi recolhido pode ser exportado.
+- Um mapa que saiu da rotação responde com um desvio dentro do próprio site: essa página fica marcada como erro e a recolha segue para a seguinte. Um desvio para fora do site continua a parar tudo, e três desvios seguidos também.
+- A tabela dinâmica é observada em vez de verificada por intervalos fixos.
 - Páginas lentas podem carregar até 3 minutos; falhas temporárias de leitura são tentadas automaticamente até 3 vezes. Bloqueios e verificações continuam a pausar a fila.
 - Importação de até 20 fichas por gravação confirmada.
 - Publicar fichas utiliza os resultados importados, sem consultar novamente as fontes externas.

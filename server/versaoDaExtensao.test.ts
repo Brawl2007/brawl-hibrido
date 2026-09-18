@@ -24,6 +24,31 @@ describe("versão da extensão que produziu o ficheiro", () => {
     expect(VERSAO_DA_EXTENSAO).toBe(manifesto.version);
   });
 
+  /**
+   * O site oferecia "Baixar extensão v62" e entregava o ZIP da v99.
+   *
+   * O número tinha sido escrito à mão numa etiqueta de ligação e ficou lá
+   * trinta e sete versões. Ninguém mentiu de propósito: escreve-se uma vez,
+   * nunca mais se olha para ela, e a partir daí o site diz uma coisa e entrega
+   * outra. Quem reclamou que a extensão não tinha sido atualizada tinha razão —
+   * era o que a página dizia.
+   *
+   * É o mesmo erro que o painel da extensão tinha na v98, e a correção é a
+   * mesma: nenhuma etiqueta escreve um número, todas o derivam da constante.
+   */
+  it("o que o site oferece descarregar traz a versão que vai entregar", () => {
+    const ficheiro = readFileSync(resolve(process.cwd(), "client/src/components/ImportarLote.tsx"), "utf8");
+    // Só interessa o que chega ao ecrã. Os comentários falam do erro antigo
+    // pelo nome — e é preciso que possam, senão a explicação tem de sair daqui
+    // para o teste passar, que é perder a única parte que diz porquê.
+    const noEcra = ficheiro.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    // Nenhum número de extensão escrito à mão, seja na etiqueta ou na descrição.
+    expect(noEcra).not.toMatch(/extensão v\d/);
+    expect(noEcra).not.toMatch(/v\d+: uma só corrida/);
+    // E a etiqueta tem de sair da constante que o manifesto também obedece.
+    expect(noEcra).toContain("Baixar extensão v{VERSAO_DA_EXTENSAO}");
+  });
+
   it("a extensão carimba a versão no que exporta", () => {
     const panel = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/panel.js"), "utf8");
     // Nos dois ficheiros: mapas e fichas.
