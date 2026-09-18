@@ -1,4 +1,4 @@
-Brawl Híbrido v97 — recolha, importação em lote e rotação automática
+Brawl Híbrido v98 — recolha, importação em lote e rotação automática
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -14,6 +14,12 @@ A rotação Ranked entra sozinha (novo)
 - Não tens de fazer nada de diferente: corre a fila como sempre. A rotação viaja no MESMO ficheiro dos mapas (topbrawl-mapas.json) e é aplicada quando o importas.
 - Quando entram mapas novos, eles aparecem na fila SEGUINTE. Por isso, numa rotação nova, vale a pena correr a fila duas vezes: a primeira aprende a rotação, a segunda recolhe os mapas novos.
 - Uma leitura do índice com poucos mapas é recusada e a rotação anterior mantém-se. Isso é de propósito: um parser partido lê zero mapas, e zero mapas tomado por verdade significaria "a rotação acabou".
+
+Como saber se a atualização pegou mesmo
+- O topo do painel da extensão mostra a versão instalada, tirada do próprio manifesto. É esse o número a comparar.
+- E agora o site também te diz: o ficheiro exportado leva a versão da extensão carimbada, e a importação avisa se for anterior à que o site espera. Um ficheiro sem carimbo nenhum é, por si só, sinal de extensão antiga.
+- Isto existe porque aconteceu três vezes seguidas: correção publicada, "atualiza e recarrega" dito, e o que continuou a correr foi a versão antiga — sem nada em lado nenhum a dizê-lo.
+- Os dados de um ficheiro antigo são guardados na mesma. O aviso não é uma recusa: é para a próxima corrida já ser feita com a versão certa.
 
 Se a fonte pedir verificação
 - O TopBrawl e o BrawlScope podem pedir verificação a meio de uma corrida. A extensão NÃO contorna isso, e não é para isso que serve.

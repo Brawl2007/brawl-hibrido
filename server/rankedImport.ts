@@ -5,6 +5,7 @@ import { lerPaginaTopBrawl } from "../shared/topBrawlParser";
 import { parseRankedRotationIndex } from "@shared/rankedRotationSource";
 import { ROTACAO_GUARDADA_SETTING, type RotacaoGuardada } from "@shared/rotacaoGuardada";
 import { setSetting } from "./appSettings";
+import { avisoDeVersao } from "@shared/versaoDaExtensao";
 
 /**
  * As páginas do TopBrawl, tal como a extensão as traz.
@@ -29,6 +30,14 @@ import { setSetting } from "./appSettings";
  */
 export const rankedPaginasSchema = z.object({
   format: z.literal("brawlhibrido-ranked-paginas-v1"),
+  /**
+   * A versão da extensão que produziu este ficheiro.
+   *
+   * Opcional porque as versões anteriores à v97 não a enviam — e a ausência é,
+   * ela própria, a resposta: foi uma extensão antiga. Ver
+   * `shared/versaoDaExtensao.ts`.
+   */
+  extensao: z.string().trim().max(32).optional(),
   maps: z.array(z.object({
     mapId: z.string().trim().regex(/^\d{1,20}$/, "O id do mapa vem do endereço e é numérico."),
     map: z.string().trim().min(1).max(128),
@@ -64,6 +73,8 @@ export async function guardarPaginasRanked(entrada: RankedPaginas) {
    * corrige a fila da próxima passagem, e é isso que tira este problema do
    * calendário de alguém.
    */
+  const avisoDeExtensao = avisoDeVersao(entrada.extensao);
+  if (avisoDeExtensao) console.warn(`[RankedImport] ${avisoDeExtensao}`);
   let rotacao: { mapas: number; capturedAt: string } | null = null;
   /** A rotação foi tentada, mesmo que a leitura não tenha servido. */
   let rotacaoTentada = false;
@@ -104,7 +115,7 @@ export async function guardarPaginasRanked(entrada: RankedPaginas) {
 
   if (!guardar.length) {
     // Uma importação só com a rotação é válida: corrige a fila seguinte.
-    if (rotacao) return { ok: true as const, mapas: 0, recusados, rotacao };
+    if (rotacao) return { ok: true as const, mapas: 0, recusados, rotacao, avisoDeExtensao };
     /**
      * Rotação tentada e recusada, sem mapas: nada se perdeu, mas também nada
      * mudou — e a mensagem tem de dizer isso, e não "nenhuma página deu
@@ -119,5 +130,5 @@ export async function guardarPaginasRanked(entrada: RankedPaginas) {
 
   const total = await upsertRankedMapCaptures(guardar);
   console.log(`[RankedImport] ${total} mapas guardados da extensão · ${recusados.length} recusados.`);
-  return { ok: true as const, mapas: total, recusados, rotacao };
+  return { ok: true as const, mapas: total, recusados, rotacao, avisoDeExtensao };
 }
