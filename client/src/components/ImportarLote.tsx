@@ -1,4 +1,5 @@
 import { VERSAO_DO_SITE } from "@shared/version";
+import { VERSAO_DA_EXTENSAO } from "@shared/versaoDaExtensao";
 import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { reviewCaptureBatch, type BrawlScopeCapture } from "@shared/brawlScopeCapture";
@@ -205,8 +206,20 @@ export default function ImportarLote({ pendingUrls, refreshUrls }: { pendingUrls
   return <details className="paste-box">
     <summary>Importação em lote · {VERSAO_DO_SITE}</summary>
     <p className="paste-help">Use a fila pendente para completar o site. Use Atualizar todas para recolher de novo os valores atuais, inclusive fichas já importadas.</p>
-    <p className="paste-help">v62: a extensão lê também os mapas do TopBrawl. Mantém o avanço de 250 ms, espera páginas lentas e repete leituras temporárias. A importação confirma até 20 fichas por gravação.</p>
-    <p><a href="/brawlscope-helper.zip" download>Baixar extensão v62</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
+    {/*
+      O que esta caixa diz sobre a extensão tem de vir do mesmo sítio que a
+      extensão. Esteve parada na v62 durante trinta e sete versões: o site
+      oferecia "Baixar extensão v62" e entregava o ZIP da v99, e a descrição ao
+      lado prometia um avanço de 250 ms que já não era o que o worker fazia.
+      Quem lesse concluía, com razão, que a atualização não tinha chegado.
+    */}
+    <p className="paste-help">
+      v{VERSAO_DA_EXTENSAO}: uma só corrida lê a rotação Ranked, os mapas do TopBrawl e as fichas do
+      BrawlScope. No TopBrawl vai devagar — cerca de 1,2 s entre páginas, com variação — e, se a
+      fonte pedir verificação, espera 2, 5 e 10 minutos antes de desistir. Um mapa que saiu da
+      rotação é saltado em vez de parar a recolha. A importação confirma até 20 fichas por gravação.
+    </p>
+    <p><a href="/brawlscope-helper.zip" download>Baixar extensão v{VERSAO_DA_EXTENSAO}</a> · <a href="/brawlscope-helper/README.txt" target="_blank" rel="noreferrer">Como instalar e usar a extensão</a></p>
     <div className="paste-actions">
       {/*
         Uma passagem, as duas fontes.

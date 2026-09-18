@@ -72,8 +72,61 @@ test('pause during capture prevents committing or starting next page',async()=>{
   listeners.alarm({name:'brawl-v54-next'});await flush();await send({action:'pause'});finish({profile:{brawler:'Bibi'}});await flush();
   assert.equal(state().running,false);assert.equal(state().cursor,0);assert.equal(Object.keys(state().profiles).length,0);
 });
-test('unexpected redirect pauses rather than navigating around it',async()=>{
-  await reset();await send({action:'start'});await tick();tabs.get(state().tabId).url='https://brawlscope.com/challenge';await tick();assert.equal(state().running,false);assert.equal(executions,0);
+/**
+ * Um mapa que saiu da rotação não pode parar a recolha inteira.
+ *
+ * Aconteceu: o Beach Ball saiu, a fila tinha sido exportada antes de o site
+ * saber disso, e a página dele passou a redireccionar. A recolha parou aos 22
+ * de 27 — com 21 mapas bons já lidos e cinco por ler — por causa de um mapa que
+ * já não existe.
+ *
+ * E não foi azar: é o que TEM de acontecer sempre que a rotação muda, porque a
+ * fila é exportada antes de a rotação nova ser conhecida.
+ */
+test('a same-origin redirect skips that page and keeps going',async()=>{
+  await reset();await send({action:'start'});await tick();
+  // A fonte manda-nos para outro sítio do MESMO site: o mapa saiu.
+  tabs.get(state().tabId).url='https://brawlscope.com/counters';
+  await tick();
+  assert.equal(state().running,true,'parou por causa de um mapa que saiu');
+  assert.equal(state().cursor,1,'não avançou para a página seguinte');
+  assert.match(Object.values(state().errors)[0],/saiu da rotação/);
+  await send({action:'pause'});
+});
+
+/**
+ * Sair do site é outra coisa — um desafio, uma página de entrada — e aí pára-se
+ * como sempre. Nunca se navega por cima de um desvio para fora.
+ */
+test('a cross-origin redirect still pauses instead of navigating around it',async()=>{
+  await reset();await send({action:'start'});await tick();
+  tabs.get(state().tabId).url='https://outro-sitio.example/challenge';
+  await tick();
+  assert.equal(state().running,false);
+  assert.equal(executions,0);
+  assert.equal(state().cursor,0,'avançou apesar do desvio para fora');
+});
+
+/** Três redireccionamentos seguidos deixam de ser mapas que saíram. */
+test('three redirects in a row stop the run',async()=>{
+  // Precisa de uma fila mais longa do que três: com duas páginas a recolha
+  // chegaria ao fim antes de acumular os três seguidos, e o teste mediria o fim
+  // da fila em vez da regra que quer verificar.
+  stored={};tabs.clear();executions=0;
+  await send({action:'load',queue:{format:'brawlhibrido-queue-v1',urls:[
+    'https://brawlscope.com/counters/bibi','https://brawlscope.com/counters/lou',
+    'https://brawlscope.com/counters/gus','https://brawlscope.com/counters/nita',
+    'https://brawlscope.com/counters/piper',
+  ]}});
+  await send({action:'start'});await tick();
+  let ciclos=0;
+  while(state().running && ciclos++<12){
+    const tab=tabs.get(state().tabId);
+    if(tab) tab.url='https://brawlscope.com/counters';
+    await tick();
+  }
+  assert.equal(state().running,false);
+  assert.match(state().message,/Três páginas seguidas redireccionaram/);
 });
 
 /**

@@ -105,7 +105,58 @@ async function tick() {
       if (Date.now() - state.waitSince > MAX_PAGE_WAIT_MS) { state.running = false; state.message = "Carregamento demorou mais de 3 minutos. Verifica a página antes de retomar."; await write(state); }
       await schedule(); return;
     }
-    if (source.url !== url) { state.running = false; state.message = "O endereço mudou. Verifica a página antes de retomar."; await write(state); return; }
+    if (source.url !== url) {
+      /**
+       * Um endereço que muda a meio já não é sempre a mesma coisa.
+       *
+       * Esta guarda existe para nunca se passar por cima de um desvio — um
+       * desafio, uma página de entrada, um redireccionamento para fora. Isso
+       * continua a parar tudo, e deve.
+       *
+       * Mas apareceu um caso que não é nada disso: um MAPA QUE SAIU DA ROTAÇÃO.
+       * O Beach Ball saiu, a fila tinha sido exportada antes de o site saber
+       * disso, e a página dele passou a redireccionar. Resultado: a recolha
+       * parou aos 22 de 27, com 21 mapas bons já lidos e cinco por ler, por
+       * causa de um mapa que já não existe.
+       *
+       * E isto não é um azar: é o que TEM de acontecer sempre que a rotação
+       * muda, porque a fila é exportada antes de a rotação nova ser conhecida.
+       * Parar tudo à primeira transforma cada mudança de rotação numa recolha
+       * falhada.
+       *
+       * A distinção é a origem. Dentro do mesmo sítio, é a fonte a dizer que
+       * aquela página já não é aquilo — um erro daquela página, e segue-se. Para
+       * fora, é outra coisa qualquer, e aí pára-se como sempre.
+       */
+      let mesmaOrigem = false;
+      try { mesmaOrigem = new URL(source.url).origin === new URL(url).origin; } catch { mesmaOrigem = false; }
+      if (!mesmaOrigem) {
+        state.running = false;
+        state.message = `O endereço saiu de ${new URL(url).origin} para ${source.url}. Verifica a página antes de retomar.`;
+        await write(state); return;
+      }
+      state.errors[url] = `A fonte redireccionou para ${source.url} — provavelmente este mapa saiu da rotação. Ignorado; a recolha seguiu.`;
+      state.consecutiveErrors = (state.consecutiveErrors || 0) + 1;
+      state.pageRetries = 0;
+      state.cursor += 1;
+      state.needsNavigation = true;
+      state.message = state.errors[url];
+      // Três seguidos deixa de ser um mapa que saiu e passa a ser outra coisa.
+      if (state.consecutiveErrors >= 3) { state.running = false; state.message = "Três páginas seguidas redireccionaram. Verifica a fonte antes de retomar."; }
+      await write(state);
+      if (!state.running) { await chrome.alarms.clear(ALARM); return; }
+      if (state.cursor < state.urls.length) {
+        await chrome.tabs.update(source.id, { url: state.urls[state.cursor] });
+        const atual = await read();
+        if (atual?.id === state.id) await write({ ...atual, needsNavigation: false, waitSince: Date.now(), pageRetries: 0 });
+        await schedule(variar(pausaPara(state.urls[state.cursor])));
+      } else {
+        const atual = await read();
+        if (atual?.id === state.id) await write({ ...atual, running: false, message: "Recolha concluída. Exporta os resultados." });
+        clearTimeout(nextTimer); await chrome.alarms.clear(ALARM);
+      }
+      return;
+    }
     const [captured] = await chrome.scripting.executeScript({ target: { tabId: source.id }, func: captureProfile });
     const result = captured?.result;
     const latest = await read();
