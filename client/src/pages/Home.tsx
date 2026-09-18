@@ -61,6 +61,7 @@ import { useHybridWeights } from "@/lib/hybridWeights";
 import { officialSourceBalance, useSourceBalance, type SourceBalancePreference } from "@/lib/sourceBalance";
 import { buildMapsTsv } from "@shared/mapTsv";
 import { avisoDaRecolha } from "@shared/recolhaAutomatica";
+import { avaliarConfianca, explicarConfianca } from "@shared/amostraPequena";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
 
@@ -826,15 +827,28 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
           <div className="source-full-row source-full-header" role="row">
             <span role="columnheader">#</span><span role="columnheader">Brawler</span><span role="columnheader">Tier</span>{current.metrics.map((metric) => <span role="columnheader" key={metric.label}>{metric.label}</span>)}<span role="columnheader">Estado</span>
           </div>
-          {sourceRows.map((row, index) => (
+          {sourceRows.map((row, index) => {
+            /*
+              Um número que assenta em poucos jogos tinha a mesma cara de um
+              assente em milhares: mesma letra de tier, mesmas casas decimais.
+              O sinal já estava nos dados — a taxa de uso. Ver
+              `shared/amostraPequena.ts` para a medição que fixa os limiares.
+            */
+            const confianca = avaliarConfianca(row);
+            const porque = explicarConfianca(confianca);
+            return (
             <div className="source-full-row" role="row" key={`${row.map}-${row.brawler}`}>
               <span className="source-full-rank">{String(index + 1).padStart(2, "0")}</span>
               <span className="source-full-brawler"><span className="source-full-avatar" style={brawlerImageFor(row.brawler, row.brawlerId) ? { backgroundImage: `url(${brawlerImageFor(row.brawler, row.brawlerId)})` } : undefined}>{!brawlerImageFor(row.brawler, row.brawlerId) && row.brawler.slice(0, 2).toUpperCase()}</span>{row.brawler}</span>
               <span><TierBadge tier={row.tier} /></span>
               {current.metrics.map((metric) => <span key={metric.label} className={readMetric(row, metric.key) === "—" ? "not-available" : "source-full-value"}>{readMetric(row, metric.key)}</span>)}
-              <span className="source-full-status">{row.rankedStatus === "unavailable" ? "A aguardar Ranked" : row.dataStatus === "partial" ? "Parcial" : "Disponível"}</span>
+              <span className="source-full-status">
+                {row.rankedStatus === "unavailable" ? "A aguardar Ranked" : row.dataStatus === "partial" ? "Parcial" : "Disponível"}
+                {porque ? <em className="marca-amostra" title={porque}>{confianca.fontesDiscordam && !confianca.poucosJogos ? "fontes discordam" : "poucos jogos"}</em> : null}
+              </span>
             </div>
-          ))}
+            );
+          })}
           {sourceRows.length === 0 && <div className="table-empty"><Search size={22} /><strong>Nenhum brawler encontrado</strong><span>Altera a pesquisa para procurar outro nome.</span></div>}
         </div>
       </div>

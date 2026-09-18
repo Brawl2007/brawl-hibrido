@@ -165,3 +165,25 @@
   font-size: 0.92rem;
   line-height: 1.5;
 }
+
+/*
+ * v106: uma linha que assenta em poucos jogos deixa de ter a mesma cara de uma
+ * assente em milhares.
+ *
+ * Discreta de propósito. Não é um erro nem um alerta — é uma ressalva, e uma
+ * ressalva aos gritos seria tão desonesta como não a ter: passaria a impressão
+ * de que o número está errado, quando o que se sabe é que é incerto.
+ */
+.marca-amostra {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--bh-warning);
+  border-radius: 999px;
+  color: var(--bh-warning);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+}
