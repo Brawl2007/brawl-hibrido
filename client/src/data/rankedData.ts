@@ -46,6 +46,15 @@ export type RankedRow = {
 
 export type MapSummary = {
   name: string;
+  /**
+   * O identificador oficial do mapa, o mesmo que o TopBrawl usa em
+   * `/rankeds/<id>` e que a Brawlify usa para a imagem.
+   *
+   * Opcional porque as snapshots gravadas antes disto não o trazem, e porque a
+   * ausência tem de significar "não se sabe" e não "não tem". Quem o usa cai
+   * na tabela escrita à mão quando ele falta.
+   */
+  id?: string;
   mode: string;
   modeId: string;
   brawlerCount: number;

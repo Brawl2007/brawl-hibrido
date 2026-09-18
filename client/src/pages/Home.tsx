@@ -137,8 +137,19 @@ const mapAssetIds: Record<string, string> = {
   ...additionalMapAssetIds,
 };
 
-function mapImageFor(mapName: string) {
-  const mapId = mapAssetIds[mapName];
+/**
+ * A imagem do mapa, pelo id oficial.
+ *
+ * O id vem da rotação lida — é o mesmo que o TopBrawl usa em `/rankeds/<id>` e
+ * o mesmo que a Brawlify usa para publicar a imagem. A tabela escrita à mão
+ * fica como recurso para snapshots antigas, que não trazem o id.
+ *
+ * Enquanto a tabela era o único caminho, um mapa que entrava na rotação
+ * aparecia sem imagem nenhuma até alguém se lembrar de a editar — e "sem
+ * imagem" era indistinguível de "a fonte não publica imagem deste mapa".
+ */
+function mapImageFor(map: { name: string; id?: string }) {
+  const mapId = map.id ?? mapAssetIds[map.name];
   return mapId ? `https://cdn.brawlify.com/maps/regular/${mapId}.png` : FUNDO_DE_MAPA;
 }
 
@@ -425,7 +436,7 @@ function MapSelector({
               key={map.name}
               className={`map-card ${selected ? "is-selected" : ""}`}
               onClick={() => onSelect(map)}
-              style={{ backgroundImage: fundoCom("linear-gradient(135deg, rgba(13,16,26,.78), rgba(22,15,43,.42))", selected ? mapImageFor(map.name) : FUNDO_DE_MAPA) }}
+              style={{ backgroundImage: fundoCom("linear-gradient(135deg, rgba(13,16,26,.78), rgba(22,15,43,.42))", selected ? mapImageFor(map) : FUNDO_DE_MAPA) }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24, delay: index * 0.025 }}
@@ -435,7 +446,7 @@ function MapSelector({
                 <b>#{String(index + 1).padStart(2, "0")}</b>
               </span>
               <span className="map-card-name">
-                <span className="map-card-thumb" style={fundoDeMapa(mapImageFor(map.name))} />
+                <span className="map-card-thumb" style={fundoDeMapa(mapImageFor(map))} />
                 {map.name}
               </span>
               {melhor ? (

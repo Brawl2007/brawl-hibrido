@@ -18,8 +18,19 @@ import { lerPaginaTopBrawl, type TopBrawlRow } from "../shared/topBrawlParser";
 import { RANKED_MAP_SOURCES } from "../shared/rankedMaps";
 export { RANKED_MAP_SOURCES };
 
-/** Recalcula os cartões de mapa a partir da snapshot efetivamente sincronizada. */
-export function deriveMapSummaries(rows: RankedRow[]): MapSummary[] {
+/**
+ * Recalcula os cartões de mapa a partir da snapshot efetivamente sincronizada.
+ *
+ * `idsPorMapa` traz o identificador oficial de cada mapa, vindo da rotação que
+ * acabou de ser lida. Existe porque as linhas não o carregam — só o nome do
+ * mapa — e sem ele o cliente ficava dependente de uma tabela nome→id escrita à
+ * mão para encontrar a imagem. Um mapa que entrou na rotação não está nessa
+ * tabela, e aparecia sem imagem nenhuma até alguém a editar.
+ *
+ * É opcional: quando falta, o campo fica por preencher, que é o que "não se
+ * sabe" deve parecer.
+ */
+export function deriveMapSummaries(rows: RankedRow[], idsPorMapa?: ReadonlyMap<string, string>): MapSummary[] {
   const grouped = new Map<string, RankedRow[]>();
   for (const row of rows) {
     const current = grouped.get(row.map) ?? [];
@@ -28,7 +39,7 @@ export function deriveMapSummaries(rows: RankedRow[]): MapSummary[] {
   }
 
   return Array.from(grouped, ([name, entries]) => {
-    const base = { name, mode: entries[0].mode, modeId: entries[0].modeId, brawlerCount: 0, topScore: 0 };
+    const base = { name, id: idsPorMapa?.get(name), mode: entries[0].mode, modeId: entries[0].modeId, brawlerCount: 0, topScore: 0 };
     const mapRows = grouped.get(base.name) ?? [];
     const scores = mapRows.flatMap((row) => typeof row.score === "number" ? [row.score] : []);
     const tiers: MapSummary["tiers"] = { S: 0, A: 0, B: 0 };
@@ -151,7 +162,13 @@ export function normalizeSnapshotPayload(payload: SnapshotPayload): SnapshotPayl
   const merged = new Map((payload.roster ? [] : allRankedRows.filter(row => allowed.has(row.map))).map(row => [`${row.map}::${row.brawler}`, row]));
   for (const row of payload.rows) if (allowed.has(row.map)) merged.set(`${row.map}::${row.brawler}`, row);
   const rows = normalizeRankedRows(Array.from(merged.values()));
-  return { ...payload, rows, maps: deriveMapSummaries(rows),
+  /**
+   * Os ids que a snapshot guardada já traz não se perdem ao normalizar. Sem
+   * isto, reler uma snapshot apagava o id de cada mapa e as imagens voltavam a
+   * depender da tabela escrita à mão.
+   */
+  const idsGuardados = new Map(payload.maps.flatMap((mapa) => mapa.id ? [[mapa.name, mapa.id] as const] : []));
+  return { ...payload, rows, maps: deriveMapSummaries(rows, idsGuardados),
     mapTeams: (payload.mapTeams ?? []).filter(team => allowed.has(team.map)),
     officialBrawlers: payload.officialBrawlers ?? [] };
 }
@@ -592,7 +609,7 @@ export function mergeRows(topBrawl: SourceResult, brawlPlanet: SourceResult, rot
 export function buildFallbackPayload(): SnapshotPayload {
   return {
       rows: allRankedRows,
-      maps: deriveMapSummaries(allRankedRows),
+      maps: deriveMapSummaries(allRankedRows, new Map(RANKED_MAP_SOURCES.map(([nome, id]) => [nome, id]))),
       mapTeams: [],
       officialBrawlers: [],
       updatedAt: new Date(0).toISOString(),
@@ -751,9 +768,15 @@ export async function syncRankedData(trigger: "scheduled" | "manual" | "bootstra
     }
 
     const version = `live-${capturedAt.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+    /**
+     * Os ids da rotação acabada de ler acompanham os cartões de mapa. É o que
+     * permite a um mapa que entrou na rotação ter imagem sem ninguém editar uma
+     * tabela — o id é o mesmo que a Brawlify usa para a publicar.
+     */
+    const idsDaRotacao = new Map(rotation.maps.flatMap((mapa) => mapa.id ? [[mapa.name, mapa.id] as const] : []));
     const payload: SnapshotPayload = {
       rows,
-      maps: deriveMapSummaries(rows),
+      maps: deriveMapSummaries(rows, idsDaRotacao),
       mapTeams: brawlPlanet.mapTeams ?? [],
       officialBrawlers,
       roster: evaluation.state,
