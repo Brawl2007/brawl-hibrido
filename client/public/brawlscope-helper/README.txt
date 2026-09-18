@@ -1,4 +1,4 @@
-Brawl Híbrido v98 — recolha, importação em lote e rotação automática
+Brawl Híbrido v99 — recolha, importação em lote e rotação automática
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -14,6 +14,12 @@ A rotação Ranked entra sozinha (novo)
 - Não tens de fazer nada de diferente: corre a fila como sempre. A rotação viaja no MESMO ficheiro dos mapas (topbrawl-mapas.json) e é aplicada quando o importas.
 - Quando entram mapas novos, eles aparecem na fila SEGUINTE. Por isso, numa rotação nova, vale a pena correr a fila duas vezes: a primeira aprende a rotação, a segunda recolhe os mapas novos.
 - Uma leitura do índice com poucos mapas é recusada e a rotação anterior mantém-se. Isso é de propósito: um parser partido lê zero mapas, e zero mapas tomado por verdade significaria "a rotação acabou".
+
+Mapas que saíram da rotação
+- A fila é exportada ANTES de o site saber a rotação nova, por isso, numa mudança de rotação, ela traz sempre mapas que já saíram. É inevitável, não é um erro.
+- A página de um mapa que saiu redirecciona. Antes isso parava a recolha inteira: parou aos 22 de 27 por causa do Beach Ball, com 21 mapas bons já lidos e cinco por ler.
+- Agora esse mapa é ignorado, aparece em "Páginas sem resultado" a dizer que provavelmente saiu da rotação, e a recolha segue.
+- Um desvio para FORA do site continua a parar tudo — isso não é um mapa que saiu, é outra coisa. E três redireccionamentos seguidos também param, porque aí já não é um mapa.
 
 Como saber se a atualização pegou mesmo
 - O topo do painel da extensão mostra a versão instalada, tirada do próprio manifesto. É esse o número a comparar.

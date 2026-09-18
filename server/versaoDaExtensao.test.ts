@@ -44,9 +44,17 @@ describe("versão da extensão que produziu o ficheiro", () => {
     expect(versaoEAnterior("10.0.0", "9.0.0")).toBe(false);
     expect(versaoEAnterior("96.0.0", "97.0.0")).toBe(true);
     expect(versaoEAnterior("97.0.0", "97.0.0")).toBe(false);
-    // Mais recente do que o site espera não é motivo para aviso nenhum.
-    expect(versaoEAnterior("98.0.0", "97.0.0")).toBe(false);
-    expect(avisoDeVersao("98.0.0")).toBeNull();
+    /**
+     * Mais recente do que o site espera não é motivo para aviso nenhum.
+     *
+     * O número é DERIVADO da constante, e não escrito à mão: a primeira versão
+     * disto fixava "98.0.0" como "mais recente", e o teste passou a falhar
+     * assim que a extensão chegou à 99 — a falhar por causa do teste, não do
+     * código.
+     */
+    const maisRecente = `${Number(VERSAO_DA_EXTENSAO.split(".")[0]) + 1}.0.0`;
+    expect(versaoEAnterior(maisRecente)).toBe(false);
+    expect(avisoDeVersao(maisRecente)).toBeNull();
   });
 
   it("o aviso diz a versão recebida e a esperada", () => {
