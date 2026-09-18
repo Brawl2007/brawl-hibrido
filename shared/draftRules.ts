@@ -73,6 +73,21 @@ export type DraftRuleSettings = {
   topCounterPenalty: number;
   sameClassPenalty: number;
   worstTeammatePenalty: number;
+  /**
+   * Interruptor: 0 desligado, 1 ligado. Não é uma percentagem.
+   *
+   * Ligado, o bónus de Counter contra um inimigo deixa de ser pago quando esse
+   * inimigo JÁ está respondido por um aliado que o tem no Top 10 dos counters
+   * dele — resposta a sério, não um delta positivo residual.
+   *
+   * A excepção: um candidato que responde a DOIS ou mais inimigos mantém o
+   * bónus inteiro. Um brawler que resolve duas frentes não é uma repetição, e
+   * cortá-lo seria castigar exatamente a escolha mais útil do draft.
+   *
+   * Desligado por omissão porque é uma opinião sobre drafting, não um dado
+   * publicado: quem acha que o delta de cada par vale por si deixa-o em 0.
+   */
+  coveredCounterSuppression: number;
 };
 
 export const defaultDraftRuleSettings: DraftRuleSettings = {
@@ -130,6 +145,7 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   topCounterPenalty: 0,
   sameClassPenalty: 0.03,
   worstTeammatePenalty: 0.03,
+  coveredCounterSuppression: 0,
 };
 
 export const draftRuleSettingKeys = Object.keys(defaultDraftRuleSettings) as (keyof DraftRuleSettings)[];

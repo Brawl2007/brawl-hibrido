@@ -269,14 +269,21 @@ describe("chips de pontuação do Draft", () => {
       },
     );
 
+    /**
+     * Este chip dizia "sem bónus repetido" e o Score pagava o bónus na mesma —
+     * o teste guardava a mentira em vez de a apanhar, porque só comparava o
+     * texto com ele próprio. Agora diz o que acontece, e com a regra desligada
+     * (o padrão) o que acontece é o bónus ser pago.
+     */
     expect(getActiveDraftBonuses(signal, inferDraftRole("Brock"))).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        label: "Counter unitário já coberto",
+        label: "Counter já coberto · bónus mantido",
         rate: 0,
         points: 0,
-        source: "Bea já counterado por Angelo · sem bónus repetido",
+        source: "Bea já counterado por Angelo · o delta deste par é teu e conta na mesma",
       }),
     ]));
+    expect(signal.scoreBreakdown.counterPoints).toBeGreaterThan(0);
   });
 
   it("expõe o risco literal da janela Top 16 sem alterar o Score antes de picks", () => {

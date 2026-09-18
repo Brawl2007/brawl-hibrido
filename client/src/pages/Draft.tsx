@@ -188,14 +188,30 @@ export function getActiveDraftBonuses(signal: DraftSignal, role: ReturnType<type
   }
 
   if (signal.bonusSources.coveredCounterTargets.length) {
-    const coveredTargets = signal.bonusSources.coveredCounterTargets
+    /*
+     * Este chip dizia "sem bónus repetido" — e era mentira. O motor tinha
+     * deixado de suprimir o bónus e pagava-o na mesma; o texto ficou para trás.
+     * Quem lia o cartão concluía, com razão, que a resposta dupla não valia
+     * nada, quando valia tudo.
+     *
+     * Agora diz qual dos dois casos está à frente, que passaram a ser dois de
+     * verdade: com a regra "resposta já coberta" ligada o bónus é retirado, com
+     * ela desligada é pago.
+     */
+    const suprimidos = signal.bonusSources.suppressedCounterTargets;
+    const cobertos = suprimidos.length
+      ? signal.bonusSources.fullyCoveredTargets.filter((coverage) => suprimidos.includes(coverage.enemy))
+      : signal.bonusSources.coveredCounterTargets;
+    const texto = cobertos
       .map((coverage) => `${coverage.enemy} já counterado por ${coverage.allies.join(", ")}`)
       .join(" · ");
     bonuses.push({
-      label: "Counter unitário já coberto",
+      label: suprimidos.length ? "Counter já coberto · bónus retirado" : "Counter já coberto · bónus mantido",
       rate: 0,
       points: 0,
-      source: `${coveredTargets} · sem bónus repetido`,
+      source: suprimidos.length
+        ? `${texto} · o aliado tem-no no Top 10 dele e respondes só a este inimigo`
+        : `${texto} · o delta deste par é teu e conta na mesma`,
     });
   }
 
@@ -1717,6 +1733,13 @@ type DraftRuleField = {
    * campo editável que não muda nada é pior do que um campo que não existe.
    */
   inactive?: string;
+  /**
+   * Campos que são um sim/não, não uma percentagem. Guardam-se na mesma
+   * preferência (0 ou 100), e aparecem como caixa em vez de campo numérico —
+   * pedir "quantos por cento" a uma regra que só liga e desliga é mentir sobre
+   * o que ela faz.
+   */
+  toggle?: true;
 };
 
 const draftRuleSections: Array<{ title: string; description: string; fields: DraftRuleField[] }> = [
@@ -1734,6 +1757,18 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
     fields: [
       { key: "banPick1", label: "Pick 1", helper: "O banido tem de ser counter literal do candidato E estar no Top 25 do mapa." }, { key: "banPick2", label: "Pick 2" }, { key: "banPick3", label: "Pick 3" },
       { key: "banPick4", label: "Pick 4" }, { key: "banPick5Plus", label: "Pick 5+" },
+    ],
+  },
+  {
+    title: "Resposta já coberta",
+    description: "O que fazer quando um inimigo já tem resposta de um aliado teu.",
+    fields: [
+      {
+        key: "coveredCounterSuppression",
+        toggle: true,
+        label: "Não repetir o bónus de Counter",
+        helper: "Ligado: se um aliado já countera o inimigo E o tem no Top 10 dos counters dele, o candidato não recebe bónus por counterar o mesmo inimigo. Excepção: quem responde a dois ou mais inimigos mantém o bónus inteiro. Desligado (padrão): cada par paga o delta publicado dele, haja ou não outra resposta.",
+      },
     ],
   },
   {
@@ -1950,12 +1985,25 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
                   {!inactive && field.helper ? <em className="rule-when" title={field.helper}>quando?</em> : null}
                 </span>
                 <div>
-                  <input
-                    type="number" min="0" max="100" step="0.5" inputMode="decimal"
-                    value={preference[field.key]}
-                    disabled={Boolean(inactive)}
-                    onChange={(event) => setRate(field.key, event.currentTarget.value)}
-                  /><em>%</em>
+                  {field.toggle ? (
+                    <>
+                      <input
+                        type="checkbox"
+                        checked={preference[field.key] >= 50}
+                        disabled={Boolean(inactive)}
+                        onChange={(event) => setRate(field.key, event.currentTarget.checked ? "100" : "0")}
+                      /><em>{preference[field.key] >= 50 ? "ligado" : "desligado"}</em>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        type="number" min="0" max="100" step="0.5" inputMode="decimal"
+                        value={preference[field.key]}
+                        disabled={Boolean(inactive)}
+                        onChange={(event) => setRate(field.key, event.currentTarget.value)}
+                      /><em>%</em>
+                    </>
+                  )}
                 </div>
                 {inactive
                   ? <small className="rule-inactive-note">{inactive}</small>

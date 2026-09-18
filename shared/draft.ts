@@ -557,6 +557,10 @@ export type DraftSignal = {
 	    nonTop30CounterBonusTargets: string[];
 	    /** Inimigos já cobertos por um aliado; anulam apenas o Counter unitário redundante. */
 	    coveredCounterTargets: Array<{ enemy: string; allies: string[] }>;
+	    /** Dos cobertos, aqueles em que o aliado tem mesmo o inimigo no Top 10 dele. */
+	    fullyCoveredTargets: Array<{ enemy: string; allies: string[] }>;
+	    /** Inimigos cujo bónus a regra opcional "resposta já coberta" retirou. Vazio com a regra desligada. */
+	    suppressedCounterTargets: string[];
 	    /** Bans no Top 25 que não geram bónus porque o candidato está fora do Top 30 base. */
 	    nonTop30BannedCounters: string[];
     /** Bans que counteram o candidato, mas estão fora do Top 25 de Score Híbrido base do mapa. */
@@ -1061,6 +1065,30 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     .filter((coverage) => coverage.allies.length > 0);
   const coveredCounterTargetKeys = new Set(coveredCounterTargets.map((coverage) => counterKey(coverage.enemy)));
   /**
+   * Cobertura a sério: o aliado tem aquele inimigo no Top 10 do que ele countera.
+   *
+   * A diferença entre isto e `coveredCounterTargets` é a que decide se vale a
+   * pena não pagar o bónus outra vez. Um aliado com um delta positivo residual
+   * contra o inimigo não o está a responder — está só a não perder. Um aliado
+   * que o tem nos dez primeiros da lista publicada dele, esse responde.
+   *
+   * A lista usada é a mesma que o bónus de ban usa, do outro lado: ali é o Top
+   * 10 de quem me countera, aqui é o Top 10 de quem o aliado countera.
+   */
+  const top10TargetKeysOf = (brawler: string) => new Set(
+    getCounterSourceProfiles(brawler, getBrawlScopeReading() === "byMode" ? context.mapModeId : undefined)
+      .filter((profile) => profile.source === "BrawlScope" || profile.source === "PL Prodigy")
+      .flatMap((profile) => profile.targets.slice(0, 10))
+      .map((relation) => counterKey(relation.brawler)),
+  );
+  const fullyCoveredTargets = coveredCounterTargets
+    .map((coverage) => ({
+      enemy: coverage.enemy,
+      allies: coverage.allies.filter((ally) => top10TargetKeysOf(ally).has(counterKey(coverage.enemy))),
+    }))
+    .filter((coverage) => coverage.allies.length > 0);
+  const fullyCoveredKeys = new Set(fullyCoveredTargets.map((coverage) => counterKey(coverage.enemy)));
+  /**
    * A supressão do "Counter unitário já coberto" era da era da taxa fixa: dar
    * +5% ao segundo brawler que respondia ao mesmo inimigo era mesmo pagar duas
    * vezes pela mesma resposta, porque a taxa não dizia nada sobre o par.
@@ -1203,11 +1231,36 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const banBonusRate = getBannedCounterBonusRate(context.pickNumber, ruleSettings);
   const banBonusPick = getBannedCounterBonusPick(context.pickNumber);
   const hybridPoints = metaSignal;
-  const brawlScopeEnemyDeltas = !isAlreadyChosen
+  const enemyDeltaPairs = !isAlreadyChosen
     ? enemyRows
-      .map((enemy) => getMatchupValue(row.brawler, enemy.brawler, context.mapModeId).total)
-      .filter((delta) => delta !== 0)
+      .map((enemy) => ({ enemy: enemy.brawler, delta: getMatchupValue(row.brawler, enemy.brawler, context.mapModeId).total }))
+      .filter((par) => par.delta !== 0)
     : [];
+  /**
+   * A regra opcional "resposta já coberta".
+   *
+   * Ligada, um inimigo que já tem resposta a sério de um aliado deixa de pagar
+   * bónus ao candidato seguinte: a resposta já está no tabuleiro, e pagá-la
+   * outra vez é contar duas vezes a mesma solução.
+   *
+   * A excepção é o que impede a regra de se virar contra quem a liga: um
+   * candidato que responde a DOIS ou mais inimigos mantém tudo. Esse não está a
+   * repetir a resposta do aliado — está a cobrir uma frente que mais ninguém
+   * cobre, e é precisamente a escolha que o Draft devia premiar.
+   *
+   * Conta-se por inimigos respondidos, não por deltas positivos: o que faz de
+   * alguém uma resposta dupla é enfrentar dois inimigos, não somar dois números.
+   */
+  const suppressionLigada = ruleSettings.coveredCounterSuppression >= 0.5;
+  const inimigosRespondidos = enemyDeltaPairs.filter((par) => par.delta > 0).length;
+  const respostaMultipla = inimigosRespondidos >= 2;
+  const suppressedCounterTargets = suppressionLigada && !respostaMultipla
+    ? enemyDeltaPairs.filter((par) => par.delta > 0 && fullyCoveredKeys.has(counterKey(par.enemy))).map((par) => par.enemy)
+    : [];
+  const suppressedKeys = new Set(suppressedCounterTargets.map(counterKey));
+  const brawlScopeEnemyDeltas = enemyDeltaPairs
+    .filter((par) => !suppressedKeys.has(counterKey(par.enemy)))
+    .map((par) => par.delta);
   // O ajuste configurável multiplica a percentagem publicada do confronto: 1
   // mantém o delta da fonte, 2 duplica, 3 triplica, 0,5 reduz para metade.
   /**
@@ -1269,7 +1322,9 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
 	const activeBonuses = includePresentation ? [
     ...(counterPoints ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · delta BrawlScope${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
     ...(nonTop30CounterBonusTargets.length ? [`Counter fora do Top 30 · 0% (${row.brawler} não recebe bónus de Counter de Pick neste mapa)`] : []),
-    ...(coveredCounterTargets.length ? [`Resposta já coberta (${coveredCounterTargets.map((coverage) => `${coverage.enemy} também counterado por ${coverage.allies.join(", ")}`).join(" · ")})`] : []),
+    ...(suppressedCounterTargets.length
+      ? [`Resposta já coberta · bónus retirado (${fullyCoveredTargets.filter((coverage) => suppressedCounterTargets.includes(coverage.enemy)).map((coverage) => `${coverage.enemy} já respondido por ${coverage.allies.join(", ")}`).join(" · ")})`]
+      : coveredCounterTargets.length ? [`Resposta já coberta · bónus mantido (${coveredCounterTargets.map((coverage) => `${coverage.enemy} também counterado por ${coverage.allies.join(", ")}`).join(" · ")})`] : []),
     ...(missingMidPoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingMid * 100}%` : `Mid em falta +${ruleSettings.missingMid * 100}%`] : []),
     ...(missingSidePoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingSide * 100}%` : `Lane em falta +${ruleSettings.missingSide * 100}%`] : []),
     ...(banPoints ? [`Counter banido +${banBonusRate * 100 * bannedCounters.length}% (${bannedCounters.length} counter${bannedCounters.length === 1 ? "" : "s"} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · pick ${banBonusPick}: +${banBonusRate * 100}% por counter)`] : []),
@@ -1439,6 +1494,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       nonTop30CounterBonusTargets,
       nonTop30BannedCounters,
       coveredCounterTargets,
+      fullyCoveredTargets,
+      suppressedCounterTargets,
       nonTop25BannedCounters,
       bannedCounters,
       registeredBans,
