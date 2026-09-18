@@ -187,33 +187,24 @@ export function getBannedCounterBonusPick(pickNumber?: number) {
 }
 
 /**
- * Impede que uma soma de sinais contextuais ultrapasse a leitura de mapa.
- * A margem aumenta somente à medida que o tabuleiro fica conhecido: no início,
- * o mapa domina; com picks reais, counters e composição podem decidir o ranking.
+ * O limite contextual foi retirado.
+ *
+ * POR QUE ISTO ESTÁ AQUI ESCRITO E NÃO LÁ EM CIMA EM CÓDIGO
+ *
+ * Havia um tecto por estado de Draft — +4% na abertura, +12% na resposta
+ * inicial, +16% a meio, +20% no fecho, com tectos próprios para os desbónus —
+ * aplicado sobre a Base híbrida. A ideia era o mapa continuar a mandar enquanto
+ * o tabuleiro estivesse vazio.
+ *
+ * O efeito prático era outro: as regras que se afinam no painel do Draft
+ * deixavam de valer o que dizem. Punha-se um bónus de Counter a +8%, viam-se os
+ * fatores somados no cartão, e o Score subia menos do que a soma — cortado por
+ * um tecto que não está em lado nenhum desse painel. Dois candidatos com
+ * fatores muito diferentes podiam encostar ao mesmo tecto e empatar.
+ *
+ * Agora o ajuste contextual é exatamente a soma dos fatores ativos: o que o
+ * cartão mostra é o que entra no Score.
  */
-export function getContextualAdjustmentCaps(
-  pickNumber: number | undefined,
-  allyCount: number,
-  enemyCount: number,
-  bannedCount: number,
-) {
-  const selectedCount = Math.max(0, allyCount) + Math.max(0, enemyCount);
-  const pick = getDraftPickNumber(pickNumber);
-  if (selectedCount === 0) {
-    return {
-      bonusRate: bannedCount > 0 ? 0.08 : 0.04,
-      penaltyRate: 0,
-      stage: "abertura" as const,
-    };
-  }
-  if (selectedCount === 1 || pick <= 2) {
-    return { bonusRate: 0.12, penaltyRate: 0.08, stage: "resposta inicial" as const };
-  }
-  if (selectedCount <= 3 || pick <= 4) {
-    return { bonusRate: 0.16, penaltyRate: 0.10, stage: "meio de draft" as const };
-  }
-  return { bonusRate: 0.20, penaltyRate: 0.14, stage: "fecho de draft" as const };
-}
 
 /** Sete classes oficiais, na terminologia apresentada pelo Draft em português. */
 export const officialBrawlerClasses = [
@@ -542,14 +533,9 @@ export type DraftSignal = {
     topCounterWindowSize: number;
 	    sameClassPenaltyPoints: number;
 	    worstTeammatePenaltyPoints: number;
-	    /** Soma original dos fatores contextuais, antes dos limites por estado de Draft. */
+	    /** Soma dos fatores contextuais a favor e contra. O ajuste é a diferença entre as duas. */
 	    rawContextualBonusPoints: number;
 	    rawContextualPenaltyPoints: number;
-	    contextualBonusCapPoints: number;
-	    contextualPenaltyCapPoints: number;
-	    contextualBonusCapRate: number;
-	    contextualPenaltyCapRate: number;
-	    contextualCapApplied: boolean;
 	    contextualAdjustment: number;
     activeBonuses: string[];
   };
@@ -1277,18 +1263,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
 
   const rawContextualBonusPoints = Math.max(0, counterPoints) + missingMidPoints + missingSidePoints + banPoints + openingLongRangePoints + synergyPoints + mapTeamSynergyPoints;
   const rawContextualPenaltyPoints = Math.max(0, -counterPoints) + enemyCounterPenaltyPoints + repeatedEnemyCounterPressurePoints + topTwentyCounterPenaltyPoints + sameClassPenaltyPoints + worstTeammatePenaltyPoints;
-  const contextualCaps = getContextualAdjustmentCaps(
-    context.pickNumber,
-    allyRows.length,
-    enemyRows.length,
-    rawBannedNames.length,
-  );
-  const contextualBonusCapPoints = hybridPoints * contextualCaps.bonusRate;
-  const contextualPenaltyCapPoints = hybridPoints * contextualCaps.penaltyRate;
-  const cappedContextualBonusPoints = Math.min(rawContextualBonusPoints, contextualBonusCapPoints);
-  const cappedContextualPenaltyPoints = Math.min(rawContextualPenaltyPoints, contextualPenaltyCapPoints);
-  const contextualCapApplied = rawContextualBonusPoints > contextualBonusCapPoints || rawContextualPenaltyPoints > contextualPenaltyCapPoints;
-	const contextualAdjustment = cappedContextualBonusPoints - cappedContextualPenaltyPoints;
+	// Sem tecto: o ajuste é a soma dos fatores ativos, tal como o cartão os lista.
+	const contextualAdjustment = rawContextualBonusPoints - rawContextualPenaltyPoints;
 	const draftScore = hybridPoints + contextualAdjustment;
 	const activeBonuses = includePresentation ? [
     ...(counterPoints ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · delta BrawlScope${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
@@ -1307,7 +1283,6 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ...(topTwentyCounterPenaltyPoints ? [`Desbônus Counter no Top ${topCounterWindowSize} -${topTwentyCounterPenaltyPercent}% (${topTwentyCounters.length} counter${topTwentyCounters.length === 1 ? "" : "s"}: ${topTwentyCounters.join(", ")})`] : []),
     ...(sameClassPenaltyPoints ? [`Desbônus Mesma Classe (${candidateClass}) -${ruleSettings.sameClassPenalty * 100 * sameClassCount}% — ativado por ${sameClassTriggerAllies.join(", ")}`] : []),
     ...(worstTeammatePenaltyPoints ? [`Worst Teammate -${ruleSettings.worstTeammatePenalty * 100 * activeWorstTeammates.length}% (${activeWorstTeammates.join(", ")})`] : []),
-    ...(contextualCapApplied ? [`Limite contextual ${contextualCaps.stage}: +${contextualCaps.bonusRate * 100}% / -${contextualCaps.penaltyRate * 100}% sobre a Base híbrida`] : []),
   ] : [];
   // Mantido como alias transitório para contratos existentes do Draft.
   const coachScore = draftScore;
@@ -1393,9 +1368,6 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   if (worstTeammatePenaltyPoints) {
     reasons.push(`Desbônus Worst Teammate -${ruleSettings.worstTeammatePenalty * 100 * activeWorstTeammates.length}%: ${activeWorstTeammates.join(", ")} ${activeWorstTeammates.length === 1 ? "é aliado identificado" : "são aliados identificados"} pelo Brawl Planet como combinação negativa para ${row.brawler}.`);
   }
-  if (contextualCapApplied) {
-    reasons.push(`Limite de ${contextualCaps.stage}: os fatores contextuais foram limitados a +${contextualCaps.bonusRate * 100}% e -${contextualCaps.penaltyRate * 100}% da Base híbrida para o mapa continuar dominante neste estado do Draft.`);
-  }
   reasons.push(`Base híbrida: ${hybridPoints.toFixed(2)} pts. Bónus ativos: ${activeBonuses.length ? activeBonuses.join(" · ") : "nenhum"}. Total: ${draftScore.toFixed(2)} pts.`);
   if (coverage < 0.5) {
     reasons.push("Nota: confiança ajustada por amostragem parcial nas fontes web.");
@@ -1450,11 +1422,6 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
 	      worstTeammatePenaltyPoints,
 	      rawContextualBonusPoints,
 	      rawContextualPenaltyPoints,
-	      contextualBonusCapPoints,
-	      contextualPenaltyCapPoints,
-	      contextualBonusCapRate: contextualCaps.bonusRate,
-	      contextualPenaltyCapRate: contextualCaps.penaltyRate,
-	      contextualCapApplied,
 	      contextualAdjustment,
       activeBonuses,
     },

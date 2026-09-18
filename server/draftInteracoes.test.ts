@@ -90,34 +90,46 @@ describe("regras do Draft a interagir", () => {
   });
 
   /**
-   * O limite contextual é uma PROPORÇÃO dos Pontos Base, não um número fixo.
+   * Os fatores contextuais entram inteiros, seja qual for a Base.
    *
-   * Se fosse fixo, mexer na escada vitória/uso — que mexe nos Pontos Base —
-   * apertaria ou afrouxaria o limite sem ninguém o pedir. É exatamente a
-   * forma de erro que este ficheiro existe para apanhar.
+   * Aqui havia dois testes a guardar um tecto por estado de Draft: que ele era
+   * uma proporção dos Pontos Base e não um número fixo, e que o corte era
+   * declarado quando acontecia. O tecto saiu — as regras que se afinam no painel
+   * do Draft passam a valer o que dizem.
+   *
+   * O que continua a valer a pena guardar é o que o tecto obrigava a explicar: a
+   * conta tem de bater certo. O ajuste é a soma dos bónus menos a soma dos
+   * desbónus, e o Score é a Base mais esse ajuste — com Base baixa ou alta.
    */
-  it("o limite contextual acompanha os Pontos Base em vez de ser um valor fixo", () => {
+  it("o ajuste é a soma dos fatores, com Pontos Base baixos ou altos", () => {
     setCounterSyncSnapshot(snapshotComDupla());
     const contexto = { mapModeId: "knockout", allyRows: [gus], pickNumber: 2 as const };
     const baixo = calculateDraftSignal({ ...nori, score: 40 }, contexto);
     const alto = calculateDraftSignal({ ...nori, score: 90 }, contexto);
 
     expect(alto.scoreBreakdown.hybridPoints).toBeGreaterThan(baixo.scoreBreakdown.hybridPoints);
-    expect(alto.scoreBreakdown.contextualBonusCapPoints)
-      .toBeGreaterThan(baixo.scoreBreakdown.contextualBonusCapPoints);
-    // A mesma taxa nos dois: o que mudou foram os pontos a que ela se aplica.
-    expect(alto.scoreBreakdown.contextualBonusCapRate)
-      .toBeCloseTo(baixo.scoreBreakdown.contextualBonusCapRate, 6);
+    for (const sinal of [baixo, alto]) {
+      const { rawContextualBonusPoints, rawContextualPenaltyPoints, contextualAdjustment, hybridPoints } = sinal.scoreBreakdown;
+      expect(contextualAdjustment).toBeCloseTo(rawContextualBonusPoints - rawContextualPenaltyPoints, 6);
+      expect(sinal.draftScore).toBeCloseTo(hybridPoints + contextualAdjustment, 6);
+    }
+    /**
+     * Os fatores são taxas sobre a Base, por isso a Base maior leva mais pontos
+     * de ajuste — mas a mesma percentagem. É a proporcionalidade que o antigo
+     * teste do tecto guardava, e que continua a ser verdade sem ele.
+     */
+    expect(alto.scoreBreakdown.contextualAdjustment).toBeGreaterThan(baixo.scoreBreakdown.contextualAdjustment);
+    expect(alto.scoreBreakdown.contextualAdjustment / alto.scoreBreakdown.hybridPoints)
+      .toBeCloseTo(baixo.scoreBreakdown.contextualAdjustment / baixo.scoreBreakdown.hybridPoints, 6);
   });
 
   /**
-   * Quando o limite corta, o corte é dito — e nunca aumenta o total.
+   * Nada é cortado, nem no cenário mais carregado do ficheiro.
    *
-   * Um limite que cortasse em silêncio deixava o ecrã a explicar bónus que não
-   * chegaram ao Score, que é a mesma doença da conta que não bate certo, do
-   * lado contrário.
+   * Este é o caso com dupla, trio e composição do mapa todos ativos ao mesmo
+   * tempo — o que mais fatores acumula, e por isso o que o tecto mais cortava.
    */
-  it("o corte do limite é declarado e nunca sobe o total", () => {
+  it("o cenário com mais fatores ativos chega inteiro ao Score", () => {
     setCounterSyncSnapshot(snapshotComDupla());
     const sinal = calculateDraftSignal(nori, {
       mapModeId: "knockout",
@@ -126,13 +138,11 @@ describe("regras do Draft a interagir", () => {
       mapTeams: composicaoDoMapa as never,
       pickNumber: 3,
     });
-    const { rawContextualBonusPoints, contextualBonusCapPoints, contextualAdjustment, contextualCapApplied } = sinal.scoreBreakdown;
+    const { rawContextualBonusPoints, rawContextualPenaltyPoints, contextualAdjustment } = sinal.scoreBreakdown;
 
-    expect(contextualAdjustment).toBeLessThanOrEqual(rawContextualBonusPoints + 1e-9);
-    if (rawContextualBonusPoints > contextualBonusCapPoints) {
-      expect(contextualCapApplied).toBe(true);
-      expect(contextualAdjustment).toBeCloseTo(contextualBonusCapPoints, 6);
-    }
+    expect(rawContextualBonusPoints).toBeGreaterThan(0);
+    expect(contextualAdjustment).toBeCloseTo(rawContextualBonusPoints - rawContextualPenaltyPoints, 6);
+    expect(pontosDosChipsVisiveis(sinal.scoreBreakdown)).toBeCloseTo(rawContextualBonusPoints, 6);
     expect(sinal.draftScore).toBeCloseTo(sinal.scoreBreakdown.hybridPoints + contextualAdjustment, 6);
   });
 
