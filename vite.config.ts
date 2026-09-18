@@ -178,8 +178,37 @@ async function carregarRuntimeManus(): Promise<Plugin[]> {
  * documentada de esperar por alguma coisa aqui — mais segura do que um `await`
  * à cabeça do ficheiro, que depende de como cada versão o compila.
  */
+/**
+ * Tira do HTML a etiqueta de analytics quando ela não está configurada.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * O `index.html` traz `<script src="%VITE_ANALYTICS_ENDPOINT%/umami">`. O Vite
+ * substitui `%VAR%` pelas variáveis que existem — e quando a variável NÃO
+ * existe, deixa o texto tal e qual. O resultado foi para produção: o navegador
+ * de cada visitante pedia literalmente
+ *
+ *     /%VITE_ANALYTICS_ENDPOINT%/umami
+ *
+ * e levava 400. Um pedido falhado e um erro na consola, em cada carregamento,
+ * para toda a gente, desde que isto foi publicado. Não parte nada — e é
+ * precisamente por não partir nada que ninguém reparou.
+ *
+ * Com a variável definida, a etiqueta fica e passa a apontar para o sítio
+ * certo. Sem ela, não se serve uma etiqueta que não pode funcionar.
+ */
+function vitePluginAnalyticsOpcional(): Plugin {
+  return {
+    name: "analytics-opcional",
+    transformIndexHtml(html) {
+      if (process.env.VITE_ANALYTICS_ENDPOINT) return html;
+      return html.replace(/\s*<script[^>]*%VITE_ANALYTICS_ENDPOINT%[^>]*><\/script>/g, "");
+    },
+  };
+}
+
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), jsxLocPlugin(), ...(await carregarRuntimeManus()), vitePluginManusDebugCollector()],
+  plugins: [react(), tailwindcss(), jsxLocPlugin(), ...(await carregarRuntimeManus()), vitePluginManusDebugCollector(), vitePluginAnalyticsOpcional()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

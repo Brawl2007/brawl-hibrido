@@ -2,7 +2,16 @@
 <html lang="pt-PT">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <!--
+      Sem `maximum-scale=1`: bloqueava o zoom com dois dedos no telemóvel.
+
+      Quem precisa de aproximar para ler — e há muito texto a 7 px neste
+      desenho — ficava sem poder fazê-lo. Não se ganhava nada com o bloqueio:
+      serve para evitar o salto de zoom que o iOS dá ao tocar num campo de
+      texto, e isso resolve-se com o tamanho da letra do campo, não tirando o
+      zoom a toda a gente.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b0e14" />
     <meta name="description" content="Brawl Híbrido — inteligência competitiva para a rotação Ranked de Brawl Stars." />
     <link rel="icon" type="image/svg+xml" href="/marca/logo-provisorio.svg" />

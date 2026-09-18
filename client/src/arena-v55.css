@@ -226,3 +226,19 @@
 .intro-badge.is-velho .intro-badge-idade {
   color: var(--bh-warning);
 }
+
+
+/*
+ * v108: o botão de fechar o menu media 26x26 no telemóvel.
+ *
+ * É o botão que se carrega com o polegar, no ecrã pequeno, e era o alvo mais
+ * pequeno da página. A recomendação de toque são 44x44: a área passa a 44,
+ * sem o ícone mudar de tamanho — o que cresce é o sítio onde se pode acertar.
+ */
+.sidebar-close {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
