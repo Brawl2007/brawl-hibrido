@@ -640,15 +640,27 @@ export function marcarQuemNaoEstaNoRanked(rows: readonly RankedRow[]): RankedRow
   const todos = new Set<string>();
   for (const row of rows) {
     todos.add(row.brawler);
-    if (row.topBrawlWinRate != null || row.brawlPlanetWinRate != null
-      || row.topBrawlUseRate != null || row.brawlPlanetPickRate != null) temNumeros.add(row.brawler);
+    /**
+     * O sinal é a TAXA DE VITÓRIA, e só ela.
+     *
+     * A primeira versão disto aceitava também a taxa de uso, e não marcava
+     * ninguém — um no-op que passou nos testes porque o exemplo do teste tinha
+     * sido escrito a partir da minha suposição em vez dos dados reais. O
+     * TopBrawl publica `topBrawlUseRate: 0` para quem não está no Ranked, e não
+     * `null`: zero é um número, e `0 != null` é verdade.
+     *
+     * A taxa de vitória não tem essa ambiguidade. Quem nunca foi jogado não
+     * ganhou nem perdeu, e as duas fontes dizem `null` — que é a resposta certa
+     * e não um zero que parece medição.
+     */
+    if (row.topBrawlWinRate != null || row.brawlPlanetWinRate != null) temNumeros.add(row.brawler);
   }
   // Recolha falhada, e não plantel encolhido: fica tudo como estava.
   if (temNumeros.size * 2 < todos.size) return rows as RankedRow[];
 
   const semNada = new Set([...todos].filter((brawler) => !temNumeros.has(brawler)));
   if (!semNada.size) return rows as RankedRow[];
-  console.log(`[RankedSync] ${semNada.size} brawler(es) sem uma única linha das duas fontes: marcados como à espera do Ranked — ${[...semNada].join(", ")}.`);
+  console.log(`[RankedSync] ${semNada.size} brawler(es) sem taxa de vitória em nenhuma fonte: marcados como à espera do Ranked — ${[...semNada].join(", ")}.`);
   return rows.map((row) => semNada.has(row.brawler) ? { ...row, rankedStatus: "unavailable" as const } : row);
 }
 

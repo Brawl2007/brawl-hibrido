@@ -17,12 +17,27 @@ import type { RankedRow } from "../client/src/data/rankedData";
  * estava errado não era a forma de o mostrar, era a classificação.
  */
 
+/**
+ * A linha de quem NÃO está no Ranked, copiada da produção — não inventada.
+ *
+ * Isto é o ponto todo deste ficheiro. A primeira versão da regra não marcava
+ * ninguém, e passou nos testes na mesma, porque eu escrevi aqui
+ * `topBrawlUseRate: null` a partir do que supunha. Os dados reais dizem outra
+ * coisa: o TopBrawl publica `topBrawlUseRate: 0` para quem não está no Ranked.
+ * Zero é um número, `0 != null` é verdade, e a regra aceitava-o como medição.
+ *
+ * Copiado da snapshot `live-20260918174340`, linha do Cosmo em Belle's Rock:
+ *   score: null · tier: null · topBrawlWinRate: null · topBrawlUseRate: 0
+ *   winRate: null · usage: 0 · brawlerId: 16000109
+ */
 const linha = (brawler: string, mapa: string, comNumeros: boolean): RankedRow => ({
   map: mapa, mode: "Fute-Brawl", modeId: "brawl-ball", brawler,
   score: comNumeros ? 50 : null, tier: comNumeros ? "B" : null,
-  winRate: null, usage: null,
+  winRate: comNumeros ? 51 : null,
+  usage: comNumeros ? 12 : 0,
   topBrawlWinRate: comNumeros ? 51 : null,
-  topBrawlUseRate: comNumeros ? 12 : null,
+  // Zero, e não `null`: é isto que a fonte publica para quem não está no Ranked.
+  topBrawlUseRate: comNumeros ? 12 : 0,
   brawlPlanetWinRate: null, brawlPlanetPickRate: null,
   rankedStatus: "active",
 } as RankedRow);
