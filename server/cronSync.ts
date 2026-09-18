@@ -5,6 +5,7 @@ import { RANKED_SYNC_JOB, COUNTER_SYNC_JOB } from "./syncJobNames";
 import { syncRankedData } from "./rankedSync";
 import { syncCounterData } from "./counterSync";
 import { garantirArranque } from "./arranque";
+import { fecharExecucoesAbandonadas } from "./db";
 
 /**
  * A recolha periódica, para um alojamento sem processo de pé.
@@ -41,6 +42,25 @@ import { garantirArranque } from "./arranque";
  * por isso usa-se quase todo, com margem para a gravação final.
  */
 const ORCAMENTO_MS = Number(process.env.CRON_SYNC_BUDGET_MS ?? 240_000);
+
+/**
+ * Quanto tempo tem de sobrar para valer a pena começar os counters.
+ *
+ * Uma recolha cortada a meio não grava nada — a função é morta sem aviso e o
+ * trabalho todo é deitado fora. Começar com pouco tempo é portanto pior do que
+ * não começar: gasta a recolha e não deixa resultado. Este é o mínimo abaixo do
+ * qual se prefere assumir que não dá.
+ */
+const MINIMO_PARA_COUNTERS_MS = Number(process.env.CRON_SYNC_COUNTERS_MIN_MS ?? 120_000);
+
+/**
+ * Tempo acima do qual uma execução "a correr" já não está a correr.
+ *
+ * O máximo de uma função nesta plataforma são 300 segundos. Passado isso, ou
+ * acabou e gravou, ou foi morta e nunca vai gravar. Com folga para o relógio
+ * da base não bater certo ao segundo com o nosso.
+ */
+const EXECUCAO_ABANDONADA_MS = 15 * 60 * 1000;
 
 /**
  * Comparação que não denuncia o segredo pelo tempo que demora.
@@ -94,6 +114,16 @@ export async function handleCronSync(req: Request, res: Response) {
   await garantirArranque();
 
   /**
+   * Antes de começar, fechar o que ficou pendurado.
+   *
+   * Uma execução morta a meio nunca escreve o fim dela, e fica gravada como "a
+   * correr" para sempre. O painel passa a mostrar uma sincronização em curso
+   * que não existe, e quem olha fica à espera em vez de ir ver o que se passou.
+   */
+  const fechadas = await fecharExecucoesAbandonadas(EXECUCAO_ABANDONADA_MS);
+  if (fechadas) console.log(`[Cron] ${fechadas} execuções estavam marcadas como "a correr" sem ninguém a correr; fechadas como falhadas.`);
+
+  /**
    * A rotação Ranked primeiro, e é a única que corre sempre.
    *
    * São cerca de vinte páginas com duas em paralelo, o que cabe folgadamente
@@ -109,24 +139,42 @@ export async function handleCronSync(req: Request, res: Response) {
     startSyncJob(RANKED_SYNC_JOB, () => syncRankedData("scheduled"));
     await esperarPeloTrabalho(RANKED_SYNC_JOB);
   });
+  const rankedMs = Date.now() - inicio;
 
   /**
-   * Os counters só a pedido, e por um motivo prático.
+   * Os counters passam a correr também — o motivo para não correrem já não se
+   * aplica.
    *
-   * Uma recolha completa de counters são centenas de páginas espaçadas no
-   * tempo — minutos. Não cabe no tempo de uma função, e cortada a meio não
-   * grava nada, porque a função é morta sem aviso. Fica atrás de um sinal
-   * explícito para quem tiver um plano com tempo que chegue.
+   * A regra anterior era "centenas de páginas, minutos, não cabe". Isso era
+   * verdade quando a recolha incluía o BrawlScope, que é a fonte grande. Mas o
+   * `brawlscope.com` recusa pedidos vindos desta rede, tal como o TopBrawl: a
+   * parte cara nem chega a acontecer aqui, falha depressa e os dados dela
+   * entram pelas capturas do navegador. O que resta é o Brawl Planet e o PL
+   * Prodigy, que respondem daqui, e são cerca de uma centena de páginas com
+   * espaçamento de 120 ms e duas em paralelo.
+   *
+   * Consequência de estarem desligados: as relações de counter e as sinergias
+   * do Brawl Planet só mudavam quando alguém carregasse no botão à mão. As do
+   * Draft com elas.
+   *
+   * NÃO AFIRMO O TEMPO EXATO — não consigo medi-lo de fora desta rede. Por isso
+   * o que aqui está não é uma aposta: só começa se sobrar tempo que chegue, o
+   * tempo que demorou fica nos registos, e `CRON_SYNC_COUNTERS=false` desliga
+   * isto sem publicar nada caso a medição mostre que não cabe.
    */
-  const querCounters = req.query.counters === "1" || process.env.CRON_SYNC_COUNTERS === "true";
-  const counters = querCounters
-    ? await dentroDoOrcamento("Counters", fim, async () => {
-        startSyncJob(COUNTER_SYNC_JOB, () => syncCounterData("scheduled"));
-        await esperarPeloTrabalho(COUNTER_SYNC_JOB);
-      })
-    : { estado: "ignorado" as const };
+  const desligados = req.query.counters === "0" || process.env.CRON_SYNC_COUNTERS === "false";
+  const tempoQueSobra = fim - Date.now();
+  const counters = desligados
+    ? { estado: "desligado" as const }
+    : tempoQueSobra < MINIMO_PARA_COUNTERS_MS
+      ? { estado: "sem-tempo" as const }
+      : await dentroDoOrcamento("Counters", fim, async () => {
+          startSyncJob(COUNTER_SYNC_JOB, () => syncCounterData("scheduled"));
+          await esperarPeloTrabalho(COUNTER_SYNC_JOB);
+        });
+  const countersMs = desligados ? 0 : Date.now() - inicio - rankedMs;
 
   const duracaoMs = Date.now() - inicio;
-  console.log(`[Cron] recolha concluída em ${duracaoMs}ms · ranked=${ranked.estado} · counters=${counters.estado}`);
-  res.json({ ok: true, duracaoMs, ranked: ranked.estado, counters: counters.estado });
+  console.log(`[Cron] recolha concluída em ${duracaoMs}ms · ranked=${ranked.estado} (${rankedMs}ms) · counters=${counters.estado} (${countersMs}ms)${fechadas ? ` · ${fechadas} execuções abandonadas fechadas` : ""}`);
+  res.json({ ok: true, duracaoMs, ranked: ranked.estado, rankedMs, counters: counters.estado, countersMs, execucoesFechadas: fechadas });
 }

@@ -1,4 +1,5 @@
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
+import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
@@ -361,33 +362,27 @@ function DraftSidebar({ active }: { active: string }) {
 }
 
 /**
- * Idade dos dados em linguagem corrente. O objetivo não é precisão ao segundo —
- * é impedir que alguém decida um draft com dados de ontem sem dar por isso.
+ * Estado real dos dados no ecrã.
+ *
+ * Este chip já mostrou duas coisas falsas. Primeiro um rótulo fixo "Sync 1h",
+ * que não dizia nada sobre o que estava no ecrã. Depois a hora da
+ * sincronização, apresentada como a idade dos dados — e não é: a recolha
+ * automática volta a publicar as capturas do navegador com a hora de agora,
+ * por isso números lidos ontem apareciam como "Dados agora mesmo".
+ *
+ * Agora mostra QUANDO A FONTE FOI MESMA LIDA, e avisa quando essa leitura
+ * passa do limite. A hora da sincronização continua disponível, na explicação,
+ * onde é útil sem enganar ninguém.
  */
-function describeDataAge(capturedAt?: string | null) {
-  if (!capturedAt) return null;
-  const captured = new Date(capturedAt).getTime();
-  if (!Number.isFinite(captured)) return null;
-  const minutos = Math.max(0, Math.round((Date.now() - captured) / 60_000));
-  if (minutos < 1) return "agora mesmo";
-  if (minutos < 60) return `há ${minutos} min`;
-  const horas = Math.round(minutos / 60);
-  if (horas < 24) return `há ${horas} h`;
-  return `há ${Math.round(horas / 24)} dias`;
-}
-
-/**
- * Estado real da sincronização, em vez do rótulo fixo "Sync 1h" que estava aqui
- * antes. Aquele rótulo era simplesmente falso: a sincronização corre de 15 em 15
- * minutos e não dizia nada sobre a idade dos dados que estavam no ecrã.
- */
-function SyncStatusChip({ capturedAt, syncState, blockedSources }: {
+function SyncStatusChip({ capturedAt, sourceReadAt, syncState, blockedSources }: {
   capturedAt?: string | null;
+  sourceReadAt?: LeituraPorFonte | null;
   syncState: string;
   blockedSources: string[];
 }) {
-  const idade = describeDataAge(capturedAt);
-  const bundled = syncState === "bundled" || !idade;
+  const frescura = descreverFrescura(sourceReadAt);
+  const sincronizadaEm = idadeEmPalavras(capturedAt);
+  const bundled = syncState === "bundled";
 
   if (blockedSources.length) {
     return (
@@ -400,14 +395,35 @@ function SyncStatusChip({ capturedAt, syncState, blockedSources }: {
     );
   }
 
+  if (bundled) {
+    return (
+      <span className="live-chip" title="A mostrar o catálogo incluído no projeto. A sincronização ainda não trouxe dados novos nesta sessão.">
+        <span className="live-dot" /> Catálogo local
+      </span>
+    );
+  }
+
+  /**
+   * Sem data de leitura não se inventa uma. Uma snapshot gravada antes de este
+   * campo existir não sabe a idade dos seus dados, e dizer "agora mesmo" seria
+   * repetir o erro que isto veio corrigir.
+   */
+  if (!frescura.idade) {
+    return (
+      <span
+        className="live-chip"
+        title={`Esta snapshot não regista quando as fontes foram lidas.${sincronizadaEm ? ` Sincronizada ${sincronizadaEm} — o que diz quando o site correu a recolha, não de quando são os números.` : ""} A próxima recolha já o regista.`}
+      >
+        <span className="live-dot" /> Idade desconhecida
+      </span>
+    );
+  }
+
+  const explicacao = `Fonte mais antiga lida ${frescura.idade}.${sincronizadaEm ? ` Última sincronização ${sincronizadaEm}.` : ""} A sincronização republica o que já tem, por isso a hora dela não é a idade dos números.${frescura.velho ? " Passou de dois dias sem leitura nova: vale a pena correr a recolha no navegador." : ""}`;
+
   return (
-    <span
-      className="live-chip"
-      title={bundled
-        ? "A mostrar o catálogo incluído no projeto. A sincronização ainda não trouxe dados novos nesta sessão."
-        : `Última sincronização ${idade}. Corre sozinha de 15 em 15 minutos; "Atualizar agora" força já.`}
-    >
-      <span className="live-dot" /> {bundled ? "Catálogo local" : `Dados ${idade}`}
+    <span className={frescura.velho ? "live-chip is-warning" : "live-chip"} title={explicacao}>
+      {frescura.velho ? <AlertTriangle size={13} /> : <span className="live-dot" />} Dados {frescura.idade}
     </span>
   );
 }
@@ -1001,13 +1017,14 @@ function CountUp({ value, decimals = 1, className }: { value: number; decimals?:
   );
 }
 
-function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observedLabel, capturedAt, syncState, blockedSources }: {
+function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observedLabel, capturedAt, sourceReadAt, syncState, blockedSources }: {
   refreshProgress?: string | null;
   onReset: () => void;
   isRefreshing: boolean;
   onRefresh: () => void;
   observedLabel: string;
   capturedAt?: string | null;
+  sourceReadAt?: LeituraPorFonte | null;
   syncState: string;
   blockedSources: string[];
 }) {
@@ -1015,7 +1032,7 @@ function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observ
     <header className="topbar">
       <div className="topbar-crumbs"><span className="crumb-muted">Ranked</span><span>›</span><span className="crumb-muted">Brawl Híbrido</span><span>›</span><span className="crumb-active">Draft</span></div>
       <div className="topbar-actions">
-        <SyncStatusChip capturedAt={capturedAt} syncState={syncState} blockedSources={blockedSources} />
+        <SyncStatusChip capturedAt={capturedAt} sourceReadAt={sourceReadAt} syncState={syncState} blockedSources={blockedSources} />
         <span className="live-chip" title="Partidas Ranked observadas e deduplicadas; não alteram o Score até atingirem evidência suficiente."><span className="live-dot" /> {observedLabel}</span>
         {/*
           O rótulo mostra o passo real quando o servidor o reporta. "A atualizar…"
@@ -2307,6 +2324,7 @@ export default function Draft() {
           onRefresh={handleRefresh}
           observedLabel={observedLabel}
           capturedAt={rankedSync.capturedAt}
+          sourceReadAt={rankedSync.sourceReadAt}
           syncState={rankedSync.syncState}
           blockedSources={blockedSources}
         />

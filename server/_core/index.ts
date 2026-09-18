@@ -59,6 +59,7 @@ export function createApp() {
       nextRefreshAt: getNextRefreshAt(capturedAt)?.toISOString() ?? null,
       sourceStatus: snapshot.sourceStatus,
       sourceNotes: snapshot.sourceNotes,
+      sourceReadAt: snapshot.sourceReadAt,
       rowCount: snapshot.rowCount,
       payload: snapshot.payload,
     })}\n\n`);
