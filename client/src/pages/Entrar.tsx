@@ -48,7 +48,14 @@ export default function Entrar() {
 
           <h1 className="text-2xl font-bold text-slate-100 text-center mb-2">Entrar como dono</h1>
           <p className="text-sm text-slate-400 text-center mb-6">
-            O Draft, o diagnóstico e a colagem de fichas são só para ti.
+            {/*
+              Esta frase dizia "O Draft, o diagnóstico e a colagem de fichas são
+              só para ti" — e o Draft não é. Draftar, ver a matriz, o catálogo e
+              os mapas é de toda a gente e nunca pediu entrada; o que é só teu
+              são os comandos que mexem nos dados.
+            */}
+            "Atualizar agora", o diagnóstico das fontes, a chave da API e a colagem de fichas são só para ti.
+            O Draft e o resto do site são para toda a gente, sem entrar.
           </p>
 
           {semPalavraPasseDefinida && (

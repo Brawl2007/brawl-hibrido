@@ -39,6 +39,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useEhDono } from "@/lib/ehDono";
 import { trpc } from "@/lib/trpc";
 import { useSyncRefresh } from "@/lib/useSyncRefresh";
 import {
@@ -297,6 +298,10 @@ function Sidebar({
 function Topbar({ onMenu, capturedAt, lastStatus, liveState, onRefresh, isRefreshing, refreshProgress }: { onMenu: () => void; capturedAt: Date | string | null | undefined; lastStatus: string; liveState: "connecting" | "live" | "offline"; onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null }) {
   const isLive = Boolean(capturedAt) && lastStatus === "success";
   const liveLabel = liveState === "live" ? "Live · SSE" : liveState === "connecting" ? "A ligar…" : "Offline · fallback";
+  // "Atualizar agora" manda o servidor ir ler as fontes, e só o dono o pode
+  // fazer. A quem não pode, o site mostrava o botão na mesma e respondia com
+  // uma recusa depois do clique. A idade dos dados continua visível abaixo.
+  const ehDono = useEhDono();
   return (
     <header className="topbar">
       <button className="mobile-menu-button lg:hidden" onClick={onMenu} aria-label="Abrir menu">
@@ -309,10 +314,12 @@ function Topbar({ onMenu, capturedAt, lastStatus, liveState, onRefresh, isRefres
       </div>
       <div className="topbar-actions">
         <span className="live-chip"><span className="live-dot" /> {isLive ? liveLabel : "Snapshot local"}</span>
-        <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Última atualização: ${formatSyncDate(capturedAt)}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
-          <Activity size={16} className={isRefreshing ? "animate-spin" : undefined} />
-          <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
-        </button>
+        {ehDono ? (
+          <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Última atualização: ${formatSyncDate(capturedAt)}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
+            <Activity size={16} className={isRefreshing ? "animate-spin" : undefined} />
+            <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
+          </button>
+        ) : null}
         <div className="profile-chip">
           <span className="profile-avatar">BH</span>
           <span className="profile-label">Analista</span>
