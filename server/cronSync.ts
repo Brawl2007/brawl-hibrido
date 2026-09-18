@@ -6,6 +6,8 @@ import { syncRankedData } from "./rankedSync";
 import { syncCounterData } from "./counterSync";
 import { garantirArranque } from "./arranque";
 import { fecharExecucoesAbandonadas } from "./db";
+import { setSetting } from "./appSettings";
+import { RECOLHA_AUTOMATICA_SETTING, type RecolhaAutomatica } from "@shared/recolhaAutomatica";
 
 /**
  * A recolha periódica, para um alojamento sem processo de pé.
@@ -75,20 +77,62 @@ function segredoConfere(recebido: string, esperado: string) {
   return timingSafeEqual(a, b);
 }
 
-/** Corre `tarefa`, ou desiste se o orçamento de tempo já acabou. */
+/**
+ * Corre `tarefa` dentro do tempo que sobra, e desiste quando ele acaba.
+ *
+ * POR QUE A ESPERA TEM DE SER LIMITADA
+ *
+ * Isto olhava para o relógio UMA vez, antes de começar, e depois esperava pela
+ * tarefa sem limite nenhum. O orçamento não limitava coisa nenhuma: garantia
+ * apenas que uma tarefa não COMEÇAVA tarde demais.
+ *
+ * O que acontece a seguir não é teórico. Na recolha agendada de 18/09 às 05:01,
+ * a tarefa dos mapas não voltou, esta função ficou à espera dela, e a
+ * plataforma matou tudo aos 300 segundos. Uma função morta não escreve nada:
+ * nem a resposta, nem o registo, nem sequer o motivo. A execução ficou gravada
+ * como "a correr" durante as 24 horas seguintes, e as únicas sincronizações
+ * desse dia foram as que alguém fez à mão.
+ *
+ * O caminho interativo já fazia isto bem — ver `arrancarEEsperar` em
+ * `syncJobs.ts`, que corre a espera contra um relógio. Faltava aqui.
+ *
+ * A tarefa abandonada continua a correr em pano de fundo; não há como a parar.
+ * Mas quem a esperava deixa de ficar preso a ela, e isso é o que interessa:
+ * chega-se ao fim da função pelo nosso pé, com tempo para escrever o que se
+ * passou. Uma desistência registada vale mais do que um sucesso que ninguém
+ * chega a ver.
+ */
 async function dentroDoOrcamento<T>(
   nome: string,
   fim: number,
   tarefa: () => Promise<T>,
 ): Promise<{ estado: "ok" | "falhou" | "sem-tempo"; detalhe?: string; resultado?: T }> {
-  if (Date.now() >= fim) return { estado: "sem-tempo" };
+  const sobra = fim - Date.now();
+  if (sobra <= 0) return { estado: "sem-tempo" };
+
+  let alarme: ReturnType<typeof setTimeout> | undefined;
+  const ESGOTOU = Symbol("sem-tempo");
+  const relogio = new Promise<typeof ESGOTOU>((resolve) => {
+    alarme = setTimeout(() => resolve(ESGOTOU), sobra);
+    // Sem `unref`, este temporizador sozinho segurava o processo até ao fim.
+    (alarme as unknown as { unref?: () => void })?.unref?.();
+  });
+
   try {
-    const resultado = await tarefa();
-    return { estado: "ok", resultado };
+    const resultado = await Promise.race([tarefa(), relogio]);
+    if (resultado === ESGOTOU) {
+      // Em segundos quando são segundos: "orçamento de 0s" não diz nada a ninguém.
+      const quanto = sobra >= 1000 ? `${Math.round(sobra / 1000)}s` : `${sobra}ms`;
+      console.error(`[Cron] ${nome} não coube no orçamento de ${quanto}; segue-se em frente sem esperar por ela.`);
+      return { estado: "sem-tempo", detalhe: `não coube em ${quanto}` };
+    }
+    return { estado: "ok", resultado: resultado as T };
   } catch (error) {
     const detalhe = error instanceof Error ? error.message : String(error);
     console.error(`[Cron] ${nome} falhou; as outras fontes continuam: ${detalhe}`);
     return { estado: "falhou", detalhe };
+  } finally {
+    if (alarme) clearTimeout(alarme);
   }
 }
 
@@ -176,5 +220,31 @@ export async function handleCronSync(req: Request, res: Response) {
 
   const duracaoMs = Date.now() - inicio;
   console.log(`[Cron] recolha concluída em ${duracaoMs}ms · ranked=${ranked.estado} (${rankedMs}ms) · counters=${counters.estado} (${countersMs}ms)${fechadas ? ` · ${fechadas} execuções abandonadas fechadas` : ""}`);
+
+  /**
+   * Fica por escrito, onde o site o possa ler.
+   *
+   * Até aqui isto ia para o corpo da resposta — que só a plataforma recebe — e
+   * para o `console.log`, que obriga a ir aos registos do alojamento. Ou seja:
+   * a recolha automática podia falhar todos os dias sem que o site desse um
+   * único sinal. Falhou, e não deu.
+   *
+   * A gravação não pode derrubar a rota: se a base não responder, o que se
+   * perde é o registo, e o resto da recolha já está feito e gravado.
+   */
+  const registo: RecolhaAutomatica = {
+    comecouEm: new Date(inicio).toISOString(),
+    duracaoMs,
+    orcamentoMs: ORCAMENTO_MS,
+    ranked: { estado: ranked.estado, duracaoMs: rankedMs, detalhe: ranked.detalhe },
+    counters: { estado: counters.estado, duracaoMs: countersMs, detalhe: "detalhe" in counters ? counters.detalhe : undefined },
+    execucoesFechadas: fechadas,
+  };
+  try {
+    await setSetting(RECOLHA_AUTOMATICA_SETTING, JSON.stringify(registo));
+  } catch (error) {
+    console.error(`[Cron] não consegui guardar o registo da recolha: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   res.json({ ok: true, duracaoMs, ranked: ranked.estado, rankedMs, counters: counters.estado, countersMs, execucoesFechadas: fechadas });
 }

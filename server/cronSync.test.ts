@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const recolhas = vi.hoisted(() => ({ ranked: 0, counters: 0, demoraMs: 0, fechadas: 0 }));
+const recolhas = vi.hoisted(() => ({ ranked: 0, counters: 0, demoraMs: 0, fechadas: 0, nuncaAcaba: false, guardado: [] as Array<[string, string]> }));
 vi.mock("./rankedSync", () => ({
   syncRankedData: vi.fn(async () => {
     recolhas.ranked += 1;
+    // Uma recolha que nunca volta é o que aconteceu na produção às 05:01.
+    if (recolhas.nuncaAcaba) await new Promise(() => {});
     if (recolhas.demoraMs) await new Promise((r) => setTimeout(r, recolhas.demoraMs));
     return { ok: true };
   }),
@@ -13,10 +15,14 @@ vi.mock("./rankedSync", () => ({
 vi.mock("./counterSync", () => ({ syncCounterData: vi.fn(async () => { recolhas.counters += 1; return { ok: true }; }) }));
 vi.mock("./arranque", () => ({ garantirArranque: vi.fn(async () => undefined) }));
 vi.mock("./db", () => ({ fecharExecucoesAbandonadas: vi.fn(async () => recolhas.fechadas) }));
+vi.mock("./appSettings", () => ({
+  setSetting: vi.fn(async (chave: string, valor: string) => { recolhas.guardado.push([chave, valor]); }),
+}));
 
 import { handleCronSync } from "./cronSync";
 import { resetSyncJobsForTests } from "./syncJobs";
 import { CRON_DA_RECOLHA } from "@shared/agendamento";
+import { RECOLHA_AUTOMATICA_SETTING, avisoDaRecolha, lerRecolhaAutomatica } from "@shared/recolhaAutomatica";
 
 function pedido(auth?: string, query: Record<string, string> = {}) {
   return { headers: auth ? { authorization: auth } : {}, query } as never;
@@ -33,6 +39,7 @@ function resposta() {
 describe("recolha periódica na Vercel", () => {
   beforeEach(() => {
     recolhas.ranked = 0; recolhas.counters = 0; recolhas.demoraMs = 0; recolhas.fechadas = 0;
+    recolhas.nuncaAcaba = false; recolhas.guardado = [];
     resetSyncJobsForTests();
     process.env.CRON_SECRET = "segredo-de-teste";
     delete process.env.CRON_SYNC_COUNTERS;
@@ -172,4 +179,73 @@ describe("recolha periódica na Vercel", () => {
       expect(readFileSync(resolve(process.cwd(), entrada), "utf8")).toContain('app.get("/api/cron/sync", handleCronSync)');
     }
   });
+
+  /**
+   * O ORÇAMENTO TEM DE LIMITAR MESMO A ESPERA.
+   *
+   * Isto olhava para o relógio uma vez, antes de começar, e depois esperava
+   * pela recolha sem limite nenhum. Ou seja: garantia que uma tarefa não
+   * COMEÇAVA tarde demais, e nada mais do que isso.
+   *
+   * Na produção, a recolha agendada de 18/09 às 05:01 não voltou. A rota ficou
+   * presa nela e a plataforma matou tudo aos 300 segundos — e uma função morta
+   * não escreve nada: nem resposta, nem registo, nem motivo. A execução ficou
+   * gravada como "a correr" 24 horas, e as únicas sincronizações desse dia
+   * foram manuais.
+   *
+   * Sem este teste a regressão é silenciosa: tudo continua a passar, e só se
+   * descobre indo ver a produção — que foi como se descobriu da primeira vez.
+   */
+  it("não fica preso numa recolha que nunca acaba", async () => {
+    process.env.CRON_SYNC_BUDGET_MS = "50";
+    recolhas.nuncaAcaba = true;
+    vi.resetModules();
+    const { handleCronSync: comOrcamentoCurto } = await import("./cronSync");
+    const { res, dados } = resposta();
+
+    // O que importa é CHEGAR AQUI: antes, isto nunca resolvia.
+    await comOrcamentoCurto(pedido("Bearer segredo-de-teste"), res);
+
+    expect(dados.body).toMatchObject({ ok: true, ranked: "sem-tempo" });
+    // E não se gasta a fonte dos counters com o tempo já esgotado.
+    expect(recolhas.counters).toBe(0);
+    delete process.env.CRON_SYNC_BUDGET_MS;
+  }, 5000);
+
+  /**
+   * O que a recolha fez fica onde o site o possa ler.
+   *
+   * Antes ia para o corpo da resposta — que só a plataforma recebe — e para o
+   * `console.log`, que obriga a ir aos registos do alojamento. A recolha
+   * automática podia falhar todos os dias sem o site dar um único sinal.
+   */
+  it("deixa por escrito o que fez, para o site o poder mostrar", async () => {
+    const { res } = resposta();
+    await handleCronSync(pedido("Bearer segredo-de-teste"), res);
+
+    const [chave, valor] = recolhas.guardado.at(-1) ?? [];
+    expect(chave).toBe(RECOLHA_AUTOMATICA_SETTING);
+    const registo = lerRecolhaAutomatica(valor);
+    expect(registo?.ranked.estado).toBe("ok");
+    expect(registo?.counters.estado).toBe("ok");
+    expect(registo?.orcamentoMs).toBeGreaterThan(0);
+    expect(new Date(registo!.comecouEm).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("também deixa escrito quando correu mal, que é quando interessa", async () => {
+    process.env.CRON_SYNC_BUDGET_MS = "50";
+    recolhas.nuncaAcaba = true;
+    vi.resetModules();
+    const { handleCronSync: comOrcamentoCurto } = await import("./cronSync");
+    const { res } = resposta();
+    await comOrcamentoCurto(pedido("Bearer segredo-de-teste"), res);
+
+    const registo = lerRecolhaAutomatica(recolhas.guardado.at(-1)?.[1]);
+    expect(registo?.ranked.estado).toBe("sem-tempo");
+    // E a frase que o ecrã mostra diz de onde vêm os números que se estão a ver.
+    const aviso = avisoDaRecolha(registo);
+    expect(aviso).toContain("não coube no tempo");
+    expect(aviso).toContain("recolha anterior");
+    delete process.env.CRON_SYNC_BUDGET_MS;
+  }, 5000);
 });

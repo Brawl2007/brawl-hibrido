@@ -603,7 +603,65 @@ export function mergeRows(topBrawl: SourceResult, brawlPlanet: SourceResult, rot
       dataStatus: winRate !== null && usageValues.length ? "complete" : "partial",
     };
   }) as RankedRow[];
-  return normalizeRankedRows(rotation ? mergedRows.filter(row => rotation.some(map => map.name === row.map)) : mergedRows);
+  const naRotacao = rotation ? mergedRows.filter(row => rotation.some(map => map.name === row.map)) : mergedRows;
+  return normalizeRankedRows(marcarQuemNaoEstaNoRanked(naRotacao));
+}
+
+/**
+ * Um brawler sobre o qual NENHUMA fonte publicou nada não está no Ranked.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * O site marcava como `active` — elegível no Ranked — todos os brawlers, e
+ * tinha a prova do contrário à frente. O Cosmo e o Vince apareciam nos 26
+ * mapas, marcados elegíveis, com `score`, `tier` e as taxas das duas fontes
+ * todos a `null`. Não são elegíveis: ainda não foram libertados para Ranked, e
+ * é por isso mesmo que nem o TopBrawl nem o Brawl Planet têm uma linha sobre
+ * eles.
+ *
+ * As linhas nasciam assim porque o `base` de uma combinação mapa/brawler que
+ * ainda não existia escrevia `rankedStatus: "active"` à cabeça — uma suposição
+ * escrita uma vez, para uma pergunta a que os dados já respondem.
+ *
+ * Derivado, e não uma lista escrita à mão: no dia em que o Cosmo entrar no
+ * Ranked, as fontes começam a publicá-lo e ele passa a elegível sozinho. Uma
+ * lista teria de ser editada, e não seria — é o mesmo erro da tabela de imagens
+ * e da etiqueta da extensão.
+ *
+ * A GUARDA QUE IMPEDE O DESASTRE
+ *
+ * Se as duas fontes falharem, ninguém tem números, e a regra ingénua concluiria
+ * que o Ranked ficou sem brawlers. Uma leitura em falta nunca pode passar por
+ * ausência: abaixo de metade do plantel com números, não se reclassifica nada.
+ * É a mesma regra que protege a rotação em `MIN_PLAUSIBLE_MAPS`.
+ */
+export function marcarQuemNaoEstaNoRanked(rows: readonly RankedRow[]): RankedRow[] {
+  const temNumeros = new Set<string>();
+  const todos = new Set<string>();
+  for (const row of rows) {
+    todos.add(row.brawler);
+    /**
+     * O sinal é a TAXA DE VITÓRIA, e só ela.
+     *
+     * A primeira versão disto aceitava também a taxa de uso, e não marcava
+     * ninguém — um no-op que passou nos testes porque o exemplo do teste tinha
+     * sido escrito a partir da minha suposição em vez dos dados reais. O
+     * TopBrawl publica `topBrawlUseRate: 0` para quem não está no Ranked, e não
+     * `null`: zero é um número, e `0 != null` é verdade.
+     *
+     * A taxa de vitória não tem essa ambiguidade. Quem nunca foi jogado não
+     * ganhou nem perdeu, e as duas fontes dizem `null` — que é a resposta certa
+     * e não um zero que parece medição.
+     */
+    if (row.topBrawlWinRate != null || row.brawlPlanetWinRate != null) temNumeros.add(row.brawler);
+  }
+  // Recolha falhada, e não plantel encolhido: fica tudo como estava.
+  if (temNumeros.size * 2 < todos.size) return rows as RankedRow[];
+
+  const semNada = new Set([...todos].filter((brawler) => !temNumeros.has(brawler)));
+  if (!semNada.size) return rows as RankedRow[];
+  console.log(`[RankedSync] ${semNada.size} brawler(es) sem taxa de vitória em nenhuma fonte: marcados como à espera do Ranked — ${[...semNada].join(", ")}.`);
+  return rows.map((row) => semNada.has(row.brawler) ? { ...row, rankedStatus: "unavailable" as const } : row);
 }
 
 export function buildFallbackPayload(): SnapshotPayload {

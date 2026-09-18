@@ -40,6 +40,7 @@ import { importBrawlScopeCapture, getWreqStatus } from "./counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot, syncRankedData } from "./rankedSync";
 import { AGENDAMENTO_DA_RECOLHA } from "@shared/agendamento";
 import { ROTACAO_GUARDADA_SETTING, lerRotacaoGuardada } from "@shared/rotacaoGuardada";
+import { RECOLHA_AUTOMATICA_SETTING, lerRecolhaAutomatica } from "@shared/recolhaAutomatica";
 import { getBrawlPlanetMapTeamBoard } from "@shared/brawlPlanetMapTeams";
 import { getSnapshotSynergies } from "@shared/counterSyncSnapshot";
 import { brawlScopeSynergyData, normalizeBrawlScopeSynergyList } from "@shared/brawlScopeSynergyData";
@@ -180,6 +181,15 @@ export const appRouter = router({
          * que esta sincronização correu. Ver `shared/idadeDosDados.ts`.
          */
         sourceReadAt: snapshot.sourceReadAt,
+        /**
+         * O que a recolha AUTOMÁTICA fez da última vez.
+         *
+         * `runs` mostra execuções, mas não distingue o que morreu do que nunca
+         * escreveu o fim: uma recolha morta a meio fica lá como "a correr". Ver
+         * `shared/recolhaAutomatica.ts` — foi assim que a falha das 05:00
+         * passou um dia inteiro sem ninguém saber.
+         */
+        ultimaRecolhaAutomatica: lerRecolhaAutomatica(await getSetting(RECOLHA_AUTOMATICA_SETTING)),
         runs,
       };
     }),

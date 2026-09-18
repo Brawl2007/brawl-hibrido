@@ -146,3 +146,44 @@
 #perfil-sinergias .sourced-counter-copy > div { flex-wrap: wrap; }
 #perfil-sinergias .sourced-counter-copy strong { white-space: normal; overflow: visible; }
 #perfil-sinergias .sourced-counter-copy > small:first-of-type { font-size: 15px; font-weight: 800; color: var(--bh-text); }
+
+/*
+ * v103: a recolha automática falhava calada.
+ *
+ * Deliberadamente discreto e no fluxo do texto, e não uma caixa vermelha a
+ * meio do ecrã: isto não é um erro que a pessoa tenha de resolver agora, é o
+ * site a dizer de onde vêm os números que ela está a ver. O que o torna útil é
+ * aparecer só quando há mesmo alguma coisa a assinalar.
+ */
+.aviso-recolha {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--bh-warning);
+  border-radius: 0 8px 8px 0;
+  background: var(--bh-surface-2);
+  color: var(--bh-text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/*
+ * v106: uma linha que assenta em poucos jogos deixa de ter a mesma cara de uma
+ * assente em milhares.
+ *
+ * Discreta de propósito. Não é um erro nem um alerta — é uma ressalva, e uma
+ * ressalva aos gritos seria tão desonesta como não a ter: passaria a impressão
+ * de que o número está errado, quando o que se sabe é que é incerto.
+ */
+.marca-amostra {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--bh-warning);
+  border-radius: 999px;
+  color: var(--bh-warning);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+}
