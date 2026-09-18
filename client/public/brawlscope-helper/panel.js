@@ -7,17 +7,46 @@ async function action(action, extra = {}) {
     state = result.state; render(); $("error").textContent = "";
   } catch (error) { $("error").textContent = error.message; }
 }
+/**
+ * A versão vem do manifesto, e não de um número escrito à mão.
+ *
+ * O cabeçalho dizia "v61" enquanto o manifesto já ia na 95. Quem seguisse a
+ * instrução "confirma que diz v95" olhava para aqui, via v61 e concluía que a
+ * atualização tinha falhado — quando podia estar certa. Um número escrito à mão
+ * em dois sítios acaba sempre por discordar de si próprio.
+ */
+const VERSAO = chrome.runtime.getManifest().version;
+
 function render() {
   const mapas = Object.keys(state?.rankedMaps || {}).length;
+  const rejeitados = state?.rejeitados ?? [];
+  $("versao").textContent = `BRAWL HÍBRIDO · RECOLHA v${VERSAO}`;
   $("status").textContent = state
     ? `${state.cursor}/${state.urls.length} páginas processadas · ${Object.keys(state.profiles).length} fichas${mapas ? ` · ${mapas} mapas` : ""}${state.rankedRotation ? " · rotação lida" : ""} · ${Object.keys(state.errors).length} erros. ${state.message}`
     : "Carrega a fila exportada no site.";
   $("progress").max = state?.urls.length || 1; $("progress").value = state?.cursor || 0;
-  $("start").disabled = !state || state.running || state.cursor >= state.urls.length;
+
+  const semFila = !state;
+  const acabou = Boolean(state) && state.cursor >= state.urls.length;
+  $("start").disabled = semFila || state.running || acabou;
   $("pause").disabled = !state?.running; $("retry").disabled = !state || state.running || !Object.keys(state.errors).length;
   $("queue").disabled = !!state?.running;
   $("export").disabled = !state || (!Object.keys(state.profiles).length && !Object.keys(state.rankedMaps || {}).length && !state.rankedRotation);
   $("errors").textContent = Object.entries(state?.errors || {}).map(([url, error]) => `${url}: ${error}`).join("\n");
+
+  // Um botão cinzento sem explicação parece um botão avariado.
+  const porque = semFila
+    ? "Iniciar está desativado porque ainda não há fila carregada. Escolhe o ficheiro exportado pelo site na caixa acima. Se ao escolhê-lo aparecer um erro a vermelho, a extensão está mais antiga do que o site: descarrega o ZIP outra vez e carrega Recarregar em chrome://extensions."
+    : state.running
+      ? "A recolha está a correr. Usa Pausar para a interromper."
+      : acabou
+        ? "Esta fila chegou ao fim. Exporta os resultados e, se precisares de mais, carrega uma fila nova no site."
+        : "";
+  $("porque-cinzento").textContent = porque;
+  $("porque-cinzento").hidden = !porque;
+
+  $("bloco-rejeitados").hidden = !rejeitados.length;
+  $("rejeitados").textContent = rejeitados.map(({ url, motivo }) => `${url}: ${motivo}`).join("\n");
 }
 $("queue").onchange = async event => {
   try {

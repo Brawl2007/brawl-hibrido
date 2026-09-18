@@ -115,8 +115,24 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     let state = await read();
     if (message.action === "load") {
       if (busy || state?.running) throw new Error("Pausa a recolha antes de carregar outra fila.");
-      const urls = validateQueue(message.queue);
-      state = { id: crypto.randomUUID(), urls, cursor: 0, profiles: {}, rankedMaps: {}, rankedRotation: null, errors: {}, running: false, message: "Fila carregada. Inicia a recolha." };
+      const { urls, rejeitados } = validateQueue(message.queue);
+      /**
+       * Endereços recusados ficam à vista, mas NÃO em `errors`.
+       *
+       * `errors` é o que o botão de repetição volta a pôr na fila. Um endereço
+       * recusado por não ser reconhecido não pode voltar por essa porta — seria
+       * transformar a lista de recusados numa forma de contornar a validação, e
+       * a extensão acabaria a visitar exatamente o que se recusou a visitar.
+       *
+       * Ficam num campo só deles, que o painel mostra e a repetição ignora.
+       */
+      state = {
+        id: crypto.randomUUID(), urls, cursor: 0, profiles: {}, rankedMaps: {}, rankedRotation: null,
+        errors: {}, rejeitados, running: false,
+        message: rejeitados.length
+          ? `Fila carregada com ${urls.length} endereços · ${rejeitados.length} não reconhecidos por esta versão. Se forem muitos, atualiza a extensão.`
+          : "Fila carregada. Inicia a recolha.",
+      };
       await write(state);
     } else if (message.action === "start") {
       if (!state || busy) throw new Error("Aguarda a operação atual ou carrega uma fila.");
@@ -127,7 +143,16 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       await chrome.alarms.clear(ALARM);
     } else if (message.action === "retry") {
       if (!state || state.running || busy) throw new Error("Pausa antes de repetir erros.");
-      state.urls = Object.keys(state.errors); state.errors = {}; state.cursor = 0; state.tabId = undefined;
+      /**
+       * A repetição volta a passar pela validação, e não confia na lista.
+       *
+       * `errors` é escrito a partir do que aconteceu durante a recolha, e um
+       * dia pode passar a ser escrito a partir de outra coisa. Revalidar aqui
+       * custa nada e garante que esta porta nunca serve para visitar um
+       * endereço que a fila recusaria.
+       */
+      const { urls: paraRepetir } = validateQueue({ format: "brawlhibrido-queue-v1", urls: Object.keys(state.errors) });
+      state.urls = paraRepetir; state.errors = {}; state.rejeitados = []; state.cursor = 0; state.tabId = undefined;
       state.message = "Fila de erros preparada. Carrega Iniciar."; await write(state);
     }
     respond({ ok: true, state: await read() });

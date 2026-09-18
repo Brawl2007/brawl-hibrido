@@ -1,4 +1,4 @@
-Brawl Híbrido v95 — recolha rápida, importação em lote e rotação automática
+Brawl Híbrido v96 — recolha rápida, importação em lote e rotação automática
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -14,6 +14,12 @@ A rotação Ranked entra sozinha (novo)
 - Não tens de fazer nada de diferente: corre a fila como sempre. A rotação viaja no MESMO ficheiro dos mapas (topbrawl-mapas.json) e é aplicada quando o importas.
 - Quando entram mapas novos, eles aparecem na fila SEGUINTE. Por isso, numa rotação nova, vale a pena correr a fila duas vezes: a primeira aprende a rotação, a segunda recolhe os mapas novos.
 - Uma leitura do índice com poucos mapas é recusada e a rotação anterior mantém-se. Isso é de propósito: um parser partido lê zero mapas, e zero mapas tomado por verdade significaria "a rotação acabou".
+
+Se o botão Iniciar aparecer cinzento
+- Iniciar só fica ativo depois de uma fila carregar. Se escolheste o ficheiro e ele ficou cinzento na mesma, a fila não carregou — o painel diz porquê, por baixo dos botões.
+- A causa mais provável é a extensão estar mais antiga do que o site: o site aprendeu um endereço novo (o índice da rotação) que a extensão instalada ainda não conhece. Descarrega o ZIP outra vez, substitui os ficheiros na MESMA pasta e carrega Recarregar em chrome://extensions.
+- A versão instalada aparece no topo do painel, tirada do próprio manifesto. É esse o número a comparar com o do site.
+- A partir desta versão, um endereço desconhecido já não deita a fila toda fora: é posto de lado, aparece em "Endereços que esta versão não reconhece", e a recolha segue com o resto.
 
 Limites honestos
 - Não resolve nem contorna HTTP 403, CAPTCHA, verificações ou restrições do BrawlScope. A fila pausa se encontrar esses sinais. Não muda IP, fingerprint, user-agent nem extrai cookies.

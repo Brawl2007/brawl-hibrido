@@ -21,22 +21,95 @@ import { validateQueue } from "../client/public/brawlscope-helper/queue.js";
  */
 describe("a rotação passa a vir da extensão", () => {
   it("a fila aceita o índice da rotação, e não só as páginas de mapa", () => {
-    const aceites = validateQueue({
+    const { urls } = validateQueue({
       format: "brawlhibrido-queue-v1",
       urls: ["https://topbrawl.com/rankeds", "https://topbrawl.com/rankeds/15000007?rows=106"],
     });
-    expect(aceites).toContain("https://topbrawl.com/rankeds");
-    expect(aceites).toHaveLength(2);
+    expect(urls).toContain("https://topbrawl.com/rankeds");
+    expect(urls).toHaveLength(2);
   });
 
   it("continua a recusar o que a recolha não sabe ler", () => {
+    const bom = "https://topbrawl.com/rankeds/15000007?rows=106";
     for (const mau of [
       "https://topbrawl.com/rankeds?ordenar=1",
       "https://topbrawl.com/outra/coisa",
       "https://exemplo.test/rankeds",
     ]) {
-      expect(() => validateQueue({ format: "brawlhibrido-queue-v1", urls: [mau] })).toThrow();
+      const { urls, rejeitados } = validateQueue({ format: "brawlhibrido-queue-v1", urls: [mau, bom] });
+      // O que importa: a extensão nunca chega a VISITAR o que não conhece.
+      expect(urls).toEqual([bom]);
+      expect(rejeitados).toHaveLength(1);
     }
+  });
+
+  /**
+   * O que aconteceu a sério, e que esta fila não pode voltar a fazer.
+   *
+   * O site aprendeu um endereço novo — o índice da rotação — e passou a pô-lo à
+   * frente da fila. A extensão instalada não o conhecia, recusava-o, e com ele
+   * deitava fora as outras duzentas: o ficheiro não carregava, o botão Iniciar
+   * ficava cinzento, e a única pista era "Só páginas de mapa do TopBrawl" —
+   * uma frase sobre um endereço, para um problema que era de versão.
+   *
+   * A propriedade que interessava (nunca visitar o que não se conhece) é
+   * mantida recusando um a um. Deitar a fila fora não acrescentava segurança
+   * nenhuma; só tornava a falha total e muda.
+   */
+  it("um endereço que esta versão não conhece não deita a fila toda fora", () => {
+    const fila = [
+      "https://topbrawl.com/qualquer-coisa-do-futuro",
+      ...Array.from({ length: 26 }, (_, i) => `https://topbrawl.com/rankeds/150000${10 + i}?rows=106`),
+    ];
+    const { urls, rejeitados } = validateQueue({ format: "brawlhibrido-queue-v1", urls: fila });
+
+    expect(urls).toHaveLength(26);
+    expect(rejeitados).toHaveLength(1);
+    expect(urls).not.toContain("https://topbrawl.com/qualquer-coisa-do-futuro");
+  });
+
+  /**
+   * Quando NADA é reconhecido, a causa quase sempre é a versão — e a mensagem
+   * tem de o dizer, em vez de falar do primeiro endereço da lista.
+   */
+  it("sem nada reconhecido, a mensagem aponta para a versão da extensão", () => {
+    expect(() => validateQueue({
+      format: "brawlhibrido-queue-v1",
+      urls: ["https://topbrawl.com/futuro", "https://topbrawl.com/outro-futuro"],
+    })).toThrow(/extensão está mais antiga do que o site/);
+  });
+
+  /**
+   * A lista de recusados não pode virar uma porta das traseiras.
+   *
+   * O botão de repetição volta a pôr `errors` na fila. Se um endereço recusado
+   * entrasse por aí, a extensão acabaria a visitar exatamente o que se recusou
+   * a visitar — a validação deixaria de valer de nada.
+   */
+  it("os recusados ficam fora de errors, que é o que a repetição reutiliza", () => {
+    const worker = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/worker.js"), "utf8");
+    expect(worker).toContain("errors: {}, rejeitados,");
+    // E a repetição revalida, em vez de confiar na lista.
+    expect(worker).toContain('validateQueue({ format: "brawlhibrido-queue-v1", urls: Object.keys(state.errors) })');
+  });
+
+  /**
+   * O painel dizia "v61" enquanto o manifesto ia na 95. Quem seguisse a
+   * instrução "confirma que diz v95" via v61 e concluía que a atualização tinha
+   * falhado — podendo estar certa.
+   */
+  it("o painel mostra a versão do manifesto, não um número escrito à mão", () => {
+    const panel = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/panel.js"), "utf8");
+    expect(panel).toContain("chrome.runtime.getManifest().version");
+    const html = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/panel.html"), "utf8");
+    expect(html).not.toMatch(/v6\d/i);
+  });
+
+  /** Um botão cinzento sem explicação é indistinguível de um botão avariado. */
+  it("o painel explica porque é que Iniciar está desativado", () => {
+    const panel = readFileSync(resolve(process.cwd(), "client/public/brawlscope-helper/panel.js"), "utf8");
+    expect(panel).toContain("porque-cinzento");
+    expect(panel).toContain("ainda não há fila carregada");
   });
 
   /**
