@@ -51,10 +51,11 @@ const DESLIGADA = { coveredCounterSuppression: 0 };
  */
 const NOMES_DE_ENCHIMENTO = ["Shelly", "Colt", "Bull", "Brock", "Jessie", "Nita", "Dynamike", "Bo", "Tick", "Barley", "Poco", "Rosa"];
 
-function snapshot({ aliadoCounteraInimigo, enchimento = 0 }: { aliadoCounteraInimigo: boolean; enchimento?: number }): CounterSyncSnapshotPayload {
+function snapshot({ aliadoCounteraInimigo, enchimento = 0, bibiCounteraOCandidato = false }: { aliadoCounteraInimigo: boolean; enchimento?: number; bibiCounteraOCandidato?: boolean }): CounterSyncSnapshotPayload {
   const relations = [
     { owner: "Nori", direction: "targets" as const, attacker: "Nori", defender: "Pearl", source: "brawlscope" as const, sourceUrl: "https://brawlscope.test/nori", delta: -6 },
-    { owner: "Nori", direction: "targets" as const, attacker: "Nori", defender: "Bibi", source: "brawlscope" as const, sourceUrl: "https://brawlscope.test/nori", delta: -5 },
+    // Sinal invertido: com `delta: 5` é a Bibi a ganhar 5% ao Nori, ou seja um desbónus.
+    { owner: "Nori", direction: "targets" as const, attacker: "Nori", defender: "Bibi", source: "brawlscope" as const, sourceUrl: "https://brawlscope.test/nori", delta: bibiCounteraOCandidato ? 5 : -5 },
   ];
   if (aliadoCounteraInimigo) {
     /**
@@ -135,6 +136,33 @@ describe("resposta já coberta", () => {
     // Os dois deltas inteiros, incluindo o da Pearl que sozinha seria cortada.
     const semRegra = calculateDraftSignal(candidato, contexto({ allyRows: [aliado], enemyRows: [inimigo, outroInimigo], ruleSettings: DESLIGADA }) as never);
     expect(doisInimigos.scoreBreakdown.counterPoints).toBeCloseTo(semRegra.scoreBreakdown.counterPoints, 6);
+  });
+
+  it("retira o bónus, mas o desbónus mantém-se inteiro", () => {
+    /**
+     * A regra só tira o que o candidato GANHA.
+     *
+     * Aqui o Nori ganha 6% à Pearl (que o Gus já cobre) e perde 5% à Bibi. Com
+     * a regra ligada, os 6% saem — e os −5% ficam, porque um confronto perdido
+     * não deixa de existir por outra resposta estar coberta. O Score passa de
+     * +1% para −5%.
+     *
+     * Escrever a regra ao contrário — limpar tudo o que toca no inimigo
+     * coberto — daria a quem tem a resposta repetida um desconto no que perde,
+     * que é o oposto de uma supressão.
+     */
+    setCounterSyncSnapshot(snapshot({ aliadoCounteraInimigo: true, bibiCounteraOCandidato: true }));
+    const contextoDuplo = { allyRows: [aliado], enemyRows: [inimigo, outroInimigo] };
+    const desligada = calculateDraftSignal(candidato, contexto({ ...contextoDuplo, ruleSettings: DESLIGADA }) as never);
+    const ligada = calculateDraftSignal(candidato, contexto({ ...contextoDuplo, ruleSettings: LIGADA }) as never);
+    const base = ligada.scoreBreakdown.hybridPoints;
+
+    // Só a Pearl é respondida, por isso a excepção da resposta dupla não se aplica.
+    expect(ligada.bonusSources.suppressedCounterTargets).toEqual(["Pearl"]);
+    // +6 −5 = +1 sem a regra; −5 com a regra. O desbónus sobrevive inteiro.
+    expect(desligada.scoreBreakdown.counterPoints).toBeCloseTo(base * 0.01, 6);
+    expect(ligada.scoreBreakdown.counterPoints).toBeCloseTo(base * -0.05, 6);
+    expect(ligada.scoreBreakdown.rawContextualPenaltyPoints).toBeCloseTo(base * 0.05, 6);
   });
 
   it("sem aliado nenhum a cobrir, a regra ligada não muda nada", () => {
