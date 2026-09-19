@@ -270,7 +270,7 @@ export default function BrawlerDetail() {
   const [, params] = useRoute("/brawlers/:name");
   const [, navigate] = useLocation();
   const rankedSync = useRankedSync();
-  const { weights: hybridWeights } = useHybridWeights();
+  const { weights: hybridWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { topBrawlWeight } = useSourceBalance();
   const [selectedModeId, setSelectedModeId] = useState("global");
   /**
@@ -297,7 +297,7 @@ export default function BrawlerDetail() {
     counterSnapshotVersion,
   );
   const catalogRows = useMemo(() => [
-    ...normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, hybridWeights.winRate / 100, topBrawlWeight),
+    ...normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight, starPlayerWeight),
     ...(rankedSync.snapshot?.officialBrawlers ?? []).map((brawler) => ({
       map: "Ainda não disponível",
       mode: "Ranked",
@@ -310,7 +310,7 @@ export default function BrawlerDetail() {
       rankedStatus: "unavailable" as const,
     })),
     ...preRankedBrawlerCatalogRows,
-  ], [hybridWeights.winRate, rankedSync.snapshot?.officialBrawlers, rankedSync.snapshot?.rows]);
+  ], [winRateWeight, starPlayerWeight, topBrawlWeight, rankedSync.snapshot?.officialBrawlers, rankedSync.snapshot?.rows]);
   const catalog = useMemo(
     () => buildBrawlerCatalog(catalogRows, counterSnapshot),
     // `matrizesVivas.version` entra aqui para o perfil se refazer no momento em

@@ -255,11 +255,11 @@ export default function Brawlers() {
   const [rangeSort, setRangeSort] = useState<RangeSort>("highest");
   const [selectedName, setSelectedName] = useState("");
   const [mobileSidebar, setMobileSidebar] = useState(false);
-  const { weights: hybridWeights } = useHybridWeights();
+  const { weights: hybridWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { topBrawlWeight } = useSourceBalance();
   const { rules: draftRules } = useDraftRules();
 
-  const liveRows = useMemo(() => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, hybridWeights.winRate / 100, topBrawlWeight), [hybridWeights.winRate, topBrawlWeight, rankedSync.snapshot?.rows]);
+  const liveRows = useMemo(() => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight, starPlayerWeight), [winRateWeight, starPlayerWeight, topBrawlWeight, rankedSync.snapshot?.rows]);
   const officialCatalogRows = useMemo(() => (rankedSync.snapshot?.officialBrawlers ?? []).map((brawler) => ({
     map: "Ainda não disponível",
     mode: "Ranked",

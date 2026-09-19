@@ -57,8 +57,9 @@ import {
   type Tier,
 } from "@/data/rankedData";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { additionalBrawlerAssetIds, additionalMapAssetIds } from "@/data/additionalRankedData";
-import { useHybridWeights } from "@/lib/hybridWeights";
+import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights, type HybridWeightsPreference } from "@/lib/hybridWeights";
 import { officialSourceBalance, useSourceBalance, type SourceBalancePreference } from "@/lib/sourceBalance";
 import { buildMapsTsv } from "@shared/mapTsv";
 import { avisoDaRecolha } from "@shared/recolhaAutomatica";
@@ -84,7 +85,16 @@ const tierMeta: Record<Tier, { label: string; className: string; dot: string }> 
   B: { label: "Tier B", className: "tier-b", dot: "bg-[#94A3B8]" },
 };
 
-type RankingPreset = { id: string; name: string; winRateWeight: number };
+/**
+ * Uma divisão guardada com nome.
+ *
+ * `starPlayerWeight` é opcional de propósito: as predefinições já guardadas
+ * não o têm, e são lidas como o que eram quando foram guardadas — uma divisão
+ * Vitória/Uso, sem Star Player. Aplicar uma predefinição antiga desliga o Star
+ * Player, e isso está à vista na etiqueta do botão ("70/30" contra
+ * "50/30/20"), por isso ninguém aplica uma coisa e recebe outra.
+ */
+type RankingPreset = { id: string; name: string; winRateWeight: number; starPlayerWeight?: number };
 
 const RANKING_PRESETS_STORAGE_KEY = "brawl-hibrido:ranking-laboratory-presets:v2";
 
@@ -97,15 +107,29 @@ function readRankingPresets(): RankingPreset[] {
       if (!preset || typeof preset.name !== "string" || typeof preset.winRateWeight !== "number") return [];
       const weight = Math.round(preset.winRateWeight);
       if (weight < 0 || weight > 100) return [];
+      const star = typeof preset.starPlayerWeight === "number" ? Math.round(preset.starPlayerWeight) : 0;
+      // Uma soma impossível é uma predefinição corrompida, não uma a corrigir
+      // em silêncio: metade dos pesos certos daria um Score que não é o que o
+      // nome promete.
+      if (star < 0 || weight + star > 100) return [];
       return [{
-        id: typeof preset.id === "string" && preset.id ? preset.id : `${preset.name}-${weight}`,
+        id: typeof preset.id === "string" && preset.id ? preset.id : `${preset.name}-${weight}-${star}`,
         name: preset.name.trim().slice(0, 28),
         winRateWeight: weight,
+        starPlayerWeight: star,
       }];
     }).filter((preset) => preset.name.length > 0);
   } catch {
     return [];
   }
+}
+
+/** A etiqueta de uma predefinição: "70/30", ou "50/30/20" se guardar Star Player. */
+function presetLabel(preset: RankingPreset) {
+  const star = preset.starPlayerWeight ?? 0;
+  return star > 0
+    ? `${preset.winRateWeight}/${star}/${100 - preset.winRateWeight - star}`
+    : `${preset.winRateWeight}/${100 - preset.winRateWeight}`;
 }
 
 function formatScore(value: number | null | undefined) {
@@ -495,6 +519,7 @@ function RotationAverages({
   isRefreshing,
   winRateWeight,
   topBrawlWeight,
+  starPlayerWeight,
 }: {
   sourceRows: readonly RankedRow[];
   activeMaps: readonly MapSummary[];
@@ -503,6 +528,7 @@ function RotationAverages({
   isRefreshing: boolean;
   winRateWeight: number;
   topBrawlWeight: number;
+  starPlayerWeight: number;
 }) {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -516,8 +542,8 @@ function RotationAverages({
     [activeMaps, selectedMode],
   );
   const rows = useMemo(
-    () => buildRankedRotationAverages(sourceRows, mapsInScope, winRateWeight, topBrawlWeight),
-    [winRateWeight, topBrawlWeight, mapsInScope, sourceRows],
+    () => buildRankedRotationAverages(sourceRows, mapsInScope, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [winRateWeight, starPlayerWeight, topBrawlWeight, mapsInScope, sourceRows],
   );
   const mapCount = mapsInScope.length;
   const totalMapCount = selectedMode === "Todos" ? expectedMapCount : mapCount;
@@ -609,22 +635,32 @@ function RankChange({ delta, label }: { delta: number; label: string }) {
 }
 
 function RankingLaboratory({
-  winRateWeight,
-  onWinRateWeightChange,
+  weights,
+  onWeightsChange,
   sourceBalance,
   hasCustomBalance,
   onSourceBalanceChange,
 }: {
-  winRateWeight: number;
-  onWinRateWeightChange: (weight: number) => void;
+  weights: HybridWeightsPreference;
+  onWeightsChange: (preference: Partial<Pick<HybridWeightsPreference, "winRate" | "starPlayer" | "starPlayerEnabled">>) => void;
   sourceBalance: SourceBalancePreference;
   hasCustomBalance: boolean;
   onSourceBalanceChange: (topBrawl: number) => void;
 }) {
   const [presetName, setPresetName] = useState("");
   const [presets, setPresets] = useState<RankingPreset[]>(readRankingPresets);
-  const usageRateWeight = 100 - winRateWeight;
-  const isOfficialWeight = winRateWeight === 70;
+  const winRateWeight = weights.winRate;
+  const usageRateWeight = weights.usageRate;
+  const starPlayerWeight = weights.starPlayer;
+  const starLigado = weights.starPlayerEnabled;
+  const isOfficialWeight = winRateWeight === 70 && !starLigado;
+  /**
+   * O máximo do cursor do Star Player é o que sobra depois da vitória. Sem
+   * este limite dava para pedir 80% de vitória e 40% de Star Player, e a
+   * função que equilibra teria de cortar um valor que a pessoa tinha acabado
+   * de escolher — um cursor que se mexe e volta para trás sozinho.
+   */
+  const maximoDoStar = Math.max(0, 100 - winRateWeight);
 
   useEffect(() => {
     window.localStorage.setItem(RANKING_PRESETS_STORAGE_KEY, JSON.stringify(presets));
@@ -638,9 +674,10 @@ function RankingLaboratory({
     }
     setPresets((current) => {
       const matching = current.find((preset) => preset.name.toLocaleLowerCase("pt-PT") === name.toLocaleLowerCase("pt-PT"));
+      const guardado = { winRateWeight, starPlayerWeight: starLigado ? starPlayerWeight : 0 };
       const next = matching
-        ? current.map((preset) => preset.id === matching.id ? { ...preset, winRateWeight } : preset)
-        : [...current, { id: `${Date.now()}-${name}`, name, winRateWeight }];
+        ? current.map((preset) => preset.id === matching.id ? { ...preset, ...guardado } : preset)
+        : [...current, { id: `${Date.now()}-${name}`, name, ...guardado }];
       return next.slice(-8);
     });
     setPresetName("");
@@ -659,14 +696,54 @@ function RankingLaboratory({
       </div>
 
       <div className="weight-sandbox" aria-label="Configuração global local de pesos">
-        <div className="sandbox-title"><SlidersHorizontal size={17} /><div><strong>Pesos para este navegador</strong><span>{isOfficialWeight ? "Fórmula padrão 70% Vitória / 30% Uso" : `Ativo em mapas, ranking, média, Brawlers e Draft: ${winRateWeight}% Vitória / ${usageRateWeight}% Uso`}</span></div></div>
+        <div className="sandbox-title"><SlidersHorizontal size={17} /><div><strong>Pesos para este navegador</strong><span>{isOfficialWeight ? "Fórmula padrão 70% Vitória / 30% Uso" : `Ativo em mapas, ranking, média, Brawlers e Draft: ${hybridWeightsSentence(weights)}`}</span></div></div>
         <div className="weight-controls">
           {/* Mesma regra: o cursor mede a taxa de vitória, logo é ela que fica à direita. */}
           <div className="weight-readout"><span>Taxa de uso</span><b>{usageRateWeight}%</b></div>
-          <Slider value={[winRateWeight]} min={0} max={100} step={1} onValueChange={([value]) => onWinRateWeightChange(value ?? 70)} aria-label="Pesos do Score: arrastar para a direita dá mais peso à taxa de vitória" />
+          <Slider value={[winRateWeight]} min={0} max={100} step={1} onValueChange={([value]) => onWeightsChange({ winRate: value ?? 70 })} aria-label="Pesos do Score: arrastar para a direita dá mais peso à taxa de vitória" />
           <div className="weight-readout"><span>Taxa de vitória</span><b>{winRateWeight}%</b></div>
-          <button className="sandbox-reset" onClick={() => onWinRateWeightChange(70)} disabled={isOfficialWeight}><RotateCcw size={14} /> Restaurar 70/30</button>
+          <button className="sandbox-reset" onClick={() => onWeightsChange({ winRate: 70, starPlayerEnabled: false })} disabled={isOfficialWeight}><RotateCcw size={14} /> Restaurar 70/30</button>
         </div>
+      </div>
+
+      <div className="weight-sandbox" id="star-player-sandbox" aria-label="Star Player no Score Híbrido">
+        <div className="sandbox-title">
+          <Star size={17} />
+          <div>
+            <strong>Star Player <span className="sandbox-optional">opcional</span></strong>
+            <span>{starLigado
+              ? `Ativo: ${hybridWeightsSentence(weights)}`
+              : "Desligado. O Score é exatamente o de sempre, sem esta métrica."}</span>
+          </div>
+        </div>
+        <label className="sandbox-switch">
+          <Switch checked={starLigado} onCheckedChange={(ligado) => onWeightsChange({ starPlayerEnabled: ligado })} aria-label="Ligar ou desligar o Star Player no Score Híbrido" />
+          <span>{starLigado ? "A contar no Score" : "Fora do Score"}</span>
+        </label>
+        {starLigado ? <div className="weight-controls">
+          <div className="weight-readout"><span>Taxa de vitória</span><b>{winRateWeight}%</b></div>
+          <Slider
+            value={[Math.min(starPlayerWeight, maximoDoStar)]}
+            min={0}
+            max={maximoDoStar}
+            step={1}
+            onValueChange={([value]) => onWeightsChange({ starPlayer: value ?? 0 })}
+            aria-label="Fatia do Star Player no Score: o que não for vitória nem Star Player fica para o uso"
+          />
+          <div className="weight-readout"><span>Star Player</span><b>{starPlayerWeight}%</b></div>
+          <button className="sandbox-reset" onClick={() => onWeightsChange({ winRate: 50, starPlayer: 30 })} disabled={winRateWeight === 50 && starPlayerWeight === 30}>
+            <RotateCcw size={14} /> Usar 50/30/20
+          </button>
+        </div> : null}
+        <p className="sandbox-note">
+          O Brawl Planet publica, por mapa, a percentagem de partidas em que cada brawler foi eleito
+          <strong> Star Player</strong>. A taxa de vitória diz se a equipa ganhou; esta diz se foi
+          <strong> este brawler</strong> a puxar — e as duas não coincidem: na snapshot de produção
+          correlacionam 0,62, e afastam-se mais de 38 pontos em 10% dos casos.{" "}
+          <strong>Quem ainda não tiver Star Player publicado não é penalizado</strong>: a fatia dele
+          volta para a vitória e o uso, e o brawler é pontuado como se isto estivesse desligado. São
+          55 das 2808 linhas, quase todas de brawlers acabados de sair.
+        </p>
       </div>
 
       <div className="weight-sandbox" aria-label="Equilíbrio entre as fontes de estatísticas">
@@ -711,11 +788,11 @@ function RankingLaboratory({
         <div className="preset-save-controls">
           <label className="sr-only" htmlFor="ranking-preset-name">Nome da predefinição</label>
           <input id="ranking-preset-name" value={presetName} maxLength={28} onChange={(event) => setPresetName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") savePreset(); }} placeholder="Ex.: Vitória 75/25" />
-          <button onClick={savePreset}><BookmarkPlus size={14} /> Guardar {winRateWeight}/{usageRateWeight}</button>
+          <button onClick={savePreset}><BookmarkPlus size={14} /> Guardar {hybridWeightsLabel(weights)}</button>
         </div>
         {presets.length > 0 ? <div className="preset-list" aria-label="Predefinições guardadas">
           {presets.map((preset) => <div className="preset-chip" key={preset.id}>
-            <button className="preset-apply" onClick={() => onWinRateWeightChange(preset.winRateWeight)} aria-label={`Aplicar ${preset.name}, ${preset.winRateWeight}/${100 - preset.winRateWeight} globalmente`}><strong>{preset.name}</strong><span>{preset.winRateWeight}/{100 - preset.winRateWeight}</span></button>
+            <button className="preset-apply" onClick={() => onWeightsChange({ winRate: preset.winRateWeight, starPlayer: preset.starPlayerWeight ?? 0, starPlayerEnabled: (preset.starPlayerWeight ?? 0) > 0 })} aria-label={`Aplicar ${preset.name}, ${presetLabel(preset)} globalmente`}><strong>{preset.name}</strong><span>{presetLabel(preset)}</span></button>
             <button className="preset-remove" onClick={() => { setPresets((current) => current.filter((item) => item.id !== preset.id)); toast.success(`Predefinição “${preset.name}” removida.`); }} aria-label={`Remover a predefinição ${preset.name}`}><Trash2 size={13} /></button>
           </div>)}
         </div> : <p className="preset-empty">Guarda uma divisão para a aplicar rapidamente noutra visita.</p>}
@@ -726,8 +803,10 @@ function RankingLaboratory({
   );
 }
 
-function FormulaCard({ winRateWeight }: { winRateWeight: number }) {
-  const usageRateWeight = 100 - winRateWeight;
+function FormulaCard({ weights }: { weights: HybridWeightsPreference }) {
+  const winRateWeight = weights.winRate;
+  const usageRateWeight = weights.usageRate;
+  const starPlayerWeight = weights.starPlayerEnabled ? weights.starPlayer : 0;
   return (
     <section className="formula-card" id="formula">
       <div className="formula-card-glow" />
@@ -742,9 +821,11 @@ function FormulaCard({ winRateWeight }: { winRateWeight: number }) {
       </div>
       <p>Uma métrica de 0 a 100 que junta resultado observado e utilização real, agregados entre as fontes.</p>
       <div className="formula-equation">
-        <span>Taxa de vitória normalizada</span><b>× {(winRateWeight / 100).toFixed(2)}</b><i>+</i><span>Taxa de uso normalizada</span><b>× {(usageRateWeight / 100).toFixed(2)}</b>
+        <span>Taxa de vitória normalizada</span><b>× {(winRateWeight / 100).toFixed(2)}</b>
+        {starPlayerWeight > 0 ? <><i>+</i><span>Star Player normalizado</span><b>× {(starPlayerWeight / 100).toFixed(2)}</b></> : null}
+        <i>+</i><span>Taxa de uso normalizada</span><b>× {(usageRateWeight / 100).toFixed(2)}</b>
       </div>
-      <div className="formula-foot"><span className="formula-dot" /> Score Híbrido ativo = (Vitória média das fontes, normalizada no mapa × {winRateWeight}%) + (Uso médio das fontes, normalizado no mapa × {usageRateWeight}%). O Score 0–13 TopBrawl não entra no cálculo.</div>
+      <div className="formula-foot"><span className="formula-dot" /> Score Híbrido ativo = (Vitória média das fontes, normalizada no mapa × {winRateWeight}%){starPlayerWeight > 0 ? ` + (Star Player do Brawl Planet, normalizado no mapa × ${starPlayerWeight}%)` : ""} + (Uso médio das fontes, normalizado no mapa × {usageRateWeight}%). O Score 0–13 TopBrawl não entra no cálculo.</div>
     </section>
   );
 }
@@ -878,21 +959,20 @@ export default function Home() {
    * copiada em cada página era garantir que uma delas ficava para trás.
    */
   const { isRefreshing, progress: syncProgress, start: startRefresh } = useSyncRefresh();
-  const { weights: hybridWeights, updateWeights } = useHybridWeights();
+  const { weights: hybridWeights, updateWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { balance: sourceBalance, topBrawlWeight, hasCustomBalance, updateBalance } = useSourceBalance();
-  const winRateWeight = hybridWeights.winRate / 100;
   const liveRows = useMemo(
-    () => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight),
-    [rankedSync.snapshot?.rows, winRateWeight, topBrawlWeight],
+    () => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [rankedSync.snapshot?.rows, winRateWeight, starPlayerWeight, topBrawlWeight],
   );
   const liveMapSummaries = useMemo(
-    () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight),
-    [liveRows, rankedSync.snapshot?.maps, winRateWeight, topBrawlWeight],
+    () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [liveRows, rankedSync.snapshot?.maps, winRateWeight, starPlayerWeight, topBrawlWeight],
   );
   const liveModeOptions = useMemo(() => ["Todos", ...Array.from(new Set(liveMapSummaries.map((map) => map.mode)))], [liveMapSummaries]);
   const mapDisplayRows = useMemo(
-    () => buildMapDisplayRows(liveRows, liveMapSummaries, winRateWeight, topBrawlWeight),
-    [winRateWeight, topBrawlWeight, liveRows, liveMapSummaries],
+    () => buildMapDisplayRows(liveRows, liveMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [winRateWeight, starPlayerWeight, topBrawlWeight, liveRows, liveMapSummaries],
   );
   const [selectedMap, setSelectedMap] = useState<MapSummary>(() => liveMapSummaries.find((map) => map.name === "Beach Ball") ?? liveMapSummaries[0]);
   const [modeFilter, setModeFilter] = useState("Todos");
@@ -1029,16 +1109,17 @@ export default function Home() {
               isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching}
               winRateWeight={winRateWeight}
               topBrawlWeight={topBrawlWeight}
+              starPlayerWeight={starPlayerWeight}
             />
             <RankingLaboratory
-              winRateWeight={hybridWeights.winRate}
-              onWinRateWeightChange={updateWeights}
+              weights={hybridWeights}
+              onWeightsChange={updateWeights}
               sourceBalance={sourceBalance}
               hasCustomBalance={hasCustomBalance}
               onSourceBalanceChange={updateBalance}
             />
             <SourceComparison rows={currentRows} mapName={selectedMap.name} />
-            <FormulaCard winRateWeight={hybridWeights.winRate} />
+            <FormulaCard weights={hybridWeights} />
           </div>
         </main>
         <footer className="app-footer"><span>BRAWL HÍBRIDO / 26-map intelligence workspace</span><span>Feito para decisões melhores, não para picks cegos.</span></footer>

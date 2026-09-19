@@ -49,7 +49,7 @@ import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { allMapSummaries, allRankedRows, buildActiveRankedMapCatalog, normalizeRankedRows, resolveRankedMapSelection, type MapSummary, type RankedRow } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
-import { useHybridWeights } from "@/lib/hybridWeights";
+import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights } from "@/lib/hybridWeights";
 import { getWinRatePickWeight, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
@@ -362,8 +362,8 @@ function DraftSidebar({ active }: { active: string }) {
       </nav>
       <div className="sidebar-spacer" />
       <div className="sidebar-note"><div className="note-icon"><Zap size={16} /></div><div><strong>Draft Híbrido</strong><p>Escolhe por pontos, contexto e posição ideal.</p></div></div>
-      <div className="sidebar-footer" title={`Vitória ${weights.winRate}% / Uso ${weights.usageRate}% · TopBrawl ${balance.topBrawl}% / Brawl Planet ${balance.brawlPlanet}%`}>
-        <span className="footer-dot" /> Dados por mapa · Score {weights.winRate}/{weights.usageRate}
+      <div className="sidebar-footer" title={`${hybridWeightsSentence(weights)} · TopBrawl ${balance.topBrawl}% / Brawl Planet ${balance.brawlPlanet}%`}>
+        <span className="footer-dot" /> Dados por mapa · Score {hybridWeightsLabel(weights)}
       </div>
     </aside>
   );
@@ -2048,21 +2048,20 @@ export default function Draft() {
    * impede o botão de ficar preso.
    */
   const { isRefreshing, progress: syncProgress, start: startRefresh, processHealth } = useSyncRefresh();
-  const { weights: hybridWeights } = useHybridWeights();
+  const { weights: hybridWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { topBrawlWeight } = useSourceBalance();
   const { reading: brawlScopeReading, setReading: setBrawlScopeReadingPreference } = useBrawlScopeReading();
   const { preference: draftRulePreference, rules: draftRuleSettings, hasCustomRules, updatePreference: updateDraftRulePreference, resetPreference: resetDraftRulePreference } = useDraftRules();
-  const winRateWeight = hybridWeights.winRate / 100;
   const experimentalWeights = useMemo<ExperimentalWeights>(() => ({
     winRate: hybridWeights.winRate,
     usageRate: hybridWeights.usageRate,
   }), [hybridWeights]);
-  const hasCustomGlobalWeights = hybridWeights.winRate !== 70;
+  const hasCustomGlobalWeights = hybridWeights.winRate !== 70 || hybridWeights.starPlayerEnabled;
 
-  const liveRows = useMemo(() => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight), [winRateWeight, topBrawlWeight, rankedSync.snapshot?.rows]);
+  const liveRows = useMemo(() => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight, starPlayerWeight), [winRateWeight, starPlayerWeight, topBrawlWeight, rankedSync.snapshot?.rows]);
   const liveMaps = useMemo(
-    () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight),
-    [winRateWeight, topBrawlWeight, rankedSync.snapshot?.maps, liveRows],
+    () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [winRateWeight, starPlayerWeight, topBrawlWeight, rankedSync.snapshot?.maps, liveRows],
   );
   const [selectedMapName, setSelectedMapName] = useState("Beach Ball");
   const selectedMap = resolveRankedMapSelection(liveMaps, selectedMapName);
@@ -2110,8 +2109,8 @@ export default function Draft() {
     // trabalho, mantém as linhas idênticas por identidade e os memos a jusante
     // não se invalidam à toa.
     if (pesoDeVitoriaDoPick === winRateWeight) return doMapa;
-    return calculateHybridScoresByMap(doMapa, pesoDeVitoriaDoPick, topBrawlWeight);
-  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, winRateWeight, topBrawlWeight]);
+    return calculateHybridScoresByMap(doMapa, pesoDeVitoriaDoPick, topBrawlWeight, starPlayerWeight);
+  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, winRateWeight, starPlayerWeight, topBrawlWeight]);
   // Matrizes completas vindas da sincronização: a geral e, na leitura por modo, a do mapa ativo.
   const liveMatchups = useBrawlScopeLiveMatchups(
     brawlScopeReading === "byMode" && selectedMap?.modeId ? [selectedMap.modeId] : [],
@@ -2519,7 +2518,7 @@ export default function Draft() {
               </aside>}
               <label className="ranking-order-control">Ordenar por
                 <select value={rankingOrder} onChange={event => setRankingOrder(event.target.value as "base" | "context")}>
-                  <option value="base">Vitória {hybridWeights.winRate}% + Uso {hybridWeights.usageRate}%</option>
+                  <option value="base">{hybridWeightsSentence(hybridWeights).replaceAll(" / ", " + ")}</option>
                   <option value="context">Pontos do Draft · com bónus</option>
                 </select>
                 <small>{rankingOrder === "base" ? "Ranking base do mapa. Os pontos finais incluem os ajustes do Draft." : "Ranking contextual: counters, sinergias e regras podem mudar a ordem."}</small>
