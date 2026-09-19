@@ -134,6 +134,46 @@ export function normalizeRateForMap(rate: number | null | undefined, mapRates: r
 export const normalizeUsageRateForMap = normalizeRateForMap;
 
 /**
+ * O mínimo e o máximo de uma métrica dentro de um mapa.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * `normalizeRateForMap` recebe a lista inteira de taxas do mapa e tira dela o
+ * mínimo e o máximo. Chamada uma vez, é barata. Chamada uma vez POR LINHA e
+ * por métrica — que é o que `calculateHybridScoresByMap` fazia — passa a ser
+ * quadrática: para cada uma das 108 linhas de um mapa, construía-se uma lista
+ * nova de 108 valores e espalhava-se em `Math.min(...)`. Vezes três métricas,
+ * vezes 26 mapas.
+ *
+ * Medido com a snapshot da produção (2808 linhas): 71 ms por passagem. E a
+ * página faz quatro passagens a cada toque no cursor dos pesos, o que dava
+ * 253 ms de espera por cada pixel arrastado.
+ *
+ * Os extremos de um mapa são os mesmos para todas as linhas desse mapa, por
+ * isso calculam-se UMA vez na primeira volta e reutilizam-se. A conta passa de
+ * quadrática a linear sem mudar um único resultado.
+ */
+type Extremos = { minimo: number; maximo: number } | null;
+
+function extremosDe(values: readonly (number | null | undefined)[]): Extremos {
+  let minimo = Infinity;
+  let maximo = -Infinity;
+  for (const value of values) {
+    if (!finite(value)) continue;
+    if (value < minimo) minimo = value;
+    if (value > maximo) maximo = value;
+  }
+  return minimo === Infinity ? null : { minimo, maximo };
+}
+
+/** A mesma normalização de `normalizeRateForMap`, com os extremos já em mão. */
+function normalizeComExtremos(rate: number | null | undefined, extremos: Extremos) {
+  if (!finite(rate) || !extremos) return null;
+  if (extremos.maximo === extremos.minimo) return 50;
+  return clamp(((rate - extremos.minimo) / (extremos.maximo - extremos.minimo)) * 100);
+}
+
+/**
  * O Score de uma linha, já com as três métricas normalizadas no mapa.
  *
  * COMO OS DOIS PESOS SE COMBINAM
@@ -199,25 +239,37 @@ export function calculateHybridScoresByMap<T extends UsageWinMetricRow>(
   topBrawlWeight = TOPBRAWL_SOURCE_WEIGHT,
   starPlayerWeight = STAR_PLAYER_HYBRID_WEIGHT,
 ): T[] {
-  const metricsByMap = new Map<string, { winRate: number | null; usage: number | null; starPlayer: number | null }[]>();
-  for (const row of rows) {
-    const metrics = metricsByMap.get(row.map) ?? [];
-    metrics.push({
-      winRate: aggregatePublishedWinRate(row, topBrawlWeight),
-      usage: aggregatePublishedUsageRate(row, topBrawlWeight),
-      starPlayer: aggregatePublishedStarPlayerRate(row),
-    });
-    metricsByMap.set(row.map, metrics);
+  // Primeira volta: agrega as três métricas de cada linha e guarda-as, para a
+  // segunda volta não ter de as calcular outra vez.
+  const metricasPorLinha = rows.map((row) => ({
+    winRate: aggregatePublishedWinRate(row, topBrawlWeight),
+    usage: aggregatePublishedUsageRate(row, topBrawlWeight),
+    starPlayer: aggregatePublishedStarPlayerRate(row),
+  }));
+
+  const porMapa = new Map<string, { winRate: number | null; usage: number | null; starPlayer: number | null }[]>();
+  for (let i = 0; i < rows.length; i++) {
+    const doMapa = porMapa.get(rows[i].map);
+    if (doMapa) doMapa.push(metricasPorLinha[i]);
+    else porMapa.set(rows[i].map, [metricasPorLinha[i]]);
   }
 
-  return rows.map((row) => {
-    const winRate = aggregatePublishedWinRate(row, topBrawlWeight);
-    const usage = aggregatePublishedUsageRate(row, topBrawlWeight);
-    const starPlayer = aggregatePublishedStarPlayerRate(row);
-    const mapMetrics = metricsByMap.get(row.map) ?? [];
-    const winScore = normalizeRateForMap(winRate, mapMetrics.map((metric) => metric.winRate));
-    const usageScore = normalizeRateForMap(usage, mapMetrics.map((metric) => metric.usage));
-    const starScore = normalizeRateForMap(starPlayer, mapMetrics.map((metric) => metric.starPlayer));
+  // Os extremos de cada mapa, calculados uma única vez. Ver `extremosDe`.
+  const extremosPorMapa = new Map<string, { winRate: Extremos; usage: Extremos; starPlayer: Extremos }>();
+  for (const [mapa, metricas] of porMapa) {
+    extremosPorMapa.set(mapa, {
+      winRate: extremosDe(metricas.map((metrica) => metrica.winRate)),
+      usage: extremosDe(metricas.map((metrica) => metrica.usage)),
+      starPlayer: extremosDe(metricas.map((metrica) => metrica.starPlayer)),
+    });
+  }
+
+  return rows.map((row, i) => {
+    const { winRate, usage, starPlayer } = metricasPorLinha[i];
+    const extremos = extremosPorMapa.get(row.map);
+    const winScore = normalizeComExtremos(winRate, extremos?.winRate ?? null);
+    const usageScore = normalizeComExtremos(usage, extremos?.usage ?? null);
+    const starScore = normalizeComExtremos(starPlayer, extremos?.starPlayer ?? null);
     const score = calculateHybridScoreForWinRateWeight(winScore, usageScore, winRateWeight, starScore, starPlayerWeight);
     return score === null
       ? { ...row, winRate, usage }
