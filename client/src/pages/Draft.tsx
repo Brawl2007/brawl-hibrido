@@ -49,10 +49,10 @@ import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { allMapSummaries, allRankedRows, buildActiveRankedMapCatalog, normalizeRankedRows, resolveRankedMapSelection, type MapSummary, type RankedRow } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
-import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights } from "@/lib/hybridWeights";
+import { hybridWeightFractions, hybridWeightsLabel, hybridWeightsSentence, useHybridWeights } from "@/lib/hybridWeights";
 import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
-import { useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
+import { fatiasDoPick, pesosDoPickAPartirDasFatias, useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
 import { analyzeDraftComposition, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
 import { getCounterBonusRate, getSynergyBonusRate } from "@shared/draft";
 import { buildGamePlanText } from "@shared/coachPlan";
@@ -1885,7 +1885,6 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
 }) {
   // O peso que o resto do site usa, para o atalho de igualar a escada a ele.
   const { weights: pesosGlobais } = useHybridWeights();
-  const pesoGlobalDeVitoria = pesosGlobais.winRate;
   const starLigadoNoSite = pesosGlobais.starPlayerEnabled;
   const pesoGlobalDeStar = pesosGlobais.starPlayer;
   /**
@@ -1896,11 +1895,30 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
    * a 30 dá 49 na prática, e alguém que veja só o campo que preencheu fica
    * convencido de que pediu 70. Por isso o resultado vai escrito ao lado.
    */
-  const reparticaoDoPick = (vitoria: number, star: number) => {
-    const fatiaStar = starLigadoNoSite ? Math.min(100, Math.max(0, star)) : 0;
-    const resto = 100 - fatiaStar;
-    const fatiaVitoria = Math.round(vitoria * resto / 100);
-    return { vitoria: fatiaVitoria, star: fatiaStar, uso: resto - fatiaVitoria };
+  const reparticaoDoPick = (vitoria: number, star: number) => fatiasDoPick(vitoria, star, starLigadoNoSite);
+
+  /**
+   * Grava um pick a partir das percentagens FINAIS que estão no ecrã.
+   *
+   * O que fica guardado em `winRatePickN` é a divisão Vitória/Uso do que sobra
+   * depois do Star Player — é assim que o motor a compõe, e é isso que faz a
+   * escada por pick continuar a significar o mesmo com o Star Player ligado ou
+   * desligado. Mas ninguém devia ter de pensar nisso para escrever um número.
+   *
+   * Por isso a conversão vive aqui, na fronteira: os três campos são fatias do
+   * total e somam 100, e esta função traduz para o formato do motor.
+   *
+   * ISTO CORRIGE UM ERRO REAL
+   *
+   * O atalho "Todos a 50/30/20 (peso global)" gravava 50 em `winRatePickN` a
+   * pensar que era a fatia do total. Com o Star Player a 30%, os 50 valiam
+   * 50% dos 70 que sobravam — e o botão que prometia 50/30/20 entregava
+   * 35/30/35. Com a conversão feita num sítio só, deixa de haver forma de
+   * escrever um número numa escala e o lê-lo noutra.
+   */
+  const gravarFatiasDoPick = (indice: number, vitoriaFinal: number, starFinal: number, base = preference) => {
+    const pesos = pesosDoPickAPartirDasFatias(vitoriaFinal, starFinal, base[winRatePickKeys[indice]]);
+    return { ...base, [starPlayerPickKeys[indice]]: pesos.starPlayer, [winRatePickKeys[indice]]: pesos.winRate };
   };
   /**
    * Cobertura por modo, juntando as duas origens.
@@ -1973,10 +1991,14 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
             No primeiro pick escolhe-se às cegas, e a taxa de uso diz o que a de vitória não diz: que o brawler é
             flexível e funciona em muitas composições — que é o que protege quem ainda não sabe o que vem a seguir.
             No último pick já não há nada a adivinhar, e o que interessa é ganhar o confronto que está à frente.
+            {" "}Os dois campos são percentagens do Score e <strong>escreve-se qualquer um deles</strong>: mexer num
+            ajusta o outro, para os três pesos do pick somarem sempre 100.
           </p>
           <div className="counter-pick-grid">
             {winRatePickKeys.map((key, indice) => {
-              const vitoria = preference[key];
+              const fatias = reparticaoDoPick(preference[key], preference[starPlayerPickKeys[indice]]);
+              // O tecto de cada um dos dois é o que o Star Player deixar livre.
+              const disponivel = 100 - fatias.star;
               return (
                 <div className="counter-pick-row" key={key}>
                   <span className="counter-pick-label">Pick {indice + 1}</span>
@@ -1992,17 +2014,36 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
                     */}
                   <div className="counter-pick-field">
                     <CampoDePercentagem
-                      ariaLabel={`Peso da taxa de vitória no pick ${indice + 1}`}
-                      value={vitoria}
-                      onCommit={(valor) => onChange({ ...preference, [key]: valor })}
+                      ariaLabel={`Percentagem da taxa de vitória no pick ${indice + 1}`}
+                      value={fatias.vitoria}
+                      maximo={disponivel}
+                      onCommit={(valor) => onChange(gravarFatiasDoPick(indice, valor, fatias.star))}
                     />
                   </div>
                   <span className="rule-unit">% vitória</span>
-                  {/* O uso nunca se escreve: é o resto, e assim não há como os dois deixarem de somar 100. */}
-                  <span className="counter-pick-effect">{(() => {
-                    const fatias = reparticaoDoPick(vitoria, preference[starPlayerPickKeys[indice]]);
-                    return starLigadoNoSite ? `${fatias.vitoria} / ${fatias.star} / ${fatias.uso}` : `${fatias.vitoria} / ${fatias.uso}`;
-                  })()}</span>
+                  {/*
+                    * O uso deixou de ser só "o resto".
+                    *
+                    * Era calculado e mostrado, nunca escrito — a ideia era que
+                    * assim os dois nunca deixavam de somar 100. Mas quem quer
+                    * 20% de uso tinha de fazer a conta ao contrário na cabeça,
+                    * e com o Star Player pelo meio a conta deixou de ser uma
+                    * subtração simples. Passa a escrever-se; quem cede é a
+                    * vitória, e a soma continua garantida porque os dois campos
+                    * gravam pela mesma função.
+                    */}
+                  <div className="counter-pick-field">
+                    <CampoDePercentagem
+                      ariaLabel={`Percentagem da taxa de uso no pick ${indice + 1}`}
+                      value={fatias.uso}
+                      maximo={disponivel}
+                      onCommit={(valor) => onChange(gravarFatiasDoPick(indice, disponivel - Math.min(disponivel, Math.max(0, valor)), fatias.star))}
+                    />
+                  </div>
+                  <span className="rule-unit">% uso</span>
+                  <span className="counter-pick-effect" title="Vitória / Star Player / Uso">
+                    {starLigadoNoSite ? `${fatias.vitoria} / ${fatias.star} / ${fatias.uso}` : `${fatias.vitoria} / ${fatias.uso}`}
+                  </span>
                 </div>
               );
             })}
@@ -2011,20 +2052,30 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
             <span>Atalhos:</span>
             <button
               type="button"
-              title="Os seis picks com o mesmo peso que o resto do site usa."
-              onClick={() => onChange(winRatePickKeys.reduce((seguinte, key) => ({ ...seguinte, [key]: pesoGlobalDeVitoria }), { ...preference }))}
+              title="Os seis picks com a mesma divisão que o resto do site usa, incluindo a fatia do Star Player."
+              onClick={() => onChange(winRatePickKeys.reduce(
+                (seguinte, _key, indice) => gravarFatiasDoPick(
+                  indice,
+                  pesosGlobais.winRate,
+                  starLigadoNoSite ? pesosGlobais.starPlayer : reparticaoDoPick(0, preference[starPlayerPickKeys[indice]]).star,
+                  seguinte,
+                ),
+                { ...preference },
+              ))}
             >
               {/*
                 * A etiqueta mostrava "50/50" com o Score em 50/30/20 — uma
-                * divisão que não existe em lado nenhum. O rótulo de um atalho
-                * tem de dizer o que o atalho faz, senão é só ruído com um
-                * número dentro.
+                * divisão que não existe em lado nenhum. E depois de corrigida
+                * passou a prometer 50/30/20 e a entregar 35/30/35, porque o
+                * número era gravado numa escala e lido noutra. Agora o botão
+                * grava pela mesma função que os campos, por isso o que promete
+                * é o que sai.
                 */}
               Todos a {hybridWeightsLabel(pesosGlobais)} (peso global)
             </button>
             <button
               type="button"
-              title="Sobe cinco pontos por pick: a taxa de uso pesa mais quando ainda há muito por decidir."
+              title="A divisão entre vitória e uso sobe cinco pontos por pick: o uso pesa mais quando ainda há muito por decidir. A fatia do Star Player de cada pick fica como está, e estes são os pesos do que sobra."
               onClick={() => onChange(winRatePickKeys.reduce((seguinte, key, indice) => ({ ...seguinte, [key]: 70 + indice * 5 }), { ...preference }))}
             >
               Escada 70 → 95
@@ -2034,9 +2085,10 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
         <fieldset className="draft-rules-section counter-multiplier">
           <legend>Star Player por Pick <span className="legend-optional">opcional</span></legend>
           <p>
-            A fatia do <strong>Star Player</strong> no Score, pick a pick. Aqui o número é a fatia do total:
-            escreve 30 e são 30% do Score. A vitória e o uso dividem o que sobra, segundo a escada acima —
-            por isso 70% de vitória com 30% de Star Player dá <strong>49 / 30 / 21</strong>, e não 70 / 30 / 0.
+            A fatia do <strong>Star Player</strong> no Score, pick a pick. Tal como a vitória e o uso lá em cima,
+            o número é a fatia do total: escreve 30 e são 30% do Score, e os três somam sempre 100.
+            {" "}Mexer aqui <strong>não desarruma a divisão entre vitória e uso</strong> — os dois encolhem ou
+            crescem na proporção que já tinham, para o que escolheste lá em cima continuar a valer.
             A coluna da direita mostra sempre as três percentagens que saem mesmo.
           </p>
           {starLigadoNoSite ? null : (

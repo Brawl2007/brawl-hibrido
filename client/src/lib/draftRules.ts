@@ -80,6 +80,54 @@ function normalizePreference(value: unknown): DraftRulePreference | null {
   }, {} as DraftRulePreference);
 }
 
+/**
+ * As três percentagens finais de um pick, como aparecem no painel.
+ *
+ * DUAS ESCALAS, E PORQUÊ
+ *
+ * O que fica guardado em `winRatePickN` é a divisão Vitória/Uso do que SOBRA
+ * depois do Star Player; `starPlayerPickN` é fatia do total. É assim que o
+ * motor as compõe, e é isso que faz a escada por pick significar o mesmo com o
+ * Star Player ligado ou desligado.
+ *
+ * No ecrã, as três são fatias do total e somam 100 — que é a única leitura em
+ * que "20% de uso" quer dizer 20% do Score. A tradução entre as duas escalas
+ * vive aqui, num sítio só.
+ *
+ * NÃO É ACADÉMICO
+ *
+ * Enquanto a conversão não existia, o atalho "Todos a 50/30/20" gravava 50 em
+ * `winRatePickN` a pensar que era a fatia do total. Com o Star Player a 30%,
+ * esses 50 valiam 50% dos 70 que sobravam: o botão prometia 50/30/20 e
+ * entregava 35/30/35.
+ */
+export function fatiasDoPick(winRatePercent: number, starPercent: number, starAtivo: boolean) {
+  const star = starAtivo ? Math.min(100, Math.max(0, starPercent)) : 0;
+  const resto = 100 - star;
+  const vitoria = Math.round(winRatePercent * resto / 100);
+  return { vitoria, star, uso: resto - vitoria };
+}
+
+/**
+ * O caminho inverso: das percentagens finais para o formato guardado.
+ *
+ * Devolve só as duas chaves que mudam. Quem chama junta-as à preferência, e é
+ * por isso que os dois campos — vitória e uso — não podem deixar de somar o
+ * que o Star Player lhes deixa: gravam os dois por aqui.
+ */
+export function pesosDoPickAPartirDasFatias(vitoriaFinal: number, starFinal: number, winRateAnterior: number) {
+  const star = Math.min(100, Math.max(0, starFinal));
+  const resto = 100 - star;
+  const vitoria = Math.min(resto, Math.max(0, vitoriaFinal));
+  return {
+    starPlayer: star,
+    // Com o Star Player a 100% não sobra nada para repartir, e dividir por zero
+    // daria NaN. A divisão anterior fica como estava, à espera de voltar a ter
+    // espaço — perdê-la seria castigar quem experimentou um extremo.
+    winRate: resto > 0 ? (vitoria * 100) / resto : winRateAnterior,
+  };
+}
+
 export function readDraftRulePreference(): DraftRulePreference {
   if (typeof window === "undefined") return defaultDraftRulePreference;
   try {
