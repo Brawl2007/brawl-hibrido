@@ -1800,6 +1800,79 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
   },
 ];
 
+/**
+ * Um campo de percentagem que não mente sobre o que tem.
+ *
+ * O QUE ESTAVA MAL
+ *
+ * Os campos do painel eram `<input type="number">` controlados pelo número
+ * guardado. Três coisas saíam torcidas, todas no mesmo gesto — selecionar o
+ * valor e escrever por cima, que é como qualquer pessoa muda um número:
+ *
+ *  1. **Apagar punha o campo a zero.** `Number("")` é 0, e o 0 era gravado na
+ *     hora. Ficava impossível limpar o campo para escrever de novo: mal se
+ *     carregava em Apagar, a regra passava a 0% e o Draft recalculava com ela.
+ *
+ *  2. **O zero ficava colado.** Escrever "65" por cima do "0" dava "065".
+ *
+ *  3. **E nunca mais se corrigia**, nem ao sair do campo. Isto é o React a
+ *     comparar o valor do DOM com o novo com `!=` em vez de `!==` nos campos
+ *     numéricos: `"065" != 65` é falso, por isso conclui que já está certo e
+ *     não lhe toca. O campo mostrava 065 para sempre enquanto guardava 65.
+ *
+ * O número gravado estava certo e a conta ao lado também. Era só o campo a
+ * mostrar outra coisa — e é precisamente esse tipo de erro que faz duvidar de
+ * todos os outros números do painel, incluindo os que estão bem.
+ *
+ * COMO FICA
+ *
+ * Enquanto o campo está a ser escrito, manda o que lá está escrito: "" é ""
+ * e "065" é "065", sem ninguém a corrigir por cima de quem está a escrever.
+ * Ao sair, mostra o número gravado, limpo. Só se grava o que for um número
+ * válido — apagar tudo deixa a regra como estava em vez de a pôr a zero.
+ *
+ * É `type="text"` de propósito, não `type="number"`: é o `number` que se
+ * recusa a normalizar o "065". `inputMode="decimal"` mantém o teclado
+ * numérico no telemóvel, que é onde isto é usado.
+ */
+function CampoDePercentagem({ value, onCommit, disabled, ariaLabel, maximo = 100 }: {
+  value: number;
+  onCommit: (valor: number) => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+  maximo?: number;
+}) {
+  // `null` significa "não está a ser escrito": mostra-se o valor gravado.
+  const [aEscrever, setAEscrever] = useState<string | null>(null);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      value={aEscrever ?? String(value)}
+      onFocus={(event) => {
+        setAEscrever(String(value));
+        // Selecionar tudo faz do "escrever por cima" o gesto natural, que era
+        // exatamente o que dava "065".
+        event.currentTarget.select();
+      }}
+      onBlur={() => setAEscrever(null)}
+      onChange={(event) => {
+        const bruto = event.currentTarget.value;
+        // Dígitos e, quando muito, um separador decimal. Recusar em silêncio o
+        // resto evita ter de adivinhar o que "12a3" quer dizer.
+        if (!/^\d*[.,]?\d*$/.test(bruto)) return;
+        setAEscrever(bruto);
+        if (bruto === "" || bruto === "." || bruto === ",") return;
+        const lido = Number(bruto.replace(",", "."));
+        if (Number.isFinite(lido)) onCommit(Math.min(maximo, Math.max(0, lido)));
+      }}
+    />
+  );
+}
+
 function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, reading, onReadingChange, liveCoverage, liveCapturedAt }: {
   preference: DraftRulePreference;
   hasCustomRules: boolean;
@@ -1907,19 +1980,24 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
               return (
                 <div className="counter-pick-row" key={key}>
                   <span className="counter-pick-label">Pick {indice + 1}</span>
-                  <div>
-                    <input
-                      type="number" min="0" max="100" step="1" inputMode="decimal"
-                      aria-label={`Peso da taxa de vitória no pick ${indice + 1}`}
+                  {/*
+                    * A unidade fica FORA da caixa sublinhada.
+                    *
+                    * Estava lá dentro, e o campo era `width: 100%` a dividir
+                    * espaço com ela: quanto mais comprida a unidade, mais
+                    * estreito ficava o campo. Com "% star player" sobrava tão
+                    * pouco que o "30" aparecia cortado a meio — "3(" no ecrã.
+                    * O sublinhado só faz sentido debaixo do número, de
+                    * qualquer maneira; é esse que se escreve.
+                    */}
+                  <div className="counter-pick-field">
+                    <CampoDePercentagem
+                      ariaLabel={`Peso da taxa de vitória no pick ${indice + 1}`}
                       value={vitoria}
-                      onChange={(event) => {
-                        const lido = Number(event.target.value);
-                        if (!Number.isFinite(lido)) return;
-                        onChange({ ...preference, [key]: Math.min(100, Math.max(0, lido)) });
-                      }}
+                      onCommit={(valor) => onChange({ ...preference, [key]: valor })}
                     />
-                    <span className="rule-unit">% vitória</span>
                   </div>
+                  <span className="rule-unit">% vitória</span>
                   {/* O uso nunca se escreve: é o resto, e assim não há como os dois deixarem de somar 100. */}
                   <span className="counter-pick-effect">{(() => {
                     const fatias = reparticaoDoPick(vitoria, preference[starPlayerPickKeys[indice]]);
@@ -1936,7 +2014,13 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
               title="Os seis picks com o mesmo peso que o resto do site usa."
               onClick={() => onChange(winRatePickKeys.reduce((seguinte, key) => ({ ...seguinte, [key]: pesoGlobalDeVitoria }), { ...preference }))}
             >
-              Todos a {pesoGlobalDeVitoria}/{100 - pesoGlobalDeVitoria} (peso global)
+              {/*
+                * A etiqueta mostrava "50/50" com o Score em 50/30/20 — uma
+                * divisão que não existe em lado nenhum. O rótulo de um atalho
+                * tem de dizer o que o atalho faz, senão é só ruído com um
+                * número dentro.
+                */}
+              Todos a {hybridWeightsLabel(pesosGlobais)} (peso global)
             </button>
             <button
               type="button"
@@ -1970,19 +2054,24 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
               return (
                 <div className="counter-pick-row" key={key}>
                   <span className="counter-pick-label">Pick {indice + 1}</span>
-                  <div>
-                    <input
-                      type="number" min="0" max="100" step="1" inputMode="decimal"
-                      aria-label={`Fatia do Star Player no pick ${indice + 1}`}
+                  {/*
+                    * A unidade fica FORA da caixa sublinhada.
+                    *
+                    * Estava lá dentro, e o campo era `width: 100%` a dividir
+                    * espaço com ela: quanto mais comprida a unidade, mais
+                    * estreito ficava o campo. Com "% star player" sobrava tão
+                    * pouco que o "30" aparecia cortado a meio — "3(" no ecrã.
+                    * O sublinhado só faz sentido debaixo do número, de
+                    * qualquer maneira; é esse que se escreve.
+                    */}
+                  <div className="counter-pick-field">
+                    <CampoDePercentagem
+                      ariaLabel={`Fatia do Star Player no pick ${indice + 1}`}
                       value={star}
-                      onChange={(event) => {
-                        const lido = Number(event.target.value);
-                        if (!Number.isFinite(lido)) return;
-                        onChange({ ...preference, [key]: Math.min(100, Math.max(0, lido)) });
-                      }}
+                      onCommit={(valor) => onChange({ ...preference, [key]: valor })}
                     />
-                    <span className="rule-unit">% star player</span>
                   </div>
+                  <span className="rule-unit">% star player</span>
                   <span className="counter-pick-effect" title="Vitória / Star Player / Uso">
                     {starLigadoNoSite ? `${fatias.vitoria} / ${fatias.star} / ${fatias.uso}` : "não conta"}
                   </span>
@@ -2076,11 +2165,11 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
                     </>
                   ) : (
                     <>
-                      <input
-                        type="number" min="0" max="100" step="0.5" inputMode="decimal"
+                      <CampoDePercentagem
+                        ariaLabel={field.label}
                         value={preference[field.key]}
                         disabled={Boolean(inactive)}
-                        onChange={(event) => setRate(field.key, event.currentTarget.value)}
+                        onCommit={(valor) => onChange({ ...preference, [field.key]: valor })}
                       /><em>%</em>
                     </>
                   )}
