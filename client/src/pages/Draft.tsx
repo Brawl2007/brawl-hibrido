@@ -50,7 +50,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { allMapSummaries, allRankedRows, buildActiveRankedMapCatalog, normalizeRankedRows, resolveRankedMapSelection, type MapSummary, type RankedRow } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
 import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights } from "@/lib/hybridWeights";
-import { getWinRatePickWeight, winRatePickKeys } from "@shared/draftRules";
+import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
 import { analyzeDraftComposition, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
@@ -1813,6 +1813,22 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
   // O peso que o resto do site usa, para o atalho de igualar a escada a ele.
   const { weights: pesosGlobais } = useHybridWeights();
   const pesoGlobalDeVitoria = pesosGlobais.winRate;
+  const starLigadoNoSite = pesosGlobais.starPlayerEnabled;
+  const pesoGlobalDeStar = pesosGlobais.starPlayer;
+  /**
+   * As três percentagens finais de um pick, para a linha da tabela as mostrar.
+   *
+   * O número que se escreve na coluna da vitória é a divisão do que SOBRA
+   * depois do Star Player, não a fatia do total. Escrever 70 com o Star Player
+   * a 30 dá 49 na prática, e alguém que veja só o campo que preencheu fica
+   * convencido de que pediu 70. Por isso o resultado vai escrito ao lado.
+   */
+  const reparticaoDoPick = (vitoria: number, star: number) => {
+    const fatiaStar = starLigadoNoSite ? Math.min(100, Math.max(0, star)) : 0;
+    const resto = 100 - fatiaStar;
+    const fatiaVitoria = Math.round(vitoria * resto / 100);
+    return { vitoria: fatiaVitoria, star: fatiaStar, uso: resto - fatiaVitoria };
+  };
   /**
    * Cobertura por modo, juntando as duas origens.
    *
@@ -1905,7 +1921,10 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
                     <span className="rule-unit">% vitória</span>
                   </div>
                   {/* O uso nunca se escreve: é o resto, e assim não há como os dois deixarem de somar 100. */}
-                  <span className="counter-pick-effect">{Number(vitoria.toFixed(0))} / {Number((100 - vitoria).toFixed(0))}</span>
+                  <span className="counter-pick-effect">{(() => {
+                    const fatias = reparticaoDoPick(vitoria, preference[starPlayerPickKeys[indice]]);
+                    return starLigadoNoSite ? `${fatias.vitoria} / ${fatias.star} / ${fatias.uso}` : `${fatias.vitoria} / ${fatias.uso}`;
+                  })()}</span>
                 </div>
               );
             })}
@@ -1925,6 +1944,67 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
               onClick={() => onChange(winRatePickKeys.reduce((seguinte, key, indice) => ({ ...seguinte, [key]: 70 + indice * 5 }), { ...preference }))}
             >
               Escada 70 → 95
+            </button>
+          </div>
+        </fieldset>
+        <fieldset className="draft-rules-section counter-multiplier">
+          <legend>Star Player por Pick <span className="legend-optional">opcional</span></legend>
+          <p>
+            A fatia do <strong>Star Player</strong> no Score, pick a pick. Aqui o número é a fatia do total:
+            escreve 30 e são 30% do Score. A vitória e o uso dividem o que sobra, segundo a escada acima —
+            por isso 70% de vitória com 30% de Star Player dá <strong>49 / 30 / 21</strong>, e não 70 / 30 / 0.
+            A coluna da direita mostra sempre as três percentagens que saem mesmo.
+          </p>
+          {starLigadoNoSite ? null : (
+            <p className="star-pick-desligado">
+              <strong>O Star Player está desligado no Score.</strong> Estes valores ficam guardados, mas não
+              contam enquanto não o ligares em <a href="/#ranking-laboratory">Ajustar o Score Híbrido</a>.
+              A escada não pode mandar no interruptor: se mandasse, o Draft pontuava com uma métrica que o
+              ranking não usa, e os dois números do mesmo brawler discordavam sem explicação à vista.
+            </p>
+          )}
+          <div className={`counter-pick-grid ${starLigadoNoSite ? "" : "is-inativa"}`}>
+            {starPlayerPickKeys.map((key, indice) => {
+              const star = preference[key];
+              const fatias = reparticaoDoPick(preference[winRatePickKeys[indice]], star);
+              return (
+                <div className="counter-pick-row" key={key}>
+                  <span className="counter-pick-label">Pick {indice + 1}</span>
+                  <div>
+                    <input
+                      type="number" min="0" max="100" step="1" inputMode="decimal"
+                      aria-label={`Fatia do Star Player no pick ${indice + 1}`}
+                      value={star}
+                      onChange={(event) => {
+                        const lido = Number(event.target.value);
+                        if (!Number.isFinite(lido)) return;
+                        onChange({ ...preference, [key]: Math.min(100, Math.max(0, lido)) });
+                      }}
+                    />
+                    <span className="rule-unit">% star player</span>
+                  </div>
+                  <span className="counter-pick-effect" title="Vitória / Star Player / Uso">
+                    {starLigadoNoSite ? `${fatias.vitoria} / ${fatias.star} / ${fatias.uso}` : "não conta"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="counter-pick-presets">
+            <span>Atalhos:</span>
+            <button
+              type="button"
+              title="Os seis picks com a mesma fatia que o resto do site usa."
+              onClick={() => onChange(starPlayerPickKeys.reduce((seguinte, key) => ({ ...seguinte, [key]: pesoGlobalDeStar }), { ...preference }))}
+            >
+              Todos a {pesoGlobalDeStar}% (fatia global)
+            </button>
+            <button
+              type="button"
+              title="Tira o Star Player só da pontuação dos candidatos do Draft; o resto do site mantém-no."
+              onClick={() => onChange(starPlayerPickKeys.reduce((seguinte, key) => ({ ...seguinte, [key]: 0 }), { ...preference }))}
+            >
+              Todos a 0% (fora do Draft)
             </button>
           </div>
         </fieldset>
@@ -2103,14 +2183,26 @@ export default function Draft() {
    * candidatos DESTE mapa, que é o que o motor usa para recomendar.
    */
   const pesoDeVitoriaDoPick = getWinRatePickWeight(analysisGlobalPickNumber, draftRuleSettings);
+  /**
+   * A fatia do Star Player neste pick.
+   *
+   * O interruptor global manda. Com o Star Player desligado no Score, a escada
+   * fica a zero por muito que os seis valores estejam preenchidos — senão o
+   * Draft pontuaria com uma métrica que o resto do site não usa, e as duas
+   * leituras do mesmo brawler discordariam sem nada no ecrã a explicar porquê.
+   */
+  const pesoDeStarDoPick = starPlayerWeight > 0
+    ? getStarPlayerPickWeight(analysisGlobalPickNumber, draftRuleSettings)
+    : 0;
   const currentRows = useMemo(() => {
     const doMapa = liveRows.filter((row) => row.map === selectedMap?.name);
-    // Sem diferença para o peso global não se recalcula nada: além de poupar
+    // Sem diferença para os pesos globais não se recalcula nada: além de poupar
     // trabalho, mantém as linhas idênticas por identidade e os memos a jusante
-    // não se invalidam à toa.
-    if (pesoDeVitoriaDoPick === winRateWeight) return doMapa;
-    return calculateHybridScoresByMap(doMapa, pesoDeVitoriaDoPick, topBrawlWeight, starPlayerWeight);
-  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, winRateWeight, starPlayerWeight, topBrawlWeight]);
+    // não se invalidam à toa. A fatia do Star Player entra nesta comparação —
+    // sem isso, uma escada só do Star Player não chegava a ser aplicada.
+    if (pesoDeVitoriaDoPick === winRateWeight && pesoDeStarDoPick === starPlayerWeight) return doMapa;
+    return calculateHybridScoresByMap(doMapa, pesoDeVitoriaDoPick, topBrawlWeight, pesoDeStarDoPick);
+  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, pesoDeStarDoPick, winRateWeight, starPlayerWeight, topBrawlWeight]);
   // Matrizes completas vindas da sincronização: a geral e, na leitura por modo, a do mapa ativo.
   const liveMatchups = useBrawlScopeLiveMatchups(
     brawlScopeReading === "byMode" && selectedMap?.modeId ? [selectedMap.modeId] : [],

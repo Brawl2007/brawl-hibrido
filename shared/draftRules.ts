@@ -48,6 +48,35 @@ export type DraftRuleSettings = {
   winRatePick4: number;
   winRatePick5: number;
   winRatePick6: number;
+  /**
+   * Fatia do Star Player no Score, por pick.
+   *
+   * Ao contrário de `winRatePickN`, que reparte o que SOBRA entre vitória e
+   * uso, este valor é a fatia do TOTAL — de 0 a 1. Os outros dois dividem o
+   * resto segundo a escada da vitória. Com 0,30 aqui e 0,70 em `winRatePick1`,
+   * o pick 1 fica em 49% vitória / 30% Star Player / 21% uso.
+   *
+   * Existe pela mesma razão que a escada da vitória existe: o que a métrica
+   * diz não vale o mesmo em todos os momentos do draft. O Star Player mede se
+   * foi ESTE brawler a decidir a partida. No primeiro pick isso é uma aposta
+   * sobre um brawler que ainda não tem equipa à volta; no último, já se sabe
+   * quem o acompanha e quem o enfrenta, e "quem decide a partida" passa a ser
+   * uma pergunta com resposta.
+   *
+   * Qual das pontas deve pesar mais é opinião, e não é minha para dar: entra
+   * plano nos seis picks, com o mesmo valor que o resto do site usa.
+   *
+   * SÓ CONTA COM O INTERRUPTOR GLOBAL LIGADO. O Star Player é opcional em todo
+   * o site; estes seis valores ficam guardados mas não entram em conta nenhuma
+   * enquanto ele estiver desligado. Sem essa condição haveria duas fontes de
+   * verdade a contradizerem-se — o site sem Star Player e o Draft com ele.
+   */
+  starPlayerPick1: number;
+  starPlayerPick2: number;
+  starPlayerPick3: number;
+  starPlayerPick4: number;
+  starPlayerPick5: number;
+  starPlayerPick6: number;
   counterPick1: number;
   counterPick2: number;
   counterPick3: number;
@@ -118,6 +147,19 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   winRatePick4: 0.85,
   winRatePick5: 0.9,
   winRatePick6: 0.95,
+  /**
+   * Plano nos seis picks, com a mesma fatia que o painel do Score oferece por
+   * omissão. Ao contrário da escada da vitória, esta entra sem inclinação
+   * nenhuma: subir ou descer o Star Player ao longo do draft é uma opinião
+   * sobre drafting que ninguém mediu, e inventá-la aqui seria dá-la como
+   * adquirida a quem nunca a pediu.
+   */
+  starPlayerPick1: 0.3,
+  starPlayerPick2: 0.3,
+  starPlayerPick3: 0.3,
+  starPlayerPick4: 0.3,
+  starPlayerPick5: 0.3,
+  starPlayerPick6: 0.3,
   // Matriz gradual: um sinal isolado informa, mas não ultrapassa o ranking do mapa.
   // Respostas aos picks 2/4/6 têm peso ligeiramente maior, por serem contrapartidas reais.
   counterPick1: 0.05,
@@ -233,6 +275,38 @@ export function getWinRatePickWeight(pickNumber: number | undefined, settings: D
   const pick = typeof pickNumber === "number" && Number.isFinite(pickNumber) ? Math.trunc(pickNumber) : 1;
   return byPick[pick] ?? settings.winRatePick1;
 }
+
+/**
+ * Fatia do Star Player em vigor para um pick, de 0 a 1.
+ *
+ * Fora do intervalo 1–6 vale a do primeiro pick, pelo mesmo critério do resto
+ * do motor: antes de o draft começar, o que está à frente é o primeiro pick.
+ *
+ * Quem chama isto é responsável por só o aplicar com o interruptor global
+ * ligado — ver `starPlayerPick1`.
+ */
+export function getStarPlayerPickWeight(pickNumber: number | undefined, settings: DraftRuleSettings) {
+  const byPick: Record<number, number> = {
+    1: settings.starPlayerPick1,
+    2: settings.starPlayerPick2,
+    3: settings.starPlayerPick3,
+    4: settings.starPlayerPick4,
+    5: settings.starPlayerPick5,
+    6: settings.starPlayerPick6,
+  };
+  const pick = typeof pickNumber === "number" && Number.isFinite(pickNumber) ? Math.trunc(pickNumber) : 1;
+  return byPick[pick] ?? settings.starPlayerPick1;
+}
+
+/** As chaves da escada do Star Player, na ordem dos picks. */
+export const starPlayerPickKeys = [
+  "starPlayerPick1",
+  "starPlayerPick2",
+  "starPlayerPick3",
+  "starPlayerPick4",
+  "starPlayerPick5",
+  "starPlayerPick6",
+] as const satisfies readonly (keyof DraftRuleSettings)[];
 
 /** As chaves da escada, na ordem dos picks, para a interface não as repetir à mão. */
 export const winRatePickKeys = [
