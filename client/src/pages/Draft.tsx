@@ -54,7 +54,8 @@ import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winR
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { fatiasDoPick, pesosDoPickAPartirDasFatias, useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
 import { analyzeDraftComposition, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
-import { getCounterBonusRate, getSynergyBonusRate } from "@shared/draft";
+import { getSynergyBonusRate } from "@shared/draft";
+import { getCounterPickMultiplier } from "@shared/draftRules";
 import { buildGamePlanText } from "@shared/coachPlan";
 import { getLiteralCounterRelations } from "@shared/counterSourceRelations";
 import { resolveSpokenBrawler } from "@shared/brawlerVoice";
@@ -2430,9 +2431,30 @@ export default function Draft() {
   const synergyRows = visibleRows;
   const counterRows = visibleRows;
   const synergyRate = getSynergyBonusRate(analysisGlobalPickNumber, draftRuleSettings) * 100;
-  const counterRate = getCounterBonusRate(analysisGlobalPickNumber, draftRuleSettings) * 100;
-  const synergyReason = activeTeamPicks.length ? `Sinergia contextual: completa a composição atual; vale ${synergyRate}% do Score de Draft no pick global ${analysisGlobalPickNumber}.` : `Sinergia contextual: no pick global ${analysisGlobalPickNumber ?? 1}, vale ${synergyRate}% quando a relação literal for ativada.`;
-  const counterReason = enemyPicks.length ? `Counter contextual: +${counterRate}% por matchup direto literal no pick global ${analysisGlobalPickNumber}.` : "Sem pick inimigo, ainda não há bónus Counter ativo; o Score Híbrido mantém-se como base.";
+  /**
+   * O ajuste do Counter em vigor neste pick.
+   *
+   * A FRASE QUE ESTAVA ERRADA
+   *
+   * Aqui lia-se `getCounterBonusRate(...)`, e o ecrã anunciava
+   * "Counter contextual: +6% por matchup direto literal". Essa percentagem
+   * (`counterPickN`) é herança de quando o bónus era uma taxa fixa por pick.
+   * Hoje o bónus é o DELTA PUBLICADO de cada confronto multiplicado pelo
+   * ajuste do pick — `counterPickN` já não entra em conta nenhuma.
+   *
+   * Medido: pondo esse valor a 60, a frase passava a prometer "+60%" e o Score
+   * do candidato não mexia um decimal. Uma frase que cita um número sem efeito
+   * é pior do que não dizer nada — manda estudar um botão que não existe.
+   */
+  const counterMultiplicador = getCounterPickMultiplier(analysisGlobalPickNumber, draftRuleSettings);
+  // A taxa configurada só vale quando a fonte NÃO publica uma para o par; se
+  // publicar, ganha a dela. A frase dizia-a como se fosse sempre a que conta.
+  const synergyReason = activeTeamPicks.length
+    ? `Sinergia contextual: completa a composição atual; vale ${synergyRate}% do Score de Draft no pick global ${analysisGlobalPickNumber} — ou a percentagem que a fonte publicar para o par, quando publicar.`
+    : `Sinergia contextual: no pick global ${analysisGlobalPickNumber ?? 1}, vale ${synergyRate}% quando a relação literal for ativada, ou a percentagem publicada pela fonte para o par.`;
+  const counterReason = enemyPicks.length
+    ? `Counter contextual: a percentagem publicada de cada confronto${counterMultiplicador === 1 ? "" : `, multiplicada por ${counterMultiplicador}×`}, no pick global ${analysisGlobalPickNumber}.`
+    : "Sem pick inimigo, ainda não há bónus Counter ativo; o Score Híbrido mantém-se como base.";
   const liveCounterSuggestions = useMemo(() => getLiveCounterSuggestions(opponentPicks.map((row) => row.brawler), currentRows.filter((row) => !analysisLockedNames.has(row.brawler))), [opponentPicks, currentRows, analysisLockedNames, counterSnapshotVersion]);
   const canAutoPick = activeDraftStep?.team === myTeam && activeDraftStep.kind === "pick";
   const hybridAverage = currentRows.reduce((sum, row) => sum + (row.score ?? 0), 0) / Math.max(1, currentRows.length);

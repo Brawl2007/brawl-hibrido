@@ -91,9 +91,23 @@ describe("chips de pontuação do Draft", () => {
     expect(draftSource).toContain("Configurações das regras percentuais do Draft");
     expect(draftSource).toContain("ruleSettings: draftRuleSettings");
     expect(draftSource).toContain("draftRuleSettings.sameClassPenalty * 100");
-    // A taxa continua a ser lida das regras configuráveis, agora pelo pick global
-    // já resolvido em vez de um parâmetro local.
-    expect(draftSource).toContain("getCounterBonusRate(analysisGlobalPickNumber, draftRuleSettings) * 100");
+    /*
+     * Esta linha exigia `getCounterBonusRate(analysisGlobalPickNumber, ...)`,
+     * com o comentário "a taxa continua a ser lida das regras configuráveis".
+     * Já não é verdade, e não era há muito: o bónus de Counter é o delta
+     * publicado do confronto vezes o ajuste do pick, e `counterPickN` não entra
+     * em conta nenhuma — posto a 60, o ecrã prometia "+60% por matchup direto
+     * literal" e o Score não mexia um decimal.
+     *
+     * O teste estava a guardar esse erro em vez de o apanhar. Passa a exigir o
+     * que o Score faz mesmo: o ajuste do pick, que é o que de facto multiplica
+     * a percentagem publicada.
+     */
+    expect(draftSource).toContain("getCounterPickMultiplier(analysisGlobalPickNumber, draftRuleSettings)");
+    // A garantia de que o valor morto não volta a alimentar texto está em
+    // `frasesDoPainel.test.ts`, que limpa os comentários antes de procurar —
+    // aqui a fonte é lida crua, e o comentário que explica esta correção cita
+    // o nome antigo de propósito, para o próximo leitor perceber o que mudou.
     expect(draftSource).toContain("rateFromContextualPoints(signal.scoreBreakdown.enemyCounterPenaltyPoints");
     expect(draftSource).toContain("label: `Risco Counter Top ${windowSize}`");
     expect(draftSource).toContain("rateFromContextualPoints(signal.scoreBreakdown.sameClassPenaltyPoints");
