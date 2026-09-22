@@ -217,3 +217,51 @@ describe("o hover não fica preso no telemóvel", () => {
     }
   });
 });
+
+describe("o cabeçalho de cada secção não volta a ser um carimbo", () => {
+  /**
+   * A Home tinha 7 secções e 23 micro-etiquetas em maiúsculas espalhadas por
+   * elas. Não era o número que incomodava — era serem sempre as MESMAS duas
+   * linhas, pela mesma ordem, sete vezes seguidas:
+   *
+   *     BIBLIOTECA RANKED · 01 — 26
+   *     BH ———— LIVE ROTATION / 26 MAPS
+   *     ESCOLHE O TEU MAPA
+   *
+   * A do meio não dizia nada que já não estivesse no ecrã: o "26" estava na
+   * linha de cima E na barra lateral. Repetido sete vezes, o que aquilo
+   * comunicava era "isto foi gerado por um molde", que é exatamente o
+   * contrário de vivo.
+   *
+   * Ao puxar o fio saiu código morto: o componente que desenhava a marquinha
+   * estava definido DUAS vezes — `BrandMotif` no Home.tsx, `Brand` no
+   * Draft.tsx — e o Draft nunca chegou a renderizar o dele. Havia também
+   * quatro carimbos "BH // ALGO" fixados em CSS nos cantos das secções.
+   */
+  const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
+  const DRAFT = readFileSync("client/src/pages/Draft.tsx", "utf8");
+
+  it("a linha de motivo não volta a duplicar o cabeçalho", () => {
+    expect(HOME).not.toContain('className="section-motif"');
+    expect(DRAFT).not.toContain('className="section-motif"');
+  });
+
+  it("os carimbos BH // ALGO não voltam aos cantos", () => {
+    expect(CSS_LIMPO).not.toContain('content: "BH //');
+  });
+
+  it("o componente da marquinha não volta a existir sem ser usado", () => {
+    // Estava definido em dois sítios e renderizado em nenhum.
+    for (const fonte of [HOME, DRAFT]) {
+      const definido = /function (BrandMotif|Brand)\(/.test(fonte);
+      const usado = /<(BrandMotif|Brand)[\s/>]/.test(fonte);
+      expect(definido && !usado).toBe(false);
+    }
+  });
+
+  it("as etiquetas de intervalo saíram dos cabeçalhos", () => {
+    // "01 — 26" é numeração decorativa: quem lê consegue contar os cartões.
+    expect(HOME).not.toContain("<span>01 — 26</span>");
+    expect(HOME).not.toContain('<span>FULL SOURCE READOUT</span>');
+  });
+});

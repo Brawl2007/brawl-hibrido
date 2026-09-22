@@ -319,14 +319,6 @@ function brawlerImageFor(row: RankedRow) {
   return id ? `https://cdn.brawlify.com/brawlers/borderless/${id}.png` : null;
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className={`brand-motif ${compact ? "is-compact" : ""}`} aria-hidden="true">
-      <img src={LOGO_URL} alt="" />
-      <span>{compact ? "BH" : "BRAWL HÍBRIDO"}</span>
-    </span>
-  );
-}
 
 function DraftSidebar({ active }: { active: string }) {
   /**

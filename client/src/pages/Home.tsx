@@ -200,14 +200,6 @@ function ModeIcon({ modeId, size = 16 }: { modeId: string; size?: number }) {
   return <Icon size={size} strokeWidth={2.2} />;
 }
 
-function BrandMotif({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className={`brand-motif ${compact ? "is-compact" : ""}`} aria-hidden="true">
-      <img src={LOGO_URL} alt="" />
-      <span>{compact ? "BH" : "BRAWL HÍBRIDO"}</span>
-    </span>
-  );
-}
 
 function TierBadge({ tier }: { tier: Tier | null }) {
   if (!tier) return <span className="tier-badge tier-pending"><span className="tier-dot bg-[#64748B]" />—</span>;
@@ -440,8 +432,7 @@ function MapSelector({
     <section className="map-section" id="maps">
       <div className="section-heading-row">
         <div>
-          <div className="section-kicker">Biblioteca Ranked <span>01 — 26</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">LIVE ROTATION / 26 MAPS</span></div>
+          <div className="section-kicker">Biblioteca Ranked</div>
           <h2>Escolhe o teu mapa</h2>
         </div>
         <div className="map-tools">
@@ -565,8 +556,7 @@ function RotationAverages({
     <section className="data-section rotation-section" id="rotation-averages">
       <div className="data-heading rotation-heading">
         <div>
-          <div className="section-kicker">Média da rotação <span>01 — {String(totalMapCount).padStart(2, "0")}</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">ROTATION CONSISTENCY / {mapCount}/{totalMapCount} MAPS</span></div>
+          <div className="section-kicker">Média da rotação</div>
           <h2>Score Híbrido médio</h2>
           <p>A média de cada brawler nos <strong>{mapCount}/{totalMapCount} mapas de {modeLabel}</strong>. O cálculo é refeito automaticamente assim que a snapshot Ranked muda; cada mapa com Score Híbrido publicado entra uma única vez.</p>
         </div>
@@ -689,7 +679,6 @@ function RankingLaboratory({
       <div className="data-heading ranking-lab-heading">
         <div>
           <div className="section-kicker">Configuração local <span>TODO O SITE</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">PESOS HÍBRIDOS</span></div>
           <h2>Ajustar o Score Híbrido</h2>
           <p>Escolhe a ponderação que queres usar neste navegador. A alteração atualiza de imediato os mapas, ranking, médias, perfis de Brawlers e recomendações do Draft.</p>
         </div>
@@ -812,8 +801,7 @@ function FormulaCard({ weights }: { weights: HybridWeightsPreference }) {
       <div className="formula-card-glow" />
       <div className="card-heading formula-heading">
         <div>
-                      <div className="section-kicker">A nossa leitura <span>Methodology</span></div>
-            <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">BH FORMULA</span></div>
+                      <div className="section-kicker">A nossa leitura</div>
             <h3>O que é o Score Híbrido?</h3>
 
         </div>
@@ -873,8 +861,7 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
     <section className="source-section" id="sources">
       <div className="source-heading">
         <div>
-          <div className="section-kicker">Leitura por fonte <span>FULL SOURCE READOUT</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">FONTES / {mapName.toUpperCase()}</span></div>
+          <div className="section-kicker">Leitura por fonte</div>
           <h2>Vê cada sinal no seu lugar.</h2>
           <p>Escolhe TopBrawl, Brawl Planet ou Score Híbrido. Os seis brawlers em destaque atualizam-se com a fonte selecionada.</p>
         </div>
@@ -1071,7 +1058,6 @@ export default function Home() {
             <div className="intro-row" id="dashboard">
               <div className="intro-copy">
                 <div className="section-kicker">Painel de controlo <span>Season 06 / 2026</span></div>
-                <div className="section-motif"><BrandMotif compact /><span className="hud-line" /></div>
                 <h2>O meta, sem ruído.</h2>
                 <p>Seleciona um mapa para cruzar o ranking completo com a métrica que criámos para separar popularidade de performance.</p>
               </div>
