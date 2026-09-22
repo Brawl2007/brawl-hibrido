@@ -265,3 +265,65 @@ describe("o cabeçalho de cada secção não volta a ser um carimbo", () => {
     expect(HOME).not.toContain('<span>FULL SOURCE READOUT</span>');
   });
 });
+
+describe("nenhum controlo abre para o vazio", () => {
+  /**
+   * O Draft tinha DOIS controlos que respondiam ao toque e não entregavam nada.
+   *
+   *   <details><summary>Referência de pontuação</summary> … </details>
+   *   <FoldPanel title="Leitura das fontes" summary="De onde vêm os números…">
+   *
+   * Carregava-se, a seta virava, e abria com zero de altura. O conteúdo até
+   * existia — o React desenhava-o a cada mudança do draft, com os dados certos
+   * lá dentro — e uma linha de CSS escondia-o depois de pronto.
+   *
+   * A causa foi um trabalho de esquema: oito secções antigas desligadas de uma
+   * vez com `display: none`. Seis não tinham controlo nenhum a apontar-lhes e
+   * era essa a intenção. Duas tinham, e essas passaram a ser outra coisa — um
+   * botão avariado.
+   *
+   * Ninguém reparou porque estão as duas no fundo da página, atrás de um
+   * clique que quase nunca se dá. Foi preciso abrir cada uma no browser e
+   * medir a altura do que aparecia.
+   *
+   * Um controlo que não entrega é pior do que um controlo que não existe: à
+   * primeira tentativa, quem lá chega conclui que o site está avariado.
+   */
+  const DRAFT = readFileSync("client/src/pages/Draft.tsx", "utf8");
+
+  /** As regras de CSS que escondem alguma coisa, com o seu seletor. */
+  function seletoresEscondidos(folha: string) {
+    const escondidos: string[] = [];
+    const regra = /([^{}]+)\{([^{}]*)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = regra.exec(folha)) !== null) {
+      if (!/display:\s*none/.test(m[2])) continue;
+      for (const sel of m[1].split(",")) escondidos.push(sel.trim());
+    }
+    return escondidos;
+  }
+
+  const ESCONDIDOS = seletoresEscondidos(CSS_LIMPO);
+
+  it.each([
+    ["draft-arena-reference", "Referência de pontuação"],
+    ["draft-intel-grid", "Leitura das fontes"],
+  ])("o conteúdo de \"%s\" não volta a ser escondido", (classe, rotulo) => {
+    // O controlo tem de continuar a existir: se alguém o remover, o teste
+    // deixa de fazer sentido e é melhor falhar do que passar por engano.
+    expect(DRAFT).toContain(classe);
+    expect(DRAFT).toContain(rotulo);
+
+    const culpados = ESCONDIDOS.filter((sel) => sel.includes(classe));
+    expect(culpados).toEqual([]);
+  });
+
+  it("o rótulo dentro da referência é legível e do tipo certo", () => {
+    const regra = CSS_LIMPO.match(/\.hybrid-usage-value small \{[^}]*\}/)?.[0];
+    expect(regra).toBeDefined();
+    // "Inter" nunca foi carregado por este site: caía no sans do browser.
+    expect(regra).not.toContain("Inter");
+    // 6px não se lê.
+    expect(regra).not.toMatch(/font-size:\s*[0-7]px/);
+  });
+});

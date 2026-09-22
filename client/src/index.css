@@ -1100,7 +1100,15 @@ main { max-width: 1600px; margin: 0 auto; }
 .hybrid-usage-copy small { display: block; overflow: hidden; margin-top: 3px; color: var(--bh-text-dim); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .hybrid-usage-value { display: grid; justify-items: end; color: var(--bh-info); font-family: "Barlow Condensed", sans-serif; line-height: .9; text-align: right; }
 .hybrid-usage-value b { font-size: 17px; font-weight: 800; }
-.hybrid-usage-value small { margin-top: 3px; color: var(--bh-info); font-family: "Inter", sans-serif; font-size: 6px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }
+/*
+ * Dizia `font-family: "Inter"` — um tipo de letra que este site nunca carrega,
+ * nem agora nem quando os tipos vinham do Google. Caía no sans genérico do
+ * browser, diferente de tudo à volta.
+ *
+ * E 6px não se lê. Enquanto o painel esteve escondido isso não incomodava
+ * ninguém; agora que abre, incomoda.
+ */
+.hybrid-usage-value small { margin-top: 3px; color: var(--bh-info); font-family: "Space Grotesk", sans-serif; font-size: 9px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }
 .hybrid-usage-reference > p { margin: 9px 0 0; color: var(--bh-text-dim); font-size: 8px; line-height: 1.4; }
 @media (max-width: 980px) {
   .draft-action-zone { grid-template-columns: 1fr; }
@@ -1633,14 +1641,39 @@ main { max-width: 1600px; margin: 0 auto; }
 @media (max-width: 700px) { .brawler-detail-main { padding: 20px 14px 45px; } .brawler-detail-nav { align-items: flex-start; flex-direction: column; } .brawler-profile-hero { grid-template-columns: 88px minmax(0, 1fr); gap: 14px; padding: 16px 13px; } .profile-hero-image { width: 88px; height: 88px; } .profile-hero-copy h1 { font-size: 40px; } .profile-hero-copy p { grid-column: 1 / -1; margin-top: 8px; font-size: 9px; } .profile-hero-score { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); } .profile-hero-score strong { font-size: 36px; } .profile-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .guide-callout { grid-template-columns: minmax(0, 1fr); padding: 13px; } .guide-callout-icon { display: none; } .guide-callout > div:not(.guide-callout-icon) { min-width: 0; } .guide-callout p { max-width: none; overflow-wrap: anywhere; } .guide-callout .source-link-stack { grid-column: 1 / -1; width: 100%; } .brawler-relation-columns { grid-template-columns: 1fr; } .brawler-relation-section { padding: 14px 11px; } .brawler-relation-grid { grid-template-columns: 1fr; } .relation-section-head h2 { font-size: 27px; } .profile-build-panel { grid-template-columns: 34px minmax(0, 1fr); padding: 14px 12px; } .profile-build-panel button { grid-column: 2; justify-self: start; } }
 
 /* Simple draft workspace: only the active decision surfaces remain visible. */
+/*
+ * Blocos que a arena nova substituiu.
+ *
+ * DOIS TINHAM DE SAIR DAQUI, E A RAZÃO INTERESSA
+ *
+ * Esta lista nasceu de um trabalho de esquema: secções antigas desligadas de
+ * uma vez só. Seis delas não tinham controlo nenhum a apontar-lhes — ficaram
+ * simplesmente fora do ecrã, que era a intenção.
+ *
+ * As outras duas tinham. E isso transformava-as noutra coisa:
+ *
+ *   <details><summary>Referência de pontuação</summary>  ...  </details>
+ *   <FoldPanel title="Leitura das fontes" summary="De onde vêm os números…">
+ *
+ * Quem carrega nesses controlos vê a seta virar e não aparece nada. O painel
+ * abre com zero de altura. O conteúdo até existe — o React desenha-o a cada
+ * mudança do draft, com os dados certos lá dentro ("#1 Wendy · Base 100.00 ·
+ * 102.88") — e uma linha de CSS escondia-o depois de pronto.
+ *
+ * Um controlo que responde ao toque e não entrega nada é pior do que um
+ * controlo que não existe: a primeira vez que alguém carrega, conclui que o
+ * site está avariado. E ninguém reparou porque estão os dois no fundo da
+ * página, atrás de um clique que quase nunca se dá.
+ *
+ * Ficam de fora desta lista. Se um deles voltar a ser de mais para o ecrã, o
+ * que sai é o controlo, não o conteúdo.
+ */
 .draft-shell .draft-hero,
 .draft-shell .official-events-banner,
 .draft-shell .scrim-setup-panel,
 .draft-shell .live-counter-engine,
 .draft-shell .final-win-probability,
-.draft-shell .game-plan-section,
-.draft-shell .draft-intel-grid,
-.draft-shell .draft-arena-reference { display: none; }
+.draft-shell .game-plan-section { display: none; }
 .draft-shell .draft-main { max-width: 1520px; margin: 0 auto; padding: 24px 28px 48px; }
 .draft-shell .draft-arena { width: 100%; margin: 0; padding: 0; border: 1px solid var(--bh-surface-3); border-top: 3px solid var(--bh-violet); background: linear-gradient(100deg, rgba(7, 14, 24, .94), rgba(10, 19, 31, .8), rgba(7, 14, 24, .94)) !important; box-shadow: none; }
 .draft-shell .draft-arena-header { align-items: center; gap: 16px; padding: 16px 18px; border-bottom-color: var(--bh-surface-3); background: var(--bh-surface); }
