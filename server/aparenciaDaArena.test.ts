@@ -172,7 +172,7 @@ describe("o movimento tem sempre saída para quem o não quer", () => {
     "bh-arena-breath",
     "bh-orbit-slow",
     "bh-hero-in",
-    "bh-stamp-land",
+    "bh-champion-in",
     "bh-champion-sweep",
   ];
 
@@ -183,7 +183,7 @@ describe("o movimento tem sempre saída para quem o não quer", () => {
       ".orbit-one",
       ".orbit-two",
       ".hero-content > *",
-      ".hero-stamp",
+      ".hero-champion-portrait",
       ".stat-card.accent-amber::before",
     ]) {
       expect(corpos).toContain(seletor);
@@ -325,5 +325,52 @@ describe("nenhum controlo abre para o vazio", () => {
     expect(regra).not.toContain("Inter");
     // 6px não se lê.
     expect(regra).not.toMatch(/font-size:\s*[0-7]px/);
+  });
+});
+
+describe("a entrada responde ao próprio título", () => {
+  /**
+   * "Joga com dados" e, ao lado, o dado: o nº1 do mapa escolhido.
+   *
+   * Antes disto o lado direito passou por três versões de decoração — vazio,
+   * depois um brilho, depois um selo "BH INTEL" rodado. E a entrada falhava a
+   * grelha em quatro pontos: título em 3 linhas a 1440px, subtítulo com 23
+   * palavras, etiqueta por cima E frase solta ao lado do botão, e nenhum
+   * visual que não fosse um gradiente.
+   */
+  const HOME = semComentarios(readFileSync("client/src/pages/Home.tsx", "utf8"));
+  const heroi = HOME.slice(HOME.indexOf("function Hero("), HOME.indexOf("function StatCard("));
+
+  it("a entrada e o cartão Melhor score dizem o mesmo nº1", () => {
+    // O cartão tirava o NÚMERO de measuredRows[0] e o NOME de currentRows[0].
+    // Se a primeira linha fosse de um brawler indisponível, o score de um
+    // aparecia com o nome de outro. Agora os dois lêem o mesmo `lider`.
+    expect(HOME).toContain("<Hero selectedMap={selectedMap} leader={lider}");
+    expect(HOME).toContain("value={formatScore(lider?.score ?? null)} detail={`${lider?.brawler");
+    expect(HOME).not.toContain("currentRows[0]?.brawler");
+  });
+
+  it("o nº1 é o máximo, não o primeiro da lista", () => {
+    expect(HOME).toMatch(/const lider = useMemo\([\s\S]*?rankedStatus !== "unavailable"[\s\S]*?\.reduce/);
+  });
+
+  it("a entrada fica com título, subtítulo e um botão — sem etiqueta nem frase solta", () => {
+    expect(heroi).not.toContain('className="eyebrow"');
+    expect(heroi).not.toContain("hero-footnote");
+    expect(heroi).not.toContain("hero-stamp");
+    const sub = heroi.match(/<p className="hero-copy">\s*([^<]+?)\s*<\/p>/)?.[1] ?? "";
+    expect(sub.split(/\s+/).length).toBeLessThanOrEqual(20);
+  });
+
+  it("um retrato que falha não deixa um quadrado partido", () => {
+    expect(heroi).toContain("onError={() => setRetratoFalhado(retrato)}");
+  });
+
+  it("o recuo lateral não volta a ser uma percentagem dentro da grelha", () => {
+    // Uma percentagem num item de grelha resolve contra a CÉLULA: o cartão
+    // saía 22px pela direita e o título desalinhava 24px da secção de baixo.
+    const regra = CSS_LIMPO.match(/\.hero-champion \{[^}]*\}/)?.[0] ?? "";
+    expect(regra).not.toMatch(/margin:[^;]*%/);
+    expect(CSS_LIMPO).toMatch(/\.hero-panel \{[^}]*padding: 0 7\.2%/);
   });
 });

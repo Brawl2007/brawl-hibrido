@@ -274,12 +274,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .primary-button, .copy-button { display: inline-flex; align-items: center; gap: 9px; color: #fff; background: var(--bh-violet-deep); padding: 12px 17px; font-size: 11px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 24px rgba(124,58,237,.22); transition: transform .16s ease, background .18s ease; }
 .primary-button:hover, .copy-button:hover { background: var(--bh-violet-deep); transform: translateY(-2px); }
 .primary-button:active, .copy-button:active { transform: scale(.97); }
-.hero-footnote { display: inline-flex; align-items: center; gap: 6px; color: var(--bh-text-dim); font-size: 10px; }
-.hero-footnote svg { color: var(--bh-warning); }
-.hero-stamp { position: absolute; z-index: 2; right: 7.2%; bottom: 53px; width: 92px; height: 92px; display: grid; place-items: center; color: var(--bh-violet); border: 1px solid rgba(167,139,250,.43); transform: rotate(12deg); background: rgba(6,9,16,.2); box-shadow: inset 0 0 25px rgba(124,58,237,.12), 0 0 30px rgba(124,58,237,.15); }
-.hero-stamp img { position: absolute; top: 8px; width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 0 11px rgba(167,139,250,.9)); transform: rotate(-12deg); }
-.hero-stamp span { font-family: "Barlow Condensed", sans-serif; font-size: 38px; line-height: .8; font-weight: 800; transform: rotate(-12deg); margin-top: 22px; }
-.hero-stamp small { position: absolute; bottom: 12px; font-size: 7px; letter-spacing: .2em; transform: rotate(-12deg); }
 .hero-orbit { position: absolute; z-index: 1; border: 1px solid rgba(167,139,250,.27); border-radius: 50%; transform: rotate(-19deg); }
 .orbit-one { width: 450px; height: 160px; right: 2%; top: 31px; }
 .orbit-two { width: 560px; height: 200px; right: -8%; top: 3px; border-color: rgba(34,211,238,.14); }
@@ -485,9 +479,6 @@ main { max-width: 1600px; margin: 0 auto; }
   .hero-content h1 { font-size: 59px; }
   .hero-copy { font-size: 12px; }
   .hero-actions { align-items: flex-start; flex-direction: column; gap: 14px; }
-  .hero-stamp { right: 23px; bottom: 28px; width: 70px; height: 70px; }
-  .hero-stamp span { font-size: 29px; }
-  .hero-stamp small { font-size: 6px; bottom: 9px; }
   .main-content { padding: 31px 16px 54px; }
   .intro-row, .section-heading-row, .data-heading { align-items: flex-start; flex-direction: column; }
   .intro-badge { align-self: flex-start; }
@@ -3062,7 +3053,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .data-heading h2,
 .card-heading h3,
 .map-card-name,
-.hero-stamp span,
 /* Os do Draft. O arena-v55.css dá-lhes o tamanho (27 e 28px) mas nunca lhes
    deu um tipo, por isso a escolha ainda é desta folha. */
 .draft-shell .draft-arena-header h2,
@@ -3187,15 +3177,6 @@ main { max-width: 1600px; margin: 0 auto; }
   to   { opacity: 1; transform: none; }
 }
 
-/* O selo tem de aterrar, não aparecer. */
-.hero-stamp {
-  animation: bh-stamp-land .5s var(--ease-pop) .34s backwards;
-  box-shadow: inset 0 0 25px rgba(124, 58, 237, .18), 0 0 40px rgba(124, 58, 237, .2);
-}
-@keyframes bh-stamp-land {
-  from { opacity: 0; transform: rotate(12deg) scale(1.28); }
-  to   { opacity: 1; transform: rotate(12deg) scale(1); }
-}
 
 /* ---------------------------------------------------------------------------
  * 3. As peças físicas chegam ao painel principal
@@ -3355,7 +3336,7 @@ main { max-width: 1600px; margin: 0 auto; }
   .orbit-one,
   .orbit-two,
   .hero-content > *,
-  .hero-stamp,
+  .hero-champion-portrait,
   .draft-recommendation-list > *:first-child .draft-recommendation::after,
   .draft-recommendation:first-child::after,
   .stat-card.accent-amber::before {
@@ -3409,8 +3390,6 @@ main { max-width: 1600px; margin: 0 auto; }
 @media (max-width: 900px) {
   .hero-content { max-width: 100%; padding-right: 7.2%; }
   .hero-panel { min-height: 0; }
-  /* O selo rodado ocupava um canto que, a esta largura, é do texto. */
-  .hero-stamp { display: none; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -3430,4 +3409,153 @@ main { max-width: 1600px; margin: 0 auto; }
  */
 @media (max-width: 700px) {
   .profile-chip { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 10. A entrada com alguém lá dentro
+ * ---------------------------------------------------------------------------
+ *
+ * Duas colunas: o texto à esquerda, o nº1 do mapa à direita. O foco de luz
+ * da secção 2 (`::before` e `::after` do painel) já estava centrado nessa
+ * zona — passa a iluminar alguém em vez de um vazio.
+ *
+ * O título estava em três linhas a 1440px ("JOGA COM DADOS. / GANHA COM /
+ * CONTEXTO."). A frase tem duas afirmações e o `<br>` já as separa; cada uma
+ * cabe numa linha se o tamanho for escolhido a partir da coluna que lhe sobra,
+ * e não da largura do ecrã inteiro. "GANHA COM CONTEXTO." mede ~10,4em em
+ * Lilita One — é esse número que manda no `clamp`.
+ */
+.hero-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+  /*
+   * O recuo lateral vive no PAINEL e não nas colunas.
+   *
+   * Primeira versão: `margin-right: 7.2%` no cartão e o `padding: 7.2%` que o
+   * texto já tinha. Medido a 1440px, o cartão saía 22px pela direita e o
+   * título começava 24px à esquerda de "O meta, sem ruído" logo abaixo.
+   *
+   * Uma percentagem num item de grelha resolve contra a ÁREA DA CÉLULA, não
+   * contra o painel: o 7,2% do texto passou de 86px para 62px, e o do cartão
+   * para 22px — que, numa coluna `auto`, nem entra no tamanho da coluna e
+   * transborda. No painel, o 7,2% resolve contra a mesma largura que o
+   * `.main-content` usa, e os dois voltam a alinhar ao píxel.
+   */
+  padding: 0 7.2%;
+}
+.hero-content { padding-left: 0; padding-right: 0; }
+/*
+ * Os mesmos degraus do `.main-content` (7,2% → 6% abaixo de 1180px → 16px
+ * abaixo de 680px). Se o recuo da entrada e o da página tiverem regras
+ * diferentes, o título e a secção de baixo desalinham num tamanho qualquer
+ * que ninguém testou — foi o que a medição apanhou a 1024 e a 390.
+ */
+@media (max-width: 1180px) { .hero-panel { padding-left: 6%; padding-right: 6%; } }
+@media (max-width: 680px)  { .hero-panel { padding-left: 16px; padding-right: 16px; } }
+.hero-content h1 { font-size: clamp(32px, 4.1vw, 64px); }
+.hero-copy { max-width: 46ch; }
+
+.hero-champion {
+  position: relative;
+  z-index: 2;
+  width: clamp(230px, 21vw, 310px);
+  margin: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hero-champion-portrait {
+  position: relative;
+  z-index: 1;
+  width: 86%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  /* O retrato pousa em cima do cartão: a sombra é o chão onde está de pé. */
+  margin-bottom: -34px;
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .55));
+  animation: bh-champion-in .7s var(--ease-arena) .28s backwards;
+}
+@keyframes bh-champion-in {
+  from { opacity: 0; transform: translateY(18px) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+.hero-champion-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 16px 16px 13px;
+  text-align: center;
+  border-radius: var(--bh-radius);
+  border: 1px solid rgba(255, 192, 46, .34);
+  border-bottom: 4px solid var(--bh-gold-deep);
+  background: linear-gradient(180deg, var(--bh-surface-2), var(--bh-surface));
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .45);
+}
+.hero-champion-rank {
+  display: block;
+  color: var(--bh-gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.hero-champion-name {
+  display: block;
+  margin-top: 6px;
+  color: var(--bh-text);
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+  overflow-wrap: anywhere;
+}
+.hero-champion-score {
+  display: block;
+  margin-top: 7px;
+  color: var(--bh-text-muted);
+  font-size: 11px;
+}
+.hero-champion-score b {
+  margin-right: 5px;
+  color: var(--bh-gold);
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+}
+
+/*
+ * Abaixo de 1100px: uma coluna, e o nº1 passa a faixa horizontal por BAIXO
+ * do botão. O botão tem de continuar à vista sem deslizar.
+ *
+ * Era 900px. A 1024 o cartão ao lado deixava ao título uma coluna de ~430px e
+ * "GANHA COM CONTEXTO." partia em três linhas — o corte passou para onde o
+ * título deixa de caber, não para um número redondo.
+ */
+@media (max-width: 1100px) {
+  .hero-panel { grid-template-columns: minmax(0, 1fr); }
+  .hero-champion {
+    width: auto;
+    margin: 0 0 32px;
+    flex-direction: row;
+    align-items: center;
+  }
+  .hero-champion-portrait {
+    width: 76px;
+    margin: 0 -14px 0 0;
+    flex: 0 0 auto;
+  }
+  .hero-champion-card {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 11px 14px 10px 24px;
+    text-align: left;
+  }
+  .hero-champion-name { font-size: 26px; margin-top: 3px; }
+  .hero-champion-score { margin-top: 4px; }
+  .hero-champion-score b { font-size: 18px; }
 }

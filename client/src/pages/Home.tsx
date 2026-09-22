@@ -345,30 +345,64 @@ function Topbar({ onMenu, capturedAt, lastStatus, liveState, onRefresh, isRefres
   );
 }
 
-function Hero({ selectedMap, onExplore }: { selectedMap: MapSummary; onExplore: () => void }) {
+/**
+ * A entrada.
+ *
+ * O lado direito era meio ecrã vazio, depois um brilho, depois um selo "BH
+ * INTEL" rodado — decoração, nas três versões. A regra que se aplica aqui é
+ * simples: texto e um gradiente não fazem uma entrada, fazem o lugar onde ela
+ * devia estar.
+ *
+ * O que lá entra agora é a resposta ao título. "Joga com dados" e, ao lado, o
+ * dado: quem é o nº1 do mapa escolhido, com o retrato e o Score. Muda sozinho
+ * quando se escolhe outro mapa, e o foco de luz que já lá estava passa a ter
+ * alguém para iluminar.
+ *
+ * O retrato vem do mesmo CDN da Brawlify que os cartões já usam. Se não houver
+ * id ou a imagem falhar, o cartão fica só com o nome e o número — nunca com um
+ * quadrado partido.
+ */
+function Hero({ selectedMap, leader, onExplore }: { selectedMap: MapSummary; leader?: RankedRow; onExplore: () => void }) {
+  const retrato = leader ? brawlerImageFor(leader.brawler, leader.brawlerId) : null;
+  // Guarda o endereço que falhou, não um sim/não: ao mudar de mapa o retrato
+  // novo tenta outra vez sem precisar de efeito nenhum a repor o estado.
+  const [retratoFalhado, setRetratoFalhado] = useState<string | null>(null);
+  const mostrarRetrato = Boolean(retrato) && retratoFalhado !== retrato;
+
   return (
     <section className="hero-panel" style={IMAGEM_PRINCIPAL ? { backgroundImage: `url(${IMAGEM_PRINCIPAL})` } : undefined}>
       <div className="hero-overlay" />
       <div className="hero-content">
-        <div className="eyebrow"><span className="eyebrow-line" /> Competitive intelligence <span className="eyebrow-dot" /></div>
         <h1>Joga com dados.<br /><em>Ganha com contexto.</em></h1>
         <p className="hero-copy">
-          A leitura híbrida da rotação Ranked: força competitiva, consistência de mapa e sinais de meta reunidos numa tabela que vai direto ao ponto.
+          A leitura híbrida da rotação Ranked: força competitiva, consistência de mapa e sinais de meta numa só tabela.
         </p>
         <div className="hero-actions">
           <button className="primary-button" onClick={onExplore}>
             Explorar {selectedMap.name} <ChevronRight size={17} />
           </button>
-          <span className="hero-footnote"><Sparkles size={14} /> 106 brawlers por mapa</span>
         </div>
       </div>
+      {leader ? (
+        <aside className="hero-champion" aria-label={`Nº1 em ${selectedMap.name}: ${leader.brawler}`}>
+          {mostrarRetrato ? (
+            <img
+              key={retrato}
+              className="hero-champion-portrait"
+              src={retrato!}
+              alt=""
+              onError={() => setRetratoFalhado(retrato)}
+            />
+          ) : null}
+          <div className="hero-champion-card">
+            <span className="hero-champion-rank">Nº1 em {selectedMap.name}</span>
+            <strong className="hero-champion-name">{leader.brawler}</strong>
+            <span className="hero-champion-score"><b>{formatScore(leader.score)}</b> Score Híbrido</span>
+          </div>
+        </aside>
+      ) : null}
       <div className="hero-orbit orbit-one" />
       <div className="hero-orbit orbit-two" />
-      <div className="hero-stamp">
-        <img src={LOGO_URL} alt="" />
-        <span>BH</span>
-        <small>INTEL</small>
-      </div>
     </section>
   );
 }
@@ -995,6 +1029,24 @@ export default function Home() {
   const handleRefresh = startRefresh;
 
   const currentRows = useMemo(() => mapDisplayRows.filter((row) => row.map === selectedMap.name), [mapDisplayRows, selectedMap.name]);
+  /**
+   * Quem lidera o mapa escolhido: a linha medida com o Score mais alto.
+   *
+   * Calculado aqui, uma vez, porque dois sítios dizem este facto — a entrada e
+   * o cartão "Melhor score" — e têm de dizer o mesmo. O cartão tirava o NÚMERO
+   * de `measuredRows[0]` (sem as linhas indisponíveis) e o NOME de
+   * `currentRows[0]` (com elas): se a primeira linha fosse de um brawler
+   * indisponível, o score de um aparecia com o nome de outro.
+   *
+   * E não confia na ordem da lista: procura o máximo, que é o que "nº1" quer
+   * dizer.
+   */
+  const lider = useMemo(
+    () => currentRows
+      .filter((row) => row.rankedStatus !== "unavailable" && row.score !== null)
+      .reduce<RankedRow | undefined>((melhor, row) => (!melhor || (row.score ?? -Infinity) > (melhor.score ?? -Infinity) ? row : melhor), undefined),
+    [currentRows],
+  );
   const mapExportTsv = useMemo(() => {
     const uniqueMaps = Array.from(new Map(allRankedMaps.map((map) => [map.name, map])).values());
     return buildMapsTsv(uniqueMaps);
@@ -1050,7 +1102,7 @@ export default function Home() {
       <div className="app-main">
         <Topbar onMenu={() => setMobileSidebar(true)} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
         <main>
-          <Hero selectedMap={selectedMap} onExplore={() => scrollTo("maps")} />
+          <Hero selectedMap={selectedMap} leader={lider} onExplore={() => scrollTo("maps")} />
           <div className="main-content">
             {avisoDaAutomatica ? (
               <p className="aviso-recolha" role="status">{avisoDaAutomatica}</p>
@@ -1071,7 +1123,7 @@ export default function Home() {
               </div>
             </div>
             <div className="stats-grid">
-              <StatCard icon={Trophy} label="Melhor score" value={formatScore(stats.top)} detail={`${currentRows[0]?.brawler ?? "—"} lidera o mapa`} accent="accent-amber" />
+              <StatCard icon={Trophy} label="Melhor score" value={formatScore(lider?.score ?? null)} detail={`${lider?.brawler ?? "—"} lidera o mapa`} accent="accent-amber" />
               <StatCard icon={BarChart3} label="Média do mapa" value={formatScore(stats.average)} detail="Score Híbrido médio" accent="accent-violet" />
               <StatCard icon={ShieldCheck} label="Tier S + A" value={`${stats.s + stats.a}`} detail={`${stats.s} S · ${stats.a} A recomendados`} accent="accent-cyan" />
               <StatCard icon={Database} label="Amostra" value={`${currentRows.length}`} detail="brawlers catalogados" accent="accent-blue" />
