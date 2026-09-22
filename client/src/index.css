@@ -6,6 +6,68 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * ---------------------------------------------------------------------------
+ * Tipos de letra, servidos daqui
+ * ---------------------------------------------------------------------------
+ *
+ * Estavam a ser pedidos ao Google por um <link> no index.html. Isso custava
+ * dois domínios externos antes da primeira letra aparecer, e enquanto não
+ * chegavam o título de entrada — 88 px — era desenhado num sans qualquer e
+ * saltava para o tipo certo a meio.
+ *
+ * O salto não era um pormenor: o Lilita One é o que faz a interface parecer o
+ * jogo. A identidade chegava depois da página, e a saltar.
+ *
+ * `swap` mantém-se de propósito: com `block` o título ficaria invisível até o
+ * ficheiro chegar, e texto que não se lê é pior do que texto que muda de
+ * forma. Como agora vêm do mesmo servidor, a janela do salto é curta.
+ *
+ * Subconjunto `latin` apenas — cobre U+0000–00FF, ou seja todo o português
+ * acentuado. Ficheiros e licenças em client/public/tipos/LEIA-ME.txt.
+ */
+@font-face {
+  font-family: "Lilita One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/tipos/lilita-one-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/tipos/barlow-condensed-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/tipos/barlow-condensed-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/tipos/barlow-condensed-800.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Um ficheiro variável cobre 400 a 700: por isso é só este. */
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/tipos/space-grotesk-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -2925,4 +2987,428 @@ main { max-width: 1600px; margin: 0 auto; }
   margin: 0 0 10px;
   color: var(--bh-text-muted);
   font-size: .74rem;
+}
+
+
+/*
+ * ===========================================================================
+ * ARENA — a camada que faz isto parecer Brawl Stars
+ * ===========================================================================
+ *
+ * O que estava cá antes já tinha as ideias certas escritas: tipografia pesada
+ * nos números, peças com aresta inferior, âmbar usado com avareza. O problema
+ * não era o sistema — era o alcance. O Lilita One, que é o tipo que faz a
+ * interface parecer o jogo, aparecia em quatro seletores de uma folha com
+ * quase três mil linhas. Fora do Draft, o site voltava a ser um painel de
+ * análise azul-escuro como qualquer outro.
+ *
+ * Esta secção leva o tratamento ao resto: títulos, números grandes, cartões
+ * de mapa e a entrada. Vem no fim do ficheiro de propósito — assim ganha os
+ * empates de especificidade sem precisar de `!important` em lado nenhum.
+ *
+ * REGRA QUE NÃO SE QUEBRA AQUI
+ *
+ * A folha antiga avisa, e tem razão: "quando tudo brilha, nada se destaca".
+ * Portanto nada disto aumenta a área colorida do ecrã. O que faz é o
+ * contrário — escurece e dessatura o terreno para que o âmbar que já existia
+ * passe a bater com mais força pelo contraste, em vez de ser mais uma cor
+ * saturada entre várias.
+ */
+
+:root {
+  /*
+   * Contorno de texto. O `--bh-edge` (45% de preto) chega para a aresta de um
+   * cartão, mas num número de 40px por cima de um fundo claro desaparece.
+   * A tipografia de jogo tem contorno OPACO — é isso que a faz ler-se sempre.
+   */
+  --bh-edge-hard: rgba(0, 0, 0, .78);
+
+  /*
+   * Curva de entrada. Mais forte do que a `--ease-out` que já cá estava: as
+   * curvas nativas do CSS são fracas de mais para se notar a intenção.
+   */
+  --ease-arena: cubic-bezier(.23, 1, .32, 1);
+}
+
+/* ---------------------------------------------------------------------------
+ * 1. A voz de display chega ao resto do site
+ * ---------------------------------------------------------------------------
+ *
+ * O Barlow Condensed continua a ser a ferramenta certa nas etiquetas pequenas
+ * em maiúsculas — é estreito e aguenta 8px. O que ele não faz é soar a jogo.
+ * Nos sítios onde o tamanho já é grande, quem manda passa a ser o Lilita One.
+ */
+.intro-copy h2,
+.section-heading-row h2,
+.data-heading h2,
+.card-heading h3,
+.map-card-name,
+.hero-stamp span,
+/* Os do Draft. O arena-v55.css dá-lhes o tamanho (27 e 28px) mas nunca lhes
+   deu um tipo, por isso a escolha ainda é desta folha. */
+.draft-shell .draft-arena-header h2,
+.draft-shell .recommendations-heading h2,
+.draft-shell .team-heading h3,
+.draft-shell .draft-contextbar-main strong {
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-weight: 400;
+  letter-spacing: .015em;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+}
+
+/*
+ * Os números. Num sítio cuja razão de existir é um Score, o número tem de ser
+ * a coisa mais presente do ecrã — e até aqui o do painel principal era
+ * desenhado no mesmo tipo das etiquetas à volta dele.
+ */
+.stat-value,
+.rank-kpi b,
+.rotation-kpis b,
+.weight-readout b,
+.map-card-meta strong,
+/* O Score de cada sugestão: o número maior e mais decisivo do Draft. Estava
+   a ser desenhado no mesmo tipo das etiquetas de 8px ao lado dele. */
+.recommendation-metrics b,
+.draft-probability-center strong {
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+}
+/* O valor do painel cresce: é o que se lê de pé, a um metro do ecrã. */
+.stat-value { font-size: 38px; letter-spacing: .01em; }
+
+/* O contorno dos títulos de entrada também endurece, pela mesma razão. */
+.bh-display,
+.draft-hero h1,
+.hero-content h1 {
+  text-shadow: 0 3px 0 var(--bh-edge-hard), 0 6px 14px rgba(0, 0, 0, .5);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. A entrada deixa de ser meio ecrã vazio
+ * ---------------------------------------------------------------------------
+ *
+ * O título ocupava a metade esquerda e a direita tinha duas elipses de 1px.
+ * Quase metade da vista mais importante do site não estava a fazer nada.
+ *
+ * O que entra lá não é decoração a mais: é um foco de luz. Uma arena é um
+ * sítio iluminado ao centro e escuro nas bordas, e é isso que estas duas
+ * camadas desenham. Custam zero elementos novos no JSX — são pseudo-elementos
+ * do painel que já existe.
+ */
+.hero-panel::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(52% 78% at 76% 42%, rgba(167, 139, 250, .22), transparent 68%),
+    radial-gradient(38% 62% at 88% 64%, rgba(34, 211, 238, .13), transparent 70%);
+}
+
+/*
+ * A respiração. Um foco de arena nunca está completamente parado, e é esse
+ * movimento mínimo que separa "imagem" de "sítio vivo".
+ *
+ * 9 segundos e só opacidade e escala: é lento de mais para distrair quem está
+ * a ler uma tabela, e não toca no esquema nem na pintura do resto da página.
+ */
+.hero-panel::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  right: 4%;
+  top: 50%;
+  width: 620px;
+  height: 620px;
+  margin-top: -310px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 192, 46, .085), transparent 62%);
+  animation: bh-arena-breath 9s var(--ease-arena) infinite alternate;
+}
+@keyframes bh-arena-breath {
+  from { opacity: .55; transform: scale(.94); }
+  to   { opacity: 1;   transform: scale(1.06); }
+}
+
+/* As órbitas que já lá estavam ganham corpo e passam a rodar devagar. */
+.hero-orbit {
+  border-width: 1px;
+  box-shadow: 0 0 24px rgba(167, 139, 250, .1);
+}
+.orbit-one { animation: bh-orbit-slow 34s linear infinite; }
+.orbit-two { animation: bh-orbit-slow 52s linear infinite reverse; }
+@keyframes bh-orbit-slow {
+  from { transform: rotate(-19deg); }
+  to   { transform: rotate(341deg); }
+}
+
+/*
+ * Entrada escalonada.
+ *
+ * Tudo aparecia ao mesmo tempo, o que é a definição de estático. Quatro peças
+ * com 70ms entre elas leem-se como uma sequência — o olho segue de cima para
+ * baixo e chega ao botão a saber o caminho.
+ *
+ * `backwards` é o que mantém a peça invisível durante o atraso; sem isso
+ * piscava visível antes de começar.
+ */
+.hero-content > * {
+  animation: bh-hero-in .62s var(--ease-arena) backwards;
+}
+.hero-content > *:nth-child(1) { animation-delay: .04s; }
+.hero-content > *:nth-child(2) { animation-delay: .11s; }
+.hero-content > *:nth-child(3) { animation-delay: .18s; }
+.hero-content > *:nth-child(4) { animation-delay: .25s; }
+@keyframes bh-hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* O selo tem de aterrar, não aparecer. */
+.hero-stamp {
+  animation: bh-stamp-land .5s var(--ease-pop) .34s backwards;
+  box-shadow: inset 0 0 25px rgba(124, 58, 237, .18), 0 0 40px rgba(124, 58, 237, .2);
+}
+@keyframes bh-stamp-land {
+  from { opacity: 0; transform: rotate(12deg) scale(1.28); }
+  to   { opacity: 1; transform: rotate(12deg) scale(1); }
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. As peças físicas chegam ao painel principal
+ * ---------------------------------------------------------------------------
+ *
+ * A aresta inferior sólida — o detalhe que separa "retângulo desenhado" de
+ * "peça que se carrega" — só existia no Draft. Aqui passa a valer para os
+ * cartões do painel e da biblioteca de mapas.
+ *
+ * CUIDADO QUE CUSTOU UMA VERIFICAÇÃO NO BROWSER
+ *
+ * `.stat-card` e `.map-card` são elementos do Framer Motion com `whileHover`
+ * e `initial`, e o Framer Motion escreve `transform` DIRETO no atributo
+ * style. Um `transform` meu em CSS aqui nunca ganharia — seria código morto,
+ * do tipo que parece estar a funcionar até alguém ir medir.
+ *
+ * Por isso estas duas peças reagem por aresta, cor e brilho, e o movimento
+ * fica por conta do Framer Motion, que já o faz. O `.primary-button` é um
+ * botão normal, e esse leva o gesto completo.
+ */
+.stat-card {
+  border-bottom: 3px solid var(--bh-edge);
+  border-radius: var(--bh-radius-sm);
+  transition: border-color .16s var(--ease-out), box-shadow .16s var(--ease-out), background .16s var(--ease-out);
+}
+/* A aresta herda o acento do cartão: é o que os liga ao número que mostram. */
+.stat-card.accent-amber { border-bottom-color: var(--bh-gold-deep); }
+.stat-card.accent-violet, .stat-card.accent-blue { border-bottom-color: var(--bh-violet-deep); }
+.stat-card.accent-cyan { border-bottom-color: #0e7490; }
+
+.map-card {
+  border-bottom: 3px solid var(--bh-edge);
+  border-radius: var(--bh-radius-sm);
+  transition: border-color .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.map-card.is-selected {
+  border-bottom-color: var(--bh-gold);
+  box-shadow: 0 0 0 1px rgba(255, 192, 46, .3), 0 10px 26px rgba(0, 0, 0, .45);
+}
+
+/*
+ * `hover` atrás de uma consulta de media: no telemóvel um toque dispara
+ * `:hover` e o estado fica preso depois do dedo sair.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .stat-card:hover { box-shadow: 0 10px 26px rgba(0, 0, 0, .4); }
+  .map-card:hover {
+    border-color: rgba(255, 255, 255, .17);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .42);
+  }
+}
+
+/* A ação principal passa a peça inteira: sobe ao passar, afunda ao carregar. */
+.primary-button, .copy-button {
+  border-radius: var(--bh-radius-sm);
+  border-bottom: 3px solid rgba(0, 0, 0, .42);
+  transition: transform .14s var(--ease-pop), background .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.primary-button:active, .copy-button:active {
+  transform: translateY(2px);
+  border-bottom-width: 1px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:hover, .copy-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(124, 58, 237, .32);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. A etiqueta de modo passa a ficha de jogo
+ * ---------------------------------------------------------------------------
+ *
+ * Já era a coisa mais parecida com Brawl Stars na página — modo por cor, uma
+ * por cada um. Só lhe faltava peso: 13% de fundo sobre azul-escuro lê-se como
+ * um rótulo, não como uma ficha.
+ */
+.map-card-mode {
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  border: 1px solid currentColor;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .45), inset 0 0 12px rgba(255, 255, 255, .06);
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. O primeiro lugar tem de se ver que é o primeiro
+ * ---------------------------------------------------------------------------
+ *
+ * Num sítio de competitivo, "a escolha" é a informação mais valiosa do ecrã.
+ * A recomendação do topo já tinha a aresta dourada; ganha agora um brilho que
+ * atravessa o cartão de sete em sete segundos.
+ *
+ * Sete segundos é deliberado. Uma animação que se veja muitas vezes por dia
+ * tem de ser rara o suficiente para nunca chatear — isto é um sinal, não um
+ * enfeite, e passa despercebido até o olho o apanhar de raspão.
+ */
+.draft-recommendation-list > *:first-child .draft-recommendation,
+.draft-recommendation:first-child,
+.stat-card.accent-amber {
+  position: relative;
+  overflow: hidden;
+}
+.draft-recommendation-list > *:first-child .draft-recommendation::after,
+.draft-recommendation:first-child::after,
+.stat-card.accent-amber::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 192, 46, .13), transparent);
+  animation: bh-champion-sweep 7s var(--ease-out) infinite;
+}
+@keyframes bh-champion-sweep {
+  0%        { left: -45%; opacity: 0; }
+  12%       { opacity: 1; }
+  38%, 100% { left: 105%; opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. O fundo do pavilhão NÃO se escreve aqui
+ * ---------------------------------------------------------------------------
+ *
+ * Escrevi primeiro um `.app-shell { background-image: ... }` nesta secção e
+ * fui ao browser ver o resultado: nenhum. Vale a pena deixar escrito porquê,
+ * porque não é óbvio e volta a acontecer a quem tentar.
+ *
+ * O `background-image` do `.app-shell` está disputado por três sítios:
+ *
+ *   1. o JSX, que o escreve INLINE (Home.tsx e Draft.tsx, com a textura);
+ *   2. este ficheiro;
+ *   3. o `arena-v55.css`, que é importado DEPOIS do index.css no main.tsx e
+ *      o declara com `!important`.
+ *
+ * Uma declaração `!important` numa folha de estilos ganha até a um estilo
+ * inline sem `!important`. Ou seja: o arena-v55 ganha sempre, e qualquer
+ * regra escrita aqui para essa propriedade é decoração que nunca pinta.
+ *
+ * Por isso as luzes de canto — as que dão ao fundo profundidade de pavilhão
+ * em vez de chapa lisa — foram escritas no `arena-v55.css`, ao lado da
+ * declaração que manda. Está lá com a explicação.
+ */
+
+/* ---------------------------------------------------------------------------
+ * 7. Quem prefere o ecrã quieto continua a ter direito a isso
+ * ---------------------------------------------------------------------------
+ *
+ * Reduzir movimento não é desligar tudo: o que desaparece é a DESLOCAÇÃO, que
+ * é o que provoca enjoo. As transições de cor e de opacidade ficam, porque
+ * essas ajudam a perceber o que mudou.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .hero-panel::after,
+  .orbit-one,
+  .orbit-two,
+  .hero-content > *,
+  .hero-stamp,
+  .draft-recommendation-list > *:first-child .draft-recommendation::after,
+  .draft-recommendation:first-child::after,
+  .stat-card.accent-amber::before {
+    animation: none;
+  }
+  .primary-button, .copy-button { transition: background .16s var(--ease-out); }
+  .primary-button:hover, .copy-button:hover,
+  .primary-button:active, .copy-button:active { transform: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 8. A medida do título de entrada, refeita para o tipo que lá está
+ * ---------------------------------------------------------------------------
+ *
+ * Isto é uma correção, não um enfeite, e a causa é instrutiva.
+ *
+ * O `.hero-content` tinha `max-width: 660px`, uma medida escolhida quando o
+ * título era desenhado em Barlow Condensed — que é, como o nome diz, estreito.
+ * Como o Lilita One nunca chegava a carregar (vinha do Google e bloqueava),
+ * ninguém viu o resultado real: o Lilita é MUITO mais largo, e nos 660px a
+ * frase partia-se em cinco linhas com um rasgo irregular à direita.
+ *
+ *     JOGA COM
+ *     DADOS.
+ *     GANHA
+ *     COM
+ *     CONTEXTO.
+ *
+ * Com os tipos a chegar de vez, a medida tem de ser a do tipo verdadeiro. A
+ * 980px a frase assenta nas duas linhas para que foi escrita — uma afirmação
+ * por linha — e passa a ler-se como um cartaz em vez de uma lista.
+ *
+ * O `min-height` desce junto: cinco linhas precisavam de 375px, duas não, e
+ * o que se ganha é a tabela começar mais perto do topo.
+ */
+.hero-content { max-width: 1100px; }
+.hero-content h1 {
+  font-size: clamp(38px, 5.4vw, 82px);
+  line-height: .92;
+  letter-spacing: -.005em;
+  /* Sem isto, uma palavra longa num ecrã estreito sai para fora do cartão. */
+  overflow-wrap: break-word;
+}
+.hero-panel { min-height: 330px; }
+
+/*
+ * Em ecrã estreito a entrada volta a ser uma coluna só, e aí a medida larga
+ * não serve de nada: o que conta é o título caber sem cortar nem empurrar a
+ * página para o lado.
+ */
+@media (max-width: 900px) {
+  .hero-content { max-width: 100%; padding-right: 7.2%; }
+  .hero-panel { min-height: 0; }
+  /* O selo rodado ocupava um canto que, a esta largura, é do texto. */
+  .hero-stamp { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 9. O crachá da versão estava sentado em cima do avatar
+ * ---------------------------------------------------------------------------
+ *
+ * Encontrado a medir a página a 390px, não a olhar para ela: o crachá da
+ * versão é `position: fixed` no canto superior direito com `z-index: 60`, e
+ * nessa largura o `.profile-chip` fica exatamente por baixo (x 338–372 contra
+ * 332–380 do crachá). Via-se meio disco dourado a sair de trás do amarelo, o
+ * tipo de coisa que se lê como defeito sem se perceber o que é.
+ *
+ * O avatar não faz nada — não é botão nem menu, é um "BH / Analista" fixo.
+ * Num ecrã onde o espaço da barra é disputado, a peça decorativa é a que sai.
+ * O crachá fica, porque esse serve para responder à pergunta "é a versão nova
+ * ou a antiga?" sem ir ver registos de build.
+ */
+@media (max-width: 700px) {
+  .profile-chip { display: none; }
 }

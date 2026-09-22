@@ -15,9 +15,24 @@
     <meta name="theme-color" content="#0b0e14" />
     <meta name="description" content="Brawl Híbrido — inteligência competitiva para a rotação Ranked de Brawl Stars." />
     <link rel="icon" type="image/svg+xml" href="/marca/logo-provisorio.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Lilita+One&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!--
+      Os tipos de letra passaram a ser servidos daqui.
+
+      Antes eram dois domínios externos a bloquear a pintura: o browser tinha
+      de abrir fonts.googleapis.com para ler a folha de estilos e só depois
+      ia a fonts.gstatic.com buscar os ficheiros. Até isso acontecer, o
+      título de 88px da entrada aparecia num sans qualquer e saltava para o
+      tipo certo a meio — e é o Lilita One que dá à interface o ar do jogo.
+      A identidade chegava atrasada e a saltar.
+
+      Agora são 100 KB servidos do mesmo sítio que o resto. O Lilita One vai
+      pré-carregado porque é o primeiro que se vê; os outros entram com
+      `font-display: swap`, declarados no index.css.
+
+      Ficheiros e licenças: client/public/tipos/LEIA-ME.txt
+    -->
+    <link rel="preload" href="/tipos/lilita-one-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/tipos/space-grotesk-var.woff2" as="font" type="font/woff2" crossorigin />
     <title>Brawl Híbrido — Ranked intelligence</title>
   </head>
   <body>

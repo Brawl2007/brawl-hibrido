@@ -1,9 +1,43 @@
 /* v55: lightweight arena skin; scoring and source data stay in shared modules. */
-.app-shell { background-color: #090f26; background-image: radial-gradient(ellipse at 20% 0%, #25377880, transparent 65%) !important; }
+/*
+ * O fundo do pavilhão.
+ *
+ * Esta declaração tem `!important`, e é por isso que ela mora aqui: o
+ * `background-image` do `.app-shell` também é escrito INLINE pelo Home.tsx e
+ * pelo Draft.tsx, e `!important` numa folha de estilos ganha a um estilo
+ * inline que não o tenha. Quem escrever esta propriedade noutro sítio está a
+ * escrever código que nunca pinta — foi tentado no index.css e não pintou.
+ *
+ * Era uma só luz no canto superior esquerdo. Passam a ser três, e não é
+ * enfeite: um pavilhão tem luz nos cantos e escuro no meio do chão, e são os
+ * cantos acesos que dão a sensação de profundidade em vez de chapa lisa. A
+ * área colorida quase não muda — o que muda é haver relevo.
+ */
+.app-shell {
+  background-color: #070c1f;
+  background-image:
+    radial-gradient(58% 44% at 6% 0%, rgba(124, 58, 237, .26), transparent 64%),
+    radial-gradient(52% 40% at 97% 6%, rgba(34, 211, 238, .13), transparent 62%),
+    radial-gradient(96% 52% at 50% 100%, rgba(124, 58, 237, .11), transparent 72%) !important;
+}
 .site-version-badge { position: fixed; top: 6px; right: 10px; z-index: 60; pointer-events: none; background: #ffce45; color: #19213a; padding: 4px 9px; border: 2px solid #111a33; border-radius: 7px; font: 900 12px/1.1 sans-serif; box-shadow: 0 2px 0 #03091d; }
 .draft-shell .draft-main { max-width: 1720px; padding: 22px 24px 48px; gap: 18px; }
 .draft-shell .draft-contextbar { order: 0; margin: 0; padding: 16px 20px; border: 1px solid #415591; border-radius: 16px; background: linear-gradient(115deg, #233d83, #392566); box-shadow: 0 5px 0 #050b20; }
-.draft-contextbar-kicker { color: #ffcf4b; }
+/*
+ * A etiqueta "Draft" era dourada SOBRE dourado.
+ *
+ * O index.css desenha esta etiqueta como uma ficha de fundo âmbar com texto
+ * quase preto por cima, que é o que a torna legível. Esta linha trocava o
+ * texto para #ffcf4b e deixava o fundo #ffc02e onde estava: duas cores a um
+ * ponto de distância uma da outra, com rácio de contraste de 1,07:1 — o
+ * mínimo legível é 4,5:1.
+ *
+ * Na prática a palavra desaparecia. Só se via a mancha amarela, e ninguém
+ * reparou porque a mancha sozinha parece decoração intencional.
+ *
+ * Volta ao texto escuro do index.css, que dá 11:1 sobre o mesmo âmbar.
+ */
+.draft-contextbar-kicker { color: #1a1206; font-weight: 800; }
 .draft-shell .draft-contextbar-main strong { color: #fff; font-size: 28px; }
 .draft-shell .draft-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; width: 100%; }
 .draft-shell .draft-content > * { order: 0; margin: 0; min-width: 0; grid-column: 1 / -1; }
@@ -241,4 +275,74 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+
+/*
+ * ===========================================================================
+ * v118 — o Draft com cara de jogo
+ * ===========================================================================
+ *
+ * Este ficheiro é carregado DEPOIS do index.css e por isso é ele que decide a
+ * aparência do Draft. As regras abaixo ficam aqui pela mesma razão: escritas
+ * no index.css seriam apagadas pelas que estão em cima.
+ */
+
+/*
+ * O primeiro da lista.
+ *
+ * Todas as sugestões tinham a mesma aresta preta. Num sítio de competitivo a
+ * informação mais valiosa do ecrã é qual é A escolha, e essa não estava a ser
+ * dita por nenhuma diferença visual — só pela posição.
+ *
+ * Dourado, e só no primeiro. Se fosse no top 3 voltava a não dizer nada.
+ */
+.draft-shell .draft-recommendation-list > :first-child .draft-recommendation,
+.draft-shell .draft-recommendation-list > .draft-recommendation:first-child {
+  border-color: #6a5220;
+  border-bottom-color: #ffc02e;
+  background: linear-gradient(118deg, #24304f, #1d2a49);
+}
+
+/*
+ * Os slots do tabuleiro afundam ao carregar.
+ *
+ * O index.css já dava este gesto ao `.draft-slot`, mas aqui o slot é
+ * redesenhado com outro raio e outro tamanho, e o `transform` do hover do
+ * index.css perdia para as regras deste ficheiro. Fica declarado onde manda.
+ */
+.draft-shell .draft-slot {
+  border-bottom: 3px solid #070e23;
+  transition: transform .14s cubic-bezier(.34, 1.56, .64, 1), border-color .14s ease, background .14s ease;
+}
+.draft-shell .draft-slot:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .draft-shell .draft-slot:hover:not(:disabled) { transform: translateY(-2px); }
+}
+
+/*
+ * O slot à espera de escolha pulsa.
+ *
+ * É a única coisa do ecrã que o jogador TEM de fazer a seguir, e estava a ser
+ * dita por uma borda amarela parada no meio de um tabuleiro com doze caixas.
+ * 2,4 s é lento o suficiente para não competir com a leitura da lista ao lado.
+ */
+.draft-shell .draft-slot.is-active {
+  animation: bh-slot-waiting 2.4s ease-in-out infinite;
+}
+@keyframes bh-slot-waiting {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 212, 83, .22); }
+  50%      { box-shadow: 0 0 0 5px rgba(255, 212, 83, .05); }
+}
+
+/* A barra de contexto ganha a aresta sólida das outras peças. */
+.draft-shell .draft-contextbar {
+  border-bottom: 4px solid #050b20;
+  box-shadow: 0 5px 0 rgba(5, 11, 32, .5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-shell .draft-slot.is-active { animation: none; }
+  .draft-shell .draft-slot { transition: border-color .14s ease, background .14s ease; }
+  .draft-shell .draft-slot:hover, .draft-shell .draft-slot:active { transform: none; }
 }
