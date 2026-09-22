@@ -4,7 +4,7 @@
  * cyan telemetry, amber S-tier emphasis, asymmetric data-first composition.
  */
 import { LOGO, IMAGEM_PRINCIPAL, FUNDO_DE_MAPA, TEXTURA, fundoCom } from "@/lib/imagens";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
@@ -368,6 +368,30 @@ function Hero({ selectedMap, leader, onExplore }: { selectedMap: MapSummary; lea
   // novo tenta outra vez sem precisar de efeito nenhum a repor o estado.
   const [retratoFalhado, setRetratoFalhado] = useState<string | null>(null);
   const mostrarRetrato = Boolean(retrato) && retratoFalhado !== retrato;
+  /*
+   * Duas animações diferentes para o mesmo cartão, e não é capricho.
+   *
+   * Ao abrir a página, o nº1 entra depois do título, como a última peça da
+   * cascata. Ao escolher outro mapa, é resposta a um clique — e resposta a um
+   * clique tem de começar já. Medido antes: o retrato ficava 240ms invisível
+   * (o atraso da entrada a ser reaproveitado) e só assentava aos ~800ms,
+   * enquanto o nome e o número trocavam de uma vez, sem movimento nenhum.
+   *
+   */
+  //
+  // PRIMEIRA VERSÃO ERRADA, APANHADA A MEDIR: "primeira vez" era o primeiro
+  // render do componente. Mas a entrada renderiza primeiro SEM dados, e o nº1
+  // só aparece depois — quando já não era "a primeira vez". Resultado: ao
+  // abrir a página, o cartão usava sempre a animação de troca.
+  //
+  // Agora "primeira vez" é o primeiro nº1 MOSTRADO, e a entrada acaba no
+  // momento em que se mostra outro. Uma atualização dos dados com o mesmo nº1
+  // não muda a classe — senão a animação repetia a cada sincronização.
+  const primeiroMostrado = useRef<string | null>(null);
+  const jaTrocou = useRef(false);
+  const chaveDoLider = leader ? `${selectedMap.name}::${leader.brawler}` : null;
+  if (chaveDoLider && primeiroMostrado.current === null) primeiroMostrado.current = chaveDoLider;
+  if (chaveDoLider && chaveDoLider !== primeiroMostrado.current) jaTrocou.current = true;
 
   return (
     <section className="hero-panel" style={IMAGEM_PRINCIPAL ? { backgroundImage: `url(${IMAGEM_PRINCIPAL})` } : undefined}>
@@ -384,10 +408,15 @@ function Hero({ selectedMap, leader, onExplore }: { selectedMap: MapSummary; lea
         </div>
       </div>
       {leader ? (
-        <aside className="hero-champion" aria-label={`Nº1 em ${selectedMap.name}: ${leader.brawler}`}>
+        <aside
+          // A chave inclui o mapa: se o mesmo brawler lidera dois mapas, o
+          // "Nº1 em …" mudou e a troca tem de se ver na mesma.
+          key={chaveDoLider!}
+          className={`hero-champion ${jaTrocou.current ? "is-troca" : "is-entrada"}`}
+          aria-label={`Nº1 em ${selectedMap.name}: ${leader.brawler}`}
+        >
           {mostrarRetrato ? (
             <img
-              key={retrato}
               className="hero-champion-portrait"
               src={retrato!}
               alt=""
@@ -496,9 +525,20 @@ function MapSelector({
               className={`map-card ${selected ? "is-selected" : ""}`}
               onClick={() => onSelect(map)}
               style={{ backgroundImage: fundoCom("linear-gradient(135deg, rgba(13,16,26,.78), rgba(22,15,43,.42))", selected ? mapImageFor(map) : FUNDO_DE_MAPA) }}
+              /*
+               * Entram quando aparecem, não quando a página abre. Estão abaixo
+               * da dobra: medido aos 500ms, 26 destes cartões estavam a animar
+               * FORA do ecrã, ao mesmo tempo que o título — 41 animações em
+               * paralelo, e a cascata que ninguém chegava a ver.
+               *
+               * O atraso segue a coluna (`index % 6`), não a posição na lista:
+               * com `index * 0.025` o 26.º cartão esperava 650ms, acima do
+               * orçamento de 500ms para uma cascata inteira.
+               */
               initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.24, delay: index * 0.025 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25 }}
+              transition={{ duration: 0.24, delay: (index % 6) * 0.035 }}
             >
               <span className="map-card-top">
                 <span className={`map-card-mode mode-${map.modeId}`}><ModeIcon modeId={map.modeId} size={14} /> {map.mode}</span>
@@ -920,7 +960,7 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
         {current.metrics.map((metric) => <span key={metric.label}><b>{coverageFor(metric.key)}/{rows.length}</b> {metric.label}</span>)}
       </div>
       <div className="source-card-grid" aria-label={`Seis brawlers em destaque no ${current.label}`}>
-        {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
+        {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
           <div className="source-card-top"><span className="source-rank">{String(index + 1).padStart(2, "0")}</span><span className="source-tier"><TierBadge tier={row.tier} /></span></div>
           <div className="source-brawler"><span className="source-avatar" style={brawlerImageFor(row.brawler, row.brawlerId) ? { backgroundImage: `url(${brawlerImageFor(row.brawler, row.brawlerId)})` } : undefined}>{!brawlerImageFor(row.brawler, row.brawlerId) && row.brawler.slice(0, 2).toUpperCase()}</span><strong>{row.brawler}</strong></div>
           <div className="source-metric-grid">{current.metrics.map((metric) => <div className="source-metric" key={metric.label}><span>{metric.label}</span><strong>{readMetric(row, metric.key)}</strong></div>)}</div>

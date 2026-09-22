@@ -374,3 +374,81 @@ describe("a entrada responde ao próprio título", () => {
     expect(CSS_LIMPO).toMatch(/\.hero-panel \{[^}]*padding: 0 7\.2%/);
   });
 });
+
+describe("o movimento não custa o site", () => {
+  /**
+   * Medido em repouso, sem ninguém a tocar em nada (v121 → v122):
+   *
+   *   entrada   262ms de trabalho em 6s  →  11ms
+   *   Draft     676ms de trabalho em 6s  →  25ms   (11% do processador, parado)
+   *
+   * Os dois culpados eram animações infinitas minhas, da v118: o brilho do nº1
+   * animava `left` (refaz o esquema a cada frame) e o pulso do slot animava
+   * `box-shadow` (repinta a cada frame). O compositor só anima sozinho
+   * `transform` e `opacity`; tudo o resto acorda o fio principal, para sempre.
+   */
+  function corpoDoKeyframes(folha: string, nome: string) {
+    const i = folha.indexOf(`@keyframes ${nome} {`);
+    if (i === -1) return null;
+    let profundidade = 0;
+    for (let j = folha.indexOf("{", i); j < folha.length; j += 1) {
+      if (folha[j] === "{") profundidade += 1;
+      else if (folha[j] === "}" && --profundidade === 0) return folha.slice(i, j + 1);
+    }
+    return null;
+  }
+
+  it("toda a animação infinita só mexe em transform e opacity", () => {
+    const folhas = [CSS_LIMPO, ARENA_LIMPO];
+    const infinitas = new Set<string>();
+    for (const f of folhas) {
+      for (const m of f.matchAll(/animation:\s*([a-z0-9-]+)[^;]*\binfinite\b/g)) infinitas.add(m[1]);
+    }
+    expect(infinitas.size).toBeGreaterThanOrEqual(4);
+    const culpadas: string[] = [];
+    for (const nome of infinitas) {
+      const corpo = folhas.map((f) => corpoDoKeyframes(f, nome)).find(Boolean);
+      if (!corpo) continue;
+      const props = [...corpo.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+      const proibidas = props.filter((x) => x !== "transform" && x !== "opacity");
+      if (proibidas.length) culpadas.push(`${nome}: ${[...new Set(proibidas)].join(", ")}`);
+    }
+    expect(culpadas).toEqual([]);
+  });
+
+  it("o brilho do nº1 não volta a apanhar as doze sugestões", () => {
+    // Cada sugestão vive no seu próprio <div> e é sempre a primeira dele.
+    expect(CSS_LIMPO).not.toMatch(/(^|[,\s])\.draft-recommendation:first-child/m);
+  });
+
+  it("o título, que é o LCP, não começa invisível", () => {
+    // O fade de 620ms atrasava o LCP 672ms: o Chrome não conta um elemento a
+    // opacidade 0 como pintado. Sobe, mas está visível desde o primeiro frame.
+    expect(CSS_LIMPO).toContain(".hero-content > h1 { animation-name: bh-hero-rise; }");
+    expect(corpoDoKeyframes(CSS_LIMPO, "bh-hero-rise")).not.toContain("opacity");
+  });
+
+  it("os cartões abaixo da dobra entram quando aparecem, não à entrada", () => {
+    // Aos 500ms estavam 41 animações em paralelo, 32 delas fora do ecrã.
+    const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
+    expect(HOME).not.toContain("delay: index * 0.025");
+    expect(HOME).toContain("delay: (index % 6) * 0.035");
+    expect(HOME.match(/whileInView=\{\{ opacity: 1, y: 0 \}\}/g)?.length).toBe(2);
+    expect(HOME.match(/viewport=\{\{ once: true/g)?.length).toBe(2);
+  });
+
+  it("a troca de mapa responde já, e a entrada é só a primeira", () => {
+    const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
+    // "Primeira vez" é o primeiro nº1 MOSTRADO, não o primeiro render: a
+    // entrada renderiza sem dados antes de o nº1 existir.
+    expect(HOME).toContain("primeiroMostrado.current === null");
+    expect(HOME).toContain('jaTrocou.current ? "is-troca" : "is-entrada"');
+    // A troca não tem atraso: resposta a um clique começa no frame do clique.
+    expect(CSS_LIMPO).toContain(".hero-champion.is-troca .hero-champion-card {\n  animation: bh-champion-swap var(--dur-padrao) var(--ease-pop) both;");
+  });
+
+  it("o Framer Motion respeita quem pediu menos movimento", () => {
+    const APP = readFileSync("client/src/App.tsx", "utf8");
+    expect(APP).toContain('<MotionConfig reducedMotion="user">');
+  });
+});

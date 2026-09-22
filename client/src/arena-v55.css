@@ -327,12 +327,29 @@
  * dita por uma borda amarela parada no meio de um tabuleiro com doze caixas.
  * 2,4 s é lento o suficiente para não competir com a leitura da lista ao lado.
  */
-.draft-shell .draft-slot.is-active {
+/*
+ * CUSTO MEDIDO, E CORRIGIDO NA v122
+ *
+ * Animava `box-shadow`, que obriga a repintar a cada frame. Medido em
+ * repouso no Draft: 240 recálculos de estilo e ~316ms de trabalho a cada 4
+ * segundos — perto de 8% do fio principal ocupado com um slot vazio.
+ *
+ * O anel passa para um `::after` desenhado UMA vez, e o que pulsa é a sua
+ * opacidade e escala: as duas propriedades que o compositor anima sozinho,
+ * sem acordar o fio principal.
+ */
+.draft-shell .draft-slot.is-active::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 11px;
+  box-shadow: 0 0 0 3px rgba(255, 212, 83, .3);
+  pointer-events: none;
   animation: bh-slot-waiting 2.4s ease-in-out infinite;
 }
 @keyframes bh-slot-waiting {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 212, 83, .22); }
-  50%      { box-shadow: 0 0 0 5px rgba(255, 212, 83, .05); }
+  0%, 100% { opacity: .75; transform: scale(1); }
+  50%      { opacity: .12; transform: scale(1.035); }
 }
 
 /* A barra de contexto ganha a aresta sólida das outras peças. */
@@ -342,7 +359,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .draft-shell .draft-slot.is-active { animation: none; }
+  .draft-shell .draft-slot.is-active::after { animation: none; }
   .draft-shell .draft-slot { transition: border-color .14s ease, background .14s ease; }
   .draft-shell .draft-slot:hover, .draft-shell .draft-slot:active { transform: none; }
 }

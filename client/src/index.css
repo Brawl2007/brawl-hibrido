@@ -675,8 +675,21 @@ main { max-width: 1600px; margin: 0 auto; }
 .draft-voice-button:hover:not(:disabled) { border-color: rgba(94,234,212,.82); background: rgba(45,212,191,.16); }
 .draft-voice-button:active:not(:disabled) { transform: scale(.97); }
 .draft-voice-button:disabled { cursor: not-allowed; opacity: .45; }
-.draft-voice-button.is-listening { color: #fff; border-color: rgba(251,113,133,.86); background: rgba(244,63,94,.22); animation: voice-pulse 1s ease-in-out infinite alternate; }
-@keyframes voice-pulse { from { box-shadow: 0 0 0 0 rgba(251,113,133,.08); } to { box-shadow: 0 0 0 6px rgba(251,113,133,.20); } }
+.draft-voice-button.is-listening { position: relative; color: #fff; border-color: rgba(251,113,133,.86); background: rgba(244,63,94,.22); }
+/* Enquanto o microfone ouve. Era `box-shadow` a crescer 0 → 6px, que repinta
+   a cada frame; o anel passa a ser desenhado uma vez e o que pulsa é a
+   opacidade e a escala, que o compositor anima sozinho. (v122) */
+.draft-voice-button.is-listening::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 6px rgba(251,113,133,.2);
+  pointer-events: none;
+  animation: voice-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes voice-pulse { from { opacity: .15; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .draft-voice-button.is-listening::after { animation: none; opacity: .6; } }
 .draft-tier-filter { display: flex; gap: 4px; }
 .draft-tier-filter button { padding: 8px 10px; color: var(--bh-text-dim); border: 1px solid transparent; background: transparent; font-size: 9px; cursor: pointer; }
 .draft-tier-filter button:hover, .draft-tier-filter button.is-active { color: #fff; border-color: rgba(167,139,250,.28); background: rgba(124,58,237,.15); }
@@ -2044,8 +2057,9 @@ main { max-width: 1600px; margin: 0 auto; }
 .draft-recommendation:hover { transform: translateY(-2px); border-color: var(--bh-line-strong); }
 .draft-recommendation:active { transform: translateY(2px); border-bottom-width: 1px; }
 /* O primeiro da lista é a recomendação: é o único que ganha a cor de energia. */
-.draft-recommendation-list > *:first-child .draft-recommendation,
-.draft-recommendation:first-child { border-bottom-color: var(--bh-gold); }
+/* Só o do primeiro invólucro. O seletor sem invólucro apanhava TODAS as
+   sugestões: cada uma vive no seu próprio <div>, e é sempre a primeira dele. */
+.draft-recommendation-list > *:first-child .draft-recommendation { border-bottom-color: var(--bh-gold); }
 
 /* --- Ação principal ------------------------------------------------------- */
 .refresh-button {
@@ -3171,10 +3185,27 @@ main { max-width: 1600px; margin: 0 auto; }
 .hero-content > *:nth-child(1) { animation-delay: .04s; }
 .hero-content > *:nth-child(2) { animation-delay: .11s; }
 .hero-content > *:nth-child(3) { animation-delay: .18s; }
-.hero-content > *:nth-child(4) { animation-delay: .25s; }
 @keyframes bh-hero-in {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: none; }
+}
+/*
+ * O TÍTULO NÃO DESVANECE — SÓ SOBE. (v122)
+ *
+ * O título é o maior texto do primeiro ecrã, e por isso é ele que o browser
+ * usa para medir quando a página "apareceu" (LCP). E o Chrome não conta um
+ * elemento a opacidade 0 como pintado. Medido em telemóvel com CPU 4× e 4G:
+ * a página estava desenhada aos 2416ms e o LCP só chegava aos 3088ms — os
+ * 672ms do fade de entrada, ao milissegundo.
+ *
+ * Visível desde o primeiro frame, a subir os mesmos 14px: o movimento fica e
+ * o atraso desaparece. As outras peças da cascata continuam a desvanecer —
+ * não são elas que o LCP mede.
+ */
+.hero-content > h1 { animation-name: bh-hero-rise; }
+@keyframes bh-hero-rise {
+  from { transform: translateY(14px); }
+  to   { transform: none; }
 }
 
 
@@ -3275,28 +3306,41 @@ main { max-width: 1600px; margin: 0 auto; }
  * enfeite, e passa despercebido até o olho o apanhar de raspão.
  */
 .draft-recommendation-list > *:first-child .draft-recommendation,
-.draft-recommendation:first-child,
 .stat-card.accent-amber {
   position: relative;
   overflow: hidden;
 }
 .draft-recommendation-list > *:first-child .draft-recommendation::after,
-.draft-recommendation:first-child::after,
 .stat-card.accent-amber::before {
   content: "";
   position: absolute;
   z-index: 0;
   top: 0;
   bottom: 0;
+  left: 0;
   width: 42%;
   pointer-events: none;
   background: linear-gradient(100deg, transparent, rgba(255, 192, 46, .13), transparent);
   animation: bh-champion-sweep 7s var(--ease-out) infinite;
 }
+/*
+ * CUSTO MEDIDO, E CORRIGIDO NA v122
+ *
+ * Animava `left`, que obriga o browser a refazer o esquema em cada frame, no
+ * fio principal, para sempre. Medido em repouso, sem ninguém a tocar em
+ * nada: 107 cálculos de esquema e ~200ms de trabalho a cada 4 segundos na
+ * entrada. Com `transform` o mesmo brilho corre no compositor.
+ *
+ * E o seletor antigo apanhava as DOZE sugestões do Draft em vez de uma: o
+ * "só o primeiro brilha" nunca foi verdade, e o custo era doze vezes o de um.
+ *
+ * Percentagens do PRÓPRIO elemento (42% do cartão): -107% põe-no 45% fora à
+ * esquerda, 250% põe-no 105% à direita — o mesmo percurso de antes.
+ */
 @keyframes bh-champion-sweep {
-  0%        { left: -45%; opacity: 0; }
+  0%        { transform: translateX(-107%); opacity: 0; }
   12%       { opacity: 1; }
-  38%, 100% { left: 105%; opacity: 0; }
+  38%, 100% { transform: translateX(250%); opacity: 0; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -3337,8 +3381,9 @@ main { max-width: 1600px; margin: 0 auto; }
   .orbit-two,
   .hero-content > *,
   .hero-champion-portrait,
+  .hero-champion-card,
+  .hero-champion,
   .draft-recommendation-list > *:first-child .draft-recommendation::after,
-  .draft-recommendation:first-child::after,
   .stat-card.accent-amber::before {
     animation: none;
   }
@@ -3475,7 +3520,6 @@ main { max-width: 1600px; margin: 0 auto; }
   /* O retrato pousa em cima do cartão: a sombra é o chão onde está de pé. */
   margin-bottom: -34px;
   filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .55));
-  animation: bh-champion-in .7s var(--ease-arena) .28s backwards;
 }
 @keyframes bh-champion-in {
   from { opacity: 0; transform: translateY(18px) scale(.94); }
@@ -3559,3 +3603,86 @@ main { max-width: 1600px; margin: 0 auto; }
   .hero-champion-score { margin-top: 4px; }
   .hero-champion-score b { font-size: 18px; }
 }
+
+
+/* ---------------------------------------------------------------------------
+ * 11. Identidade de movimento
+ * ---------------------------------------------------------------------------
+ *
+ * Personalidade: ENERGÉTICA, com uma ponta de lúdica. O jogo é rápido e as
+ * peças têm peso — as entradas decidem depressa e as confirmações encaixam
+ * com um ligeiro excesso no fim.
+ *
+ * Três durações e duas curvas cobrem tudo o que esta camada anima. O resto da
+ * folha ainda tem valores soltos (.14s, .16s, .18s, .22s…) de antes disto;
+ * não foram reescritos à cega, e o que for tocado daqui em diante usa estes.
+ *
+ *   --dur-rapida   160ms  carregar, passar o rato: tem de parecer instantâneo
+ *   --dur-padrao   240ms  mudança de estado: um cartão que troca de conteúdo
+ *   --dur-lenta    520ms  entrada: algo que aparece pela primeira vez
+ *
+ *   --ease-arena   desacelera com decisão — entradas e mudanças de estado
+ *   --ease-pop     excesso de ~10% no fim — só para o que "encaixa"
+ */
+:root {
+  --dur-rapida: 160ms;
+  --dur-padrao: 240ms;
+  --dur-lenta: 520ms;
+}
+
+/*
+ * A cascata da entrada, de uma ponta à outra:
+ *
+ *     0ms  título        (secção 2)
+ *    70ms  subtítulo
+ *   140ms  botão
+ *   260ms  cartão do nº1 — o palco
+ *   320ms  retrato — aterra no palco, 60ms depois: é o seguimento
+ *
+ * Antes, o cartão não tinha animação nenhuma: aparecia inteiro no primeiro
+ * frame, ANTES do título, e o elemento mais importante do ecrã entrava fora
+ * de ordem.
+ */
+.hero-champion.is-entrada .hero-champion-card {
+  animation: bh-champion-card-in var(--dur-lenta) var(--ease-arena) .26s backwards;
+}
+.hero-champion.is-entrada .hero-champion-portrait {
+  animation: bh-champion-in var(--dur-lenta) var(--ease-arena) .32s backwards;
+}
+@keyframes bh-champion-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/*
+ * A troca, quando se escolhe outro mapa. Sem atraso — começa no frame do
+ * clique. O conjunto encaixa com `--ease-pop`, e o retrato chega 40ms depois
+ * com um pouco mais de subida: é essa diferença que faz parecer uma pessoa a
+ * saltar para o palco, e não um bloco a trocar de imagem.
+ */
+.hero-champion.is-troca .hero-champion-card {
+  animation: bh-champion-swap var(--dur-padrao) var(--ease-pop) both;
+}
+.hero-champion.is-troca .hero-champion-portrait {
+  animation: bh-champion-portrait-swap calc(var(--dur-padrao) + 80ms) var(--ease-pop) 40ms both;
+}
+@keyframes bh-champion-swap {
+  from { opacity: 0; transform: translateY(6px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes bh-champion-portrait-swap {
+  from { opacity: 0; transform: translateY(14px) scale(.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+/*
+ * Movimento reduzido: a troca continua a ver-se, mas só em opacidade — sem
+ * isso, o nome mudava de um frame para o outro e não se percebia que mudou.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .hero-champion.is-entrada .hero-champion-card,
+  .hero-champion.is-entrada .hero-champion-portrait,
+  .hero-champion.is-troca .hero-champion-portrait { animation: none; }
+  .hero-champion.is-troca .hero-champion-card { animation: bh-fade-only var(--dur-rapida) ease-out both; }
+}
+@keyframes bh-fade-only { from { opacity: 0; } to { opacity: 1; } }
