@@ -176,9 +176,22 @@ export function getSnapshotSynergies(
 }
 
 /** Identidade partilhada entre fontes e catálogo; o nome editorial não é alterado. */
+/**
+ * Memorizada: é chamada dezenas de milhares de vezes por interação do Draft,
+ * sempre sobre os mesmos ~110 nomes. Função pura de texto para texto — o
+ * resultado não depende de estado nenhum, por isso a cache nunca envelhece.
+ * O limite existe só para que um texto inesperado e variável não a faça
+ * crescer sem fim.
+ */
+const nomesNormalizados = new Map<string, string>();
 export function normalizeCounterBrawlerName(value: string) {
+  const guardado = nomesNormalizados.get(value);
+  if (guardado !== undefined) return guardado;
   const key = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
-  return key === "larry" || key === "larryandlawrie" ? "larrylawrie" : key;
+  const resultado = key === "larry" || key === "larryandlawrie" ? "larrylawrie" : key;
+  if (nomesNormalizados.size > 4000) nomesNormalizados.clear();
+  nomesNormalizados.set(value, resultado);
+  return resultado;
 }
 
 export function uniqueCounterBrawlerNames(names: readonly string[]) {

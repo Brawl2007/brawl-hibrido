@@ -1,3 +1,4 @@
+import { versaoDoMotor } from "./versaoDoMotor";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
 import { getMatchupValue, describeMatchupValue, getBrawlScopeReading } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
@@ -19,7 +20,7 @@ import {
   type BrawlPlanetMapTeam,
   type BrawlPlanetMapTeamEntry,
 } from "./brawlPlanetMapTeams";
-import { defaultDraftRuleSettings, getCounterPickMultiplier, normalizeDraftRuleSettings, type DraftRuleSettings } from "./draftRules";
+import { defaultDraftRuleSettings, getCounterPickMultiplier, regrasDoMotor, type DraftRuleSettings } from "./draftRules";
 
 export type DraftKind = "ban" | "pick";
 export type DraftStep = { kind: DraftKind; team: DraftTeam; label: string };
@@ -132,7 +133,7 @@ export function isInActiveCounterWindow(candidateName: string, topRecommendation
 }
 
 export function getCounterBonusRate(pickNumber?: number, ruleSettings?: Partial<DraftRuleSettings>) {
-  const rules = normalizeDraftRuleSettings(ruleSettings);
+  const rules = regrasDoMotor(ruleSettings);
   const pick = getDraftPickNumber(pickNumber);
   const rates: Record<number, number> = {
     1: rules.counterPick1,
@@ -146,7 +147,7 @@ export function getCounterBonusRate(pickNumber?: number, ruleSettings?: Partial<
 }
 
 export function getSynergyBonusRate(pickNumber?: number, ruleSettings?: Partial<DraftRuleSettings>) {
-  const rules = normalizeDraftRuleSettings(ruleSettings);
+  const rules = regrasDoMotor(ruleSettings);
   const pick = getDraftPickNumber(pickNumber);
   const rates: Record<number, number> = {
     1: rules.synergyPick1,
@@ -164,7 +165,7 @@ export function getMapTeamSynergyRate(pickNumber?: number, ruleSettings?: Partia
 }
 
 export function getBannedCounterBonusRate(pickNumber?: number, ruleSettings?: Partial<DraftRuleSettings>) {
-  const rules = normalizeDraftRuleSettings(ruleSettings);
+  const rules = regrasDoMotor(ruleSettings);
   const requestedPick = typeof pickNumber === "number" && Number.isFinite(pickNumber)
     ? Math.floor(pickNumber)
     : 1;
@@ -236,7 +237,24 @@ export const brawlerClassCatalog: Record<string, string> = {
   "Tara": "Destruidor", "Tick": "Lançador", "Trunk": "Tank", "Wendy": "Suporte", "Willow": "Controlador", "Ziggy": "Controlador"
 };
 
+/**
+ * Guardada por nome. Percorria o catálogo inteiro e passava CADA chave a
+ * minúsculas em cada chamada — centenas de chamadas por pick, para uma
+ * resposta que, para o mesmo nome, é sempre a mesma: o catálogo e a lista de
+ * lançadores são constantes do módulo.
+ */
+const classesGuardadas = new Map<string, string>();
 export function getBrawlerClass(brawlerName: string): string {
+  const guardada = classesGuardadas.get(brawlerName);
+  if (guardada !== undefined) return guardada;
+  const classe = calcularClasseDoBrawler(brawlerName);
+  if (classesGuardadas.size > 4000) classesGuardadas.clear();
+  classesGuardadas.set(brawlerName, classe);
+  return classe;
+}
+
+/** O cálculo sem cache. Exportado só para o teste que o compara com a cache. */
+export function calcularClasseDoBrawler(brawlerName: string): string {
   const clean = brawlerName.trim().toLowerCase();
   for (const [key, cls] of Object.entries(brawlerClassCatalog)) {
     if (key.toLowerCase() === clean) return cls;
@@ -649,12 +667,20 @@ function counterKey(value: string) {
   return normalizeCounterBrawlerName(value);
 }
 
+/** Memorizada pela mesma razão que `normalizeCounterBrawlerName`: pura, e
+ *  chamada milhares de vezes por interação sobre os mesmos nomes. */
+const nomesMostrados = new Map<string, string>();
 function displayCounterName(value: string) {
-  return value
+  const guardado = nomesMostrados.get(value);
+  if (guardado !== undefined) return guardado;
+  const resultado = value
     .trim()
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  if (nomesMostrados.size > 4000) nomesMostrados.clear();
+  nomesMostrados.set(value, resultado);
+  return resultado;
 }
 
 function uniqueCounterNames(names: string[]) {
@@ -741,7 +767,45 @@ function getDraftCounterDirection(attacker: string, defender: string, reciprocal
   return getResolvedCounterDirection(attacker, defender, modeId)?.direction ?? null;
 }
 
+/**
+ * O perfil de counters de um brawler, guardado.
+ *
+ * MEDIDO ANTES (Draft, sem abrandar o CPU): escrever UMA letra na pesquisa
+ * custava 25ms de JavaScript, escolher um brawler 86ms — num telemóvel médio,
+ * quatro vezes isso. A maior fatia era esta função: cada cartão de sugestão
+ * chama-a a cada desenho, e cada chamada normaliza os ~106 nomes candidatos e
+ * cruza o brawler com cada um deles. Doze cartões, ~1300 confrontos, a cada
+ * tecla — para chegar sempre à mesma resposta.
+ *
+ * A resposta só depende dos argumentos e dos quatro estados de módulo que o
+ * `versaoDoMotor` segue. Mudou algum deles, a versão avança e a cache
+ * esvazia-se na chamada seguinte.
+ *
+ * O perfil devolvido vai CONGELADO: é partilhado entre todos os que pedem o
+ * mesmo, e quem o alterasse no sítio (um `.sort()` sem cópia) estragava-o para
+ * os outros sem dar erro nenhum. Congelado, a tentativa rebenta alto.
+ */
+const perfisGuardados = new Map<string, CounterProfile>();
+let versaoDosPerfis = -1;
 export function getCounterProfile(brawler: string, candidateNames: string[] = [], modeId?: string): CounterProfile {
+  const versao = versaoDoMotor();
+  if (versao !== versaoDosPerfis || perfisGuardados.size > 20000) {
+    perfisGuardados.clear();
+    versaoDosPerfis = versao;
+  }
+  const chave = `${modeId ?? ""}\u0000${brawler}\u0000${candidateNames.join("\u0001")}`;
+  const guardado = perfisGuardados.get(chave);
+  if (guardado) return guardado;
+  const perfil = calcularPerfilDeCounter(brawler, candidateNames, modeId);
+  Object.freeze(perfil.counters);
+  Object.freeze(perfil.counteredBy);
+  Object.freeze(perfil);
+  perfisGuardados.set(chave, perfil);
+  return perfil;
+}
+
+/** O cálculo sem cache. Exportado só para o teste que o compara com a cache. */
+export function calcularPerfilDeCounter(brawler: string, candidateNames: string[] = [], modeId?: string): CounterProfile {
   const key = counterKey(brawler);
   const sourcePriority: Record<string, number> = {
     "BrawlScope": 0,
@@ -988,7 +1052,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const coverage = coverageValues.filter((value) => numeric(value) !== null).length / coverageValues.length;
   const role = inferDraftRole(row.brawler);
   const roleFit = !context.role || context.role === "Todas" ? 0.5 : role === context.role ? 1 : role === "flex" ? 0.62 : 0.18;
-  const ruleSettings = normalizeDraftRuleSettings(context.ruleSettings);
+  const ruleSettings = regrasDoMotor(context.ruleSettings);
   const allyRows = context.allyRows ?? [];
   const enemyRows = context.enemyRows ?? [];
   const fit = clamp((roleObjectiveFit(context.mapModeId, role) * 100 * 0.75) + (roleFit * 100 * 0.25));

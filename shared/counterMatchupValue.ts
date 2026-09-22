@@ -1,3 +1,4 @@
+import { avancarVersaoDoMotor } from "./versaoDoMotor";
 import { brawlScopeMatchupDeltas } from './brawlScopeMatchupDeltas.generated';
 import { brawlScopeMatchupsByMode } from './brawlScopeMatchupsByMode.generated';
 import { brawlScopeModeForId, normalizeBrawlScopeModeId } from './brawlScopeModes';
@@ -40,7 +41,11 @@ const modeCatalogs = new Map(Object.entries(brawlScopeMatchupsByMode).map(([mode
 let activeReading: BrawlScopeReadingId = DEFAULT_BRAWLSCOPE_READING;
 
 export function setBrawlScopeReading(reading: unknown) {
-  activeReading = normalizeBrawlScopeReading(reading);
+  const seguinte = normalizeBrawlScopeReading(reading);
+  // Só avança quando muda: é chamado ao montar e a cada evento de
+  // preferência, e avançar sem mudança deitava fora a cache sem motivo.
+  if (seguinte !== activeReading) avancarVersaoDoMotor();
+  activeReading = seguinte;
 }
 
 /**
@@ -63,6 +68,7 @@ export function setBrawlScopeLiveMatchups(view: string, matrix: Record<string, R
   // A leitura procura pela grafia canónica ("gemGrab"). Guardar por "gem-grab"
   // deixava a matriz em memória e invisível — guardada e nunca encontrada.
   const chave = view === "overall" ? "overall" : normalizeBrawlScopeModeId(view) ?? view;
+  avancarVersaoDoMotor();
   if (!matrix || !Object.keys(matrix).length) {
     liveMatrices.delete(chave);
     return 0;

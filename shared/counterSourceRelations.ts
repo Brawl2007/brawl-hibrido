@@ -1,3 +1,4 @@
+import { avancarVersaoDoMotor } from "./versaoDoMotor";
 import { brawlCalculatorCounterData, type BrawlCalculatorCounterRelation } from "./brawlCalculatorCounterData";
 import { brawlPlanetRelationData, type BrawlPlanetRelation } from "./brawlPlanetRelationData";
 import { brawlScopeCounterData } from "./brawlScopeCounterData";
@@ -54,6 +55,7 @@ export function setCounterSyncSnapshot(snapshot: CounterSyncSnapshotPayload | un
   counterSourceProfilesCache.clear();
   resolvedCounterDirectionCache.clear();
   reciprocalCounterRelationCache.clear();
+  avancarVersaoDoMotor();
 }
 
 export function getActiveCounterSyncSnapshot() {

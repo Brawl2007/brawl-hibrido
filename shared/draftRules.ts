@@ -329,3 +329,35 @@ export function getCounterPickMultiplier(pickNumber: number | undefined, setting
   };
   return byPick[Number(pickNumber)] ?? settings.counterPickMultiplier1;
 }
+
+
+/**
+ * As regras normalizadas, guardadas — só para o motor do Draft.
+ *
+ * MEDIDO: `normalizeDraftRuleSettings` custava ~9ms por pick. O motor chama-a
+ * por brawler e por passagem (o ranking faz até cinco passagens para convergir),
+ * centenas de vezes, e sempre com o MESMO objeto de regras.
+ *
+ * Guardado pela identidade do objeto: as regras chegam do estado do React, que
+ * é substituído — nunca alterado no sítio — quando alguém muda uma regra. Um
+ * objeto novo é uma entrada nova; o velho sai sozinho da WeakMap.
+ *
+ * A função pública `normalizeDraftRuleSettings` fica igual, porque o cliente
+ * também a usa e pode querer editar o que recebe. Esta devolve o resultado
+ * CONGELADO, e só o motor, que apenas lê números, a chama.
+ */
+const regrasGuardadas = new WeakMap<object, Readonly<DraftRuleSettings>>();
+let regrasPorOmissao: Readonly<DraftRuleSettings> | null = null;
+export function regrasDoMotor(value?: Partial<DraftRuleSettings> | null): Readonly<DraftRuleSettings> {
+  // Qualquer coisa que não seja um objeto vale como "sem regras" — tal como na
+  // função pública, que a trata como candidato vazio. Não é teórico: há quem
+  // chame `[1..6].map(getCounterBonusRate)`, e o `map` passa o ÍNDICE como
+  // segundo argumento. A primeira versão desta cache rebentava aí (uma WeakMap
+  // não aceita números) e foi a suite de testes do motor que o apanhou.
+  if (!value || typeof value !== "object") return (regrasPorOmissao ??= Object.freeze(normalizeDraftRuleSettings(undefined)));
+  const guardadas = regrasGuardadas.get(value);
+  if (guardadas) return guardadas;
+  const regras = Object.freeze(normalizeDraftRuleSettings(value));
+  regrasGuardadas.set(value, regras);
+  return regras;
+}
