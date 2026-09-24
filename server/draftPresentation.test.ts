@@ -163,12 +163,13 @@ describe("chips de pontuação do Draft", () => {
     expect(draftSource).toContain("matchup-team-score-summary");
     expect(draftSource).toContain("REPARTIÇÃO DA SOMA");
     expect(draftSource).toContain("DETALHAMENTO DOS PONTOS");
-    expect(draftSource).toContain("PONTOS FINAIS · AZUL");
-    expect(draftSource).toContain("PONTOS FINAIS · VERMELHA");
+    // Os nomes seguem a perspetiva (v125): a tua equipa é {NOS}, a outra {ELES}.
+    expect(draftSource).toContain("PONTOS FINAIS · {NOS}");
+    expect(draftSource).toContain("PONTOS FINAIS · {ELES}");
     expect(draftSource).toContain("da soma");
     expect(draftSource).toContain("matchup-team-score-trophy");
-    expect(draftSource).toContain("AZUL LIDERA");
-    expect(draftSource).toContain("VERMELHA LIDERA");
+    expect(draftSource).toContain("`${NOS} LIDERA`");
+    expect(draftSource).toContain("`${ELES} LIDERA`");
     expect(draftSource).toContain("EMPATE 50/50");
   });
 

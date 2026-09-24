@@ -1478,7 +1478,8 @@ function ScoreRiseSummary({ label, row, signal, basePoints, finalPoints }: { lab
   );
 }
 
-function MatchupDuelCard({ item }: { item: ScoredMatchupItem }) {
+function MatchupDuelCard({ item, nos = "Azul", eles = "Vermelha" }: { item: ScoredMatchupItem; nos?: string; eles?: string }) {
+  const NOS = nos.toUpperCase(), ELES = eles.toUpperCase();
   const { lane, matchup, allySignal, enemySignal, allyBasePoints, allyFinalPoints, enemyBasePoints, enemyFinalPoints } = item;
   const isFavorable = matchup.score >= 55;
   const isRisky = matchup.score <= 45;
@@ -1491,11 +1492,11 @@ function MatchupDuelCard({ item }: { item: ScoredMatchupItem }) {
     <article className={`matchup-duel matchup-duel--${lane.position} ${isFavorable ? "is-favorable" : isRisky ? "is-risky" : "is-even"}`}>
       <div className="matchup-duel-top"><span>{laneLabel}</span><strong className={isFavorable ? "is-favorable" : isRisky ? "is-risky" : "is-even"}>{state}</strong></div>
       <div className="matchup-duel-players">
-        <div className="matchup-player matchup-player--ally"><span className="matchup-player-avatar">{brawlerImageFor(lane.ally) ? <img src={brawlerImageFor(lane.ally)!} alt="" /> : lane.ally.brawler.slice(0, 2)}</span><div><small>AZUL</small><strong>{lane.ally.brawler}</strong></div></div>
+        <div className="matchup-player matchup-player--ally"><span className="matchup-player-avatar">{brawlerImageFor(lane.ally) ? <img src={brawlerImageFor(lane.ally)!} alt="" /> : lane.ally.brawler.slice(0, 2)}</span><div><small>{NOS}</small><strong>{lane.ally.brawler}</strong></div></div>
         <div className="matchup-duel-score"><strong>{matchup.score.toFixed(0)}<small>%</small></strong><span>VS</span></div>
-        <div className="matchup-player matchup-player--enemy"><div><small>VERMELHA</small><strong>{lane.enemy.brawler}</strong></div><span className="matchup-player-avatar">{brawlerImageFor(lane.enemy) ? <img src={brawlerImageFor(lane.enemy)!} alt="" /> : lane.enemy.brawler.slice(0, 2)}</span></div>
+        <div className="matchup-player matchup-player--enemy"><div><small>{ELES}</small><strong>{lane.enemy.brawler}</strong></div><span className="matchup-player-avatar">{brawlerImageFor(lane.enemy) ? <img src={brawlerImageFor(lane.enemy)!} alt="" /> : lane.enemy.brawler.slice(0, 2)}</span></div>
       </div>
-      <div className="matchup-duel-bar" aria-label={`${matchup.score.toFixed(0)}% de vantagem para Azul: ${lane.ally.brawler}`}><i style={{ width: `${matchup.score}%` }} /><b style={{ left: `${matchup.score}%` }} /></div>
+      <div className="matchup-duel-bar" aria-label={`${matchup.score.toFixed(0)}% de vantagem para ${nos}: ${lane.ally.brawler}`}><i style={{ width: `${matchup.score}%` }} /><b style={{ left: `${matchup.score}%` }} /></div>
       {lane.motivo && <p className="matchup-duel-reason">{lane.motivo}</p>}
       <div className="matchup-duel-footer"><span><Target size={12} /> {source}</span><span>{matchup.position === "mid" ? "Jogar Mid" : matchup.position === "left" ? "Jogar Lane esquerda" : "Jogar Lane direita"}</span></div>
       <div className="duel-points-overview">
@@ -1504,20 +1505,28 @@ function MatchupDuelCard({ item }: { item: ScoredMatchupItem }) {
       </div>
       <details className="duel-details"><summary>Ver counters, fontes e cálculo dos pontos</summary>
       <p>{matchup.note}</p>
-      <div className="matchup-perspectives" aria-label={`Leitura direcional entre Azul ${lane.ally.brawler} e Vermelha ${lane.enemy.brawler}`}>
-        <div className={`matchup-perspective matchup-perspective--blue ${blueCounters ? "is-counter" : redCounters ? "is-countered" : "is-neutral"}`}><span>AZUL</span><strong>{blueCounters ? `${lane.ally.brawler} countera ${lane.enemy.brawler}` : redCounters ? `${lane.ally.brawler} é counterado por ${lane.enemy.brawler}` : "Sem counter literal"}</strong><small>{blueCounters ? "Ataque favorável publicado para este duelo." : redCounters ? "Atenção: o counter publicado favorece Vermelha." : "O melhor duelo é escolhido pela leitura de Win Rate."}</small></div>
-        <div className={`matchup-perspective matchup-perspective--red ${redCounters ? "is-counter" : blueCounters ? "is-countered" : "is-neutral"}`}><span>VERMELHA</span><strong>{redCounters ? `${lane.enemy.brawler} countera ${lane.ally.brawler}` : blueCounters ? `${lane.enemy.brawler} é counterado por ${lane.ally.brawler}` : "Sem counter literal"}</strong><small>{redCounters ? "Ataque favorável publicado para este duelo." : blueCounters ? "Atenção: o counter publicado favorece Azul." : "O melhor duelo é escolhido pela leitura de Win Rate."}</small></div>
+      <div className="matchup-perspectives" aria-label={`Leitura direcional entre ${nos} ${lane.ally.brawler} e ${eles} ${lane.enemy.brawler}`}>
+        <div className={`matchup-perspective matchup-perspective--blue ${blueCounters ? "is-counter" : redCounters ? "is-countered" : "is-neutral"}`}><span>{NOS}</span><strong>{blueCounters ? `${lane.ally.brawler} countera ${lane.enemy.brawler}` : redCounters ? `${lane.ally.brawler} é counterado por ${lane.enemy.brawler}` : "Sem counter literal"}</strong><small>{blueCounters ? "Ataque favorável publicado para este duelo." : redCounters ? `Atenção: o counter publicado favorece ${eles}.` : "O melhor duelo é escolhido pela leitura de Win Rate."}</small></div>
+        <div className={`matchup-perspective matchup-perspective--red ${redCounters ? "is-counter" : blueCounters ? "is-countered" : "is-neutral"}`}><span>{ELES}</span><strong>{redCounters ? `${lane.enemy.brawler} countera ${lane.ally.brawler}` : blueCounters ? `${lane.enemy.brawler} é counterado por ${lane.ally.brawler}` : "Sem counter literal"}</strong><small>{redCounters ? "Ataque favorável publicado para este duelo." : blueCounters ? `Atenção: o counter publicado favorece ${nos}.` : "O melhor duelo é escolhido pela leitura de Win Rate."}</small></div>
       </div>
-      <div className="matchup-score-rise"><div className="matchup-score-rise-heading"><span>{lane.position === "mid" ? "POR QUE OS PONTOS SUBIRAM?" : "DETALHAMENTO DOS PONTOS"}</span><small>Simulação antes de fixar cada brawler neste contexto</small></div><div className="matchup-score-rise-grid"><ScoreRiseSummary label="AZUL" row={lane.ally} signal={allySignal} basePoints={allyBasePoints} finalPoints={allyFinalPoints} /><ScoreRiseSummary label="VERMELHA" row={lane.enemy} signal={enemySignal} basePoints={enemyBasePoints} finalPoints={enemyFinalPoints} /></div></div>
+      <div className="matchup-score-rise"><div className="matchup-score-rise-heading"><span>{lane.position === "mid" ? "POR QUE OS PONTOS SUBIRAM?" : "DETALHAMENTO DOS PONTOS"}</span><small>Simulação antes de fixar cada brawler neste contexto</small></div><div className="matchup-score-rise-grid"><ScoreRiseSummary label={NOS} row={lane.ally} signal={allySignal} basePoints={allyBasePoints} finalPoints={allyFinalPoints} /><ScoreRiseSummary label={ELES} row={lane.enemy} signal={enemySignal} basePoints={enemyBasePoints} finalPoints={enemyFinalPoints} /></div></div>
       </details>
     </article>
   );
 }
 
-const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows, redRows, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue" }: { myTeam?: TeamId; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
-  // Quem joga contra quem sai dos counters (ver `atribuirDuelosPorCounter`);
-  // a posição continua a sair da função do brawler Azul, como antes.
-  const duelos = atribuirDuelosPorCounter(blueRows, redRows, myTeam === "red" ? "enemy" : "ally");
+const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, redRows: linhasVermelha, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue" }: { myTeam?: TeamId; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
+  // A tua equipa fica sempre do lado esquerdo, com as cores do teu lado: na
+  // perspetiva Vermelha, a Vermelha passa para a esquerda e a Azul é o adversário.
+  // Daqui para baixo, "blue"/"ally" quer dizer a tua equipa e "red"/"enemy" a outra.
+  const blueRows = myTeam === "red" ? linhasVermelha : linhasAzul;
+  const redRows = myTeam === "red" ? linhasAzul : linhasVermelha;
+  const nos = myTeam === "red" ? "Vermelha" : "Azul";
+  const eles = myTeam === "red" ? "Azul" : "Vermelha";
+  const NOS = nos.toUpperCase(), ELES = eles.toUpperCase();
+  // Quem joga contra quem sai dos counters (ver `atribuirDuelosPorCounter`),
+  // a favor da tua equipa; a posição sai da função do teu brawler.
+  const duelos = atribuirDuelosPorCounter(blueRows, redRows, "ally");
   const assigned = new Set<string>();
   const pickForLane = (position: "left" | "mid" | "right") => {
     const preferredRole = position === "mid" ? "mid" : "side";
@@ -1580,9 +1589,9 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows, redRows, mapNa
     : Math.abs(scoreDifference) < 0.01
       ? "Empate técnico"
       : scoreDifference > 0
-        ? `Azul +${scoreDifference.toFixed(2)} pts`
-        : `Vermelha +${Math.abs(scoreDifference).toFixed(2)} pts`;
-  const scoreLeadStatus = scoreLeader === "tie" ? "EMPATE 50/50" : blueLeads ? "AZUL LIDERA" : redLeads ? "VERMELHA LIDERA" : "SEM DUELOS";
+        ? `${nos} +${scoreDifference.toFixed(2)} pts`
+        : `${eles} +${Math.abs(scoreDifference).toFixed(2)} pts`;
+  const scoreLeadStatus = scoreLeader === "tie" ? "EMPATE 50/50" : blueLeads ? `${NOS} LIDERA` : redLeads ? `${ELES} LIDERA` : "SEM DUELOS";
   const matchupCounterRate = matchups.length
     ? matchups.reduce((total, item) => total + (item.allySignal.counterMatchups.find((matchup) => matchup.defender === item.lane.enemy.brawler)?.counterDelta ?? 0), 0) / matchups.length
     : 0;
@@ -1593,32 +1602,32 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows, redRows, mapNa
         <div>
           <div className="section-kicker"><Swords size={13} /> Matriz 1v1 <span>FLEX & SIDE LANE MATCHUPS</span></div>
           <h2>Duelo Mid e Lanes{mapName ? ` · ${mapName}` : ""}</h2>
-          <p>Quem joga contra quem é escolhido pelos counters: a combinação de duelos que dá mais vantagem à tua equipa no total, não necessariamente Mid contra Mid. Sem relação publicada, vale a leitura por Win Rate.</p>
+          <p>A tua equipa ({nos}) fica à esquerda; muda com a Perspetiva. Quem joga contra quem é escolhido pelos counters: a combinação de duelos que dá mais vantagem à tua equipa no total, não necessariamente Mid contra Mid. Sem relação publicada, vale a leitura por Win Rate.</p>
         </div>
-        <div className="coach-confidence ready"><span>1V1 ATIVOS</span><strong>{matchups.length}/3</strong><small>{blueRows.length} Azul · {redRows.length} Vermelha</small></div>
+        <div className="coach-confidence ready"><span>1V1 ATIVOS</span><strong>{matchups.length}/3</strong><small>{blueRows.length} {nos} · {redRows.length} {eles}</small></div>
       </div>
       <div className="coach-metric-strip">
         <div><span>MID</span><strong>{midMatchup ? "1v1" : "—"}</strong><small>{midMatchup ? `${midMatchup.lane.ally.brawler} vs ${midMatchup.lane.enemy.brawler}` : "Aguardando duelistas"}</small></div>
         <div><span>LANES</span><strong>{laneMatchups.length}/2</strong><small>Esquerda · Direita</small></div>
-        <div><span>VANTAGEM AZUL</span><strong>{matchups.length ? `${(matchups.reduce((total, item) => total + item.matchup.score, 0) / matchups.length).toFixed(0)}%` : "—"}</strong><small>Na média dos duelos ativos</small></div>
+        <div><span>VANTAGEM {NOS}</span><strong>{matchups.length ? `${(matchups.reduce((total, item) => total + item.matchup.score, 0) / matchups.length).toFixed(0)}%` : "—"}</strong><small>Na média dos duelos ativos</small></div>
         <div><span>COUNTER</span><strong>{matchups.length ? `${matchupCounterRate > 0 ? "+" : ""}${matchupCounterRate.toFixed(1)}%` : "—"}</strong><small>média dos deltas individuais</small></div>
       </div>
-      <section className="matchup-team-score-summary" aria-label={`Soma e média de Pontos Finais: Azul ${teamScoreSummary.blueTotal.toFixed(2)} pontos, Vermelha ${teamScoreSummary.redTotal.toFixed(2)} pontos. ${scoreLeadLabel}.`}>
-        <div className={`matchup-team-score matchup-team-score--blue ${blueLeads ? "is-leading" : scoreLeader === "tie" ? "is-tied" : ""}`}><span><Gauge size={12} /> PONTOS FINAIS · AZUL {blueLeads ? <em className="matchup-team-score-trophy"><Trophy size={11} aria-hidden="true" /> LÍDER</em> : null}</span><strong>{activeDuelCount ? teamScoreSummary.blueTotal.toFixed(2) : "—"} <small>PTS</small></strong><small>{activeDuelCount ? `Média ${blueScoreAverage.toFixed(2)} pts · ${bluePercentage.toFixed(1)}% da soma` : "Aguardando duelo ativo"}</small></div>
+      <section className="matchup-team-score-summary" aria-label={`Soma e média de Pontos Finais: ${nos} ${teamScoreSummary.blueTotal.toFixed(2)} pontos, ${eles} ${teamScoreSummary.redTotal.toFixed(2)} pontos. ${scoreLeadLabel}.`}>
+        <div className={`matchup-team-score matchup-team-score--blue ${blueLeads ? "is-leading" : scoreLeader === "tie" ? "is-tied" : ""}`}><span><Gauge size={12} /> PONTOS FINAIS · {NOS} {blueLeads ? <em className="matchup-team-score-trophy"><Trophy size={11} aria-hidden="true" /> LÍDER</em> : null}</span><strong>{activeDuelCount ? teamScoreSummary.blueTotal.toFixed(2) : "—"} <small>PTS</small></strong><small>{activeDuelCount ? `Média ${blueScoreAverage.toFixed(2)} pts · ${bluePercentage.toFixed(1)}% da soma` : "Aguardando duelo ativo"}</small></div>
         <div className={`matchup-team-score matchup-team-score--difference ${scoreLeader ? `is-${scoreLeader}` : ""}`}><span>{scoreLeader === "tie" ? "REPARTIÇÃO EQUILIBRADA" : "REPARTIÇÃO DA SOMA"}</span><strong>{percentageLabel}</strong><small>{activeDuelCount ? `${scoreLeadStatus} · ${scoreLeadLabel} · Scores de Mid e Lanes 1v1` : "Aguardando duelo ativo"}</small></div>
-        <div className={`matchup-team-score matchup-team-score--red ${redLeads ? "is-leading" : scoreLeader === "tie" ? "is-tied" : ""}`}><span><Gauge size={12} /> PONTOS FINAIS · VERMELHA {redLeads ? <em className="matchup-team-score-trophy"><Trophy size={11} aria-hidden="true" /> LÍDER</em> : null}</span><strong>{activeDuelCount ? teamScoreSummary.redTotal.toFixed(2) : "—"} <small>PTS</small></strong><small>{activeDuelCount ? `Média ${redScoreAverage.toFixed(2)} pts · ${redPercentage.toFixed(1)}% da soma` : "Aguardando duelo ativo"}</small></div>
+        <div className={`matchup-team-score matchup-team-score--red ${redLeads ? "is-leading" : scoreLeader === "tie" ? "is-tied" : ""}`}><span><Gauge size={12} /> PONTOS FINAIS · {ELES} {redLeads ? <em className="matchup-team-score-trophy"><Trophy size={11} aria-hidden="true" /> LÍDER</em> : null}</span><strong>{activeDuelCount ? teamScoreSummary.redTotal.toFixed(2) : "—"} <small>PTS</small></strong><small>{activeDuelCount ? `Média ${redScoreAverage.toFixed(2)} pts · ${redPercentage.toFixed(1)}% da soma` : "Aguardando duelo ativo"}</small></div>
       </section>
       <div className="matchup-perspective-board" aria-label="Resumo de counters por perspetiva">
-        <div className="matchup-board-side matchup-board-side--blue"><span>AZUL COUNTERA</span><strong>{blueCounters.length ? blueCounters.map((item) => `${item.lane.ally.brawler} → ${item.lane.enemy.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{blueCounters.length ? "Ataques favoráveis publicados para Azul." : "Sem relação publicada a favor de Azul."}</small></div>
-        <div className="matchup-board-side matchup-board-side--red"><span>VERMELHA COUNTERA</span><strong>{redCounters.length ? redCounters.map((item) => `${item.lane.enemy.brawler} → ${item.lane.ally.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{redCounters.length ? "Ataques favoráveis publicados para Vermelha." : "Sem relação publicada a favor de Vermelha."}</small></div>
+        <div className="matchup-board-side matchup-board-side--blue"><span>{NOS} COUNTERA</span><strong>{blueCounters.length ? blueCounters.map((item) => `${item.lane.ally.brawler} → ${item.lane.enemy.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{blueCounters.length ? `Ataques favoráveis publicados para ${nos}.` : `Sem relação publicada a favor de ${nos}.`}</small></div>
+        <div className="matchup-board-side matchup-board-side--red"><span>{ELES} COUNTERA</span><strong>{redCounters.length ? redCounters.map((item) => `${item.lane.enemy.brawler} → ${item.lane.ally.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{redCounters.length ? `Ataques favoráveis publicados para ${eles}.` : `Sem relação publicada a favor de ${eles}.`}</small></div>
         <div className="matchup-board-side matchup-board-side--neutral"><span>NEUTROS</span><strong>{neutralMatchups.length ? neutralMatchups.map((item) => `${item.lane.ally.brawler} × ${item.lane.enemy.brawler}`).join(" · ") : "Todos os duelos têm counter literal"}</strong><small>{neutralMatchups.length ? "A decisão usa a melhor leitura por Win Rate." : "Não há duelos estimados nesta matriz."}</small></div>
       </div>
       {matchups.length === 0 ? (
-        <div className="draft-empty"><Crosshair size={22} /><strong>A aguardar picks de Azul e Vermelha.</strong><span>Escolhe pelo menos um brawler em cada equipa para abrir a primeira leitura 1v1.</span></div>
+        <div className="draft-empty"><Crosshair size={22} /><strong>A aguardar picks da tua equipa e do adversário.</strong><span>Escolhe pelo menos um brawler em cada equipa para abrir a primeira leitura 1v1.</span></div>
       ) : (
         <div className="matchup-matrix">
-            <section className="matchup-zone matchup-zone--mid"><div className="matchup-zone-head"><span><Crosshair size={14} /> MID</span><strong>Duelo Mid 1v1</strong><small>Controla o espaço e a rotação.</small></div>{midMatchup ? <MatchupDuelCard item={midMatchup} /> : <div className="matchup-zone-empty"><Crosshair size={19} /><strong>Mid ainda aberto</strong><span>O próximo Mid preencherá este duelo central.</span></div>}</section>
-            <section className="matchup-zone matchup-zone--lanes"><div className="matchup-zone-head"><span><Layers3 size={14} /> LANES</span><strong>Lanes 1v1</strong><small>Pressão isolada nas duas extremidades.</small></div><div className="matchup-lanes-grid">{laneMatchups.length ? laneMatchups.map((item) => <MatchupDuelCard key={item.lane.position} item={item} />) : <div className="matchup-zone-empty"><Layers3 size={19} /><strong>Lanes ainda abertas</strong><span>Escolhe brawlers de Lane para comparar os dois lados.</span></div>}</div></section>
+            <section className="matchup-zone matchup-zone--mid"><div className="matchup-zone-head"><span><Crosshair size={14} /> MID</span><strong>Duelo Mid 1v1</strong><small>Controla o espaço e a rotação.</small></div>{midMatchup ? <MatchupDuelCard item={midMatchup} nos={nos} eles={eles} /> : <div className="matchup-zone-empty"><Crosshair size={19} /><strong>Mid ainda aberto</strong><span>O próximo Mid preencherá este duelo central.</span></div>}</section>
+            <section className="matchup-zone matchup-zone--lanes"><div className="matchup-zone-head"><span><Layers3 size={14} /> LANES</span><strong>Lanes 1v1</strong><small>Pressão isolada nas duas extremidades.</small></div><div className="matchup-lanes-grid">{laneMatchups.length ? laneMatchups.map((item) => <MatchupDuelCard key={item.lane.position} item={item} nos={nos} eles={eles} />) : <div className="matchup-zone-empty"><Layers3 size={19} /><strong>Lanes ainda abertas</strong><span>Escolhe brawlers de Lane para comparar os dois lados.</span></div>}</div></section>
         </div>
       )}
     </section>

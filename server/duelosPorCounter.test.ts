@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { setCounterSyncSnapshot } from "../shared/counterSourceRelations";
 import { atribuirDuelosPorCounter } from "../shared/draft";
 import type { CounterSyncSnapshotPayload, SyncedCounterRelation } from "../shared/counterSyncSnapshot";
@@ -99,5 +100,21 @@ describe("quem joga contra quem na matriz 1v1", () => {
       const melhor = Math.max(...perms.map((p) => p.reduce((s, e, a) => s + valor[`${aliados[a]}>${inimigos[e]}`], 0)));
       expect(soma).toBeCloseTo(melhor, 6);
     }
+  });
+});
+
+describe("a matriz 1v1 segue a perspetiva escolhida", () => {
+  const fonte = readFileSync(new URL("../client/src/pages/Draft.tsx", import.meta.url), "utf8");
+  it("na perspetiva Vermelha, a Vermelha passa para o lado esquerdo e é otimizada como a tua equipa", () => {
+    expect(fonte).toContain('const blueRows = myTeam === "red" ? linhasVermelha : linhasAzul;');
+    expect(fonte).toContain('const redRows = myTeam === "red" ? linhasAzul : linhasVermelha;');
+    expect(fonte).toContain('atribuirDuelosPorCounter(blueRows, redRows, "ally")');
+    expect(fonte).toMatch(/<LaneMatchupDesk myTeam=\{myTeam\}/);
+  });
+  it("os nomes das equipas no painel não estão escritos à mão", () => {
+    const inicio = fonte.indexOf("function MatchupDuelCard(");
+    const fim = fonte.indexOf("function FinalWinProbability(");
+    const painel = fonte.slice(inicio, fim).replace(/\/\/.*$/gm, "");
+    expect(painel).not.toMatch(/>(AZUL|VERMELHA)[ <]|"(AZUL|VERMELHA)"|label="(AZUL|VERMELHA)"/);
   });
 });
