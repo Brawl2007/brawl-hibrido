@@ -52,6 +52,15 @@
 .draft-shell .progress-copy strong { font-size: 19px; }
 .draft-shell .progress-copy small { display: none; }
 .draft-shell .draft-progress-actions { flex-wrap: wrap; gap: 6px; }
+/*
+ * A coluna do draft tem 420–520px entre 1100 e 1800px de largura, e a grelha
+ * base pedia 220 + 180 + ~177px. A terceira coluna — perspetiva, microfone,
+ * "Passar ban" — ficava fora da caixa (overflow hidden), cortada 91–192px:
+ * quem estava num portátil não via o botão "Perspetiva: Vermelha".
+ * Os botões passam para uma linha própria, como no telemóvel.
+ */
+.draft-shell .draft-arena .draft-progress { grid-template-columns: minmax(0, 1fr) auto; }
+.draft-shell .draft-arena .draft-progress-actions { grid-column: 1 / -1; justify-content: flex-start; }
 .draft-shell .draft-board-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; gap: 10px; margin: 0; }
 .draft-shell .draft-board-grid .team-board { order: 0; padding: 12px; border: 1px solid #3866a5; border-radius: 12px; background: #132b4d; min-width: 0; }
 .draft-shell .draft-board-grid .team-board.red { border-color: #8d466a; background: #392039; }

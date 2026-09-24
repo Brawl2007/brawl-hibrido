@@ -118,3 +118,13 @@ describe("a matriz 1v1 segue a perspetiva escolhida", () => {
     expect(painel).not.toMatch(/>(AZUL|VERMELHA)[ <]|"(AZUL|VERMELHA)"|label="(AZUL|VERMELHA)"/);
   });
 });
+
+describe("o botão de perspetiva cabe na coluna do draft", () => {
+  it("a barra de progresso não usa três colunas fixas dentro da coluna estreita do draft", () => {
+    // Entre 1280 e 1600px a coluna tem 418–519px e as três colunas pediam 577px:
+    // "Perspetiva: Vermelha" ficava cortado fora da caixa.
+    const css = readFileSync(new URL("../client/src/arena-v55.css", import.meta.url), "utf8");
+    expect(css).toContain(".draft-shell .draft-arena .draft-progress { grid-template-columns: minmax(0, 1fr) auto; }");
+    expect(css).toContain(".draft-shell .draft-arena .draft-progress-actions { grid-column: 1 / -1;");
+  });
+});
