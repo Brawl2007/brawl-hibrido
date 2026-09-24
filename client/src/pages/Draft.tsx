@@ -53,7 +53,7 @@ import { hybridWeightFractions, hybridWeightsLabel, hybridWeightsSentence, useHy
 import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { fatiasDoPick, pesosDoPickAPartirDasFatias, useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
-import { analyzeDraftComposition, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
+import { analyzeDraftComposition, atribuirDuelosPorCounter, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
 import { getSynergyBonusRate } from "@shared/draft";
 import { getCounterPickMultiplier } from "@shared/draftRules";
 import { buildGamePlanText } from "@shared/coachPlan";
@@ -1446,7 +1446,7 @@ function clamp(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
-type MatchupSlot = { position: "left" | "mid" | "right"; ally: RankedRow; enemy: RankedRow };
+type MatchupSlot = { position: "left" | "mid" | "right"; ally: RankedRow; enemy: RankedRow; motivo?: string };
 type MatchupItem = { lane: MatchupSlot; matchup: ReturnType<typeof calculateLaneMatchup> };
 type ScoredMatchupItem = MatchupItem & {
   allySignal: DraftSignal;
@@ -1496,6 +1496,7 @@ function MatchupDuelCard({ item }: { item: ScoredMatchupItem }) {
         <div className="matchup-player matchup-player--enemy"><div><small>VERMELHA</small><strong>{lane.enemy.brawler}</strong></div><span className="matchup-player-avatar">{brawlerImageFor(lane.enemy) ? <img src={brawlerImageFor(lane.enemy)!} alt="" /> : lane.enemy.brawler.slice(0, 2)}</span></div>
       </div>
       <div className="matchup-duel-bar" aria-label={`${matchup.score.toFixed(0)}% de vantagem para Azul: ${lane.ally.brawler}`}><i style={{ width: `${matchup.score}%` }} /><b style={{ left: `${matchup.score}%` }} /></div>
+      {lane.motivo && <p className="matchup-duel-reason">{lane.motivo}</p>}
       <div className="matchup-duel-footer"><span><Target size={12} /> {source}</span><span>{matchup.position === "mid" ? "Jogar Mid" : matchup.position === "left" ? "Jogar Lane esquerda" : "Jogar Lane direita"}</span></div>
       <div className="duel-points-overview">
         {[{ name: lane.ally.brawler, base: allyBasePoints, final: allyFinalPoints, signal: allySignal }, { name: lane.enemy.brawler, base: enemyBasePoints, final: enemyFinalPoints, signal: enemySignal }].map(team =>
@@ -1513,21 +1514,23 @@ function MatchupDuelCard({ item }: { item: ScoredMatchupItem }) {
   );
 }
 
-const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows, redRows, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings }: { blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
+const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows, redRows, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue" }: { myTeam?: TeamId; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
+  // Quem joga contra quem sai dos counters (ver `atribuirDuelosPorCounter`);
+  // a posição continua a sair da função do brawler Azul, como antes.
+  const duelos = atribuirDuelosPorCounter(blueRows, redRows, myTeam === "red" ? "enemy" : "ally");
   const assigned = new Set<string>();
-  const pickForLane = (rows: RankedRow[], team: TeamId, position: "left" | "mid" | "right") => {
+  const pickForLane = (position: "left" | "mid" | "right") => {
     const preferredRole = position === "mid" ? "mid" : "side";
-    const preferred = rows.find((row) => !assigned.has(`${team}:${row.brawler}`) && inferDraftRole(row.brawler) === preferredRole);
-    const fallback = rows.find((row) => !assigned.has(`${team}:${row.brawler}`));
+    const preferred = duelos.find((duelo) => !assigned.has(duelo.ally.brawler) && inferDraftRole(duelo.ally.brawler) === preferredRole);
+    const fallback = duelos.find((duelo) => !assigned.has(duelo.ally.brawler));
     const selected = preferred ?? fallback;
-    if (selected) assigned.add(`${team}:${selected.brawler}`);
+    if (selected) assigned.add(selected.ally.brawler);
     return selected;
   };
-  const laneSlots = (["left", "mid", "right"] as const).map((position) => ({
-    position,
-    ally: pickForLane(blueRows, "blue", position),
-    enemy: pickForLane(redRows, "red", position),
-  }));
+  const laneSlots = (["left", "mid", "right"] as const).map((position) => {
+    const duelo = pickForLane(position);
+    return { position, ally: duelo?.ally, enemy: duelo?.enemy, motivo: duelo?.motivo };
+  });
   const matchups: ScoredMatchupItem[] = laneSlots.filter((lane): lane is typeof lane & MatchupSlot => Boolean(lane.ally && lane.enemy)).map((lane) => {
     const allyContext = { mapModeId, mapTeams, allyRows: blueRows.filter((row) => row.brawler !== lane.ally.brawler), enemyRows: redRows, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, ruleSettings };
     const enemyContext = { mapModeId, mapTeams, allyRows: redRows.filter((row) => row.brawler !== lane.enemy.brawler), enemyRows: blueRows, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, ruleSettings };
@@ -1590,7 +1593,7 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows, redRows, mapNa
         <div>
           <div className="section-kicker"><Swords size={13} /> Matriz 1v1 <span>FLEX & SIDE LANE MATCHUPS</span></div>
           <h2>Duelo Mid e Lanes{mapName ? ` · ${mapName}` : ""}</h2>
-          <p>Azul e Vermelha são lidos separadamente: cada painel mostra quem countera, quem é counterado e quando não existe counter literal. Sem relação publicada, a matriz mostra apenas a melhor leitura por Win Rate.</p>
+          <p>Quem joga contra quem é escolhido pelos counters: a combinação de duelos que dá mais vantagem à tua equipa no total, não necessariamente Mid contra Mid. Sem relação publicada, vale a leitura por Win Rate.</p>
         </div>
         <div className="coach-confidence ready"><span>1V1 ATIVOS</span><strong>{matchups.length}/3</strong><small>{blueRows.length} Azul · {redRows.length} Vermelha</small></div>
       </div>
@@ -2796,7 +2799,7 @@ export default function Draft() {
               <div className="recommendation-foot"><span><span className="tiny-live" /> {visibleRows.length} opções disponíveis · meta auxiliar média {formatMetric(hybridAverage, "")}</span><span><Star size={13} /> Score Híbrido é a base. As taxas de Counter, Sinergia, Ban, Fit, composição do mapa e desbónus são as definidas no painel Regras % desta sessão. A posição é comum a Azul e Vermelho.</span></div>
             </section>
 
-            <LaneMatchupDesk blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
+            <LaneMatchupDesk myTeam={myTeam} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
 
             <LiveCounterEngine suggestions={liveCounterSuggestions} enemyRows={opponentPicks} canAutoPick={canAutoPick} onSelect={assignBrawler} onSimulate={simulateBestCounter} />
 

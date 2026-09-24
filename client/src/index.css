@@ -887,6 +887,8 @@ main { max-width: 1600px; margin: 0 auto; }
   .matchup-duel-footer { margin-top: 9px; color: var(--bh-text-dim); font-size: 8px; }
   .matchup-duel-footer span:first-child { display: inline-flex; align-items: center; gap: 4px; color: var(--bh-text-muted); }
 .matchup-duel-footer span:last-child { color: var(--bh-info); text-align: right; }
+/* Porque este é o adversário: sai de `atribuirDuelosPorCounter`. */
+.matchup-duel .matchup-duel-reason { min-height: 0; margin: 9px 0 0; color: var(--bh-text-muted); font-size: 11px; line-height: 1.4; }
 .matchup-duel p { min-height: 30px; margin: 8px 0 0; color: var(--bh-text-dim); font-size: 8px; line-height: 1.42; }
 .matchup-counter-tips { margin-top: 10px; padding: 9px; border: 1px solid rgba(167,139,250,.22); border-left: 2px solid var(--bh-violet); background: linear-gradient(135deg, rgba(20,15,36,.72), rgba(8,16,27,.74)); }
 .matchup-counter-tips-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 7px; }

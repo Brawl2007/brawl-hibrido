@@ -911,6 +911,105 @@ export function calculateLaneMatchup<T extends DraftRow>(ally: T, enemy: T, posi
   return { ally: ally.brawler, enemy: enemy.brawler, score: inferred, position, source: "win-rate-inference", note: `Inferência por Win Rate: ${allyWinRate.toFixed(1)}% aliado vs ${enemyWinRate.toFixed(1)}% adversário; confirma o matchup através da execução e cobertura da lane.` };
 }
 
+export type DueloAtribuido<T extends DraftRow> = {
+  ally: T;
+  enemy: T;
+  /** Vantagem de `ally` sobre `enemy`, 0–100, a mesma de `calculateLaneMatchup`. */
+  score: number;
+  /** Porque é este o adversário, dito na perspetiva da equipa favorecida. */
+  motivo: string;
+};
+
+/**
+ * Quem joga contra quem na matriz 1v1.
+ *
+ * Emparelhar por função (Mid contra Mid, Lane contra Lane) ignorava os
+ * counters: com El Primo, Gus e Dynamike do outro lado, o Mortis ficava com
+ * quem calhasse na mesma posição, mesmo sendo a Dynamike quem ele pune.
+ *
+ * Aqui escolhe-se a combinação de duelos que dá mais vantagem à equipa
+ * favorecida no TOTAL, e não a cada brawler isolado. É isso que permite a um
+ * brawler deixar o seu melhor alvo a um colega que só ganha a esse adversário
+ * e ficar com o segundo — a soma da equipa é maior assim.
+ *
+ * Com três de cada lado há seis combinações; experimentam-se todas. Empates
+ * desfazem-se por: pior duelo menos mau (não sacrificar ninguém), depois
+ * função igual (Mid com Mid, como antes), depois a ordem das escolhas.
+ */
+export function atribuirDuelosPorCounter<T extends DraftRow>(
+  allyRows: readonly T[],
+  enemyRows: readonly T[],
+  favorece: "ally" | "enemy" = "ally",
+): DueloAtribuido<T>[] {
+  const pares = Math.min(allyRows.length, enemyRows.length);
+  if (!pares) return [];
+  const scores = allyRows.map((ally) => enemyRows.map((enemy) => calculateLaneMatchup(ally, enemy).score));
+  const sinal = favorece === "ally" ? 1 : -1;
+  const vantagem = (a: number, e: number) => sinal * (scores[a][e] - 50);
+  const eMid = (row: T) => inferDraftRole(row.brawler) === "mid";
+  const mesmaFuncao = (a: number, e: number) => (eMid(allyRows[a]) === eMid(enemyRows[e]) ? 1 : 0);
+
+  // Percorre os emparelhamentos do lado mais curto para o mais comprido.
+  const aliadosMandam = allyRows.length <= enemyRows.length;
+  const curto = aliadosMandam ? allyRows.length : enemyRows.length;
+  const comprido = aliadosMandam ? enemyRows.length : allyRows.length;
+  let melhor: { pares: Array<[number, number]>; total: number; pior: number; funcao: number } | null = null;
+  const usados = new Array<boolean>(comprido).fill(false);
+  const atual: Array<[number, number]> = [];
+  const EPS = 1e-9;
+  const percorrer = (i: number) => {
+    if (i === curto) {
+      const valores = atual.map(([a, e]) => vantagem(a, e));
+      const total = valores.reduce((soma, valor) => soma + valor, 0);
+      const pior = Math.min(...valores);
+      const funcao = atual.reduce((soma, [a, e]) => soma + mesmaFuncao(a, e), 0);
+      const ganha = !melhor
+        || total > melhor.total + EPS
+        || (Math.abs(total - melhor.total) <= EPS && (pior > melhor.pior + EPS
+          || (Math.abs(pior - melhor.pior) <= EPS && funcao > melhor.funcao)));
+      if (ganha) melhor = { pares: atual.map(([a, e]) => [a, e] as [number, number]), total, pior, funcao };
+      return;
+    }
+    for (let j = 0; j < comprido; j++) {
+      if (usados[j]) continue;
+      usados[j] = true;
+      atual.push(aliadosMandam ? [i, j] : [j, i]);
+      percorrer(i + 1);
+      atual.pop();
+      usados[j] = false;
+    }
+  };
+  percorrer(0);
+  const escolhidos = (melhor as { pares: Array<[number, number]> } | null)?.pares ?? [];
+  escolhidos.sort((left, right) => left[0] - right[0]);
+
+  const adversarioDe = new Map(escolhidos.map(([a, e]) => [e, a]));
+  return escolhidos.map(([a, e]) => {
+    const ally = allyRows[a];
+    const enemy = enemyRows[e];
+    // O motivo fala pela equipa favorecida: o "próprio" é o brawler dessa equipa.
+    const proprio = favorece === "ally" ? ally.brawler : enemy.brawler;
+    const alvo = favorece === "ally" ? enemy.brawler : ally.brawler;
+    const deste = vantagem(a, e);
+    const opcoes = favorece === "ally"
+      ? enemyRows.map((_, j) => ({ nome: enemyRows[j].brawler, valor: vantagem(a, j), quem: adversarioDe.get(j) }))
+      : allyRows.map((_, j) => ({ nome: allyRows[j].brawler, valor: vantagem(j, e), quem: escolhidos.find(([aa]) => aa === j)?.[1] }));
+    const melhorAlvo = opcoes.reduce((top, opcao) => (opcao.valor > top.valor + EPS ? opcao : top), opcoes.find((opcao) => opcao.nome === alvo)!);
+    let motivo: string;
+    if (melhorAlvo.nome === alvo) {
+      motivo = deste > 0
+        ? `${alvo} é o adversário a quem ${proprio} mais ganha.`
+        : `Nenhum adversário é favorável a ${proprio}; ${alvo} é o duelo menos mau.`;
+    } else {
+      const colega = melhorAlvo.quem === undefined ? undefined : favorece === "ally" ? allyRows[melhorAlvo.quem]?.brawler : enemyRows[melhorAlvo.quem]?.brawler;
+      motivo = colega
+        ? `${proprio} ganharia mais a ${melhorAlvo.nome}, mas fica com ${alvo} para ${colega} jogar contra ${melhorAlvo.nome}: a equipa soma mais assim.`
+        : `${proprio} ganharia mais a ${melhorAlvo.nome}, mas ${alvo} dá mais vantagem à equipa no total.`;
+    }
+    return { ally, enemy, score: scores[a][e], motivo };
+  });
+}
+
 export function getPositionRecommendation(brawler: string, enemyRows: Array<{ brawler: string; modeId?: string }>): { position: DraftPosition; label: string; advice: string } {
   const role = inferDraftRole(brawler);
   const direct = enemyRows.map((enemy) => getCounterMatchup(brawler, enemy.brawler, undefined, enemy.modeId)).find(matchup => matchup && matchup.counterDelta > 0);
