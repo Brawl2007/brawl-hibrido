@@ -56,3 +56,38 @@ describe("Ranked push client behaviour", () => {
     expect(choices).toEqual(["Bibi", null, "Shelly"]);
   });
 });
+
+describe("fica sempre a snapshot mais recente, venha da consulta ou da stream", () => {
+  const com = (version: string, capturedAt: string | null) => ({ ...event(version, 50, 50), version, capturedAt });
+
+  it("a consulta de \"Atualizar agora\" substitui o que a stream trouxe antes (o defeito dos elos cinzentos)", () => {
+    const daStream = com("live-antiga", "2026-09-25T05:01:30.000Z");
+    const daConsulta = com("live-nova", "2026-09-25T20:32:06.000Z");
+    expect(applyRankedSnapshotPush(daStream, daConsulta).version).toBe("live-nova");
+  });
+
+  it("uma snapshot mais antiga não substitui uma mais recente, por qualquer dos caminhos", () => {
+    const nova = com("live-nova", "2026-09-25T20:32:06.000Z");
+    const antiga = com("live-antiga", "2026-09-25T05:01:30.000Z");
+    expect(applyRankedSnapshotPush(nova, antiga).version).toBe("live-nova");
+  });
+
+  it("a base incluída no projeto (sem data) perde sempre para uma recolha", () => {
+    const base = com("bundled-static", null);
+    const recolha = com("live-1", "2026-09-25T05:01:30.000Z");
+    expect(applyRankedSnapshotPush(base, recolha).version).toBe("live-1");
+    expect(applyRankedSnapshotPush(recolha, base).version).toBe("live-1");
+  });
+
+  it("a mesma snapshot outra vez não redesenha nada", () => {
+    const a = com("live-1", "2026-09-25T05:01:30.000Z");
+    expect(applyRankedSnapshotPush(a, { ...a })).toBe(a);
+  });
+
+  it("o contexto ouve a consulta também depois da stream", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const contexto = readFileSync(new URL("../contexts/RankedSyncContext.tsx", import.meta.url), "utf8");
+    expect(contexto).not.toContain("if (!snapshotQuery.data || hasPushRef.current) return;");
+    expect(contexto).toContain("setEvent((current) => applyRankedSnapshotPush(current, {");
+  });
+});

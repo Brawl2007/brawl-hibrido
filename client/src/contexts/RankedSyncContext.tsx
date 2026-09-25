@@ -49,9 +49,11 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
   const [connectionState, setConnectionState] = useState<RankedSyncClientState["connectionState"]>("connecting");
 
   useEffect(() => {
-    if (!snapshotQuery.data || hasPushRef.current) return;
+    if (!snapshotQuery.data) return;
     const data = snapshotQuery.data;
-    setEvent({
+    // Também depois da stream: é por aqui que "Atualizar agora" chega ao ecrã.
+    // Fica a mais recente das duas (ver `applyRankedSnapshotPush`).
+    setEvent((current) => applyRankedSnapshotPush(current, {
       version: data.version,
       capturedAt: data.capturedAt ? new Date(data.capturedAt).toISOString() : null,
       syncState: data.version === "bundled-static" ? "bundled" : "success",
@@ -61,7 +63,7 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
       sourceReadAt: data.sourceReadAt,
       rowCount: data.rowCount,
       payload: data.payload,
-    });
+    }));
   }, [snapshotQuery.data]);
 
   useEffect(() => {

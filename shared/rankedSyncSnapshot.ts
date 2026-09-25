@@ -95,9 +95,26 @@ export function parseRankedSnapshotEvent(data: string): RankedSnapshotEvent {
   return parsed;
 }
 
-/** O push é a fonte primária: um evento válido substitui o estado atual sem invalidar escolhas locais do Draft. */
+/**
+ * Qual das duas snapshots fica no ecrã: a mais recente, venha de onde vier.
+ *
+ * A snapshot chega por dois caminhos — a consulta e a stream — e o cliente
+ * usava só a stream a partir do primeiro envio dela. Na Vercel a stream só se
+ * religa de 5 em 5 minutos, e "Atualizar agora" refresca pela consulta: a
+ * resposta nova era deitada fora e o ecrã ficava com a snapshot anterior. Foi
+ * assim que os elos do Brawl Planet (v130) ficaram cinzentos depois de uma
+ * recolha que os tinha lido.
+ *
+ * Mais recente é o `capturedAt` maior. Sem data (a base incluída no projeto)
+ * perde sempre para uma com data. Empate fica com a atual: não se redesenha o
+ * ecrã por nada.
+ */
 export function applyRankedSnapshotPush(current: RankedSnapshotEvent | undefined, next: RankedSnapshotEvent) {
   if (!current) return next;
   if (current.version === next.version && current.capturedAt === next.capturedAt) return current;
-  return next;
+  const quando = (evento: RankedSnapshotEvent) => {
+    const t = evento.capturedAt ? Date.parse(evento.capturedAt) : NaN;
+    return Number.isFinite(t) ? t : -Infinity;
+  };
+  return quando(next) > quando(current) ? next : current;
 }
