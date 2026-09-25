@@ -1,4 +1,4 @@
-Brawl Híbrido v99 — recolha, importação em lote e rotação automática
+Brawl Híbrido — extensão v101: recolha, importação em lote, rotação automática e draft no PL Prodigy
 
 1. Publica este projeto v58 no teu alojamento habitual.
 2. Extrai o ZIP no computador. No Chrome abre chrome://extensions, ativa Modo de programador e escolhe Carregar sem compactação. Seleciona a pasta extraída que contém manifest.json.
@@ -8,7 +8,15 @@ Brawl Híbrido v99 — recolha, importação em lote e rotação automática
 6. Exporta brawlscope-resultados.json, mesmo se só parte estiver pronta. No Draft importa esse ficheiro. O site valida brawler, modo, linhas e deltas, envia até 20 fichas por grupo e só avança após confirmação de persistência. Mantém o Draft aberto durante esta etapa. Para retomar, reabre o mesmo JSON.
 7. A matriz atualiza a cada gravação. As listas dos perfis são republicadas no final do lote ou da pausa. Há também Publicar fichas para repetir uma publicação que tenha falhado.
 
-A rotação Ranked entra sozinha (novo)
+Levar o draft para o PL Prodigy (novo na v101)
+- No Draft do Brawl Híbrido, por cima do mapa dos duelos, carrega em "Abrir este draft no PL Prodigy".
+- A ferramenta de draft do PL Prodigy abre noutro separador e esta extensão escolhe lá, por ti: o mapa, os bans e os picks. A tua equipa fica à esquerda, o adversário à direita.
+- São os mesmos cliques que farias à mão, na tua conta: gasta os teus usos. A extensão não lê nada por trás e não contorna o limite de usos.
+- Depois de cada pick confirma de que lado ficou; se caiu do lado errado, tira-o, troca a vez (TURN) e volta a pô-lo.
+- No fim aparece um aviso no canto da página: "draft preenchido", ou o que faltou para escolheres à mão.
+- Se mudares o draft no Brawl Híbrido, carrega outra vez no botão.
+
+A rotação Ranked entra sozinha
 - A fila do site traz, à frente dos mapas, a página do índice da rotação: https://topbrawl.com/rankeds
 - É essa página que diz QUAIS são os mapas de agora. Enquanto ela não era lida, a fila saía de uma lista escrita à mão no projeto — e quando a Supercell mudava a rotação, a extensão continuava a recolher os mapas que já tinham saído e nunca pedia os que entraram.
 - Não tens de fazer nada de diferente: corre a fila como sempre. A rotação viaja no MESMO ficheiro dos mapas (topbrawl-mapas.json) e é aplicada quando o importas.

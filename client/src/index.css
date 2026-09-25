@@ -3966,3 +3966,13 @@ main { max-width: 1600px; margin: 0 auto; }
   .duel-map-tabs button { padding: 7px 10px; font-size: 12px; }
   .duel-map-tabs-note { margin: 8px 10px 0; }
 }
+
+/* "Abrir este draft no PL Prodigy": ao lado das abas do mapa. */
+.duel-map-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding-right: 18px; }
+.duel-map-toolbar .duel-map-tabs { flex: none; }
+.duel-map-pl { display: grid; max-width: 440px; gap: 4px; margin-top: 16px; }
+.duel-map-pl-link { justify-self: start; padding: 9px 14px; border: 1px solid var(--bh-gold); border-bottom-width: 3px; border-radius: 10px; background: rgba(6, 9, 16, .6); color: var(--bh-gold); font-size: 13px; font-weight: 800; text-decoration: none; }
+.duel-map-pl-link:active { transform: translateY(1px); border-bottom-width: 2px; }
+.duel-map-pl small { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
+@media (hover: hover) and (pointer: fine) { .duel-map-pl-link:hover { background: rgba(245, 197, 66, .12); } }
+@media (max-width: 480px) { .duel-map-toolbar { padding: 0 10px; } .duel-map-pl { margin-top: 10px; } }

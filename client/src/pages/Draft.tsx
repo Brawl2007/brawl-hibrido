@@ -2,6 +2,8 @@ import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { mapImageFor } from "@/lib/imagemDoMapa";
+import { draftParaPLProdigy, enderecoNoPLProdigy } from "@shared/plProdigyDraft";
+import { VERSAO_DA_EXTENSAO } from "@shared/versaoDaExtensao";
 import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
@@ -1714,9 +1716,20 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
         <div className="matchup-board-side matchup-board-side--red"><span>{ELES} COUNTERA</span><strong>{redCounters.length ? redCounters.map((item) => `${item.lane.enemy.brawler} → ${item.lane.ally.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{redCounters.length ? `Ataques favoráveis publicados para ${eles}.` : `Sem relação publicada a favor de ${eles}.`}</small></div>
         <div className="matchup-board-side matchup-board-side--neutral"><span>NEUTROS</span><strong>{neutralMatchups.length ? neutralMatchups.map((item) => `${item.lane.ally.brawler} × ${item.lane.enemy.brawler}`).join(" · ") : "Todos os duelos têm counter literal"}</strong><small>{neutralMatchups.length ? "A decisão usa a melhor leitura por Win Rate." : "Não há duelos estimados nesta matriz."}</small></div>
       </div>
+      <div className="duel-map-toolbar">
       <div className="duel-map-tabs" role="tablist" aria-label="De onde vem a leitura dos duelos">
         <button type="button" role="tab" aria-selected={leitura === "hibrida"} className={leitura === "hibrida" ? "is-active" : ""} onClick={() => setLeitura("hibrida")}>Leitura híbrida <small>%</small></button>
         <button type="button" role="tab" aria-selected={leitura === "prodigy"} className={leitura === "prodigy" ? "is-active" : ""} onClick={() => setLeitura("prodigy")}>PL Prodigy <small>ganha / perde</small></button>
+      </div>
+      <div className="duel-map-pl">
+        <a
+          className="duel-map-pl-link"
+          href={enderecoNoPLProdigy(draftParaPLProdigy({ mapa: mapName, nossos: blueRows.map((row) => row.brawler), deles: redRows.map((row) => row.brawler), bans: Array.from(bannedNames) }))}
+          target="_blank"
+          rel="noopener noreferrer"
+        >Abrir este draft no PL Prodigy ↗</a>
+        <small>Com a extensão Brawl Híbrido v{VERSAO_DA_EXTENSAO}, o mapa, os bans e os picks ficam lá preenchidos, e vês as percentagens e builds deles. Gasta os usos da tua conta. Sem a extensão, abre vazio.</small>
+      </div>
       </div>
       {leitura === "prodigy" && <p className="duel-map-tabs-note">Só o que as guias do PL Prodigy publicam: quem ganha a quem, sem percentagem. Os pares são escolhidos com essa leitura.</p>}
       <div className="duel-map-layout">

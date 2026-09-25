@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Brawl Híbrido — Recolha v100",
-  "version": "100.0.0",
-  "description": "Recolhe a rotação Ranked, os mapas do TopBrawl e as fichas do BrawlScope acessíveis no navegador, e exporta um lote para o teu Brawl Híbrido.",
+  "name": "Brawl Híbrido — Recolha v101",
+  "version": "101.0.0",
+  "description": "Recolhe dados Ranked para o Brawl Híbrido e preenche a ferramenta de draft do PL Prodigy com o teu draft.",
   "permissions": [
     "storage",
     "alarms",
@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://brawlscope.com/*",
-    "https://topbrawl.com/*"
+    "https://topbrawl.com/*",
+    "https://powerleagueprodigy.com/*"
   ],
   "background": {
     "service_worker": "worker.js",
@@ -18,5 +19,16 @@
   },
   "action": {
     "default_title": "Abrir recolha Brawl Híbrido"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://powerleagueprodigy.com/plprodigy*"
+      ],
+      "js": [
+        "pl-prodigy.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }
