@@ -78,7 +78,11 @@ let emMemoria: CatalogoDeBuilds | null = null;
 
 async function buscarJson(url: string, buscar: typeof fetch) {
   const resposta = await buscar(url, { headers: IDENTIFICACAO, signal: AbortSignal.timeout(15_000) });
-  if (!resposta.ok) throw new Error(`${url} respondeu ${resposta.status}`);
+  if (!resposta.ok) {
+    // O início da resposta diz porquê (chave em falta, servidores bloqueados…).
+    const motivo = (await resposta.text().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, 160);
+    throw new Error(`${url} respondeu ${resposta.status}${motivo ? `: ${motivo}` : ""}`);
+  }
   return resposta.json() as Promise<unknown>;
 }
 
