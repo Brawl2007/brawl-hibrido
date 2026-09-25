@@ -184,6 +184,19 @@ describe("a resposta da IA passa por um filtro antes de chegar ao mapa", () => {
     expect(plano.marcadores.map((m) => [m.tipo, m.brawler ?? null])).toEqual([["emboscada", "Lou"], ["foco", null]]);
   });
 
+  it("quando usar o gadget: fica se a IA disse, sai se disse \"não sei\"; e há símbolo para o sítio", () => {
+    const comGadget = lerPlanoDaIA({
+      ordens: [
+        { brawler: "Lou", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 3, linha: 20 }, usarGadget: "No Bolt quando entrar na zona" },
+        { brawler: "Nori", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 5, linha: 20 }, usarGadget: "não sei" },
+      ],
+      marcadores: [{ tipo: "gadget", ponto: { col: 10, linha: 12 }, nota: "Gadget no Bolt", brawler: "Lou" }],
+    }, NOSSOS, DELES);
+    expect(comGadget.ordens.find((o) => o.brawler === "Lou")!.usarGadget).toBe("No Bolt quando entrar na zona");
+    expect(comGadget.ordens.find((o) => o.brawler === "Nori")!.usarGadget).toBeUndefined();
+    expect(comGadget.marcadores[0]).toMatchObject({ tipo: "gadget", brawler: "Lou" });
+  });
+
   it("previsão e fases vazias são deitadas fora", () => {
     expect(plano.previsao).toEqual(["O Bolt entra pela esquerda."]);
     expect(plano.fases).toEqual([{ nome: "Início", instrucao: "Calma." }]);

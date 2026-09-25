@@ -49,12 +49,14 @@ export type OrdemDoBrawler = {
   objetivo: string;
   quandoAvancar: string;
   cuidados: string[];
+  /** Quando e como usar o gadget (o acessório), numa situação concreta. Vazio se a IA não disse. */
+  usarGadget?: string;
   build?: BuildDoBrawler;
   capacidades?: Capacidade[];
 };
 /** Uma ordem no sítio do mapa onde deve acontecer. */
 export type TipoDeMarcador =
-  | "ataque" | "defesa" | "controlo" | "posicao" | "emboscada" | "flanco" | "cobertura"
+  | "ataque" | "defesa" | "controlo" | "posicao" | "emboscada" | "flanco" | "cobertura" | "gadget"
   | "destruir" | "agua" | "abertura" | "perigo" | "foco";
 export type MarcadorDoPlano = { id: string; tipo: TipoDeMarcador; ponto: PontoNoMapa; nota: string; brawler?: string };
 export type FaseDoPlano = { nome: string; instrucao: string };
@@ -96,6 +98,7 @@ export const TIPOS_DE_MARCADOR: ReadonlyArray<{ id: TipoDeMarcador; nome: string
   { id: "emboscada", nome: "Esconder no mato para emboscada", curto: "Emboscada", simbolo: "◉" },
   { id: "flanco", nome: "Flanquear por aqui", curto: "Flanco", simbolo: "↪" },
   { id: "cobertura", nome: "Usar esta parede como cobertura", curto: "Cobertura", simbolo: "▮" },
+  { id: "gadget", nome: "Usar o gadget aqui", curto: "Gadget", simbolo: "◆" },
   { id: "destruir", nome: "Partir estas paredes", curto: "Partir paredes", simbolo: "✹" },
   { id: "agua", nome: "Atravessar a água aqui", curto: "Água", simbolo: "≈" },
   { id: "abertura", nome: "Abertura: dá para avançar", curto: "Abertura", simbolo: "➜" },
@@ -218,6 +221,7 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
       funcao: texto(ordem.funcao, 40),
       objetivo: texto(ordem.objetivo, 160),
       quandoAvancar: texto(ordem.quandoAvancar, 100),
+      ...(naoSabe(texto(ordem.usarGadget, 110)) ? {} : { usarGadget: texto(ordem.usarGadget, 110) }),
       ...lerBuild(ordem.build),
       capacidades,
       cuidados: (Array.isArray(ordem.cuidados) ? ordem.cuidados : []).map((cuidado) => texto(cuidado, 100)).filter(Boolean).slice(0, 2),
@@ -399,11 +403,12 @@ export function textoDoPedido(pedido: PedidoDePlano, comImagem: boolean, terreno
     "   - objetivo: no máximo 12 palavras, com um sítio concreto do mapa",
     "   - quandoAvancar: no máximo 8 palavras (ex.: \"quando o Ash gastar o super\")",
     "   - cuidados: 1 perigo, no máximo 8 palavras",
+    "   - usarGadget: quando e como usar o gadget escolhido, numa situação concreta deste jogo, no máximo 10 palavras (ex.: \"no Ash quando saltar para a zona\"). Se não souberes, \"não sei\".",
     "   - posicao: casa a meio do jogo; chão ou mato. NUNCA parede. Água (\"~\") só para quem atravessa água. Pode ser no meio do território inimigo, até junto da base deles, se a estratégia o pedir (roubar a zona, pressionar o spawn, flanquear).",
     "   - build: escolhe da LISTA acima (gadget, poderEstelar e até 2 engrenagens) os nomes EXATOS. Se a lista não tiver o brawler, escreve \"não sei\".",
     "   - capacidades: só as que tem de certeza: \"parte-paredes\", \"atravessa-agua\", \"salta-paredes\". Na dúvida, lista vazia.",
     "5. setas (3 a 7): movimentos-chave. \"avanco\", \"recuo\" ou \"rotacao\"; o \"de\" é a posição do brawler; indica o brawler; e uma nota de no máximo 5 palavras a dizer PORQUÊ (ex.: \"recua se perder o 1v1\", \"entra quando a zona abrir\"). A ponta NUNCA numa parede nem na água (\"~\"), salvo quem atravessa água.",
-    "6. marcadores (5 a 10): a explicação no mapa. Cada um com nota de no máximo 5 palavras e, se for de um brawler, o nome dele. Tipos: \"ataque\", \"defesa\", \"controlo\" (segurar passagem), \"posicao\" (assumir posição), \"emboscada\" (esconder neste mato), \"flanco\", \"cobertura\" (usar ESTA parede para tapar tiros), \"destruir\" (partir estas paredes — só quem parte paredes), \"agua\" (atravessar aqui — só quem atravessa), \"abertura\" (corredor aberto), \"perigo\", \"foco\" (alvo prioritário).",
+    "6. marcadores (5 a 10): a explicação no mapa. Cada um com nota de no máximo 5 palavras e, se for de um brawler, o nome dele. Tipos: \"ataque\", \"defesa\", \"controlo\" (segurar passagem), \"posicao\" (assumir posição), \"emboscada\" (esconder neste mato), \"flanco\", \"cobertura\" (usar ESTA parede para tapar tiros), \"gadget\" (usar o gadget AQUI; a nota diz a situação), \"destruir\" (partir estas paredes — só quem parte paredes), \"agua\" (atravessar aqui — só quem atravessa), \"abertura\" (corredor aberto), \"perigo\", \"foco\" (alvo prioritário).",
     "7. fases: 3 (início, meio, fecho), instrução de no máximo 8 palavras.",
     "8. trilhos (passos fantasma): para 3 a 6 brawlers — nossos E adversários — o caminho que vão percorrer mais vezes durante a partida, com 3 a 5 casas por ordem (de onde partem até onde lutam). Sem atravessar paredes nem água (salvo quem atravessa água).",
     "",
@@ -433,6 +438,7 @@ export const ESQUEMA_DO_PLANO = {
           funcao: { type: "STRING" },
           objetivo: { type: "STRING" },
           quandoAvancar: { type: "STRING" },
+          usarGadget: { type: "STRING" },
           cuidados: { type: "ARRAY", items: { type: "STRING" } },
           posicao: CASA,
           build: {
@@ -468,7 +474,7 @@ export const ESQUEMA_DO_PLANO = {
       items: {
         type: "OBJECT",
         properties: {
-          tipo: { type: "STRING", enum: ["ataque", "defesa", "controlo", "posicao", "emboscada", "flanco", "cobertura", "destruir", "agua", "abertura", "perigo", "foco"] },
+          tipo: { type: "STRING", enum: ["ataque", "defesa", "controlo", "posicao", "emboscada", "flanco", "cobertura", "gadget", "destruir", "agua", "abertura", "perigo", "foco"] },
           ponto: CASA,
           nota: { type: "STRING" },
           brawler: { type: "STRING" },
@@ -489,11 +495,11 @@ export const FORMATO_DO_PLANO_EM_TEXTO = [
   '{"resumo":"...","condicaoDeVitoria":"...","previsao":["..."],',
   '"inimigos":[{"brawler":"Nome","posicao":{"col":10,"linha":8}}],',
   '"fases":[{"nome":"Início","instrucao":"..."}],',
-  '"ordens":[{"brawler":"Nome","funcao":"...","objetivo":"...","quandoAvancar":"...","cuidados":["..."],"posicao":{"col":10,"linha":20},"build":{"gadget":"...","poderEstelar":"...","engrenagens":["..."]},"capacidades":["parte-paredes"]}],',
+  '"ordens":[{"brawler":"Nome","funcao":"...","objetivo":"...","quandoAvancar":"...","usarGadget":"...","cuidados":["..."],"posicao":{"col":10,"linha":20},"build":{"gadget":"...","poderEstelar":"...","engrenagens":["..."]},"capacidades":["parte-paredes"]}],',
   '"setas":[{"brawler":"Nome","tipo":"avanco","de":{"col":10,"linha":20},"para":{"col":10,"linha":14},"nota":"porquê, curto"}],',
   '"marcadores":[{"tipo":"emboscada","ponto":{"col":13,"linha":15},"nota":"...","brawler":"Nome"}],',
   '"trilhos":[{"brawler":"Nome","pontos":[{"col":10,"linha":28},{"col":9,"linha":22},{"col":8,"linha":17}]}]}',
-  "tipo das setas: avanco, recuo ou rotacao. tipo dos marcadores: ataque, defesa, controlo, posicao, emboscada, flanco, cobertura, destruir, agua, abertura, perigo ou foco. col de 0 a 20, linha de 0 a 32.",
+  "tipo das setas: avanco, recuo ou rotacao. tipo dos marcadores: ataque, defesa, controlo, posicao, emboscada, flanco, cobertura, gadget, destruir, agua, abertura, perigo ou foco. col de 0 a 20, linha de 0 a 32.",
 ].join("\n");
 
 /** Onde o plano de um draft fica guardado neste navegador. */
@@ -545,6 +551,7 @@ export function lerPlanoGuardado(bruto: string | null, nossos: readonly string[]
         ...ordem,
         quandoAvancar: typeof ordem.quandoAvancar === "string" ? ordem.quandoAvancar : "",
         cuidados: Array.isArray(ordem.cuidados) ? ordem.cuidados : [],
+        usarGadget: typeof ordem.usarGadget === "string" ? ordem.usarGadget.slice(0, 110) : undefined,
         build: ordem.build ? limparBuild(ordem.build) : undefined,
       }));
     const nomesDoDraft = new Set([...nossos, ...deles]);

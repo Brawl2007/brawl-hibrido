@@ -4211,3 +4211,4 @@ main { max-width: 1600px; margin: 0 auto; }
   .quadro-general-interruptor { margin-left: 0; }
 }
 .quadro-general-interruptor--seguinte { margin-left: 0; }
+.qg-chip--gadget { background: rgba(61, 220, 132, .1); color: #b6f5cf; box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .35); }

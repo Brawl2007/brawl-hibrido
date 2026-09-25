@@ -290,6 +290,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         ? [
           ordem.objetivo,
           ordem.quandoAvancar ? `Quando avançar: ${ordem.quandoAvancar}` : "",
+          ordem.usarGadget ? `Gadget: ${ordem.usarGadget}` : "",
           ...ordem.cuidados.map((c) => `Cuidado: ${c}`),
           textoDaBuild(ordem.build),
           ordem.capacidades?.length ? `Pode: ${ordem.capacidades.map((c) => CAPACIDADES.find((item) => item.id === c)?.nome.toLowerCase()).join(", ")}` : "",
@@ -482,6 +483,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                     <div className="qg-chips">
                       {ordem.quandoAvancar && <span className="qg-chip qg-chip--verde">▲ {ordem.quandoAvancar}</span>}
                       {ordem.cuidados.slice(0, 1).map((c, i) => <span key={i} className="qg-chip qg-chip--vermelho">⚠ {c}</span>)}
+                      {ordem.usarGadget && <span className="qg-chip qg-chip--gadget">◆ Gadget: {ordem.usarGadget}</span>}
                       {ordem.capacidades?.map((c) => <span key={c} className="qg-chip qg-chip--azul">{CAPACIDADES.find((item) => item.id === c)?.nome}</span>)}
                     </div>
                     {b && (b.gadget || b.poderEstelar || b.engrenagens.length > 0) && (

@@ -10,6 +10,7 @@ export const COR_DO_MARCADOR: Record<TipoDeMarcador, string> = {
   emboscada: "#b56cff",
   flanco: "#3ddc84",
   cobertura: "#c9a26b",
+  gadget: "#3ddc84",
   destruir: "#ff9f1c",
   agua: "#2ec4f0",
   abertura: "#7ee787",
