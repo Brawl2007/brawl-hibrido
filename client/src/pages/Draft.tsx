@@ -1,11 +1,12 @@
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
+import { mapImageFor } from "@/lib/imagemDoMapa";
 import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
 import FilaDeColagem from "@/components/FilaDeColagem";
-import { Fragment, memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -53,7 +54,7 @@ import { hybridWeightFractions, hybridWeightsLabel, hybridWeightsSentence, useHy
 import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { fatiasDoPick, pesosDoPickAPartirDasFatias, useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
-import { analyzeDraftComposition, atribuirDuelosPorCounter, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
+import { analyzeDraftComposition, atribuirDuelosPorCounter, posicionarNoMapa, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
 import { getSynergyBonusRate } from "@shared/draft";
 import { getCounterPickMultiplier } from "@shared/draftRules";
 import { buildGamePlanText } from "@shared/coachPlan";
@@ -1515,7 +1516,78 @@ function MatchupDuelCard({ item, nos = "Azul", eles = "Vermelha" }: { item: Scor
   );
 }
 
-const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, redRows: linhasVermelha, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue" }: { myTeam?: TeamId; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
+type ColunaDoMapa = { position: "left" | "mid" | "right"; ally?: RankedRow; enemy?: RankedRow; score?: number };
+
+const nomeDaColuna = { left: "LANE ESQ.", mid: "MID", right: "LANE DIR." } as const;
+const nomeDaFuncao = { mid: "MID", side: "LANE", flex: "FLEX" } as const;
+
+function FichaNoMapa({ row, lado }: { row?: RankedRow; lado: "ally" | "enemy" }) {
+  if (!row) {
+    return (
+      <div className={`duel-map-token duel-map-token--${lado} is-empty`}>
+        <span className="duel-map-portrait" aria-hidden="true">?</span>
+        <small>{lado === "ally" ? "Pick por fazer" : "Por escolher"}</small>
+      </div>
+    );
+  }
+  const imagem = brawlerImageFor(row);
+  return (
+    <div className={`duel-map-token duel-map-token--${lado}`}>
+      <span className="duel-map-portrait">{imagem ? <img src={imagem} alt="" loading="lazy" decoding="async" /> : row.brawler.slice(0, 2).toUpperCase()}</span>
+      <strong>{row.brawler}</strong>
+      <small>{nomeDaFuncao[inferDraftRole(row.brawler)]}</small>
+    </div>
+  );
+}
+
+/**
+ * O duelo 1v1 desenhado sobre o mapa: o adversário em cima, a tua equipa em
+ * baixo — como o jogo mostra sempre a tua equipa. Cada coluna é uma lane; a
+ * linha entre as duas fichas é o duelo, com a vantagem da tua equipa.
+ *
+ * A imagem é o layout do mapa publicado pela Brawlify. Sem ela (mapa novo, ou
+ * a imagem não carregou), fica o relvado desenhado em CSS por baixo.
+ */
+function MapaDosDuelos({ colunas, imagem, mapName, nos, eles }: { colunas: ColunaDoMapa[]; imagem: string | null; mapName?: string; nos: string; eles: string }) {
+  const estilo = imagem ? ({ "--duel-map-image": `url("${imagem}")` } as CSSProperties) : undefined;
+  return (
+    <div className="duel-map-wrap">
+    <figure className="duel-map" style={estilo} aria-label={`${mapName ?? "Mapa"}: o adversário em cima, a tua equipa em baixo`}>
+      <div className="duel-map-field" aria-hidden="true" />
+      <div className="duel-map-base duel-map-base--enemy" aria-hidden="true"><span>ADVERSÁRIO</span><strong>{eles.toUpperCase()}</strong></div>
+      <div className="duel-map-base duel-map-base--ally" aria-hidden="true"><span>A TUA EQUIPA</span><strong>{nos.toUpperCase()}</strong></div>
+      <ol className="duel-map-lanes">
+        {colunas.map((coluna) => {
+          const temDuelo = typeof coluna.score === "number";
+          const score = coluna.score ?? 50;
+          const estado = !temDuelo ? "is-open" : score >= 55 ? "is-favorable" : score <= 45 ? "is-risky" : "is-even";
+          const rotulo = !temDuelo ? "SEM DUELO" : score >= 55 ? "GANHAS" : score <= 45 ? "PERDES" : "EQUILIBRADO";
+          const descricao = temDuelo
+            ? `${nomeDaColuna[coluna.position]}: ${coluna.ally!.brawler} (${nos}) contra ${coluna.enemy!.brawler} (${eles}), ${score.toFixed(0)}% para ti, ${rotulo.toLowerCase()}.`
+            : `${nomeDaColuna[coluna.position]}: ${coluna.ally?.brawler ?? "pick por fazer"} (${nos}), ${coluna.enemy?.brawler ?? "por escolher"} (${eles}), sem duelo ainda.`;
+          return (
+            <li key={coluna.position} className={`duel-map-lane duel-map-lane--${coluna.position} ${estado}`} aria-label={descricao}>
+              <FichaNoMapa row={coluna.enemy} lado="enemy" />
+              <div className="duel-map-link" aria-hidden="true">
+                <i />
+                <b className="duel-map-badge">
+                  <small>{nomeDaColuna[coluna.position]}</small>
+                  {temDuelo ? <strong>{score.toFixed(0)}<em>%</em></strong> : null}
+                  <span>{rotulo}</span>
+                </b>
+              </div>
+              <FichaNoMapa row={coluna.ally} lado="ally" />
+            </li>
+          );
+        })}
+      </ol>
+    </figure>
+    <p className="duel-map-caption">{mapName ?? "Mapa"} · adversário em cima, a tua equipa em baixo</p>
+    </div>
+  );
+}
+
+const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, redRows: linhasVermelha, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue", mapImage }: { myTeam?: TeamId; mapImage?: string | null; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
   // A tua equipa fica sempre do lado esquerdo, com as cores do teu lado: na
   // perspetiva Vermelha, a Vermelha passa para a esquerda e a Azul é o adversário.
   // Daqui para baixo, "blue"/"ally" quer dizer a tua equipa e "red"/"enemy" a outra.
@@ -1527,19 +1599,8 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
   // Quem joga contra quem sai dos counters (ver `atribuirDuelosPorCounter`),
   // a favor da tua equipa; a posição sai da função do teu brawler.
   const duelos = atribuirDuelosPorCounter(blueRows, redRows, "ally");
-  const assigned = new Set<string>();
-  const pickForLane = (position: "left" | "mid" | "right") => {
-    const preferredRole = position === "mid" ? "mid" : "side";
-    const preferred = duelos.find((duelo) => !assigned.has(duelo.ally.brawler) && inferDraftRole(duelo.ally.brawler) === preferredRole);
-    const fallback = duelos.find((duelo) => !assigned.has(duelo.ally.brawler));
-    const selected = preferred ?? fallback;
-    if (selected) assigned.add(selected.ally.brawler);
-    return selected;
-  };
-  const laneSlots = (["left", "mid", "right"] as const).map((position) => {
-    const duelo = pickForLane(position);
-    return { position, ally: duelo?.ally, enemy: duelo?.enemy, motivo: duelo?.motivo };
-  });
+  const laneSlots = posicionarNoMapa(duelos, (duelo) => inferDraftRole(duelo.ally.brawler))
+    .map(({ position, item: duelo }) => ({ position, ally: duelo.ally, enemy: duelo.enemy, motivo: duelo.motivo }));
   const matchups: ScoredMatchupItem[] = laneSlots.filter((lane): lane is typeof lane & MatchupSlot => Boolean(lane.ally && lane.enemy)).map((lane) => {
     const allyContext = { mapModeId, mapTeams, allyRows: blueRows.filter((row) => row.brawler !== lane.ally.brawler), enemyRows: redRows, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, ruleSettings };
     const enemyContext = { mapModeId, mapTeams, allyRows: redRows.filter((row) => row.brawler !== lane.enemy.brawler), enemyRows: blueRows, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, ruleSettings };
@@ -1569,6 +1630,17 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
       enemyBasePoints: enemyPoints.basePoints,
       enemyFinalPoints: enemyPoints.finalPoints,
     };
+  });
+  // O mapa mostra também quem ainda não tem adversário, nas colunas livres.
+  const emDuelo = new Set(laneSlots.flatMap((lane) => [`a:${lane.ally.brawler}`, `e:${lane.enemy.brawler}`]));
+  const ocupadas = new Set(laneSlots.map((lane) => lane.position));
+  const aliadosSoltos = posicionarNoMapa(blueRows.filter((row) => !emDuelo.has(`a:${row.brawler}`)), (row) => inferDraftRole(row.brawler), ocupadas);
+  const adversariosSoltos = posicionarNoMapa(redRows.filter((row) => !emDuelo.has(`e:${row.brawler}`)), (row) => inferDraftRole(row.brawler), ocupadas);
+  const colunasDoMapa: ColunaDoMapa[] = (["left", "mid", "right"] as const).map((position) => {
+    const duelo = matchups.find((item) => item.lane.position === position);
+    return duelo
+      ? { position, ally: duelo.lane.ally, enemy: duelo.lane.enemy, score: duelo.matchup.score }
+      : { position, ally: aliadosSoltos.find((x) => x.position === position)?.item, enemy: adversariosSoltos.find((x) => x.position === position)?.item };
   });
   const midMatchup = matchups.find((item) => item.lane.position === "mid");
   const laneMatchups = matchups.filter((item) => item.lane.position !== "mid");
@@ -1622,13 +1694,37 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
         <div className="matchup-board-side matchup-board-side--red"><span>{ELES} COUNTERA</span><strong>{redCounters.length ? redCounters.map((item) => `${item.lane.enemy.brawler} → ${item.lane.ally.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{redCounters.length ? `Ataques favoráveis publicados para ${eles}.` : `Sem relação publicada a favor de ${eles}.`}</small></div>
         <div className="matchup-board-side matchup-board-side--neutral"><span>NEUTROS</span><strong>{neutralMatchups.length ? neutralMatchups.map((item) => `${item.lane.ally.brawler} × ${item.lane.enemy.brawler}`).join(" · ") : "Todos os duelos têm counter literal"}</strong><small>{neutralMatchups.length ? "A decisão usa a melhor leitura por Win Rate." : "Não há duelos estimados nesta matriz."}</small></div>
       </div>
-      {matchups.length === 0 ? (
-        <div className="draft-empty"><Crosshair size={22} /><strong>A aguardar picks da tua equipa e do adversário.</strong><span>Escolhe pelo menos um brawler em cada equipa para abrir a primeira leitura 1v1.</span></div>
-      ) : (
-        <div className="matchup-matrix">
+      <div className="duel-map-layout">
+        <MapaDosDuelos colunas={colunasDoMapa} imagem={mapImage ?? null} mapName={mapName} nos={nos} eles={eles} />
+        <aside className="duel-map-side" aria-label="Porque é este o adversário de cada um">
+          <span className="duel-map-side-kicker">QUEM APANHA QUEM</span>
+          {matchups.length === 0 ? (
+            <p className="duel-map-side-empty">Escolhe pelo menos um brawler em cada equipa: o mapa põe cada um contra o adversário a quem mais ganha.</p>
+          ) : (
+            <ol className="duel-map-legend">
+              {matchups.map((item) => {
+                const estado = item.matchup.score >= 55 ? "is-favorable" : item.matchup.score <= 45 ? "is-risky" : "is-even";
+                return (
+                  <li key={item.lane.position} className={estado}>
+                    <span>{item.lane.position === "mid" ? "MID" : item.lane.position === "left" ? "LANE ESQ." : "LANE DIR."}</span>
+                    <strong>{item.lane.ally.brawler} <em>→</em> {item.lane.enemy.brawler}</strong>
+                    <b>{item.matchup.score.toFixed(0)}%</b>
+                    {item.lane.motivo && <p>{item.lane.motivo}</p>}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </aside>
+      </div>
+      {matchups.length > 0 && (
+        <details className="duel-map-details">
+          <summary>Ver pontos, counters e fontes de cada duelo</summary>
+          <div className="matchup-matrix">
             <section className="matchup-zone matchup-zone--mid"><div className="matchup-zone-head"><span><Crosshair size={14} /> MID</span><strong>Duelo Mid 1v1</strong><small>Controla o espaço e a rotação.</small></div>{midMatchup ? <MatchupDuelCard item={midMatchup} nos={nos} eles={eles} /> : <div className="matchup-zone-empty"><Crosshair size={19} /><strong>Mid ainda aberto</strong><span>O próximo Mid preencherá este duelo central.</span></div>}</section>
             <section className="matchup-zone matchup-zone--lanes"><div className="matchup-zone-head"><span><Layers3 size={14} /> LANES</span><strong>Lanes 1v1</strong><small>Pressão isolada nas duas extremidades.</small></div><div className="matchup-lanes-grid">{laneMatchups.length ? laneMatchups.map((item) => <MatchupDuelCard key={item.lane.position} item={item} nos={nos} eles={eles} />) : <div className="matchup-zone-empty"><Layers3 size={19} /><strong>Lanes ainda abertas</strong><span>Escolhe brawlers de Lane para comparar os dois lados.</span></div>}</div></section>
         </div>
+        </details>
       )}
     </section>
   );
@@ -2808,7 +2904,7 @@ export default function Draft() {
               <div className="recommendation-foot"><span><span className="tiny-live" /> {visibleRows.length} opções disponíveis · meta auxiliar média {formatMetric(hybridAverage, "")}</span><span><Star size={13} /> Score Híbrido é a base. As taxas de Counter, Sinergia, Ban, Fit, composição do mapa e desbónus são as definidas no painel Regras % desta sessão. A posição é comum a Azul e Vermelho.</span></div>
             </section>
 
-            <LaneMatchupDesk myTeam={myTeam} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
+            <LaneMatchupDesk myTeam={myTeam} mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
 
             <LiveCounterEngine suggestions={liveCounterSuggestions} enemyRows={opponentPicks} canAutoPick={canAutoPick} onSelect={assignBrawler} onSimulate={simulateBestCounter} />
 

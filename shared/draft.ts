@@ -1010,6 +1010,44 @@ export function atribuirDuelosPorCounter<T extends DraftRow>(
   });
 }
 
+export type PosicaoNoMapa = "left" | "mid" | "right";
+
+/**
+ * Em que coluna do mapa dos duelos fica cada brawler da tua equipa.
+ *
+ * O de Mid vai para o meio, os de Lane para as pontas, e o que sobra (Flex,
+ * ou um segundo Mid) ocupa o primeiro lugar livre, a começar pelo meio. Antes
+ * a ordem era esquerda→meio→direita com recurso imediato, e um só brawler de
+ * Mid acabava na lane esquerda porque era o primeiro a ser procurado.
+ *
+ * `ocupadas` deixa preencher em duas passagens: primeiro os duelos, depois os
+ * brawlers ainda sem adversário nas colunas que ficaram livres.
+ */
+export function posicionarNoMapa<T>(
+  itens: readonly T[],
+  funcaoDe: (item: T) => DraftRole,
+  ocupadas: ReadonlySet<PosicaoNoMapa> = new Set(),
+): Array<{ position: PosicaoNoMapa; item: T }> {
+  const livres = [...itens];
+  const tirar = (quer: (item: T) => boolean) => {
+    const indice = livres.findIndex(quer);
+    return indice >= 0 ? livres.splice(indice, 1)[0] : undefined;
+  };
+  const lugar = new Map<PosicaoNoMapa, T>();
+  const pedir = (position: PosicaoNoMapa, quer: (item: T) => boolean) => {
+    if (ocupadas.has(position) || lugar.has(position)) return;
+    const item = tirar(quer);
+    if (item !== undefined) lugar.set(position, item);
+  };
+  pedir("mid", (item) => funcaoDe(item) === "mid");
+  pedir("left", (item) => funcaoDe(item) === "side");
+  pedir("right", (item) => funcaoDe(item) === "side");
+  for (const position of ["mid", "left", "right"] as const) pedir(position, () => true);
+  return (["left", "mid", "right"] as const)
+    .filter((position) => lugar.has(position))
+    .map((position) => ({ position, item: lugar.get(position) as T }));
+}
+
 export function getPositionRecommendation(brawler: string, enemyRows: Array<{ brawler: string; modeId?: string }>): { position: DraftPosition; label: string; advice: string } {
   const role = inferDraftRole(brawler);
   const direct = enemyRows.map((enemy) => getCounterMatchup(brawler, enemy.brawler, undefined, enemy.modeId)).find(matchup => matchup && matchup.counterDelta > 0);

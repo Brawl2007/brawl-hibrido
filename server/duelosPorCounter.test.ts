@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { setCounterSyncSnapshot } from "../shared/counterSourceRelations";
-import { atribuirDuelosPorCounter } from "../shared/draft";
+import { atribuirDuelosPorCounter, posicionarNoMapa, type PosicaoNoMapa } from "../shared/draft";
 import type { CounterSyncSnapshotPayload, SyncedCounterRelation } from "../shared/counterSyncSnapshot";
 
 /**
@@ -126,5 +126,55 @@ describe("o botão de perspetiva cabe na coluna do draft", () => {
     const css = readFileSync(new URL("../client/src/arena-v55.css", import.meta.url), "utf8");
     expect(css).toContain(".draft-shell .draft-arena .draft-progress { grid-template-columns: minmax(0, 1fr) auto; }");
     expect(css).toContain(".draft-shell .draft-arena .draft-progress-actions { grid-column: 1 / -1;");
+  });
+});
+
+describe("em que coluna do mapa fica cada brawler", () => {
+  const funcoes: Record<string, "mid" | "side" | "flex"> = { M1: "mid", M2: "mid", S1: "side", S2: "side", S3: "side", F1: "flex" };
+  const colocar = (nomes: string[], ocupadas?: Set<PosicaoNoMapa>) =>
+    Object.fromEntries(posicionarNoMapa(nomes, (n) => funcoes[n], ocupadas).map(({ position, item }) => [position, item]));
+
+  it("Mid ao meio e Lanes nas pontas, seja qual for a ordem das escolhas", () => {
+    expect(colocar(["S1", "M1", "S2"])).toEqual({ left: "S1", mid: "M1", right: "S2" });
+    expect(colocar(["M1", "S2", "S1"])).toEqual({ left: "S2", mid: "M1", right: "S1" });
+  });
+  it("um brawler de Mid sozinho fica no meio, e não na lane esquerda", () => {
+    expect(colocar(["M1"])).toEqual({ mid: "M1" });
+  });
+  it("um de Lane sozinho fica numa ponta; um Flex sozinho fica no meio", () => {
+    expect(colocar(["S1"])).toEqual({ left: "S1" });
+    expect(colocar(["F1"])).toEqual({ mid: "F1" });
+  });
+  it("o que sobra ocupa o primeiro lugar livre", () => {
+    expect(colocar(["S1", "S2", "S3"])).toEqual({ left: "S1", mid: "S3", right: "S2" });
+    expect(colocar(["M1", "M2", "F1"])).toEqual({ left: "M2", mid: "M1", right: "F1" });
+  });
+  it("respeita as colunas já ocupadas pelos duelos", () => {
+    expect(colocar(["M1", "S1"], new Set<PosicaoNoMapa>(["mid"]))).toEqual({ left: "S1", right: "M1" });
+    expect(colocar(["S1"], new Set<PosicaoNoMapa>(["left", "mid", "right"]))).toEqual({});
+  });
+});
+
+describe("o mapa dos duelos no Draft", () => {
+  const fonte = readFileSync(new URL("../client/src/pages/Draft.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../client/src/index.css", import.meta.url), "utf8");
+  const mapa = fonte.slice(fonte.indexOf("function MapaDosDuelos("), fonte.indexOf("const LaneMatchupDesk = memo("));
+
+  it("o adversário fica em cima e a tua equipa em baixo, em cada coluna", () => {
+    const cima = mapa.indexOf('<FichaNoMapa row={coluna.enemy} lado="enemy" />');
+    const linha = mapa.indexOf('className="duel-map-link"');
+    const baixo = mapa.indexOf('<FichaNoMapa row={coluna.ally} lado="ally" />');
+    expect(cima).toBeGreaterThan(0);
+    expect(cima).toBeLessThan(linha);
+    expect(linha).toBeLessThan(baixo);
+  });
+  it("usa o layout real do mapa escolhido, com o relvado em CSS por baixo", () => {
+    expect(fonte).toContain("mapImage={selectedMap ? mapImageFor(selectedMap) : null}");
+    expect(css).toMatch(/var\(--duel-map-image, none\) center \/ cover no-repeat/);
+    expect(css).toContain("aspect-ratio: 21 / 33;");
+  });
+  it("as colunas do mapa vêm da mesma atribuição por counters que a lista", () => {
+    expect(fonte).toContain("const duelos = atribuirDuelosPorCounter(blueRows, redRows, \"ally\");");
+    expect(fonte).toContain("<MapaDosDuelos colunas={colunasDoMapa}");
   });
 });

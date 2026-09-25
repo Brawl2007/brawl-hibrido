@@ -3688,3 +3688,265 @@ main { max-width: 1600px; margin: 0 auto; }
   .hero-champion.is-troca .hero-champion-card { animation: bh-fade-only var(--dur-rapida) ease-out both; }
 }
 @keyframes bh-fade-only { from { opacity: 0; } to { opacity: 1; } }
+
+/* =============================================================================
+ * 12. MAPA DOS DUELOS (Matriz 1v1)
+ *
+ * O duelo desenhado sobre o mapa: adversário em cima, a tua equipa em baixo,
+ * uma coluna por lane. A imagem é o layout da Brawlify (21×33 casas, por isso
+ * a proporção); sem ela fica o relvado em CSS por baixo, que já se aguenta
+ * sozinho. As cores seguem o resto do Draft: ciano é o teu lado, rosa o outro.
+ * ========================================================================== */
+.duel-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  padding: 18px;
+}
+.duel-map {
+  --duel-map-image: none; /* o React põe aqui o url() do mapa */
+  position: relative;
+  margin: 0;
+  width: 100%;
+  aspect-ratio: 21 / 33;
+  max-height: 88vh;
+  overflow: hidden;
+  border: 1px solid var(--bh-line-strong);
+  border-radius: 14px;
+  background: #16301f;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .04);
+  isolation: isolate;
+}
+.duel-map-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(120, 16, 40, .5) 0%, rgba(8, 12, 20, .18) 22%, rgba(8, 12, 20, .32) 50%, rgba(8, 12, 20, .18) 78%, rgba(8, 60, 90, .55) 100%),
+    var(--duel-map-image, none) center / cover no-repeat,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 32px),
+    radial-gradient(120% 60% at 50% 50%, #2f6b3c 0%, #1d4a2a 55%, #12301c 100%);
+}
+/* O rio: a linha do meio do mapa, onde os duelos se decidem. */
+.duel-map-field::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .35) 0 10px, transparent 10px 20px);
+  transform: translateY(-50%);
+}
+.duel-map-base {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(6, 9, 16, .72);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+.duel-map-base span { color: var(--bh-text-muted); }
+.duel-map-base strong { font-family: "Lilita One", "Barlow Condensed", sans-serif; font-size: 13px; font-weight: 400; letter-spacing: .04em; }
+.duel-map-base--enemy { top: 8px; }
+.duel-map-base--enemy strong { color: var(--bh-negative); }
+.duel-map-base--ally { bottom: 8px; }
+.duel-map-base--ally strong { color: var(--bh-info); }
+
+.duel-map-lanes {
+  position: absolute;
+  inset: 42px 0 42px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0 6px;
+  list-style: none;
+}
+.duel-map-lane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.duel-map-token {
+  display: flex;
+  max-width: 100%;
+  /* Altura fixa: ficha vazia e ficha cheia ocupam o mesmo, e as caixas do meio alinham. */
+  min-height: calc(clamp(46px, 9vw, 72px) + 44px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  text-align: center;
+}
+.duel-map-portrait {
+  display: grid;
+  width: clamp(46px, 9vw, 72px);
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  background: rgba(6, 9, 16, .85);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .5), 0 0 0 3px rgba(6, 9, 16, .55);
+  font-family: "Lilita One", sans-serif;
+  font-size: 18px;
+}
+.duel-map-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.duel-map-token strong {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(6, 9, 16, .82);
+  color: var(--bh-text);
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-size: clamp(12px, 1.6vw, 15px);
+  font-weight: 400;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.duel-map-token small { color: var(--bh-text-muted); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-shadow: 0 1px 2px #000; }
+.duel-map-token--enemy { color: var(--bh-negative); }
+.duel-map-token--ally { flex-direction: column-reverse; color: var(--bh-info); }
+.duel-map-token.is-empty .duel-map-portrait { border-style: dashed; color: rgba(255, 255, 255, .35); background: rgba(6, 9, 16, .45); box-shadow: none; }
+
+/* A linha do duelo e a vantagem da tua equipa a meio. */
+.duel-map-link {
+  position: relative;
+  display: grid;
+  width: 100%;
+  flex: 1;
+  place-items: center;
+  margin: 6px 0;
+}
+.duel-map-link i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--bh-negative), rgba(255, 255, 255, .2) 50%, var(--bh-info));
+  transform: translateX(-50%);
+  transform-origin: 50% 50%;
+}
+.duel-map-lane.is-open .duel-map-link i { background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); }
+.duel-map-badge {
+  position: relative;
+  display: grid;
+  min-width: 70px;
+  justify-items: center;
+  gap: 1px;
+  padding: 6px 10px 7px;
+  border: 2px solid var(--bh-line-strong);
+  border-bottom-width: 4px;
+  border-radius: 12px;
+  background: rgba(6, 9, 16, .9);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .45);
+}
+.duel-map-badge small { color: var(--bh-text-muted); font-size: 8px; font-weight: 800; letter-spacing: .14em; }
+.duel-map-badge strong { color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: clamp(20px, 3vw, 28px); font-weight: 400; line-height: 1; }
+.duel-map-badge strong em { font-size: .55em; font-style: normal; }
+.duel-map-badge span { font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+.duel-map-lane.is-favorable .duel-map-badge { border-color: var(--bh-positive); }
+.duel-map-lane.is-favorable .duel-map-badge span { color: var(--bh-positive); }
+.duel-map-lane.is-favorable .duel-map-link i { background: linear-gradient(180deg, rgba(255, 255, 255, .25), var(--bh-positive) 55%, var(--bh-info)); }
+.duel-map-lane.is-risky .duel-map-badge { border-color: var(--bh-negative); }
+.duel-map-lane.is-risky .duel-map-badge span { color: var(--bh-negative); }
+.duel-map-lane.is-risky .duel-map-link i { background: linear-gradient(180deg, var(--bh-negative), var(--bh-negative) 45%, rgba(255, 255, 255, .25)); }
+.duel-map-lane.is-even .duel-map-badge { border-color: var(--bh-gold); }
+.duel-map-lane.is-even .duel-map-badge span { color: var(--bh-gold); }
+.duel-map-lane.is-open .duel-map-badge span { color: var(--bh-text-dim); }
+
+/* A legenda fica por baixo do mapa: em cima dele tapava as fichas da tua equipa. */
+.duel-map-caption { margin-top: 8px; color: var(--bh-text-muted); font-size: 11px; text-align: center; }
+
+/* Entrada: as fichas chegam das bases e a linha estica. Só transform/opacity. */
+.duel-map-token--enemy:not(.is-empty) { animation: bh-duel-from-top var(--dur-lenta) var(--ease-arena) both; }
+.duel-map-token--ally:not(.is-empty) { animation: bh-duel-from-bottom var(--dur-lenta) var(--ease-arena) both; }
+.duel-map-link i { animation: bh-duel-link var(--dur-lenta) var(--ease-arena) 120ms both; }
+.duel-map-lane--mid .duel-map-token, .duel-map-lane--mid .duel-map-link i { animation-delay: 60ms; }
+.duel-map-lane--right .duel-map-token, .duel-map-lane--right .duel-map-link i { animation-delay: 120ms; }
+@keyframes bh-duel-from-top { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes bh-duel-from-bottom { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes bh-duel-link { from { transform: translateX(-50%) scaleY(0); } to { transform: translateX(-50%) scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .duel-map-token--enemy:not(.is-empty),
+  .duel-map-token--ally:not(.is-empty),
+  .duel-map-link i { animation: none; }
+}
+
+/* Ao lado do mapa: porque é este o adversário de cada um. */
+.duel-map-side { display: grid; gap: 10px; }
+.duel-map-side-kicker { color: var(--bh-gold); font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+.duel-map-side-empty { margin: 0; color: var(--bh-text-muted); font-size: 13px; line-height: 1.5; }
+.duel-map-legend { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.duel-map-legend li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--bh-line);
+  border-left: 4px solid var(--bh-gold);
+  border-radius: 10px;
+  background: rgba(6, 9, 16, .55);
+}
+.duel-map-legend li.is-favorable { border-left-color: var(--bh-positive); }
+.duel-map-legend li.is-risky { border-left-color: var(--bh-negative); }
+.duel-map-legend li > span { color: var(--bh-text-muted); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.duel-map-legend li > strong { overflow: hidden; color: var(--bh-text); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.duel-map-legend li > strong em { color: var(--bh-text-dim); font-style: normal; }
+.duel-map-legend li > b { color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: 20px; font-weight: 400; }
+.duel-map-legend li > p { grid-column: 1 / -1; margin: 0; color: var(--bh-text-muted); font-size: 12px; line-height: 1.45; }
+
+.duel-map-details { margin: 0 18px 18px; border: 1px solid var(--bh-line); border-radius: 10px; }
+.duel-map-details > summary { padding: 12px 14px; color: var(--bh-gold); font-size: 13px; font-weight: 700; cursor: pointer; }
+.duel-map-details[open] > summary { border-bottom: 1px solid var(--bh-line); }
+.duel-map-details > .matchup-matrix { padding: 14px; }
+
+@media (max-width: 900px) {
+  .duel-map-layout { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .duel-map { max-width: 520px; margin: 0 auto; }
+}
+@media (max-width: 480px) {
+  /* Cinco caixas encaixadas comiam 50px de cada lado: o mapa vai até às bordas do painel. */
+  .duel-map-layout { margin: 0 -12px; padding: 10px 0; }
+  .duel-map { border-radius: 10px; }
+  .duel-map-lanes { inset: 42px 0 42px; padding: 0 2px; }
+  .duel-map-base { padding: 3px 8px; font-size: 8px; }
+  .duel-map-base strong { font-size: 11px; }
+  .duel-map-side { padding: 0 12px; }
+  .duel-map-badge { min-width: 58px; padding: 5px 6px 6px; }
+  .duel-map-details { margin: 0 10px 10px; }
+}
+
+/*
+ * "X COUNTERA / Y COUNTERA / NEUTROS" por cima do mapa. Nunca teve regra
+ * nenhuma: os três blocos saíam como texto corrido ("AZUL COUNTERANori →").
+ */
+.matchup-perspective-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 18px 0; }
+.matchup-board-side { display: grid; align-content: start; gap: 3px; min-width: 0; padding: 10px 12px; border: 1px solid var(--bh-line); border-top: 3px solid var(--bh-line-strong); border-radius: 10px; background: rgba(6, 9, 16, .5); }
+.matchup-board-side > span { color: var(--bh-text-muted); font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+.matchup-board-side > strong { color: var(--bh-text); font-size: 13px; line-height: 1.35; }
+.matchup-board-side > small { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
+.matchup-board-side--blue { border-top-color: var(--bh-info); }
+.matchup-board-side--red { border-top-color: var(--bh-negative); }
+@media (max-width: 700px) {
+  .matchup-perspective-board { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 10px 0; }
+  .matchup-board-side > small { display: none; }
+}
