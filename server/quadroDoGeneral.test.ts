@@ -14,7 +14,7 @@ import {
 import { aplicarRotulos, grelhaEmTexto, pontoLivre, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
-import { escolherModelo, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
+import { escolherModelo, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
 
 const NOSSOS = ["Nori", "Lou", "R-T"];
 const DELES = ["Bolt", "Lumi", "Sandy"];
@@ -244,35 +244,69 @@ describe("o pedido à IA leva o jogo de hoje", () => {
 /* ------------------------------------------------------------------------ *
  * O servidor a falar com a Gemini: uma Gemini falsa, com os pedidos anotados.
  * ------------------------------------------------------------------------ */
-function geminiFalsa(respostas: { plano?: unknown; pesquisa?: number; plano_status?: number }) {
+type Resposta = { status: number; corpo?: unknown };
+/**
+ * Uma Gemini falsa. `plano` diz o que cada modelo responde, por ordem de
+ * tentativa ("modelo" ou "modelo:livre" para o pedido sem formato estrito).
+ */
+function geminiFalsa(config: {
+  modelos?: string[];
+  plano?: Record<string, Resposta>;
+  pesquisa?: Record<string, Resposta>;
+}) {
+  const modelos = config.modelos ?? ["gemini-3-flash"];
   const pedidos: Array<{ url: string; headers: Record<string, string>; corpo: any }> = [];
   const buscar = (async (url: string, init?: RequestInit) => {
     const corpo = init?.body ? JSON.parse(String(init.body)) : null;
     pedidos.push({ url, headers: (init?.headers ?? {}) as Record<string, string>, corpo });
-    const json = (status: number, obj: unknown) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
-    if (url.includes("/models?")) return json(200, { models: [{ name: "models/gemini-3-flash", supportedGenerationMethods: ["generateContent"] }] });
+    const json = (r: Resposta) => new Response(JSON.stringify(r.corpo ?? {}), { status: r.status, headers: { "content-type": "application/json" } });
+    if (url.includes("/models?")) return json({ status: 200, corpo: { models: modelos.map((m) => ({ name: `models/${m}`, supportedGenerationMethods: ["generateContent"] })) } });
     if (url.includes("cdn.brawlify.com")) return new Response(null, { status: 404 });
-    if (corpo?.tools) return respostas.pesquisa ? json(respostas.pesquisa, { error: {} }) : json(200, { candidates: [{ content: { parts: [{ text: "Lou: congela." }] }, groundingMetadata: { groundingChunks: [{ web: { uri: "https://fonte.pt/lou", title: "Lou hoje" } }, { web: { uri: "http://inseguro", title: "x" } }] } }] });
-    if (respostas.plano_status) return json(respostas.plano_status, { error: { message: "quota" } });
-    return json(200, { candidates: [{ content: { parts: [{ text: JSON.stringify(respostas.plano) }] } }] });
+    const modelo = decodeURIComponent(/models\/([^:]+):generateContent/.exec(url)![1]);
+    if (corpo?.tools) {
+      return json(config.pesquisa?.[modelo] ?? { status: 200, corpo: { candidates: [{ content: { parts: [{ text: "Lou: congela." }] }, groundingMetadata: { groundingChunks: [{ web: { uri: "https://fonte.pt/lou", title: "Lou hoje" } }, { web: { uri: "http://inseguro", title: "x" } }] } }] } });
+    }
+    const chave = corpo.generationConfig.responseSchema ? modelo : `${modelo}:livre`;
+    return json(config.plano?.[chave] ?? { status: 200, corpo: { candidates: [{ content: { parts: [{ text: JSON.stringify(planoMinimo) }] } }] } });
   }) as typeof fetch;
-  return { pedidos, buscar };
+  const geracoes = () => pedidos.filter((p) => p.corpo && !p.corpo.tools).map((p) => `${/models\/([^:]+):/.exec(p.url)![1]}${p.corpo.generationConfig.responseSchema ? "" : ":livre"}`);
+  return { pedidos, buscar, geracoes };
 }
 
+const erroGoogle = (status: number, estado: string, mensagem: string): Resposta => ({ status, corpo: { error: { code: status, status: estado, message: mensagem } } });
 const planoMinimo = { resumo: "r", condicaoDeVitoria: "c", previsao: [], fases: [], ordens: [{ brawler: "Lou", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 3, linha: 20 } }], setas: [], marcadores: [] };
 
+async function comChave<T>(fazer: () => Promise<T>) {
+  process.env.GEMINI_API_KEY = "chave-de-teste-123";
+  try {
+    return await fazer();
+  } finally {
+    delete process.env.GEMINI_API_KEY;
+  }
+}
+// Cada teste usa uma chave "nova" para a lista de modelos não vir da memória do anterior.
+let contador = 0;
+async function pedirCom(config: Parameters<typeof geminiFalsa>[0]) {
+  const falsa = geminiFalsa(config);
+  process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+  try {
+    return { falsa, resultado: await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, falsa.buscar).then((r) => ({ ok: r }), (erro: Error) => ({ erro })) };
+  } finally {
+    delete process.env.GEMINI_API_KEY;
+  }
+}
+
 describe("a IA no servidor", () => {
-  it("escolhe o flash estável mais recente, não o lite nem o de imagem", () => {
-    const lista = ["gemini-2.5-flash", "gemini-3-flash", "gemini-3-flash-lite", "gemini-3-flash-image", "gemini-3-pro"].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ["generateContent"] }));
+  it("ordena os modelos: flash estáveis do mais recente, antevisões, e os lite no fim; nada de imagem", () => {
+    const lista = ["gemini-2.5-flash", "gemini-3-flash", "gemini-3-flash-lite", "gemini-3-flash-image", "gemini-3-pro", "gemini-3.1-flash-preview"].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ["generateContent"] }));
+    expect(ordenarModelos(lista)).toEqual(["gemini-3-flash", "gemini-2.5-flash", "gemini-3.1-flash-preview", "gemini-3-flash-lite"]);
     expect(escolherModelo(lista)).toBe("gemini-3-flash");
-    expect(escolherModelo([{ name: "models/gemini-3-flash-preview-09", supportedGenerationMethods: ["generateContent"] }])).toBe("gemini-3-flash-preview-09");
     expect(escolherModelo([{ name: "models/embedding", supportedGenerationMethods: ["embedContent"] }])).toBeNull();
   });
 
   it("pesquisa primeiro a atualidade, depois planeia; a chave vai no cabeçalho, nunca no endereço", async () => {
-    process.env.GEMINI_API_KEY = "chave-de-teste-123";
-    try {
-      const { pedidos, buscar } = geminiFalsa({ plano: planoMinimo });
+    await comChave(async () => {
+      const { pedidos, buscar } = geminiFalsa({});
       const resultado = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, buscar);
       const aGoogle = pedidos.filter((p) => p.url.includes("googleapis"));
       expect(aGoogle.every((p) => p.headers["x-goog-api-key"] === "chave-de-teste-123" && !p.url.includes("chave-de-teste"))).toBe(true);
@@ -283,24 +317,60 @@ describe("a IA no servidor", () => {
       expect(resultado.comPesquisa).toBe(true);
       expect(resultado.plano.fontes).toEqual([{ titulo: "Lou hoje", url: "https://fonte.pt/lou" }]);
       expect(resultado.plano.ordens[0].brawler).toBe("Lou");
-    } finally {
-      delete process.env.GEMINI_API_KEY;
-    }
+    });
   });
 
-  it("se a pesquisa falhar, o plano segue sem ela", async () => {
-    const { buscar } = geminiFalsa({ pesquisa: 400 });
-    expect(await pesquisarAtualidade("k", "gemini-3-flash", pedido, buscar)).toBeNull();
+  it("erro interno com o formato estrito: repete no mesmo modelo sem ele, com a forma escrita no pedido", async () => {
+    const { falsa, resultado } = await pedirCom({ plano: { "gemini-3-flash": erroGoogle(500, "INTERNAL", "An internal error has occurred.") } });
+    expect("ok" in resultado).toBe(true);
+    expect(falsa.geracoes()).toEqual(["gemini-3-flash", "gemini-3-flash:livre"]);
+    const livre = falsa.pedidos.filter((p) => p.corpo && !p.corpo.tools).at(-1)!;
+    expect(livre.corpo.contents[0].parts.at(-1).text).toContain('"ordens":[{"brawler"');
   });
 
-  it("o limite gratuito dá uma frase que se percebe", async () => {
-    process.env.GEMINI_API_KEY = "chave-de-teste-123";
-    try {
-      const { buscar } = geminiFalsa({ plano_status: 429 });
-      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, buscar)).rejects.toThrow(/limite gratuito/);
-    } finally {
-      delete process.env.GEMINI_API_KEY;
-    }
+  it("modelo sobrecarregado: passa ao seguinte", async () => {
+    const { falsa, resultado } = await pedirCom({
+      modelos: ["gemini-3-flash", "gemini-2.5-flash"],
+      plano: { "gemini-3-flash": erroGoogle(503, "UNAVAILABLE", "The model is overloaded. Please try again later.") },
+    });
+    expect("ok" in resultado && resultado.ok.modelo).toBe("gemini-2.5-flash");
+    expect(falsa.geracoes()).toEqual(["gemini-3-flash", "gemini-2.5-flash"]);
+  });
+
+  it("quando todos falham, a mensagem diz o que a Google respondeu a cada modelo", async () => {
+    const { resultado } = await pedirCom({
+      modelos: ["gemini-3-flash", "gemini-2.5-flash"],
+      plano: {
+        "gemini-3-flash": erroGoogle(503, "UNAVAILABLE", "The model is overloaded."),
+        "gemini-2.5-flash": erroGoogle(500, "INTERNAL", "An internal error has occurred."),
+        "gemini-2.5-flash:livre": erroGoogle(500, "INTERNAL", "An internal error has occurred."),
+      },
+    });
+    const mensagem = "erro" in resultado ? resultado.erro.message : "";
+    expect(mensagem).toContain("gemini-3-flash: 503 UNAVAILABLE: The model is overloaded.");
+    expect(mensagem).toContain("gemini-2.5-flash: 500 INTERNAL");
+  });
+
+  it("só limites (429) em todos: diz que é o limite gratuito", async () => {
+    const { resultado } = await pedirCom({ plano: { "gemini-3-flash": erroGoogle(429, "RESOURCE_EXHAUSTED", "Quota exceeded.") } });
+    expect("erro" in resultado && resultado.erro.message).toMatch(/limite gratuito.*Quota exceeded/);
+  });
+
+  it("chave recusada pára logo: nenhum outro modelo a vai aceitar", async () => {
+    const { falsa, resultado } = await pedirCom({
+      modelos: ["gemini-3-flash", "gemini-2.5-flash"],
+      plano: { "gemini-3-flash": erroGoogle(403, "PERMISSION_DENIED", "Denied.") },
+    });
+    expect("erro" in resultado && resultado.erro.message).toMatch(/recusou a chave/);
+    expect(falsa.geracoes()).toEqual(["gemini-3-flash"]);
+  });
+
+  it("a pesquisa com limite num modelo tenta o seguinte; se nenhum pesquisar, o plano segue sem ela", async () => {
+    const umFalha = await pedirCom({ modelos: ["gemini-3-flash", "gemini-2.5-flash"], pesquisa: { "gemini-3-flash": erroGoogle(429, "RESOURCE_EXHAUSTED", "Search quota.") } });
+    expect("ok" in umFalha.resultado && umFalha.resultado.ok.comPesquisa).toBe(true);
+    const todas = await pedirCom({ pesquisa: { "gemini-3-flash": erroGoogle(429, "RESOURCE_EXHAUSTED", "Search quota.") } });
+    expect("ok" in todas.resultado && todas.resultado.ok.comPesquisa).toBe(false);
+    expect(await pesquisarAtualidade("k", ["gemini-3-flash"], pedido, geminiFalsa({ pesquisa: { "gemini-3-flash": erroGoogle(400, "INVALID_ARGUMENT", "no") } }).buscar)).toBeNull();
   });
 
   it("sem chave, diz onde a criar", async () => {

@@ -400,6 +400,20 @@ export const ESQUEMA_DO_PLANO = {
   required: ["resumo", "condicaoDeVitoria", "previsao", "fases", "ordens", "setas", "marcadores"],
 } as const;
 
+/**
+ * A mesma forma do esquema, escrita por extenso. Vai no fim do pedido quando
+ * a Google falha com o formato estrito e se repete sem ele.
+ */
+export const FORMATO_DO_PLANO_EM_TEXTO = [
+  "Responde só com um objeto JSON, sem texto antes nem depois, exatamente com estas chaves:",
+  '{"resumo":"...","condicaoDeVitoria":"...","previsao":["..."],',
+  '"fases":[{"nome":"Início","instrucao":"..."}],',
+  '"ordens":[{"brawler":"Nome","funcao":"...","objetivo":"...","quandoAvancar":"...","cuidados":["..."],"posicao":{"col":10,"linha":20},"build":{"gadget":"...","poderEstelar":"...","engrenagens":["..."]},"capacidades":["parte-paredes"]}],',
+  '"setas":[{"brawler":"Nome","tipo":"avanco","de":{"col":10,"linha":20},"para":{"col":10,"linha":14}}],',
+  '"marcadores":[{"tipo":"emboscada","ponto":{"col":13,"linha":15},"nota":"...","brawler":"Nome"}]}',
+  "tipo das setas: avanco, recuo ou rotacao. tipo dos marcadores: ataque, defesa, controlo, posicao, emboscada, flanco, destruir, agua, abertura, perigo ou foco. col de 0 a 20, linha de 0 a 32.",
+].join("\n");
+
 /** Onde o plano de um draft fica guardado neste navegador. */
 export function chaveDoQuadro(mapa: string | undefined, nossos: readonly string[], deles: readonly string[]) {
   const lista = (nomes: readonly string[]) => [...nomes].sort().join(",");

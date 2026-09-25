@@ -17,11 +17,21 @@
  * O MODELO
  *
  * Os nomes dos modelos mudam (e os antigos desligam-se). Em vez de fixar um,
- * pergunta-se à própria API que modelos a chave tem e escolhe-se o "flash"
- * estável mais recente — é o que o plano gratuito deixa usar com mais folga.
- * `GEMINI_MODEL` no ambiente passa por cima disto.
+ * pergunta-se à própria API que modelos a chave tem e ordenam-se: os "flash"
+ * estáveis mais recentes primeiro, depois as versões de antevisão, depois os
+ * "lite". `GEMINI_MODEL` no ambiente passa à frente de todos.
+ *
+ * QUANDO A GOOGLE FALHA
+ *
+ * No plano gratuito é comum: modelo sobrecarregado (503), limite por minuto
+ * (429), erro interno (500) — este último sobretudo com o formato de resposta
+ * estrito. Por isso cada pedido tenta o modelo seguinte da lista, e um erro
+ * interno repete-se sem o formato estrito (a forma vai descrita no texto e a
+ * resposta passa pelo mesmo filtro). Cada falha fica escrita nos registos com
+ * o código e a mensagem da Google, e a mensagem final ao dono diz o que cada
+ * modelo respondeu.
  */
-import { ESQUEMA_DO_PLANO, NOME_DO_MODO, lerPlanoDaIA, textoDoPedido, type Atualidade, type FonteConsultada, type PedidoDePlano, type PlanoDoGeneral } from "@shared/quadroDoGeneral";
+import { ESQUEMA_DO_PLANO, FORMATO_DO_PLANO_EM_TEXTO, NOME_DO_MODO, lerPlanoDaIA, textoDoPedido, type Atualidade, type FonteConsultada, type PedidoDePlano, type PlanoDoGeneral } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_CASA, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { getSetting, setSetting } from "./appSettings";
 import { guardarRotulosDaIA, imagemDaBrawlify, obterTerreno } from "./terrenoDoMapa";
@@ -41,55 +51,88 @@ export async function lerChaveDaGemini() {
 }
 
 export async function guardarChaveDaGemini(chave: string | null) {
-  modeloEscolhido.clear();
+  modelosDaChave.clear();
   await setSetting(GEMINI_API_KEY_SETTING, chave?.trim() || null);
 }
 
 /** Um erro com uma frase que o dono percebe e sabe o que fazer. */
 export class ErroDoGeneral extends Error {}
 
-function erroDaGoogle(status: number, corpo: string) {
-  if (status === 429) return new ErroDoGeneral("Chegaste ao limite gratuito da Google (por minuto ou por dia). Espera um pouco e tenta de novo.");
-  if (status === 400 && /api key not valid|API_KEY_INVALID/i.test(corpo)) return new ErroDoGeneral("A Google não aceitou a chave. Confirma que copiaste a chave inteira do AI Studio.");
-  if (status === 401 || status === 403) return new ErroDoGeneral("A Google recusou a chave (sem permissão). Cria uma nova em aistudio.google.com/apikey.");
-  if (status >= 500) return new ErroDoGeneral("A Google está com problemas neste momento. Tenta daqui a pouco.");
-  return new ErroDoGeneral(`A Google respondeu ${status}. ${corpo.slice(0, 160)}`);
+/** A mensagem que a própria Google pôs no erro, curta. O corpo nunca traz a chave. */
+export function mensagemDaGoogle(corpo: string) {
+  try {
+    const erro = (JSON.parse(corpo) as { error?: { message?: string; status?: string } }).error;
+    const texto = [erro?.status, erro?.message].filter(Boolean).join(": ");
+    if (texto) return texto.replace(/\s+/g, " ").slice(0, 220);
+  } catch {
+    // Não era JSON: fica o começo do texto.
+  }
+  return corpo.replace(/\s+/g, " ").slice(0, 160);
 }
+
+function erroDaGoogle(status: number, corpo: string) {
+  const detalhe = mensagemDaGoogle(corpo);
+  if (status === 429) return new ErroDoGeneral(`Chegaste ao limite gratuito da Google (por minuto ou por dia). Espera um pouco e tenta de novo. (${detalhe})`);
+  if (status === 400 && /api key not valid|API_KEY_INVALID/i.test(corpo)) return new ErroDoGeneral("A Google não aceitou a chave. Confirma que copiaste a chave inteira do AI Studio.");
+  if (status === 401 || status === 403) return new ErroDoGeneral(`A Google recusou a chave (sem permissão). Cria uma nova em aistudio.google.com/apikey. (${detalhe})`);
+  if (status >= 500) return new ErroDoGeneral(`A Google falhou do lado dela (${status}). Tenta daqui a pouco. (${detalhe})`);
+  return new ErroDoGeneral(`A Google respondeu ${status}: ${detalhe}`);
+}
+
+/** Um erro da Google com o código, para decidir se vale a pena tentar outra vez. */
+class FalhaDaGoogle extends Error {
+  constructor(readonly status: number, readonly detalhe: string, readonly corpo: string) {
+    super(`${status} ${detalhe}`);
+  }
+}
+/** Erros que outro modelo (ou outra tentativa) pode não ter. Chave errada não é um deles. */
+const valeTentarOutro = (status: number) => status === 429 || status === 404 || status >= 500;
 
 type ModeloDaLista = { name?: string; supportedGenerationMethods?: string[] };
 
 /**
- * Escolhe o modelo a partir da lista da API: o "gemini-X-flash" estável mais
- * recente; se não houver, o flash mais recente que não seja lite/imagem/voz;
- * se nem isso, o primeiro que gere texto.
+ * Os modelos a experimentar, pela ordem: "gemini-X-flash" estáveis do mais
+ * recente para o mais antigo, depois os flash de antevisão, depois os
+ * flash-lite. Nada de imagem, voz, "live" ou embeddings.
  */
-export function escolherModelo(lista: readonly ModeloDaLista[]) {
+export function ordenarModelos(lista: readonly ModeloDaLista[]) {
   const nomes = lista
     .filter((modelo) => modelo.supportedGenerationMethods?.includes("generateContent") && typeof modelo.name === "string")
-    .map((modelo) => modelo.name!.replace(/^models\//, ""));
+    .map((modelo) => modelo.name!.replace(/^models\//, ""))
+    .filter((nome) => nome.startsWith("gemini-") && !/image|tts|audio|live|embedding|robotics|computer/.test(nome));
   const versao = (nome: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(nome)?.[1] ?? 0);
-  const maisRecente = (a: string, b: string) => versao(b) - versao(a);
-  const estavel = nomes.filter((nome) => /^gemini-\d+(\.\d+)?-flash$/.test(nome)).sort(maisRecente);
-  if (estavel[0]) return estavel[0];
-  const flash = nomes.filter((nome) => /^gemini-.*flash/.test(nome) && !/lite|image|tts|audio|live|thinking|embedding/.test(nome)).sort(maisRecente);
-  if (flash[0]) return flash[0];
-  return nomes.find((nome) => nome.startsWith("gemini-")) ?? null;
+  const maisRecente = (a: string, b: string) => versao(b) - versao(a) || a.localeCompare(b);
+  const estaveis = nomes.filter((nome) => /^gemini-\d+(\.\d+)?-flash$/.test(nome)).sort(maisRecente);
+  const antevisao = nomes.filter((nome) => /flash/.test(nome) && !/lite/.test(nome) && !estaveis.includes(nome)).sort(maisRecente);
+  const lite = nomes.filter((nome) => /flash-lite/.test(nome)).sort(maisRecente);
+  const ordem = [...estaveis, ...antevisao, ...lite];
+  return ordem.length ? ordem : nomes.slice(0, 3);
 }
 
-const modeloEscolhido = new Map<string, string>();
+/** O primeiro da ordem (o que o ecrã mostra ao guardar a chave). */
+export function escolherModelo(lista: readonly ModeloDaLista[]) {
+  return ordenarModelos(lista)[0] ?? null;
+}
 
-async function modeloPara(chave: string, buscar: Buscar) {
+const modelosDaChave = new Map<string, string[]>();
+/** Quantos modelos diferentes se tentam por pedido: chega para passar um sobrecarregado sem demorar minutos. */
+const MODELOS_POR_PEDIDO = 3;
+
+async function modelosPara(chave: string, buscar: Buscar) {
   const fixo = (process.env.GEMINI_MODEL ?? "").trim();
-  if (fixo) return fixo;
-  const guardado = modeloEscolhido.get(chave);
-  if (guardado) return guardado;
+  const guardados = modelosDaChave.get(chave);
+  if (guardados) return fixo ? [fixo, ...guardados.filter((m) => m !== fixo)] : guardados;
   const resposta = await buscar(`${API}/models?pageSize=200`, { headers: { "x-goog-api-key": chave }, signal: AbortSignal.timeout(15_000) });
   const corpo = await resposta.text();
   if (!resposta.ok) throw erroDaGoogle(resposta.status, corpo);
-  const modelo = escolherModelo((JSON.parse(corpo) as { models?: ModeloDaLista[] }).models ?? []);
-  if (!modelo) throw new ErroDoGeneral("A chave funciona, mas a Google não lhe dá nenhum modelo Gemini que escreva texto.");
-  modeloEscolhido.set(chave, modelo);
-  return modelo;
+  const ordem = ordenarModelos((JSON.parse(corpo) as { models?: ModeloDaLista[] }).models ?? []);
+  if (!ordem.length && !fixo) throw new ErroDoGeneral("A chave funciona, mas a Google não lhe dá nenhum modelo Gemini que escreva texto.");
+  modelosDaChave.set(chave, ordem);
+  return fixo ? [fixo, ...ordem.filter((m) => m !== fixo)] : ordem;
+}
+
+async function modeloPara(chave: string, buscar: Buscar) {
+  return (await modelosPara(chave, buscar))[0];
 }
 
 /** Testa a chave pedindo a lista de modelos. Não gasta pedidos de geração. */
@@ -113,31 +156,91 @@ async function imagemParaAIA(mapaId: string | null | undefined, buscar: Buscar) 
 
 type ParteDoPedido = Record<string, unknown>;
 
-/** Um pedido à Gemini com resposta em JSON, já lido. */
-async function gerarJson(chave: string, modelo: string, partes: ParteDoPedido[], esquema: unknown, buscar: Buscar, temperatura: number) {
+type RespostaDaGemini = {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    finishReason?: string;
+    groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> };
+  }>;
+};
+
+/** Um pedido a um modelo. Um erro da Google volta como `FalhaDaGoogle`, com o código. */
+async function gerar(chave: string, modelo: string, corpo: Record<string, unknown>, buscar: Buscar, limiteMs: number) {
   const resposta = await buscar(`${API}/models/${encodeURIComponent(modelo)}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": chave },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: partes }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: esquema, temperature: temperatura },
-    }),
-    signal: AbortSignal.timeout(90_000),
+    body: JSON.stringify(corpo),
+    signal: AbortSignal.timeout(limiteMs),
   });
-  const corpo = await resposta.text();
-  if (!resposta.ok) {
-    // O modelo guardado pode ter sido desligado: a próxima tentativa volta a escolher.
-    if (resposta.status === 404) modeloEscolhido.delete(chave);
-    throw erroDaGoogle(resposta.status, corpo);
+  const texto = await resposta.text();
+  if (!resposta.ok) throw new FalhaDaGoogle(resposta.status, mensagemDaGoogle(texto), texto);
+  return JSON.parse(texto) as RespostaDaGemini;
+}
+
+const textoDaResposta = (dados: RespostaDaGemini) =>
+  (dados.candidates?.[0]?.content?.parts ?? []).filter((parte) => !parte.thought).map((parte) => parte.text ?? "").join("").trim();
+
+const esperar = (ms: number) => new Promise((resolver) => setTimeout(resolver, ms));
+
+/**
+ * Um pedido com resposta em JSON, já lido, a tentar vários modelos.
+ *
+ * Por modelo: primeiro com o formato estrito; se a Google der erro interno
+ * (500), outra vez sem ele, com `formatoEmTexto` no fim do pedido. Um 429, 503
+ * ou 404 passa ao modelo seguinte. Chave recusada pára logo: nenhum modelo a
+ * vai aceitar.
+ */
+async function gerarJson(
+  chave: string,
+  partes: ParteDoPedido[],
+  esquema: unknown,
+  buscar: Buscar,
+  temperatura: number,
+  formatoEmTexto: string,
+  tarefa: string,
+  pausaMs = 1200,
+): Promise<{ json: unknown; modelo: string }> {
+  const modelos = (await modelosPara(chave, buscar)).slice(0, MODELOS_POR_PEDIDO);
+  const falhas: string[] = [];
+  let ultima: FalhaDaGoogle | null = null;
+  for (const modelo of modelos) {
+    for (const estrito of [true, false]) {
+      const config = estrito
+        ? { responseMimeType: "application/json", responseSchema: esquema, temperature: temperatura }
+        : { responseMimeType: "application/json", temperature: temperatura };
+      const conteudo = estrito ? partes : [...partes, { text: formatoEmTexto }];
+      try {
+        const dados = await gerar(chave, modelo, { contents: [{ role: "user", parts: conteudo }], generationConfig: config }, buscar, 90_000);
+        const texto = textoDaResposta(dados);
+        if (!texto) {
+          falhas.push(`${modelo}: sem resposta (${dados.candidates?.[0]?.finishReason ?? "sem motivo"})`);
+          break;
+        }
+        try {
+          return { json: JSON.parse(texto.replace(/^```(?:json)?\s*|\s*```$/g, "")), modelo };
+        } catch {
+          falhas.push(`${modelo}: resposta que não é JSON`);
+          if (estrito) break;
+          continue;
+        }
+      } catch (erro) {
+        if (!(erro instanceof FalhaDaGoogle)) {
+          falhas.push(`${modelo}: ${erro instanceof Error ? erro.message : String(erro)}`);
+          break;
+        }
+        ultima = erro;
+        console.warn(`[General] ${tarefa}: ${modelo}${estrito ? "" : " (sem formato estrito)"} respondeu ${erro.status}: ${erro.detalhe}`);
+        falhas.push(`${modelo}: ${erro.status}${erro.detalhe ? ` ${erro.detalhe.slice(0, 90)}` : ""}`);
+        if (!valeTentarOutro(erro.status)) throw erroDaGoogle(erro.status, erro.corpo);
+        if (erro.status === 404) modelosDaChave.delete(chave);
+        // Só um erro interno justifica repetir o MESMO modelo sem o formato estrito.
+        if (!(estrito && erro.status === 500)) break;
+      }
+    }
+    if (pausaMs) await esperar(pausaMs);
   }
-  const dados = JSON.parse(corpo) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> }; finishReason?: string }> };
-  const texto = (dados.candidates?.[0]?.content?.parts ?? []).filter((parte) => !parte.thought).map((parte) => parte.text ?? "").join("").trim();
-  if (!texto) throw new ErroDoGeneral(`A IA não respondeu (${dados.candidates?.[0]?.finishReason ?? "sem motivo"}). Tenta de novo.`);
-  try {
-    return JSON.parse(texto.replace(/^```(?:json)?\s*|\s*```$/g, "")) as unknown;
-  } catch {
-    throw new ErroDoGeneral("A IA respondeu num formato que não consegui ler. Tenta de novo.");
-  }
+  if (ultima && falhas.every((falha) => / 429/.test(falha))) throw erroDaGoogle(429, ultima.corpo);
+  throw new ErroDoGeneral(`A Google não conseguiu responder (${tarefa}). Tentei ${falhas.length} vez(es): ${falhas.join(" · ")}. Tenta daqui a um minuto.`);
 }
 
 const ESQUEMA_DOS_ROTULOS = {
@@ -180,14 +283,15 @@ export function textoDosRotulos(terreno: TerrenoDoMapa) {
   ].join("\n");
 }
 
+const FORMATO_DOS_ROTULOS = 'Responde só com JSON, sem mais nada, nesta forma: {"rotulos":[{"id":"a","tipo":"parede"}]} — tipo é um de: chao, parede, mato, agua, objetivo.';
+
 /** Pede os tipos à IA e guarda-os. Se falhar, fica a regra aproximada. */
 export async function rotularTerrenoComIA(terreno: TerrenoDoMapa, buscar: Buscar = fetch) {
   const { key } = await lerChaveDaGemini();
   if (!key) throw new ErroDoGeneral("Ainda não há chave da Gemini.");
   const imagem = await imagemParaAIA(terreno.mapaId, buscar);
   if (!imagem) throw new ErroDoGeneral("Não consegui ir buscar a imagem deste mapa.");
-  const modelo = await modeloPara(key, buscar);
-  const json = await gerarJson(key, modelo, [{ text: textoDosRotulos(terreno) }, { inline_data: imagem }], ESQUEMA_DOS_ROTULOS, buscar, 0);
+  const { json } = await gerarJson(key, [{ text: textoDosRotulos(terreno) }, { inline_data: imagem }], ESQUEMA_DOS_ROTULOS, buscar, 0, FORMATO_DOS_ROTULOS, "ler o terreno");
   return guardarRotulosDaIA(terreno, (json as { rotulos?: unknown })?.rotulos);
 }
 
@@ -201,7 +305,7 @@ export async function rotularTerrenoComIA(terreno: TerrenoDoMapa, buscar: Buscar
  * não se juntam em todos os modelos. Se falhar, o plano segue sem ela e o
  * pedido do plano diz à IA para não afirmar o que não sabe se ainda é assim.
  */
-export async function pesquisarAtualidade(chave: string, modelo: string, pedido: PedidoDePlano, buscar: Buscar = fetch, hoje = new Date()): Promise<Atualidade | null> {
+export async function pesquisarAtualidade(chave: string, modelos: readonly string[], pedido: PedidoDePlano, buscar: Buscar = fetch, hoje = new Date()): Promise<Atualidade | null> {
   const nomes = [...pedido.nossos, ...pedido.deles].map((item) => item.brawler);
   const pergunta = [
     `Hoje é ${hoje.toISOString().slice(0, 10)}. Pesquisa na web informação ATUAL (da atualização mais recente de Brawl Stars) sobre estes brawlers: ${nomes.join(", ")}.`,
@@ -209,38 +313,27 @@ export async function pesquisarAtualidade(chave: string, modelo: string, pedido:
     "Para cada brawler, em 2 a 4 linhas curtas: o que o ataque e o super fazem hoje (alcance, tipo), se parte paredes, se atravessa água ou salta paredes, mudanças de equilíbrio recentes, e a build mais usada agora (gadget, poder estelar, engrenagens).",
     "Responde em português de Portugal. Se não encontrares algo, diz que não encontraste — não inventes.",
   ].join("\n");
-  try {
-    const resposta = await buscar(`${API}/models/${encodeURIComponent(modelo)}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": chave },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: pergunta }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2 } }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!resposta.ok) {
-      console.warn(`[General] Pesquisa de atualidade recusada (${resposta.status}); o plano segue sem ela.`);
-      return null;
+  // A pesquisa tem limites próprios e diferentes por modelo: tenta dois.
+  for (const modelo of modelos.slice(0, 2)) {
+    try {
+      const dados = await gerar(chave, modelo, { contents: [{ role: "user", parts: [{ text: pergunta }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2 } }, buscar, 60_000);
+      const texto = textoDaResposta(dados).slice(0, 6000);
+      if (!texto) continue;
+      const fontes: FonteConsultada[] = [];
+      for (const pedaco of dados.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
+        const url = pedaco.web?.uri;
+        if (!url || !/^https:\/\//.test(url) || fontes.some((f) => f.url === url)) continue;
+        fontes.push({ titulo: (pedaco.web?.title ?? url).slice(0, 120), url: url.slice(0, 500) });
+        if (fontes.length >= 8) break;
+      }
+      return { texto, fontes };
+    } catch (erro) {
+      const detalhe = erro instanceof FalhaDaGoogle ? `${erro.status}: ${erro.detalhe}` : erro instanceof Error ? erro.message : String(erro);
+      console.warn(`[General] Pesquisa de atualidade com ${modelo} falhou (${detalhe}); o plano segue sem ela se nenhum modelo pesquisar.`);
+      if (erro instanceof FalhaDaGoogle && !valeTentarOutro(erro.status)) return null;
     }
-    const dados = await resposta.json() as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-        groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> };
-      }>;
-    };
-    const candidato = dados.candidates?.[0];
-    const texto = (candidato?.content?.parts ?? []).filter((parte) => !parte.thought).map((parte) => parte.text ?? "").join("").trim().slice(0, 6000);
-    if (!texto) return null;
-    const fontes: FonteConsultada[] = [];
-    for (const pedaco of candidato?.groundingMetadata?.groundingChunks ?? []) {
-      const url = pedaco.web?.uri;
-      if (!url || !/^https:\/\//.test(url) || fontes.some((f) => f.url === url)) continue;
-      fontes.push({ titulo: (pedaco.web?.title ?? url).slice(0, 120), url: url.slice(0, 500) });
-      if (fontes.length >= 8) break;
-    }
-    return { texto, fontes };
-  } catch (erro) {
-    console.warn("[General] Pesquisa de atualidade falhou; o plano segue sem ela:", erro instanceof Error ? erro.message : erro);
-    return null;
   }
+  return null;
 }
 
 let pedidoEmCurso = false;
@@ -255,7 +348,7 @@ export async function pedirPlanoAoGeneral(pedido: PedidoDePlano, buscar: Buscar 
   if (pedidoEmCurso) throw new ErroDoGeneral("Já há um plano a ser pensado. Espera que termine.");
   pedidoEmCurso = true;
   try {
-    const modelo = await modeloPara(key, buscar);
+    const modelos = await modelosPara(key, buscar);
     let terreno = pedido.mapaId ? await obterTerreno(pedido.mapaId, buscar) : null;
     // Na primeira vez em cada mapa, a IA diz o que é cada cor; fica guardado para sempre.
     if (terreno && terreno.rotulado === "regra") {
@@ -265,11 +358,11 @@ export async function pedirPlanoAoGeneral(pedido: PedidoDePlano, buscar: Buscar 
         console.warn("[General] Rótulos do terreno por IA falharam; fica a regra:", erro instanceof Error ? erro.message : erro);
       }
     }
-    const atualidade = await pesquisarAtualidade(key, modelo, pedido, buscar);
+    const atualidade = await pesquisarAtualidade(key, modelos, pedido, buscar);
     const imagem = await imagemParaAIA(pedido.mapaId, buscar);
     const partes: ParteDoPedido[] = [{ text: textoDoPedido(pedido, Boolean(imagem), terreno, atualidade) }];
     if (imagem) partes.push({ inline_data: imagem });
-    const json = await gerarJson(key, modelo, partes, ESQUEMA_DO_PLANO, buscar, 0.4);
+    const { json, modelo } = await gerarJson(key, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano");
     const plano = lerPlanoDaIA(json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno);
     if (atualidade?.fontes.length) plano.fontes = atualidade.fontes;
     return { plano, modelo, comImagem: Boolean(imagem), comPesquisa: Boolean(atualidade), terreno };
