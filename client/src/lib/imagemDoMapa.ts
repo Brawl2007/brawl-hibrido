@@ -39,3 +39,9 @@ export function mapImageFor(map: { name: string; id?: string }) {
   const mapId = map.id ?? mapAssetIds[map.name];
   return mapId ? `https://cdn.brawlify.com/maps/regular/${mapId}.png` : FUNDO_DE_MAPA;
 }
+
+/** O id do mapa na Brawlify, ou null quando não se sabe (mapa novo numa snapshot antiga). */
+export function idDoMapa(map: { name: string; id?: string }) {
+  const id = map.id ?? mapAssetIds[map.name];
+  return id && /^\d{5,9}$/.test(id) ? id : null;
+}

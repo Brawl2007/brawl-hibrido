@@ -1,7 +1,7 @@
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
-import { mapImageFor } from "@/lib/imagemDoMapa";
+import { idDoMapa, mapImageFor } from "@/lib/imagemDoMapa";
 import { SeletorDeElo } from "@/components/SeletorDeElo";
 import { draftParaPLProdigy, enderecoNoPLProdigy } from "@shared/plProdigyDraft";
 import { VERSAO_DA_EXTENSAO } from "@shared/versaoDaExtensao";
@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useEhDono } from "@/lib/ehDono";
+import { QuadroDoGeneral } from "@/components/QuadroDoGeneral";
 import { trpc } from "@/lib/trpc";
 import { useSyncRefresh, type ProcessHealth } from "@/lib/useSyncRefresh";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
@@ -321,6 +322,12 @@ export function getDuelTeamScoreLeader(summary: ReturnType<typeof calculateDuelT
 function brawlerImageFor(row: RankedRow) {
   const id = row.brawlerId ?? additionalBrawlerAssetIds[row.brawler];
   return id ? `https://cdn.brawlify.com/brawlers/borderless/${id}.png` : null;
+}
+
+/** O mesmo retrato, servido pelo site: o quadro 3D só pode desenhar imagens do próprio domínio. */
+function retratoNoQuadro(row: RankedRow) {
+  const id = String(row.brawlerId ?? additionalBrawlerAssetIds[row.brawler] ?? "");
+  return /^\d{5,9}$/.test(id) ? `/api/imagens/brawler/${id}.png` : null;
 }
 
 
@@ -3030,6 +3037,14 @@ export default function Draft() {
                     })}
                   </div>
                 </section>
+                <QuadroDoGeneral
+                  mapa={selectedMap ? { name: selectedMap.name, modeId: selectedMap.modeId } : undefined}
+                  mapaId={selectedMap ? idDoMapa(selectedMap) : null}
+                  nosNome={myTeam === "red" ? "Vermelha" : "Azul"}
+                  nossos={allyPickRows}
+                  deles={myTeam === "blue" ? redPicks : bluePicks}
+                  retratoDe={retratoNoQuadro}
+                />
                 </>
               );
             })()}

@@ -18,6 +18,9 @@ import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
+import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
+import { guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
+import { TIPOS_DE_CASA } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
   deleteProdigyLink,
@@ -70,6 +73,76 @@ function exigirDono(ctx: { user: { role: string; openId: string; email: string |
 }
 
 export const appRouter = router({
+  /**
+   * O general por IA (Gemini). Tudo do dono: a chave é dele, e cada plano
+   * gasta do limite gratuito dele. Ver `server/generalIA.ts`.
+   */
+  general: router({
+    /**
+     * O terreno de um mapa (paredes, mato, água, objetivos), lido da imagem.
+     * Público: é informação do mapa, igual para toda a gente, e fica guardado
+     * depois da primeira leitura. Só aceita o id numérico.
+     */
+    terreno: publicProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
+      .query(({ input }) => obterTerreno(input.mapaId)),
+    /** O dono corrige o tipo de um grupo de cor à mão. */
+    corrigirTerreno: protectedProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/), rotulos: z.array(z.object({ id: z.string().max(2), tipo: z.enum(TIPOS_DE_CASA as unknown as [string, ...string[]]) })).max(40) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "corrigir o terreno");
+        const terreno = await obterTerreno(input.mapaId);
+        if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
+        return guardarRotulosDaIA(terreno, input.rotulos);
+      }),
+    /** A IA volta a olhar para a imagem e diz o que é cada grupo de cor. */
+    rotularTerreno: protectedProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "pedir à IA para ler o terreno");
+        const terreno = await obterTerreno(input.mapaId);
+        if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
+        try {
+          return await rotularTerrenoComIA(terreno);
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "A IA falhou." });
+        }
+      }),
+    estado: protectedProcedure.query(async ({ ctx }) => {
+      exigirDono(ctx, "ver a chave da IA");
+      const { key, origin } = await lerChaveDaGemini();
+      return { configured: Boolean(key), origin, hint: key ? `····${key.slice(-4)}` : null };
+    }),
+    guardarChave: protectedProcedure
+      .input(z.object({ key: z.string().trim().max(256) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "guardar a chave da IA");
+        await guardarChaveDaGemini(input.key || null);
+        return { saved: Boolean(input.key), test: input.key ? await testarChaveDaGemini() : { ok: false, reason: "Chave apagada." } };
+      }),
+    pedirPlano: protectedProcedure
+      .input(z.object({
+        mapa: z.string().trim().min(1).max(80),
+        modoId: z.string().trim().max(40),
+        mapaId: z.string().regex(/^\d{5,9}$/).nullish(),
+        nossos: z.array(z.object({ brawler: z.string().trim().min(1).max(40), funcao: z.string().trim().max(20) })).min(1).max(5),
+        deles: z.array(z.object({ brawler: z.string().trim().min(1).max(40), funcao: z.string().trim().max(20) })).max(5),
+        duelos: z.array(z.object({ nosso: z.string().trim().max(40), deles: z.string().trim().max(40), vantagem: z.number().min(0).max(100) })).max(5),
+        nosNome: z.string().trim().max(20),
+        numeros: z.array(z.object({ brawler: z.string().trim().max(40), lado: z.enum(["nos", "eles"]), vitoria: z.number().min(0).max(100).nullable(), uso: z.number().min(0).max(100).nullable() })).max(10).optional(),
+        dadosDe: z.string().max(40).nullish(),
+        elo: z.string().max(20).nullish(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "pedir um plano à IA");
+        try {
+          return await pedirPlanoAoGeneral(input);
+        } catch (erro) {
+          const mensagem = erro instanceof ErroDoGeneral || erro instanceof Error ? erro.message : "A IA falhou.";
+          throw new TRPCError({ code: erro instanceof ErroDoGeneral ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR", message: mensagem });
+        }
+      }),
+  }),
   draftRoles: router({
     list: publicProcedure.query(() => readDraftRoles()),
     set: protectedProcedure.input(z.object({ brawler: z.string().trim().min(1).max(80), role: z.enum(["mid", "side", "flex"]).nullable() })).mutation(({ ctx, input }) => {

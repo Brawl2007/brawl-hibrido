@@ -1,6 +1,7 @@
 import { VERSAO_DO_SITE } from "@shared/version";
 import { INTERVALO_DE_RELIGACAO_MS } from "@shared/realtimeStream";
 import "dotenv/config";
+import { registarImagensDaBrawlify } from "./imagensDaBrawlify";
 import express from "express";
 import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -64,6 +65,7 @@ export function createApp() {
    * funciona aqui, protegida pelo `CRON_SECRET`.
    */
   app.get("/api/cron/sync", handleCronSync);
+  registarImagensDaBrawlify(app);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);
   app.post("/api/scheduled/observedMatchCollection", handleObservedMatchCollectionScheduled);
