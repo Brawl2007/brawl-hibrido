@@ -19,7 +19,7 @@ import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
-import { guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
+import { diagnosticoDoMapa, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
 import { TIPOS_DE_CASA } from "@shared/terrenoDoMapa";
 import {
@@ -87,6 +87,10 @@ export const appRouter = router({
     terreno: publicProcedure
       .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
       .query(({ input }) => obterTerreno(input.mapaId)),
+    /** As medidas de cada casa de umas linhas (cor, textura, vermelho, azul): para afinar a leitura do terreno. */
+    diagnosticoDoTerreno: publicProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/), de: z.number().int().min(0).max(32), ate: z.number().int().min(0).max(32) }))
+      .query(({ input }) => diagnosticoDoMapa(input.mapaId, input.de, Math.min(input.ate, input.de + 5))),
     /** De onde veio a lista de builds e quantos itens tem (sem a lista): para confirmar que chega. */
     catalogo: publicProcedure.query(async () => {
       const catalogo = await obterCatalogo();

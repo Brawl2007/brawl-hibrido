@@ -53,41 +53,86 @@ const ID_DE_AGUA = "1";
  */
 const ID_DE_ZONA = "2";
 const azulado = (cor: readonly number[]) => cor[2] - cor[0] > 70 && cor[1] - cor[0] > 40;
-const corDeAnel = (r: number, g: number, b: number) =>
-  (r > 190 && g < 95 && b < 110) || (b > 215 && r < 70 && g > 120 && g < 185);
+const anelVermelho = (r: number, g: number, b: number) => r > 190 && g < 95 && b < 110;
+const anelAzul = (r: number, g: number, b: number) => b > 215 && r < 70 && g > 120 && g < 185;
 const LETRAS = "abcdefghijklmnopqrstuvwxyz";
 
 type Cor = [number, number, number];
 const distancia = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+export type MedidaDaCasa = {
+  cor: Cor;
+  textura: number;
+  /** Fração de píxeis do vermelho ou do azul dos anéis. */
+  anel: number;
+  vermelho: number;
+  azul: number;
+  /** Os píxeis que não são de anel: numa casa de anel são o chão; num vaso vermelho, a parede. */
+  resto: { cor: Cor; textura: number };
+};
+
+/** Cor média e variação de brilho do miolo de cada casa (sem as bordas, que têm a sombra do vizinho). */
+export function medirCasas(imagem: ImagemRGBA, casa = imagem.largura / (COLUNAS_DO_MAPA + 2)): MedidaDaCasa[] {
+  const margemInterna = Math.round(casa * 0.2);
+  const medidas: MedidaDaCasa[] = [];
+  for (let linha = 0; linha < LINHAS_DO_MAPA; linha++) {
+    for (let coluna = 0; coluna < COLUNAS_DO_MAPA; coluna++) {
+      const x0 = (coluna + 1) * casa + margemInterna, y0 = (linha + 1) * casa + margemInterna;
+      const x1 = (coluna + 2) * casa - margemInterna, y1 = (linha + 2) * casa - margemInterna;
+      let r = 0, g = 0, b = 0, n = 0, soma = 0, soma2 = 0, vermelho = 0, azul = 0;
+      let rr = 0, rg = 0, rb = 0, rn = 0, rsoma = 0, rsoma2 = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const o = (y * imagem.largura + x) * 4;
+          const pr = imagem.dados[o], pg = imagem.dados[o + 1], pb = imagem.dados[o + 2];
+          r += pr; g += pg; b += pb; n++;
+          const brilho = 0.3 * pr + 0.59 * pg + 0.11 * pb;
+          soma += brilho; soma2 += brilho * brilho;
+          if (anelVermelho(pr, pg, pb)) vermelho++;
+          else if (anelAzul(pr, pg, pb)) azul++;
+          else {
+            rr += pr; rg += pg; rb += pb; rn++;
+            rsoma += brilho; rsoma2 += brilho * brilho;
+          }
+        }
+      }
+      const media = soma / n;
+      const rmedia = rn ? rsoma / rn : 0;
+      medidas.push({
+        cor: [r / n, g / n, b / n],
+        textura: Math.sqrt(Math.max(0, soma2 / n - media * media)),
+        anel: (vermelho + azul) / n,
+        vermelho: vermelho / n,
+        azul: azul / n,
+        resto: rn
+          ? { cor: [rr / rn, rg / rn, rb / rn], textura: Math.sqrt(Math.max(0, rsoma2 / rn - rmedia * rmedia)) }
+          : { cor: [0, 0, 0], textura: 0 },
+      });
+    }
+  }
+  return medidas;
+}
+
+/** Para afinar a leitura: as medidas de cada casa de umas linhas, em texto curto. */
+export function diagnosticoDasCasas(imagem: ImagemRGBA, deLinha: number, ateLinha: number) {
+  const medidas = medirCasas(imagem);
+  const um = (v: number) => Math.round(v);
+  const linhas: string[] = [];
+  for (let linha = Math.max(0, deLinha); linha <= Math.min(LINHAS_DO_MAPA - 1, ateLinha); linha++) {
+    for (let coluna = 0; coluna < COLUNAS_DO_MAPA; coluna++) {
+      const m = medidas[linha * COLUNAS_DO_MAPA + coluna];
+      linhas.push(`${linha},${coluna} cor=${m.cor.map(um).join("/")} t=${um(m.textura)} v=${m.vermelho.toFixed(2)} a=${m.azul.toFixed(2)} resto=${m.resto.cor.map(um).join("/")} rt=${um(m.resto.textura)}`);
+    }
+  }
+  return linhas;
+}
 
 export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoDoMapa {
   const casa = imagem.largura / (COLUNAS_DO_MAPA + 2);
   if (!Number.isInteger(casa) || casa < 8 || Math.abs(imagem.altura / (LINHAS_DO_MAPA + 2) - casa) > 0.01) {
     throw new Error(`A imagem tem ${imagem.largura}×${imagem.altura}: não é um mapa de 21×33 casas.`);
   }
-  const margemInterna = Math.round(casa * 0.2);
-
-  // Cor média e variação de brilho do miolo de cada casa.
-  const medidas: Array<{ cor: Cor; textura: number; anel: number }> = [];
-  for (let linha = 0; linha < LINHAS_DO_MAPA; linha++) {
-    for (let coluna = 0; coluna < COLUNAS_DO_MAPA; coluna++) {
-      const x0 = (coluna + 1) * casa + margemInterna, y0 = (linha + 1) * casa + margemInterna;
-      const x1 = (coluna + 2) * casa - margemInterna, y1 = (linha + 2) * casa - margemInterna;
-      let r = 0, g = 0, b = 0, n = 0, soma = 0, soma2 = 0, anel = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const o = (y * imagem.largura + x) * 4;
-          const pr = imagem.dados[o], pg = imagem.dados[o + 1], pb = imagem.dados[o + 2];
-          r += pr; g += pg; b += pb; n++;
-          if (corDeAnel(pr, pg, pb)) anel++;
-          const brilho = 0.3 * pr + 0.59 * pg + 0.11 * pb;
-          soma += brilho; soma2 += brilho * brilho;
-        }
-      }
-      const media = soma / n;
-      medidas.push({ cor: [r / n, g / n, b / n], textura: Math.sqrt(Math.max(0, soma2 / n - media * media)), anel: anel / n });
-    }
-  }
+  const medidas = medirCasas(imagem, casa);
 
   // O xadrez do chão: a cor mais repetida em cada paridade.
   const chao = [0, 1].map((paridade) => {
@@ -335,4 +380,11 @@ export async function guardarRotulosDaIA(terreno: TerrenoDoMapa, rotulos: unknow
   const rotulado = aplicarRotulos(terreno, rotulos);
   if (rotulado !== terreno) await guardar(rotulado);
   return rotulado;
+}
+
+/** As medidas das casas de umas linhas de um mapa, lidas agora da imagem. Para afinar a leitura. */
+export async function diagnosticoDoMapa(mapaId: string, deLinha: number, ateLinha: number, buscar: typeof fetch = fetch) {
+  const imagem = await imagemDaBrawlify("mapa", mapaId, buscar);
+  if (!imagem || imagem.tipo !== "image/png") return null;
+  return diagnosticoDasCasas(lerPng(imagem.dados), deLinha, ateLinha);
 }
