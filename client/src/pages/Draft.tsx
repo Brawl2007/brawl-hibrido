@@ -2,6 +2,7 @@ import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { mapImageFor } from "@/lib/imagemDoMapa";
+import { SeletorDeElo } from "@/components/SeletorDeElo";
 import { draftParaPLProdigy, enderecoNoPLProdigy } from "@shared/plProdigyDraft";
 import { VERSAO_DA_EXTENSAO } from "@shared/versaoDaExtensao";
 import { orderDraftEntries } from "@shared/draft";
@@ -2881,6 +2882,7 @@ export default function Draft() {
                   <strong>Seleciona o mapa</strong>
                   <label className="draft-select"><Layers3 size={15} /><select aria-label="Selecionar mapa para o draft" value={selectedMap?.name ?? ""} onChange={(event) => changeMap(event.target.value)}>{liveMaps.map((map) => <option key={map.name} value={map.name}>{map.name} · {map.mode}</option>)}</select><ChevronDown size={14} /></label>
                   <small>{selectedMap?.mode ?? "Ranked"} · o Score e as sugestões acompanham esta rotação.</small>
+                  <SeletorDeElo mapa={selectedMap?.name} />
                 </section>
                 <details className="arena-more arena-options"><summary>Equipas sugeridas e ordem de pick</summary><div className="arena-options-body">
                 <MapTeamBoardPanel mapName={selectedMap?.name} mapTeams={mapTeams} allyNames={myPickNames} />

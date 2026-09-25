@@ -1,6 +1,7 @@
 import type { BrawlPlanetMapTeam } from "./brawlPlanetMapTeams";
 import type { LeituraPorFonte } from "./idadeDosDados";
 import type { RosterChange, RosterState } from "./rosterDiscovery";
+import type { ElosNaSnapshot, PorElo } from "./elosBrawlPlanet";
 
 export type RankedSyncState = "bundled" | "running" | "success" | "partial" | "failed";
 
@@ -20,6 +21,8 @@ export type RankedSnapshotRow = {
   brawlPlanetWinRate?: number | null;
   brawlPlanetPickRate?: number | null;
   brawlPlanetStarPlayer?: number | null;
+  /** Brawl Planet por elo (Diamond, Mythic, Legendary). Ver `shared/elosBrawlPlanet.ts`. */
+  brawlPlanetPorElo?: PorElo;
   banRate?: number | null;
   counterRate?: number | null;
   dataStatus?: "complete" | "partial";
@@ -66,6 +69,8 @@ export type RankedSnapshotPayload = {
    * gravadas antes disto existir: quem lê trata a ausência como "não se sabe",
    * nunca como "foi agora".
    */
+  /** Números do Brawl Planet por elo. Ausente nas snapshots anteriores: aí só há All ranks. */
+  elosBrawlPlanet?: ElosNaSnapshot;
   sourceReadAt?: LeituraPorFonte;
 };
 

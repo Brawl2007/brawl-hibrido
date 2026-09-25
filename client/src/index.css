@@ -3976,3 +3976,13 @@ main { max-width: 1600px; margin: 0 auto; }
 .duel-map-pl small { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
 @media (hover: hover) and (pointer: fine) { .duel-map-pl-link:hover { background: rgba(245, 197, 66, .12); } }
 @media (max-width: 480px) { .duel-map-toolbar { padding: 0 10px; } .duel-map-pl { margin-top: 10px; } }
+
+/* Elo do Brawl Planet: nos mapas e no Draft. */
+.seletor-elo { display: grid; gap: 6px; margin: 12px 0; }
+.seletor-elo-botoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.seletor-elo-rotulo { margin-right: 4px; color: var(--bh-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.seletor-elo-botoes button { padding: 6px 12px; border: 1px solid var(--bh-line); border-radius: 999px; background: rgba(6, 9, 16, .55); color: var(--bh-text-muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.seletor-elo-botoes button.is-active { border-color: var(--bh-gold); background: var(--bh-gold); color: var(--bh-on-gold); }
+.seletor-elo-botoes button:disabled { opacity: .4; cursor: not-allowed; }
+.seletor-elo-nota { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
+@media (hover: hover) and (pointer: fine) { .seletor-elo-botoes button:not(:disabled):not(.is-active):hover { border-color: var(--bh-line-strong); color: var(--bh-text); } }

@@ -60,6 +60,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
 import { mapImageFor } from "@/lib/imagemDoMapa";
+import { SeletorDeElo } from "@/components/SeletorDeElo";
 import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights, type HybridWeightsPreference } from "@/lib/hybridWeights";
 import { officialSourceBalance, useSourceBalance, type SourceBalancePreference } from "@/lib/sourceBalance";
 import { buildMapsTsv } from "@shared/mapTsv";
@@ -480,6 +481,7 @@ function MapSelector({
           </div>
         </div>
       </div>
+      <SeletorDeElo mapa={selectedMap.name} />
       <div className="map-strip">
         {visibleMaps.map((map, index) => {
           const selected = map.name === selectedMap.name;

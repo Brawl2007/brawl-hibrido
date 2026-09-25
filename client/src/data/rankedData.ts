@@ -7,6 +7,7 @@
 import { additionalMapSummaries, additionalRankedMaps, additionalRankedRows } from './additionalRankedData';
 import { beachBallRankedRows } from './beachBallRankedData';
 import { spiralingOutMapSummary, spiralingOutRankedRows } from './spiralingOutRankedData';
+import type { PorElo } from "@shared/elosBrawlPlanet";
 import {
   STAR_PLAYER_HYBRID_WEIGHT,
   TOPBRAWL_SOURCE_WEIGHT,
@@ -36,6 +37,8 @@ export type RankedRow = {
   brawlPlanetPickRate?: number | null;
   /** Mantém null até a fonte publicar um valor identificável de Star Player. */
   brawlPlanetStarPlayer?: number | null;
+  /** Brawl Planet por elo (Diamond, Mythic, Legendary). Ver `shared/elosBrawlPlanet.ts`. */
+  brawlPlanetPorElo?: PorElo;
   /** Ban Rate é opcional: só é usado quando a fonte o publicar. */
   banRate?: number | null;
   /** Counter Rate pode ser fornecido por uma fonte futura; não é inventado no fallback. */

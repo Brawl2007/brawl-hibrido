@@ -15,6 +15,8 @@ import type { LeituraPorFonte } from "../shared/idadeDosDados";
 import { ROTACAO_GUARDADA_SETTING, lerRotacaoGuardada } from "@shared/rotacaoGuardada";
 import { getSetting } from "./appSettings";
 import { lerPaginaTopBrawl, type TopBrawlRow } from "../shared/topBrawlParser";
+import { ELOS_BRAWL_PLANET, enderecoDoElo, lerElosDoBrawlPlanet, type EloBrawlPlanet, type ElosNaSnapshot } from "../shared/elosBrawlPlanet";
+import { gunzipSync } from "node:zlib";
 import { RANKED_MAP_SOURCES } from "../shared/rankedMaps";
 export { RANKED_MAP_SOURCES };
 
@@ -128,6 +130,8 @@ export type SourceResult = {
    * conjunto fresco.
    */
   lidoEm?: string | null;
+  /** Só o Brawl Planet: que elos foram lidos e quantos jogos cada mapa tem em cada um. */
+  elos?: ElosNaSnapshot;
 };
 
 export type SnapshotPayload = {
@@ -136,6 +140,8 @@ export type SnapshotPayload = {
   /** Composições literais da tabela Teams do Brawl Planet por mapa. */
   mapTeams: BrawlPlanetMapTeam[];
   officialBrawlers?: OfficialBrawlerSnapshot[];
+  /** Números do Brawl Planet por elo. Ver `shared/elosBrawlPlanet.ts`. */
+  elosBrawlPlanet?: ElosNaSnapshot;
   /**
    * Estado da deteção automática de mapas e brawlers. Opcional porque as
    * snapshots gravadas antes desta funcionalidade não o têm — e a ausência
@@ -480,6 +486,37 @@ async function collectTopBrawl(rotation: readonly DiscoveredRankedMap[]): Promis
   };
 }
 
+/**
+ * Os ficheiros de elo do Brawl Planet, lidos como qualquer ficheiro público.
+ *
+ * Não passa por `fetchText`: esses são pedidos a páginas, com o ritmo e as
+ * pausas das páginas. Isto são quatro ficheiros estáticos no armazenamento
+ * público da Google — um pedido simples e identificado, sem mais nada.
+ * Um elo que falhe fica de fora; os outros seguem.
+ */
+async function lerFicheirosDosElos(): Promise<Partial<Record<EloBrawlPlanet, unknown>>> {
+  const ficheiros: Partial<Record<EloBrawlPlanet, unknown>> = {};
+  for (const { id, ficheiro } of ELOS_BRAWL_PLANET) {
+    try {
+      const resposta = await fetch(enderecoDoElo(ficheiro), {
+        headers: { Accept: "application/json", "User-Agent": "BrawlHibrido/1.0 (recolha diaria de dados publicos)" },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!resposta.ok) {
+        console.warn(`[RankedSync] Brawl Planet ${ficheiro}: HTTP ${resposta.status}`);
+        continue;
+      }
+      const bytes = Buffer.from(await resposta.arrayBuffer());
+      // O ficheiro está guardado em gzip; normalmente chega já aberto, mas não se assume.
+      const texto = bytes[0] === 0x1f && bytes[1] === 0x8b ? gunzipSync(bytes).toString("utf8") : bytes.toString("utf8");
+      ficheiros[id] = JSON.parse(texto);
+    } catch (erro) {
+      console.warn(`[RankedSync] Brawl Planet ${ficheiro}: ${erro instanceof Error ? erro.message : erro}`);
+    }
+  }
+  return ficheiros;
+}
+
 async function collectBrawlPlanet(rotation: readonly DiscoveredRankedMap[]): Promise<SourceResult> {
   const rows = new Map<string, Partial<SyncRow>>();
   const results = await mapLimited(rotation, 2, async ({ name: mapName, planetSlug }) => {
@@ -497,14 +534,46 @@ async function collectBrawlPlanet(rotation: readonly DiscoveredRankedMap[]): Pro
   for (const result of results) {
     for (const [brawler, row] of Array.from(result.parsed.entries())) rows.set(`${result.mapName}::${brawler}`, row);
   }
-  const successful = results.filter(result => result.parsed.size > 0).length;
+
+  /*
+   * Os elos. Quatro ficheiros públicos, um por elo, com todos os mapas.
+   *
+   * Além de trazer Diamond, Mythic e Legendary, o ficheiro "All ranks" serve de
+   * reserva: se a página HTML de um mapa falhar, os números desse mapa vêm dele.
+   * São os mesmos números (verificado: diferença mediana 0,00 em 2756 linhas).
+   */
+  const slugs = new Map(rotation.flatMap((mapa) => (mapa.planetSlug ? [[mapa.planetSlug, mapa.name] as const] : [])));
+  const leitura = lerElosDoBrawlPlanet(await lerFicheirosDosElos(), slugs, canonicalBrawlerName);
+  const lidosDoHtml = new Set(results.filter((result) => result.parsed.size > 0).map((result) => result.mapName));
+  const resgatados = new Set<string>();
+  for (const [chave, { todos, porElo }] of Array.from(leitura.porLinha.entries())) {
+    const mapa = chave.slice(0, chave.indexOf("::"));
+    const atual = rows.get(chave);
+    if (atual) {
+      atual.brawlPlanetPorElo = porElo;
+    } else if (!lidosDoHtml.has(mapa) && todos) {
+      rows.set(chave, { map: mapa, brawlPlanetWinRate: todos[0], brawlPlanetPickRate: todos[1], brawlPlanetStarPlayer: todos[2], brawlPlanetPorElo: porElo });
+      resgatados.add(mapa);
+    }
+  }
+  if (resgatados.size) console.log(`[RankedSync] Brawl Planet: ${resgatados.size} mapa(s) sem página lida, com números do ficheiro All ranks.`);
+  const elos: ElosNaSnapshot = {
+    lidoEm: leitura.lidos.length ? new Date().toISOString() : null,
+    jogos: leitura.jogos,
+    lidos: leitura.lidos,
+  };
+
+  const porMapa = new Map(results.map((result) => [result.mapName, result.parsed.size]));
+  for (const mapa of Array.from(resgatados)) porMapa.set(mapa, Array.from(rows.keys()).filter((chave) => chave.startsWith(`${mapa}::`)).length);
+  const successful = lidosDoHtml.size + resgatados.size;
   return {
     status: successful === rotation.length ? "success" : successful > 0 ? "partial" : "failed",
     // O Brawl Planet responde a partir daqui, por isso o que vier foi lido
     // nesta execução. Sem nada lido não há data nenhuma a declarar.
     lidoEm: successful > 0 ? new Date().toISOString() : null,
     rows,
-    rowsByMap: new Map(results.map((result) => [result.mapName, result.parsed.size])),
+    elos,
+    rowsByMap: porMapa,
     mapTeams: results.flatMap((result) => result.teams),
     note: errors.length
       ? errors.slice(0, 3).join(" | ")
@@ -836,6 +905,7 @@ export async function syncRankedData(trigger: "scheduled" | "manual" | "bootstra
       rows,
       maps: deriveMapSummaries(rows, idsDaRotacao),
       mapTeams: brawlPlanet.mapTeams ?? [],
+      elosBrawlPlanet: brawlPlanet.elos,
       officialBrawlers,
       roster: evaluation.state,
       rosterChanges: evaluation.changes,
