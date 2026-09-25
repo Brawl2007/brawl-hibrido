@@ -54,7 +54,7 @@ import { hybridWeightFractions, hybridWeightsLabel, hybridWeightsSentence, useHy
 import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { fatiasDoPick, pesosDoPickAPartirDasFatias, useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
-import { analyzeDraftComposition, atribuirDuelosPorCounter, posicionarNoMapa, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
+import { analyzeDraftComposition, atribuirDuelosPorCounter, leituraDoPLProdigy, posicionarNoMapa, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
 import { getSynergyBonusRate } from "@shared/draft";
 import { getCounterPickMultiplier } from "@shared/draftRules";
 import { buildGamePlanText } from "@shared/coachPlan";
@@ -1516,7 +1516,9 @@ function MatchupDuelCard({ item, nos = "Azul", eles = "Vermelha" }: { item: Scor
   );
 }
 
-type ColunaDoMapa = { position: "left" | "mid" | "right"; ally?: RankedRow; enemy?: RankedRow; score?: number };
+type LeituraDoMapa = "hibrida" | "prodigy";
+/** `score` é a leitura híbrida (0–100); `direcao` é a do PL Prodigy (ganha, perde, nada publicado). */
+type ColunaDoMapa = { position: "left" | "mid" | "right"; ally?: RankedRow; enemy?: RankedRow; score?: number; direcao?: -1 | 0 | 1; motivo?: string };
 
 const nomeDaColuna = { left: "LANE ESQ.", mid: "MID", right: "LANE DIR." } as const;
 const nomeDaFuncao = { mid: "MID", side: "LANE", flex: "FLEX" } as const;
@@ -1548,7 +1550,7 @@ function FichaNoMapa({ row, lado }: { row?: RankedRow; lado: "ally" | "enemy" })
  * A imagem é o layout do mapa publicado pela Brawlify. Sem ela (mapa novo, ou
  * a imagem não carregou), fica o relvado desenhado em CSS por baixo.
  */
-function MapaDosDuelos({ colunas, imagem, mapName, nos, eles }: { colunas: ColunaDoMapa[]; imagem: string | null; mapName?: string; nos: string; eles: string }) {
+function MapaDosDuelos({ colunas, imagem, mapName, nos, eles, leitura = "hibrida" }: { colunas: ColunaDoMapa[]; imagem: string | null; mapName?: string; nos: string; eles: string; leitura?: LeituraDoMapa }) {
   const estilo = imagem ? ({ "--duel-map-image": `url("${imagem}")` } as CSSProperties) : undefined;
   return (
     <div className="duel-map-wrap">
@@ -1558,12 +1560,18 @@ function MapaDosDuelos({ colunas, imagem, mapName, nos, eles }: { colunas: Colun
       <div className="duel-map-base duel-map-base--ally" aria-hidden="true"><span>A TUA EQUIPA</span><strong>{nos.toUpperCase()}</strong></div>
       <ol className="duel-map-lanes">
         {colunas.map((coluna) => {
-          const temDuelo = typeof coluna.score === "number";
+          const prodigy = leitura === "prodigy";
+          const temDuelo = prodigy ? typeof coluna.direcao === "number" : typeof coluna.score === "number";
           const score = coluna.score ?? 50;
-          const estado = !temDuelo ? "is-open" : score >= 55 ? "is-favorable" : score <= 45 ? "is-risky" : "is-even";
-          const rotulo = !temDuelo ? "SEM DUELO" : score >= 55 ? "GANHAS" : score <= 45 ? "PERDES" : "EQUILIBRADO";
+          const direcao = coluna.direcao ?? 0;
+          const estado = !temDuelo ? "is-open"
+            : prodigy ? (direcao > 0 ? "is-favorable" : direcao < 0 ? "is-risky" : "is-even")
+            : score >= 55 ? "is-favorable" : score <= 45 ? "is-risky" : "is-even";
+          const rotulo = !temDuelo ? "SEM DUELO"
+            : prodigy ? (direcao > 0 ? "GANHAS" : direcao < 0 ? "PERDES" : "SEM RELAÇÃO")
+            : score >= 55 ? "GANHAS" : score <= 45 ? "PERDES" : "EQUILIBRADO";
           const descricao = temDuelo
-            ? `${nomeDaColuna[coluna.position]}: ${coluna.ally!.brawler} (${nos}) contra ${coluna.enemy!.brawler} (${eles}), ${score.toFixed(0)}% para ti, ${rotulo.toLowerCase()}.`
+            ? `${nomeDaColuna[coluna.position]}: ${coluna.ally!.brawler} (${nos}) contra ${coluna.enemy!.brawler} (${eles}), ${prodigy ? `segundo o PL Prodigy, ${rotulo.toLowerCase()}` : `${score.toFixed(0)}% para ti, ${rotulo.toLowerCase()}`}.`
             : `${nomeDaColuna[coluna.position]}: ${coluna.ally?.brawler ?? "pick por fazer"} (${nos}), ${coluna.enemy?.brawler ?? "por escolher"} (${eles}), sem duelo ainda.`;
           return (
             <li key={coluna.position} className={`duel-map-lane duel-map-lane--${coluna.position} ${estado}`} aria-label={descricao}>
@@ -1572,7 +1580,8 @@ function MapaDosDuelos({ colunas, imagem, mapName, nos, eles }: { colunas: Colun
                 <i />
                 <b className="duel-map-badge">
                   <small>{nomeDaColuna[coluna.position]}</small>
-                  {temDuelo ? <strong>{score.toFixed(0)}<em>%</em></strong> : null}
+                  {temDuelo && !prodigy ? <strong>{score.toFixed(0)}<em>%</em></strong> : null}
+                  {temDuelo && prodigy ? <strong className="duel-map-badge-sign">{direcao > 0 ? "▲" : direcao < 0 ? "▼" : "="}</strong> : null}
                   <span>{rotulo}</span>
                 </b>
               </div>
@@ -1599,6 +1608,7 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
   // Quem joga contra quem sai dos counters (ver `atribuirDuelosPorCounter`),
   // a favor da tua equipa; a posição sai da função do teu brawler.
   const duelos = atribuirDuelosPorCounter(blueRows, redRows, "ally");
+  const [leitura, setLeitura] = useState<LeituraDoMapa>("hibrida");
   const laneSlots = posicionarNoMapa(duelos, (duelo) => inferDraftRole(duelo.ally.brawler))
     .map(({ position, item: duelo }) => ({ position, ally: duelo.ally, enemy: duelo.enemy, motivo: duelo.motivo }));
   const matchups: ScoredMatchupItem[] = laneSlots.filter((lane): lane is typeof lane & MatchupSlot => Boolean(lane.ally && lane.enemy)).map((lane) => {
@@ -1632,16 +1642,26 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
     };
   });
   // O mapa mostra também quem ainda não tem adversário, nas colunas livres.
-  const emDuelo = new Set(laneSlots.flatMap((lane) => [`a:${lane.ally.brawler}`, `e:${lane.enemy.brawler}`]));
-  const ocupadas = new Set(laneSlots.map((lane) => lane.position));
-  const aliadosSoltos = posicionarNoMapa(blueRows.filter((row) => !emDuelo.has(`a:${row.brawler}`)), (row) => inferDraftRole(row.brawler), ocupadas);
-  const adversariosSoltos = posicionarNoMapa(redRows.filter((row) => !emDuelo.has(`e:${row.brawler}`)), (row) => inferDraftRole(row.brawler), ocupadas);
-  const colunasDoMapa: ColunaDoMapa[] = (["left", "mid", "right"] as const).map((position) => {
-    const duelo = matchups.find((item) => item.lane.position === position);
-    return duelo
-      ? { position, ally: duelo.lane.ally, enemy: duelo.lane.enemy, score: duelo.matchup.score }
-      : { position, ally: aliadosSoltos.find((x) => x.position === position)?.item, enemy: adversariosSoltos.find((x) => x.position === position)?.item };
-  });
+  const colunasCom = (pares: Array<{ position: "left" | "mid" | "right"; ally: RankedRow; enemy: RankedRow; score?: number; direcao?: -1 | 0 | 1; motivo?: string }>): ColunaDoMapa[] => {
+    const emDuelo = new Set(pares.flatMap((par) => [`a:${par.ally.brawler}`, `e:${par.enemy.brawler}`]));
+    const ocupadas = new Set(pares.map((par) => par.position));
+    const aliadosSoltos = posicionarNoMapa(blueRows.filter((row) => !emDuelo.has(`a:${row.brawler}`)), (row) => inferDraftRole(row.brawler), ocupadas);
+    const adversariosSoltos = posicionarNoMapa(redRows.filter((row) => !emDuelo.has(`e:${row.brawler}`)), (row) => inferDraftRole(row.brawler), ocupadas);
+    return (["left", "mid", "right"] as const).map((position) => {
+      const par = pares.find((item) => item.position === position);
+      return par ?? { position, ally: aliadosSoltos.find((x) => x.position === position)?.item, enemy: adversariosSoltos.find((x) => x.position === position)?.item };
+    });
+  };
+  const colunasHibridas = colunasCom(matchups.map((item) => ({ position: item.lane.position, ally: item.lane.ally, enemy: item.lane.enemy, score: item.matchup.score, motivo: item.lane.motivo })));
+  // Aba PL Prodigy: os pares e o resultado vêm só do que o PL Prodigy publica.
+  const colunasProdigy = leitura === "prodigy"
+    ? colunasCom(posicionarNoMapa(
+        atribuirDuelosPorCounter(blueRows, redRows, "ally", (ally, enemy) => 50 + 10 * leituraDoPLProdigy(ally.brawler, enemy.brawler)),
+        (duelo) => inferDraftRole(duelo.ally.brawler),
+      ).map(({ position, item }) => ({ position, ally: item.ally, enemy: item.enemy, direcao: leituraDoPLProdigy(item.ally.brawler, item.enemy.brawler), motivo: item.motivo })))
+    : [];
+  const colunasDoMapa = leitura === "prodigy" ? colunasProdigy : colunasHibridas;
+  const duelosNoMapa = colunasDoMapa.filter((coluna): coluna is ColunaDoMapa & { ally: RankedRow; enemy: RankedRow } => Boolean(coluna.ally && coluna.enemy && (leitura === "prodigy" ? coluna.direcao !== undefined : coluna.score !== undefined)));
   const midMatchup = matchups.find((item) => item.lane.position === "mid");
   const laneMatchups = matchups.filter((item) => item.lane.position !== "mid");
   const blueCounters = matchups.filter((item) => item.matchup.source === "explicit-counter");
@@ -1694,22 +1714,36 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
         <div className="matchup-board-side matchup-board-side--red"><span>{ELES} COUNTERA</span><strong>{redCounters.length ? redCounters.map((item) => `${item.lane.enemy.brawler} → ${item.lane.ally.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{redCounters.length ? `Ataques favoráveis publicados para ${eles}.` : `Sem relação publicada a favor de ${eles}.`}</small></div>
         <div className="matchup-board-side matchup-board-side--neutral"><span>NEUTROS</span><strong>{neutralMatchups.length ? neutralMatchups.map((item) => `${item.lane.ally.brawler} × ${item.lane.enemy.brawler}`).join(" · ") : "Todos os duelos têm counter literal"}</strong><small>{neutralMatchups.length ? "A decisão usa a melhor leitura por Win Rate." : "Não há duelos estimados nesta matriz."}</small></div>
       </div>
+      <div className="duel-map-tabs" role="tablist" aria-label="De onde vem a leitura dos duelos">
+        <button type="button" role="tab" aria-selected={leitura === "hibrida"} className={leitura === "hibrida" ? "is-active" : ""} onClick={() => setLeitura("hibrida")}>Leitura híbrida <small>%</small></button>
+        <button type="button" role="tab" aria-selected={leitura === "prodigy"} className={leitura === "prodigy" ? "is-active" : ""} onClick={() => setLeitura("prodigy")}>PL Prodigy <small>ganha / perde</small></button>
+      </div>
+      {leitura === "prodigy" && <p className="duel-map-tabs-note">Só o que as guias do PL Prodigy publicam: quem ganha a quem, sem percentagem. Os pares são escolhidos com essa leitura.</p>}
       <div className="duel-map-layout">
-        <MapaDosDuelos colunas={colunasDoMapa} imagem={mapImage ?? null} mapName={mapName} nos={nos} eles={eles} />
+        <MapaDosDuelos colunas={colunasDoMapa} imagem={mapImage ?? null} mapName={mapName} nos={nos} eles={eles} leitura={leitura} />
         <aside className="duel-map-side" aria-label="Porque é este o adversário de cada um">
           <span className="duel-map-side-kicker">QUEM APANHA QUEM</span>
-          {matchups.length === 0 ? (
+          {duelosNoMapa.length === 0 ? (
             <p className="duel-map-side-empty">Escolhe pelo menos um brawler em cada equipa: o mapa põe cada um contra o adversário a quem mais ganha.</p>
           ) : (
             <ol className="duel-map-legend">
-              {matchups.map((item) => {
-                const estado = item.matchup.score >= 55 ? "is-favorable" : item.matchup.score <= 45 ? "is-risky" : "is-even";
+              {duelosNoMapa.map((coluna) => {
+                const prodigy = leitura === "prodigy";
+                const direcao = coluna.direcao ?? 0;
+                const score = coluna.score ?? 50;
+                const estado = prodigy
+                  ? (direcao > 0 ? "is-favorable" : direcao < 0 ? "is-risky" : "is-even")
+                  : score >= 55 ? "is-favorable" : score <= 45 ? "is-risky" : "is-even";
                 return (
-                  <li key={item.lane.position} className={estado}>
-                    <span>{item.lane.position === "mid" ? "MID" : item.lane.position === "left" ? "LANE ESQ." : "LANE DIR."}</span>
-                    <strong>{item.lane.ally.brawler} <em>→</em> {item.lane.enemy.brawler}</strong>
-                    <b>{item.matchup.score.toFixed(0)}%</b>
-                    {item.lane.motivo && <p>{item.lane.motivo}</p>}
+                  <li key={coluna.position} className={estado}>
+                    <span>{nomeDaColuna[coluna.position]}</span>
+                    <strong>{coluna.ally.brawler} <em>→</em> {coluna.enemy.brawler}</strong>
+                    <b>{prodigy ? (direcao > 0 ? "GANHA" : direcao < 0 ? "PERDE" : "—") : `${score.toFixed(0)}%`}</b>
+                    {coluna.motivo && <p>{prodigy && direcao === 0
+                      ? coluna.motivo.startsWith("Nenhum adversário")
+                        ? `O PL Prodigy não dá a ${coluna.ally.brawler} vantagem sobre ninguém desta equipa; contra ${coluna.enemy.brawler} também não perde.`
+                        : `O PL Prodigy não publica este duelo. ${coluna.motivo}`
+                      : coluna.motivo}</p>}
                   </li>
                 );
               })}

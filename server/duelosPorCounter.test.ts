@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { setCounterSyncSnapshot } from "../shared/counterSourceRelations";
-import { atribuirDuelosPorCounter, posicionarNoMapa, type PosicaoNoMapa } from "../shared/draft";
+import { atribuirDuelosPorCounter, leituraDoPLProdigy, posicionarNoMapa, type PosicaoNoMapa } from "../shared/draft";
 import type { CounterSyncSnapshotPayload, SyncedCounterRelation } from "../shared/counterSyncSnapshot";
 
 /**
@@ -176,5 +176,40 @@ describe("o mapa dos duelos no Draft", () => {
   it("as colunas do mapa vêm da mesma atribuição por counters que a lista", () => {
     expect(fonte).toContain("const duelos = atribuirDuelosPorCounter(blueRows, redRows, \"ally\");");
     expect(fonte).toContain("<MapaDosDuelos colunas={colunasDoMapa}");
+  });
+});
+
+describe("aba PL Prodigy do mapa", () => {
+  const prodigy = (dono: string, direcao: "targets" | "counteredBy", outro: string): SyncedCounterRelation => ({
+    owner: dono, source: "prodigy", direction: direcao,
+    attacker: direcao === "targets" ? dono : outro, defender: direcao === "targets" ? outro : dono,
+    sourceUrl: `https://powerleagueprodigy.com/${dono.toLowerCase()}`,
+  });
+
+  it("ganha se a guia do próprio o diz, ou se a do adversário diz que perde com ele", () => {
+    dados([prodigy("Xa1", "targets", "Xe1"), prodigy("Xe2", "counteredBy", "Xa1")]);
+    expect(leituraDoPLProdigy("Xa1", "Xe1")).toBe(1);
+    expect(leituraDoPLProdigy("Xa1", "Xe2")).toBe(1); // o caso Bibi/Juju: vem da guia da Juju
+  });
+  it("perde pelo mesmo critério ao contrário, e fica neutro sem nada publicado ou em contradição", () => {
+    dados([prodigy("Xa1", "counteredBy", "Xe1"), prodigy("Xe2", "targets", "Xa1"), prodigy("Xa1", "targets", "Xe3"), prodigy("Xe3", "targets", "Xa1")]);
+    expect(leituraDoPLProdigy("Xa1", "Xe1")).toBe(-1);
+    expect(leituraDoPLProdigy("Xa1", "Xe2")).toBe(-1);
+    expect(leituraDoPLProdigy("Xa1", "Xe3")).toBe(0);
+    expect(leituraDoPLProdigy("Xa1", "Xe9")).toBe(0);
+  });
+  it("ignora as outras fontes: um counter do BrawlScope não conta na aba PL Prodigy", () => {
+    dados([ganha("Xa1", "Xe1", 12)]);
+    expect(leituraDoPLProdigy("Xa1", "Xe1")).toBe(0);
+  });
+  it("os pares da aba vêm da leitura do PL Prodigy", () => {
+    dados([prodigy("Xa1", "targets", "Xe2"), prodigy("Xa2", "targets", "Xe1")]);
+    const duelos = atribuirDuelosPorCounter(equipa("Xa1", "Xa2"), equipa("Xe1", "Xe2"), "ally", (a, e) => 50 + 10 * leituraDoPLProdigy(a.brawler, e.brawler));
+    expect(pares(duelos)).toEqual(["Xa1>Xe2", "Xa2>Xe1"]);
+  });
+  it("o painel tem as duas abas e a do PL Prodigy usa essa leitura", () => {
+    const fonte = readFileSync(new URL("../client/src/pages/Draft.tsx", import.meta.url), "utf8");
+    expect(fonte).toContain('onClick={() => setLeitura("prodigy")}');
+    expect(fonte).toContain("50 + 10 * leituraDoPLProdigy(ally.brawler, enemy.brawler)");
   });
 });

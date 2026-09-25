@@ -940,10 +940,12 @@ export function atribuirDuelosPorCounter<T extends DraftRow>(
   allyRows: readonly T[],
   enemyRows: readonly T[],
   favorece: "ally" | "enemy" = "ally",
+  /** Vantagem 0–100 de ally sobre enemy. Por omissão, a leitura híbrida do cartão. */
+  pontuar: (ally: T, enemy: T) => number = (ally, enemy) => calculateLaneMatchup(ally, enemy).score,
 ): DueloAtribuido<T>[] {
   const pares = Math.min(allyRows.length, enemyRows.length);
   if (!pares) return [];
-  const scores = allyRows.map((ally) => enemyRows.map((enemy) => calculateLaneMatchup(ally, enemy).score));
+  const scores = allyRows.map((ally) => enemyRows.map((enemy) => pontuar(ally, enemy)));
   const sinal = favorece === "ally" ? 1 : -1;
   const vantagem = (a: number, e: number) => sinal * (scores[a][e] - 50);
   const eMid = (row: T) => inferDraftRole(row.brawler) === "mid";
@@ -1008,6 +1010,26 @@ export function atribuirDuelosPorCounter<T extends DraftRow>(
     }
     return { ally, enemy, score: scores[a][e], motivo };
   });
+}
+
+/**
+ * O que o PL Prodigy diz de um duelo, e só ele: 1 se `ally` ganha a `enemy`,
+ * -1 se perde, 0 se nenhuma das duas guias fala do par (ou se se contradizem).
+ *
+ * Cada guia publica um Top 8 de "counters" e outro de "countered by", sem
+ * percentagem. Vale qualquer uma das duas páginas: a do `ally` a dizer que
+ * ganha, ou a do `enemy` a dizer que perde com ele — é o que a fonte publica,
+ * e nas leituras de produção nenhum par tem as duas páginas em contradição.
+ */
+export function leituraDoPLProdigy(ally: string, enemy: string): -1 | 0 | 1 {
+  const chave = (nome: string) => normalizeCounterBrawlerName(nome);
+  const perfil = (nome: string) => getCounterSourceProfiles(nome).find((profile) => profile.source === "PL Prodigy");
+  const tem = (lista: readonly { brawler: string }[] | undefined, nome: string) => lista?.some((r) => chave(r.brawler) === chave(nome)) ?? false;
+  const doAliado = perfil(ally);
+  const doAdversario = perfil(enemy);
+  const ganha = tem(doAliado?.targets, enemy) || tem(doAdversario?.counteredBy, ally);
+  const perde = tem(doAliado?.counteredBy, enemy) || tem(doAdversario?.targets, ally);
+  return ganha === perde ? 0 : ganha ? 1 : -1;
 }
 
 export type PosicaoNoMapa = "left" | "mid" | "right";

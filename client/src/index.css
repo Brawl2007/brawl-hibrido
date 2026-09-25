@@ -3950,3 +3950,19 @@ main { max-width: 1600px; margin: 0 auto; }
   .matchup-perspective-board { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 10px 0; }
   .matchup-board-side > small { display: none; }
 }
+
+/* Abas da leitura do mapa: híbrida (%) ou só PL Prodigy (ganha / perde). */
+.duel-map-tabs { display: inline-flex; gap: 4px; margin: 16px 18px 0; padding: 4px; border: 1px solid var(--bh-line); border-radius: 999px; background: rgba(6, 9, 16, .6); }
+.duel-map-tabs button { padding: 8px 14px; border: 0; border-radius: 999px; background: transparent; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; cursor: pointer; }
+.duel-map-tabs button small { margin-left: 4px; color: var(--bh-text-dim); font-size: 10px; font-weight: 600; }
+.duel-map-tabs button.is-active { background: var(--bh-gold); color: var(--bh-on-gold); }
+.duel-map-tabs button.is-active small { color: var(--bh-on-gold); opacity: .75; }
+.duel-map-tabs-note { margin: 8px 18px 0; color: var(--bh-text-muted); font-size: 12px; line-height: 1.45; }
+.duel-map-badge strong.duel-map-badge-sign { font-size: clamp(18px, 2.6vw, 24px); }
+.duel-map-lane.is-favorable .duel-map-badge-sign { color: var(--bh-positive); }
+.duel-map-lane.is-risky .duel-map-badge-sign { color: var(--bh-negative); }
+@media (max-width: 480px) {
+  .duel-map-tabs { margin: 12px 10px 0; }
+  .duel-map-tabs button { padding: 7px 10px; font-size: 12px; }
+  .duel-map-tabs-note { margin: 8px 10px 0; }
+}
