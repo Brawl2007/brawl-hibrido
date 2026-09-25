@@ -79,14 +79,14 @@ export function centroDaCasa(terreno: Pick<TerrenoDoMapa, "colunas" | "linhas">,
   return { x: (coluna + 0.5) / terreno.colunas, y: (linha + 0.5) / terreno.linhas };
 }
 
-const bloqueia = (tipo: TipoDeCasa) => tipo === "parede" || tipo === "agua";
-
 /**
  * Um brawler não pode ficar dentro de uma parede nem na água. Se o ponto cair
  * numa, vai para a casa livre mais próxima; se já estiver livre, fica igual.
+ * `atravessaAgua` deixa ficar na água (só para quem a atravessa).
  */
-export function pontoLivre(terreno: TerrenoDoMapa | null | undefined, ponto: { x: number; y: number }) {
+export function pontoLivre(terreno: TerrenoDoMapa | null | undefined, ponto: { x: number; y: number }, opcoes: { atravessaAgua?: boolean } = {}) {
   if (!terreno) return ponto;
+  const bloqueia = (tipo: TipoDeCasa) => tipo === "parede" || (tipo === "agua" && !opcoes.atravessaAgua);
   const { coluna, linha } = casaDoPonto(terreno, ponto);
   if (!bloqueia(tipoDaCasa(terreno, coluna, linha))) return ponto;
   for (let raio = 1; raio < Math.max(terreno.colunas, terreno.linhas); raio++) {
@@ -109,8 +109,8 @@ export function pontoLivre(terreno: TerrenoDoMapa | null | undefined, ponto: { x
  * A regra aproximada para dar um tipo a cada grupo, sem IA. Medida nas
  * imagens reais de vários temas:
  *
- * - um grupo só nas duas primeiras ou duas últimas linhas, ao centro, é a
- *   base de partida (os círculos vermelhos e azuis) → objetivo;
+ * - um grupo pequeno e liso só nas duas primeiras ou duas últimas linhas é a
+ *   base de partida (o enchimento dos círculos vermelhos e azuis) → objetivo;
  * - liso (textura < 10) e grande → água (ou uma zona desenhada — a IA corrige);
  * - o maior grupo com textura de relva (10 a 30) → mato;
  * - o resto → parede, porque as paredes têm contornos e sombras.
@@ -125,7 +125,9 @@ export function rotularPorRegra(grupos: readonly Omit<GrupoDeCor, "tipo">[], gre
   const tipos = new Map<string, TipoDeCasa>();
   for (const grupo of grupos) {
     const casas = casasDe(grupo.id);
-    const naBase = casas.length > 0 && casas.every(({ coluna, linha }) => (linha <= 1 || linha >= linhas - 2) && coluna >= 6 && coluna <= colunas - 7);
+    // As bases de partida estão nas duas primeiras ou duas últimas linhas, ao
+    // centro ou num canto; o enchimento do círculo é liso (sem contornos).
+    const naBase = casas.length > 0 && casas.length <= 12 && grupo.textura < 10 && casas.every(({ linha }) => linha <= 1 || linha >= linhas - 2);
     if (naBase) tipos.set(grupo.id, "objetivo");
     else if (grupo.textura < 10 && grupo.casas >= 8) tipos.set(grupo.id, "agua");
   }

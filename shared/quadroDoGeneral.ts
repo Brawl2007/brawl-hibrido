@@ -22,9 +22,16 @@ import { COLUNAS_DO_MAPA, LINHAS_DO_MAPA, centroDaCasa, grelhaEmTexto, pontoLivr
 
 export type PontoNoMapa = { x: number; y: number };
 export type TipoDeSeta = "avanco" | "recuo" | "rotacao";
-export type SetaDoPlano = { id: string; de: PontoNoMapa; para: PontoNoMapa; tipo: TipoDeSeta; brawler?: string };
+/** `nota`: porquê este movimento, em poucas palavras — fica escrita no mapa, a meio da seta. */
+export type SetaDoPlano = { id: string; de: PontoNoMapa; para: PontoNoMapa; tipo: TipoDeSeta; brawler?: string; nota?: string };
 /** Build sugerida. Vazio quando a IA não tem a certeza — melhor nada do que um nome inventado. */
-export type BuildDoBrawler = { gadget: string; poderEstelar: string; engrenagens: string[] };
+export type BuildDoBrawler = {
+  gadget: string;
+  poderEstelar: string;
+  engrenagens: string[];
+  /** Os desenhos, postos pelo servidor a partir da lista real (ver `server/catalogoDeBuilds.ts`). */
+  imagens?: { gadget?: string | null; poderEstelar?: string | null; engrenagens?: Array<string | null> };
+};
 /** O que o brawler consegue fazer ao terreno. Só entra o que a IA afirma com certeza. */
 export type Capacidade = "parte-paredes" | "atravessa-agua" | "salta-paredes";
 export const CAPACIDADES: ReadonlyArray<{ id: Capacidade; nome: string }> = [
@@ -32,6 +39,10 @@ export const CAPACIDADES: ReadonlyArray<{ id: Capacidade; nome: string }> = [
   { id: "atravessa-agua", nome: "Atravessa água" },
   { id: "salta-paredes", nome: "Salta paredes" },
 ];
+/** Passos fantasma: o caminho que a IA prevê que um brawler vai percorrer mais vezes. */
+export type TrilhoDoPlano = { id: string; brawler: string; lado: "nos" | "eles"; pontos: PontoNoMapa[] };
+export const MAXIMO_DE_TRILHOS = 6;
+
 export type OrdemDoBrawler = {
   brawler: string;
   funcao: string;
@@ -43,7 +54,7 @@ export type OrdemDoBrawler = {
 };
 /** Uma ordem no sítio do mapa onde deve acontecer. */
 export type TipoDeMarcador =
-  | "ataque" | "defesa" | "controlo" | "posicao" | "emboscada" | "flanco"
+  | "ataque" | "defesa" | "controlo" | "posicao" | "emboscada" | "flanco" | "cobertura"
   | "destruir" | "agua" | "abertura" | "perigo" | "foco";
 export type MarcadorDoPlano = { id: string; tipo: TipoDeMarcador; ponto: PontoNoMapa; nota: string; brawler?: string };
 export type FaseDoPlano = { nome: string; instrucao: string };
@@ -56,6 +67,7 @@ export type PlanoDoGeneral = {
   previsao: string[];
   ordens: OrdemDoBrawler[];
   marcadores: MarcadorDoPlano[];
+  trilhos: TrilhoDoPlano[];
   /** Posições pela chave `chaveDaFicha` ("a:Wendy", "e:Amber"). */
   posicoes: Record<string, PontoNoMapa>;
   setas: SetaDoPlano[];
@@ -83,6 +95,7 @@ export const TIPOS_DE_MARCADOR: ReadonlyArray<{ id: TipoDeMarcador; nome: string
   { id: "posicao", nome: "Assumir esta posição", curto: "Posição", simbolo: "⚑" },
   { id: "emboscada", nome: "Esconder no mato para emboscada", curto: "Emboscada", simbolo: "◉" },
   { id: "flanco", nome: "Flanquear por aqui", curto: "Flanco", simbolo: "↪" },
+  { id: "cobertura", nome: "Usar esta parede como cobertura", curto: "Cobertura", simbolo: "▮" },
   { id: "destruir", nome: "Partir estas paredes", curto: "Partir paredes", simbolo: "✹" },
   { id: "agua", nome: "Atravessar a água aqui", curto: "Água", simbolo: "≈" },
   { id: "abertura", nome: "Abertura: dá para avançar", curto: "Abertura", simbolo: "➜" },
@@ -127,7 +140,7 @@ export function posicoesIniciais(nossos: readonly string[], deles: readonly stri
 }
 
 export function planoVazio(nossos: readonly string[], deles: readonly string[]): PlanoDoGeneral {
-  return { resumo: "", condicaoDeVitoria: "", fases: [], previsao: [], ordens: [], marcadores: [], posicoes: posicoesIniciais(nossos, deles), setas: [], origem: "manual" };
+  return { resumo: "", condicaoDeVitoria: "", fases: [], previsao: [], ordens: [], marcadores: [], trilhos: [], posicoes: posicoesIniciais(nossos, deles), setas: [], origem: "manual" };
 }
 
 /** Uma coordenada dentro do mapa, com margem para a ficha não sair pela borda. */
@@ -196,62 +209,99 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
     const ordem = entrada as Record<string, unknown>;
     const brawler = porNome.get(normalizarNome(texto(ordem.brawler, 40)));
     if (!brawler || ordens.some((jaLida) => jaLida.brawler === brawler)) continue;
+    const capacidades = (Array.isArray(ordem.capacidades) ? ordem.capacidades : []).filter((c): c is Capacidade => CAPACIDADES.some((item) => item.id === c)).filter((c, i, todas) => todas.indexOf(c) === i);
     const posicao = lerPonto(ordem.posicao);
-    // Nunca dentro de uma parede ou na água: vai para a casa livre mais próxima.
-    if (posicao) posicoes[chaveDaFicha("nos", brawler)] = pontoLivre(terreno, posicao);
+    // Nunca dentro de uma parede; na água só quem a atravessa. Senão, a casa livre mais próxima.
+    if (posicao) posicoes[chaveDaFicha("nos", brawler)] = pontoLivre(terreno, posicao, { atravessaAgua: capacidades.includes("atravessa-agua") });
     ordens.push({
       brawler,
-      funcao: texto(ordem.funcao, 80),
-      objetivo: texto(ordem.objetivo, 500),
-      quandoAvancar: texto(ordem.quandoAvancar, 300),
+      funcao: texto(ordem.funcao, 40),
+      objetivo: texto(ordem.objetivo, 160),
+      quandoAvancar: texto(ordem.quandoAvancar, 100),
       ...lerBuild(ordem.build),
-      capacidades: (Array.isArray(ordem.capacidades) ? ordem.capacidades : []).filter((c): c is Capacidade => CAPACIDADES.some((item) => item.id === c)).filter((c, i, todas) => todas.indexOf(c) === i),
-      cuidados: (Array.isArray(ordem.cuidados) ? ordem.cuidados : []).map((cuidado) => texto(cuidado, 220)).filter(Boolean).slice(0, 4),
+      capacidades,
+      cuidados: (Array.isArray(ordem.cuidados) ? ordem.cuidados : []).map((cuidado) => texto(cuidado, 100)).filter(Boolean).slice(0, 2),
     });
   }
   if (ordens.length === 0) throw new Error("A IA respondeu, mas sem ordens para nenhum brawler da tua equipa.");
   // A ordem das fichas é a do draft, não a da resposta.
   ordens.sort((a, b) => nossos.indexOf(a.brawler) - nossos.indexOf(b.brawler));
+  const atravessaAgua = (nome?: string) => Boolean(nome && ordens.find((o) => o.brawler === nome)?.capacidades?.includes("atravessa-agua"));
+
+  // Onde a IA prevê que os adversários vão estar (opcional).
+  const porNomeDeles = new Map(deles.map((nome) => [normalizarNome(nome), nome]));
+  for (const entrada of Array.isArray(resposta.inimigos) ? resposta.inimigos : []) {
+    const inimigo = (entrada ?? {}) as Record<string, unknown>;
+    const nome = porNomeDeles.get(normalizarNome(texto(inimigo.brawler, 40)));
+    const ponto = lerPonto(inimigo.posicao);
+    if (nome && ponto) posicoes[chaveDaFicha("eles", nome)] = pontoLivre(terreno, ponto);
+  }
 
   const setas: SetaDoPlano[] = [];
   for (const entrada of Array.isArray(resposta.setas) ? resposta.setas : []) {
     if (setas.length >= MAXIMO_DE_SETAS) break;
     if (!entrada || typeof entrada !== "object") continue;
     const seta = entrada as Record<string, unknown>;
+    const brawler = porNome.get(normalizarNome(texto(seta.brawler, 40)));
+    // A ponta de uma seta é para onde o brawler vai: nunca uma parede, e água só para quem a atravessa.
     const de = lerPonto(seta.de);
-    const para = lerPonto(seta.para);
+    const paraBruto = lerPonto(seta.para);
+    const para = paraBruto && pontoLivre(terreno, paraBruto, { atravessaAgua: atravessaAgua(brawler) });
     if (!de || !para || Math.hypot(para.x - de.x, para.y - de.y) < 0.03) continue;
     const tipo = TIPOS_DE_SETA.some((item) => item.id === seta.tipo) ? (seta.tipo as TipoDeSeta) : "avanco";
-    const brawler = porNome.get(normalizarNome(texto(seta.brawler, 40)));
-    setas.push({ id: `ia-${setas.length + 1}`, de, para, tipo, ...(brawler ? { brawler } : {}) });
+    const notaDaSeta = texto(seta.nota, 50);
+    setas.push({ id: `ia-${setas.length + 1}`, de, para, tipo, ...(brawler ? { brawler } : {}), ...(notaDaSeta ? { nota: notaDaSeta } : {}) });
   }
 
   const marcadores: MarcadorDoPlano[] = [];
   for (const entrada of Array.isArray(resposta.marcadores) ? resposta.marcadores : []) {
     if (marcadores.length >= MAXIMO_DE_MARCADORES) break;
     const marcador = (entrada ?? {}) as Record<string, unknown>;
-    const ponto = lerPonto(marcador.ponto);
-    const nota = texto(marcador.nota, 240);
-    if (!ponto || !nota) continue;
+    const pontoBruto = lerPonto(marcador.ponto);
+    const nota = texto(marcador.nota, 60);
+    if (!pontoBruto || !nota) continue;
     const tipo = TIPOS_DE_MARCADOR.some((item) => item.id === marcador.tipo) ? (marcador.tipo as TipoDeMarcador) : "foco";
     const dono = porNome.get(normalizarNome(texto(marcador.brawler, 40)));
+    // "Partir paredes" aponta para uma parede e "atravessar água" para a água; o resto fica em chão livre.
+    // "Cobertura" e "partir paredes" apontam para uma parede, "atravessar água" para a água; o resto fica em chão livre.
+    const ponto = tipo === "destruir" || tipo === "agua" || tipo === "cobertura" ? pontoBruto : pontoLivre(terreno, pontoBruto, { atravessaAgua: atravessaAgua(dono) });
     marcadores.push({ id: `ia-m${marcadores.length + 1}`, tipo, ponto, nota, ...(dono ? { brawler: dono } : {}) });
   }
 
-  const previsao = (Array.isArray(resposta.previsao) ? resposta.previsao : []).map((linha) => texto(linha, 260)).filter(Boolean).slice(0, 5);
+  // Passos fantasma: só brawlers deste draft, 2 a 6 casas, sem paredes (e sem água para quem não a atravessa).
+  const trilhos: TrilhoDoPlano[] = [];
+  for (const entrada of Array.isArray(resposta.trilhos) ? resposta.trilhos : []) {
+    if (trilhos.length >= MAXIMO_DE_TRILHOS) break;
+    const trilho = (entrada ?? {}) as Record<string, unknown>;
+    const bruto = normalizarNome(texto(trilho.brawler, 40));
+    const nosso = porNome.get(bruto);
+    const deles_ = porNomeDeles.get(bruto);
+    const brawler = nosso ?? deles_;
+    if (!brawler) continue;
+    const lado = nosso ? "nos" : "eles";
+    const pontos = (Array.isArray(trilho.pontos) ? trilho.pontos : [])
+      .map((p) => lerPonto(p))
+      .filter((p): p is PontoNoMapa => Boolean(p))
+      .map((p) => pontoLivre(terreno, p, { atravessaAgua: lado === "nos" && atravessaAgua(brawler) }))
+      .slice(0, 6);
+    if (pontos.length >= 2) trilhos.push({ id: `ia-t${trilhos.length + 1}`, brawler, lado, pontos });
+  }
+
+  const previsao = (Array.isArray(resposta.previsao) ? resposta.previsao : []).map((linha) => texto(linha, 110)).filter(Boolean).slice(0, 3);
 
   const fases = (Array.isArray(resposta.fases) ? resposta.fases : [])
-    .map((fase) => ({ nome: texto((fase as { nome?: unknown })?.nome, 60), instrucao: texto((fase as { instrucao?: unknown })?.instrucao, 400) }))
+    .map((fase) => ({ nome: texto((fase as { nome?: unknown })?.nome, 30), instrucao: texto((fase as { instrucao?: unknown })?.instrucao, 110) }))
     .filter((fase) => fase.nome && fase.instrucao)
     .slice(0, 4);
 
   return {
-    resumo: texto(resposta.resumo, 500),
-    condicaoDeVitoria: texto(resposta.condicaoDeVitoria, 300),
+    resumo: texto(resposta.resumo, 160),
+    condicaoDeVitoria: texto(resposta.condicaoDeVitoria, 120),
     fases,
     previsao,
     ordens,
     marcadores,
+    trilhos,
     posicoes,
     setas,
     origem: "ia",
@@ -289,7 +339,23 @@ export type Atualidade = { texto: string; fontes: FonteConsultada[] };
  * - tem de prever o adversário, dizer onde há aberturas e quando avançar;
  * - não pode inventar habilidades que não conhece.
  */
-export function textoDoPedido(pedido: PedidoDePlano, comImagem: boolean, terreno?: TerrenoDoMapa | null, atualidade?: Atualidade | null, hoje = new Date()) {
+/** As builds que existem hoje, para a IA escolher em vez de inventar. */
+export type OpcoesDeBuild = { porBrawler: Record<string, { gadgets: string[]; poderes: string[] }>; engrenagens: string[] };
+
+function listaDeBuilds(pedido: PedidoDePlano, opcoes?: OpcoesDeBuild | null) {
+  if (!opcoes) return "";
+  const linhas = pedido.nossos.map(({ brawler }) => {
+    const b = opcoes.porBrawler[brawler];
+    return b ? `- ${brawler}: gadgets [${b.gadgets.join(" | ")}]; poderes estelares [${b.poderes.join(" | ")}]` : `- ${brawler}: (sem lista)`;
+  });
+  return [
+    "LISTA DE BUILDS QUE EXISTEM HOJE (escolhe só daqui, com o nome exato):",
+    ...linhas,
+    opcoes.engrenagens.length ? `Engrenagens: [${opcoes.engrenagens.join(" | ")}]` : "",
+  ].filter(Boolean).join("\n");
+}
+
+export function textoDoPedido(pedido: PedidoDePlano, comImagem: boolean, terreno?: TerrenoDoMapa | null, atualidade?: Atualidade | null, hoje = new Date(), opcoes?: OpcoesDeBuild | null) {
   const modo = NOME_DO_MODO[pedido.modoId] ?? pedido.modoId;
   const linha = (lista: PedidoDePlano["nossos"]) => lista.map((item) => `${item.brawler} (${item.funcao})`).join(", ") || "—";
   const duelos = pedido.duelos.length
@@ -321,21 +387,29 @@ export function textoDoPedido(pedido: PedidoDePlano, comImagem: boolean, terreno
       ? `GRELHA DO MAPA (${terreno.colunas}×${terreno.linhas}; "#" parede, '"' mato, "~" água, "o" objetivo/base, "." chão). Cada linha começa pelo seu número:\n${grelhaEmTexto(terreno)}`
       : "",
     "",
-    "O QUE TENS DE ENTREGAR (português de Portugal, frases curtas e práticas, sem floreados):",
-    "1. previsao: 2 a 4 frases sobre o que o adversário vai fazer com ESTE draft neste mapa (por onde vai entrar, quem vai procurar quem, que mato vai usar).",
-    "2. ordens, uma por brawler da nossa equipa:",
-    "   - funcao: 2 a 4 palavras (ex.: \"segura o mato do meio\", \"rouba a zona deles\")",
-    "   - objetivo: o que tem de conseguir e como, referindo sítios concretos do mapa",
-    "   - quandoAvancar: em que condição pode avançar para a posição aberta (ex.: \"quando o Ash gastar o super\", \"depois da primeira eliminação\") e quando deve recuar",
-    "   - cuidados: 1 a 3 perigos concretos contra ESTE adversário",
-    "   - posicao: a casa onde deve estar a meio do jogo; tem de ser chão ou mato, nunca parede nem água",
-    "   - build: gadget, poderEstelar e até 2 engrenagens para ESTE mapa e modo. Só nomes que conheces com certeza; se não souberes, escreve \"não sei\".",
-    "   - capacidades: só as que o brawler tem de certeza: \"parte-paredes\" (o ataque ou o super destrói paredes), \"atravessa-agua\", \"salta-paredes\". Na dúvida, lista vazia.",
-    "3. setas (2 a 6): os movimentos-chave. \"avanco\" = empurrar, \"recuo\" = recuar para defender, \"rotacao\" = mudar de lane ou ir ajudar. O \"de\" é a posição do brawler; indica o brawler.",
-    "4. marcadores (4 a 12): ordens no sítio exato do mapa, cada uma com uma nota curta e, se for de um brawler, o nome dele. Tipos: \"ataque\" (atacar aqui), \"defesa\" (defender aqui), \"controlo\" (segurar esta posição/passagem), \"posicao\" (assumir esta posição), \"emboscada\" (esconder neste mato), \"flanco\" (flanquear por aqui), \"destruir\" (partir estas paredes — só para quem parte paredes), \"agua\" (atravessar a água aqui — só para quem atravessa), \"abertura\" (corredor aberto para avançar), \"perigo\" (onde o adversário é forte), \"foco\" (alvo prioritário).",
-    "5. fases: 3 (início, meio, fecho), uma instrução cada. E ainda um resumo de 1 a 2 frases e a condição de vitória.",
+    listaDeBuilds(pedido, opcoes),
     "",
-    "Regras: usa só os brawlers indicados. Se não conheceres bem o kit de um brawler, NÃO inventes nomes de habilidades: fala da função, do alcance e do tipo (tanque, atirador, lançador, assassino, suporte).",
+    "O JOGADOR VAI LER ISTO EM 20 SEGUNDOS, antes da partida começar. Escreve pouco: frases telegráficas, sem floreados, em português de Portugal. A explicação vai no MAPA (símbolos com nota), não em texto corrido.",
+    "O QUE TENS DE ENTREGAR:",
+    "1. resumo: 1 frase, no máximo 12 palavras. condicaoDeVitoria: no máximo 10 palavras.",
+    "2. previsao: 2 ou 3 frases de no máximo 10 palavras: o que o adversário vai fazer (por onde entra, quem procura quem).",
+    "3. inimigos: onde prevês cada adversário a meio do jogo (uma casa por adversário).",
+    "4. ordens, uma por brawler nosso:",
+    "   - funcao: 2 ou 3 palavras (ex.: \"segura a zona\", \"emboscada no mato\")",
+    "   - objetivo: no máximo 12 palavras, com um sítio concreto do mapa",
+    "   - quandoAvancar: no máximo 8 palavras (ex.: \"quando o Ash gastar o super\")",
+    "   - cuidados: 1 perigo, no máximo 8 palavras",
+    "   - posicao: casa a meio do jogo; chão ou mato. NUNCA parede. Água (\"~\") só para quem atravessa água. Pode ser no meio do território inimigo, até junto da base deles, se a estratégia o pedir (roubar a zona, pressionar o spawn, flanquear).",
+    "   - build: escolhe da LISTA acima (gadget, poderEstelar e até 2 engrenagens) os nomes EXATOS. Se a lista não tiver o brawler, escreve \"não sei\".",
+    "   - capacidades: só as que tem de certeza: \"parte-paredes\", \"atravessa-agua\", \"salta-paredes\". Na dúvida, lista vazia.",
+    "5. setas (3 a 7): movimentos-chave. \"avanco\", \"recuo\" ou \"rotacao\"; o \"de\" é a posição do brawler; indica o brawler; e uma nota de no máximo 5 palavras a dizer PORQUÊ (ex.: \"recua se perder o 1v1\", \"entra quando a zona abrir\"). A ponta NUNCA numa parede nem na água (\"~\"), salvo quem atravessa água.",
+    "6. marcadores (5 a 10): a explicação no mapa. Cada um com nota de no máximo 5 palavras e, se for de um brawler, o nome dele. Tipos: \"ataque\", \"defesa\", \"controlo\" (segurar passagem), \"posicao\" (assumir posição), \"emboscada\" (esconder neste mato), \"flanco\", \"cobertura\" (usar ESTA parede para tapar tiros), \"destruir\" (partir estas paredes — só quem parte paredes), \"agua\" (atravessar aqui — só quem atravessa), \"abertura\" (corredor aberto), \"perigo\", \"foco\" (alvo prioritário).",
+    "7. fases: 3 (início, meio, fecho), instrução de no máximo 8 palavras.",
+    "8. trilhos (passos fantasma): para 3 a 6 brawlers — nossos E adversários — o caminho que vão percorrer mais vezes durante a partida, com 3 a 5 casas por ordem (de onde partem até onde lutam). Sem atravessar paredes nem água (salvo quem atravessa água).",
+    "",
+    "USA O TERRENO, casa a casa, e diz isso nos símbolos e nas setas: paredes (\"#\") como cobertura contra atiradores; mato ('\"') para emboscada e para esconder quem é de perto; água (\"~\") como barreira que corta caminhos (e atalho para quem a atravessa); corredores abertos (muitos \".\") para quem tem alcance longo; passagens estreitas para controlar. Cada brawler deve ter pelo menos um símbolo ou seta ligado a um sítio concreto do mapa.",
+    "",
+    "Regras: usa só os brawlers indicados. \"~\" é água: ninguém anda nela, exceto quem atravessa água. Se não conheceres bem o kit de um brawler, NÃO inventes habilidades: fala da função e do alcance.",
   ].filter((parte, indice, todas) => parte !== "" || todas[indice - 1] !== "").join("\n");
 }
 
@@ -348,6 +422,7 @@ export const ESQUEMA_DO_PLANO = {
     resumo: { type: "STRING" },
     condicaoDeVitoria: { type: "STRING" },
     previsao: { type: "ARRAY", items: { type: "STRING" } },
+    inimigos: { type: "ARRAY", items: { type: "OBJECT", properties: { brawler: { type: "STRING" }, posicao: CASA }, required: ["brawler", "posicao"] } },
     fases: { type: "ARRAY", items: { type: "OBJECT", properties: { nome: { type: "STRING" }, instrucao: { type: "STRING" } }, required: ["nome", "instrucao"] } },
     ordens: {
       type: "ARRAY",
@@ -379,16 +454,21 @@ export const ESQUEMA_DO_PLANO = {
           tipo: { type: "STRING", enum: ["avanco", "recuo", "rotacao"] },
           de: CASA,
           para: CASA,
+          nota: { type: "STRING" },
         },
         required: ["tipo", "de", "para"],
       },
+    },
+    trilhos: {
+      type: "ARRAY",
+      items: { type: "OBJECT", properties: { brawler: { type: "STRING" }, pontos: { type: "ARRAY", items: CASA } }, required: ["brawler", "pontos"] },
     },
     marcadores: {
       type: "ARRAY",
       items: {
         type: "OBJECT",
         properties: {
-          tipo: { type: "STRING", enum: ["ataque", "defesa", "controlo", "posicao", "emboscada", "flanco", "destruir", "agua", "abertura", "perigo", "foco"] },
+          tipo: { type: "STRING", enum: ["ataque", "defesa", "controlo", "posicao", "emboscada", "flanco", "cobertura", "destruir", "agua", "abertura", "perigo", "foco"] },
           ponto: CASA,
           nota: { type: "STRING" },
           brawler: { type: "STRING" },
@@ -407,17 +487,37 @@ export const ESQUEMA_DO_PLANO = {
 export const FORMATO_DO_PLANO_EM_TEXTO = [
   "Responde só com um objeto JSON, sem texto antes nem depois, exatamente com estas chaves:",
   '{"resumo":"...","condicaoDeVitoria":"...","previsao":["..."],',
+  '"inimigos":[{"brawler":"Nome","posicao":{"col":10,"linha":8}}],',
   '"fases":[{"nome":"Início","instrucao":"..."}],',
   '"ordens":[{"brawler":"Nome","funcao":"...","objetivo":"...","quandoAvancar":"...","cuidados":["..."],"posicao":{"col":10,"linha":20},"build":{"gadget":"...","poderEstelar":"...","engrenagens":["..."]},"capacidades":["parte-paredes"]}],',
-  '"setas":[{"brawler":"Nome","tipo":"avanco","de":{"col":10,"linha":20},"para":{"col":10,"linha":14}}],',
-  '"marcadores":[{"tipo":"emboscada","ponto":{"col":13,"linha":15},"nota":"...","brawler":"Nome"}]}',
-  "tipo das setas: avanco, recuo ou rotacao. tipo dos marcadores: ataque, defesa, controlo, posicao, emboscada, flanco, destruir, agua, abertura, perigo ou foco. col de 0 a 20, linha de 0 a 32.",
+  '"setas":[{"brawler":"Nome","tipo":"avanco","de":{"col":10,"linha":20},"para":{"col":10,"linha":14},"nota":"porquê, curto"}],',
+  '"marcadores":[{"tipo":"emboscada","ponto":{"col":13,"linha":15},"nota":"...","brawler":"Nome"}],',
+  '"trilhos":[{"brawler":"Nome","pontos":[{"col":10,"linha":28},{"col":9,"linha":22},{"col":8,"linha":17}]}]}',
+  "tipo das setas: avanco, recuo ou rotacao. tipo dos marcadores: ataque, defesa, controlo, posicao, emboscada, flanco, cobertura, destruir, agua, abertura, perigo ou foco. col de 0 a 20, linha de 0 a 32.",
 ].join("\n");
 
 /** Onde o plano de um draft fica guardado neste navegador. */
 export function chaveDoQuadro(mapa: string | undefined, nossos: readonly string[], deles: readonly string[]) {
   const lista = (nomes: readonly string[]) => [...nomes].sort().join(",");
   return `brawl-hibrido:quadro-do-general:v2:${mapa ?? "sem-mapa"}|${lista(nossos)}|${lista(deles)}`;
+}
+
+/** Um desenho só do CDN da Brawlify, em https: um plano guardado não traz outros endereços para a página. */
+const desenhoSeguro = (url: unknown) => (typeof url === "string" && /^https:\/\/cdn\.brawlify\.com\/[\w\-/.]+\.(png|webp)$/.test(url) ? url : null);
+
+function limparBuild(build: BuildDoBrawler): BuildDoBrawler {
+  return {
+    gadget: typeof build.gadget === "string" ? build.gadget : "",
+    poderEstelar: typeof build.poderEstelar === "string" ? build.poderEstelar : "",
+    engrenagens: Array.isArray(build.engrenagens) ? build.engrenagens.filter((e): e is string => typeof e === "string") : [],
+    imagens: build.imagens
+      ? {
+        gadget: desenhoSeguro(build.imagens.gadget),
+        poderEstelar: desenhoSeguro(build.imagens.poderEstelar),
+        engrenagens: Array.isArray(build.imagens.engrenagens) ? build.imagens.engrenagens.map(desenhoSeguro) : [],
+      }
+      : undefined,
+  };
 }
 
 /**
@@ -437,10 +537,22 @@ export function lerPlanoGuardado(bruto: string | null, nossos: readonly string[]
     }
     const setas = (Array.isArray(guardado.setas) ? guardado.setas : [])
       .filter((seta) => seta && typeof seta.de?.x === "number" && typeof seta.para?.x === "number" && TIPOS_DE_SETA.some((tipo) => tipo.id === seta.tipo))
+      .map((seta) => ({ ...seta, nota: typeof seta.nota === "string" ? seta.nota.slice(0, 50) : undefined }))
       .slice(0, MAXIMO_DE_SETAS * 2);
     const ordens = (Array.isArray(guardado.ordens) ? guardado.ordens : [])
       .filter((ordem) => ordem && nossos.includes(ordem.brawler))
-      .map((ordem) => ({ ...ordem, quandoAvancar: typeof ordem.quandoAvancar === "string" ? ordem.quandoAvancar : "", cuidados: Array.isArray(ordem.cuidados) ? ordem.cuidados : [] }));
+      .map((ordem) => ({
+        ...ordem,
+        quandoAvancar: typeof ordem.quandoAvancar === "string" ? ordem.quandoAvancar : "",
+        cuidados: Array.isArray(ordem.cuidados) ? ordem.cuidados : [],
+        build: ordem.build ? limparBuild(ordem.build) : undefined,
+      }));
+    const nomesDoDraft = new Set([...nossos, ...deles]);
+    const trilhos = (Array.isArray(guardado.trilhos) ? guardado.trilhos : [])
+      .filter((t) => t && nomesDoDraft.has(t.brawler) && (t.lado === "nos" || t.lado === "eles") && Array.isArray(t.pontos))
+      .map((t) => ({ ...t, pontos: t.pontos.filter((p) => typeof p?.x === "number" && typeof p?.y === "number").map((p) => ({ x: limitarAoMapa(p.x), y: limitarAoMapa(p.y) })).slice(0, 6) }))
+      .filter((t) => t.pontos.length >= 2)
+      .slice(0, MAXIMO_DE_TRILHOS);
     const marcadores = (Array.isArray(guardado.marcadores) ? guardado.marcadores : [])
       .filter((marcador) => marcador && typeof marcador.ponto?.x === "number" && typeof marcador.ponto?.y === "number" && TIPOS_DE_MARCADOR.some((tipo) => tipo.id === marcador.tipo))
       .slice(0, MAXIMO_DE_MARCADORES * 3);
@@ -452,6 +564,7 @@ export function lerPlanoGuardado(bruto: string | null, nossos: readonly string[]
       previsao: Array.isArray(guardado.previsao) ? guardado.previsao.filter((linha): linha is string => typeof linha === "string") : [],
       ordens,
       marcadores,
+      trilhos,
       posicoes,
       setas,
       origem: guardado.origem === "ia" ? "ia" : "manual",

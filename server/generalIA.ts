@@ -31,10 +31,11 @@
  * o código e a mensagem da Google, e a mensagem final ao dono diz o que cada
  * modelo respondeu.
  */
-import { ESQUEMA_DO_PLANO, FORMATO_DO_PLANO_EM_TEXTO, NOME_DO_MODO, lerPlanoDaIA, textoDoPedido, type Atualidade, type FonteConsultada, type PedidoDePlano, type PlanoDoGeneral } from "@shared/quadroDoGeneral";
+import { ESQUEMA_DO_PLANO, FORMATO_DO_PLANO_EM_TEXTO, NOME_DO_MODO, lerPlanoDaIA, textoDoPedido, type Atualidade, type FonteConsultada, type OpcoesDeBuild, type PedidoDePlano, type PlanoDoGeneral } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_CASA, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { getSetting, setSetting } from "./appSettings";
 import { guardarRotulosDaIA, imagemDaBrawlify, obterTerreno } from "./terrenoDoMapa";
+import { acharNaLista, normalizarNome, obterCatalogo, type CatalogoDeBuilds } from "./catalogoDeBuilds";
 
 export const GEMINI_API_KEY_SETTING = "geminiApiKey";
 // Configurável só para testes locais com uma Gemini falsa; em produção é sempre a da Google.
@@ -260,7 +261,8 @@ const ESQUEMA_DOS_ROTULOS = {
  * em casas e em píxeis da imagem, para ela ir ver.
  */
 export function textoDosRotulos(terreno: TerrenoDoMapa) {
-  const linhas = terreno.grupos.map((grupo) => {
+  // Bases, água e zonas (ids com algarismos) foram lidas pela forma e pela cor fixa: não se perguntam.
+  const linhas = terreno.grupos.filter((grupo) => /^[a-z]$/.test(grupo.id)).map((grupo) => {
     const exemplos: string[] = [];
     for (let i = 0; i < terreno.grelha.length && exemplos.length < 4; i++) {
       if (terreno.grelha[i] !== grupo.id) continue;
@@ -292,7 +294,8 @@ export async function rotularTerrenoComIA(terreno: TerrenoDoMapa, buscar: Buscar
   const imagem = await imagemParaAIA(terreno.mapaId, buscar);
   if (!imagem) throw new ErroDoGeneral("Não consegui ir buscar a imagem deste mapa.");
   const { json } = await gerarJson(key, [{ text: textoDosRotulos(terreno) }, { inline_data: imagem }], ESQUEMA_DOS_ROTULOS, buscar, 0, FORMATO_DOS_ROTULOS, "ler o terreno");
-  return guardarRotulosDaIA(terreno, (json as { rotulos?: unknown })?.rotulos);
+  const rotulos = (json as { rotulos?: unknown })?.rotulos;
+  return guardarRotulosDaIA(terreno, Array.isArray(rotulos) ? rotulos.filter((r) => /^[a-z]$/.test(String((r as { id?: unknown })?.id ?? ""))) : []);
 }
 
 /**
@@ -336,6 +339,49 @@ export async function pesquisarAtualidade(chave: string, modelos: readonly strin
   return null;
 }
 
+/** As builds reais dos nossos brawlers, para ir no pedido. */
+export function opcoesDeBuild(catalogo: CatalogoDeBuilds | null, nossos: readonly string[]): OpcoesDeBuild | null {
+  if (!catalogo) return null;
+  const porBrawler: OpcoesDeBuild["porBrawler"] = {};
+  for (const nome of nossos) {
+    const b = catalogo.brawlers[normalizarNome(nome)];
+    if (b) porBrawler[nome] = { gadgets: b.gadgets.map((g) => g.nome), poderes: b.poderes.map((p) => p.nome) };
+  }
+  return { porBrawler, engrenagens: catalogo.engrenagens.map((g) => g.nome) };
+}
+
+/**
+ * Confere a build de cada ordem com a lista real: o nome passa a ser o da
+ * lista e ganha o desenho; o que não está na lista sai. Sem lista para um
+ * brawler, a build dele sai toda — antes nada do que um nome inventado.
+ */
+export function conferirBuilds(plano: PlanoDoGeneral, catalogo: CatalogoDeBuilds | null) {
+  for (const ordem of plano.ordens) {
+    if (!ordem.build) continue;
+    const doBrawler = catalogo?.brawlers[normalizarNome(ordem.brawler)];
+    if (!doBrawler) {
+      delete ordem.build;
+      continue;
+    }
+    const gadget = acharNaLista(ordem.build.gadget, doBrawler.gadgets);
+    const poder = acharNaLista(ordem.build.poderEstelar, doBrawler.poderes);
+    const engrenagens = catalogo!.engrenagens.length
+      ? ordem.build.engrenagens.map((nome) => acharNaLista(nome, catalogo!.engrenagens)).filter((g): g is NonNullable<typeof g> => Boolean(g))
+      : [];
+    if (!gadget && !poder && !engrenagens.length) {
+      delete ordem.build;
+      continue;
+    }
+    ordem.build = {
+      gadget: gadget?.nome ?? "",
+      poderEstelar: poder?.nome ?? "",
+      engrenagens: engrenagens.map((g) => g.nome),
+      imagens: { gadget: gadget?.imagem ?? null, poderEstelar: poder?.imagem ?? null, engrenagens: engrenagens.map((g) => g.imagem) },
+    };
+  }
+  return plano;
+}
+
 let pedidoEmCurso = false;
 
 /**
@@ -360,10 +406,11 @@ export async function pedirPlanoAoGeneral(pedido: PedidoDePlano, buscar: Buscar 
     }
     const atualidade = await pesquisarAtualidade(key, modelos, pedido, buscar);
     const imagem = await imagemParaAIA(pedido.mapaId, buscar);
-    const partes: ParteDoPedido[] = [{ text: textoDoPedido(pedido, Boolean(imagem), terreno, atualidade) }];
+    const catalogo = await obterCatalogo(buscar).catch(() => null);
+    const partes: ParteDoPedido[] = [{ text: textoDoPedido(pedido, Boolean(imagem), terreno, atualidade, new Date(), opcoesDeBuild(catalogo, pedido.nossos.map((n) => n.brawler))) }];
     if (imagem) partes.push({ inline_data: imagem });
     const { json, modelo } = await gerarJson(key, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano");
-    const plano = lerPlanoDaIA(json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno);
+    const plano = conferirBuilds(lerPlanoDaIA(json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno), catalogo);
     if (atualidade?.fontes.length) plano.fontes = atualidade.fontes;
     return { plano, modelo, comImagem: Boolean(imagem), comPesquisa: Boolean(atualidade), terreno };
   } finally {

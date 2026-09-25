@@ -18,7 +18,7 @@ import { trpc } from "@/lib/trpc";
 import { useEhDono } from "@/lib/ehDono";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { ELOS_BRAWL_PLANET } from "@shared/elosBrawlPlanet";
-import { atribuirDuelosPorCounter, calculateLaneMatchup, inferDraftRole } from "@shared/draft";
+import { atribuirDuelosPorCounter, calculateLaneMatchup, inferDraftRole, posicionarNoMapa } from "@shared/draft";
 import type { RankedRow } from "@/data/rankedData";
 import {
   CAPACIDADES,
@@ -31,13 +31,14 @@ import {
   chaveDoQuadro,
   lerPlanoGuardado,
   planoVazio,
+  posicoesIniciais,
   type PlanoDoGeneral,
   type PontoNoMapa,
   type TipoDeMarcador,
   type TipoDeSeta,
 } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_CASA, pontoLivre, type TerrenoDoMapa, type TipoDeCasa } from "@shared/terrenoDoMapa";
-import type { AlvoDoCursor, ComandoDeCamara, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
+import type { AlvoDoCursor, ComandoDeCamara, DueloNo3D, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 
 const Quadro3D = lazy(() => import("./Quadro3D"));
@@ -76,6 +77,25 @@ const FERRAMENTAS: Array<{ id: Ferramenta; nome: string; ajuda: string }> = [
   { id: "simbolo", nome: "Símbolo", ajuda: "Clica no chão para pôr o símbolo escolhido." },
   { id: "apagar", nome: "Apagar", ajuda: "Clica numa seta ou num símbolo para o apagar." },
 ];
+
+/** Um retrato pequeno, com a cor da equipa. */
+function Retrato({ url, nome, lado }: { url: string | null; nome: string; lado: "nos" | "eles" }) {
+  return (
+    <span className={`qg-retrato qg-retrato--${lado}`} title={nome}>
+      {url ? <img src={url} alt={nome} loading="lazy" decoding="async" /> : nome.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+/** Um gadget, poder estelar ou engrenagem: o desenho, e o nome ao passar o cursor. */
+function ItemDaBuild({ nome, imagem, tipo }: { nome: string; imagem?: string | null; tipo: string }) {
+  return (
+    <span className={`qg-item qg-item--${tipo === "Gadget" ? "gadget" : tipo === "Poder estelar" ? "poder" : "engrenagem"}`} title={`${tipo}: ${nome}`}>
+      {imagem ? <img src={imagem} alt="" loading="lazy" decoding="async" /> : <i aria-hidden="true">{tipo === "Engrenagem" ? "⚙" : tipo === "Gadget" ? "◆" : "★"}</i>}
+      <small>{nome}</small>
+    </span>
+  );
+}
 
 function textoDaBuild(build: PlanoDoGeneral["ordens"][number]["build"]) {
   if (!build) return "";
@@ -122,6 +142,9 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   const [cursor, setCursor] = useState<AlvoDoCursor>(null);
   const [erro3D, setErro3D] = useState<string | null>(null);
   const [novaChave, setNovaChave] = useState("");
+  const [notasNoMapa, setNotasNoMapa] = useState(true);
+  const [passosFantasma, setPassosFantasma] = useState(true);
+  const semTrilhos = useMemo(() => [], []);
 
   const utils = trpc.useUtils();
   const terrenoQuery = trpc.general.terreno.useQuery({ mapaId: mapaId ?? "" }, { enabled: Boolean(mapaId), staleTime: 10 * 60_000, retry: 1 });
@@ -140,10 +163,14 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   const pedirPlano = trpc.general.pedirPlano.useMutation({
     onSuccess: (resultado) => {
       const novo = resultado.plano as PlanoDoGeneral;
+      // Adversários: onde a IA os previu; se ela não disse nada de um, fica onde tu o puseste.
+      const partida = posicoesIniciais(nomesNossos, nomesDeles);
       setPlano((atual) => ({
         ...novo,
-        // Os adversários ficam onde tu os puseste; a IA só dá ordens à tua equipa.
-        posicoes: { ...atual.posicoes, ...Object.fromEntries(Object.entries(novo.posicoes).filter(([k]) => k.startsWith("a:"))) },
+        posicoes: Object.fromEntries(Object.entries(novo.posicoes).map(([k, ponto]) => {
+          const igualAoDePartida = k.startsWith("e:") && partida[k] && partida[k].x === ponto.x && partida[k].y === ponto.y;
+          return [k, igualAoDePartida && atual.posicoes[k] ? atual.posicoes[k] : ponto];
+        })),
       }));
       if (resultado.terreno && mapaId) utils.general.terreno.setData({ mapaId }, resultado.terreno as never);
       toast.success("O general deu as ordens.", {
@@ -166,15 +193,27 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   const estado = estadoQuery.data as { configured: boolean; origin: string; hint: string | null } | undefined;
 
   const fichas = useMemo<FichaNo3D[]>(() => [
-    ...nossos.map((linha) => ({ chave: chaveDaFicha("nos", linha.brawler), nome: linha.brawler, lado: "nos" as const, retrato: retratoDe(linha), ponto: plano.posicoes[chaveDaFicha("nos", linha.brawler)] ?? { x: 0.5, y: 0.84 } })),
+    ...nossos.map((linha) => ({
+      chave: chaveDaFicha("nos", linha.brawler),
+      nome: linha.brawler,
+      lado: "nos" as const,
+      retrato: retratoDe(linha),
+      ponto: plano.posicoes[chaveDaFicha("nos", linha.brawler)] ?? { x: 0.5, y: 0.84 },
+      funcao: plano.ordens.find((ordem) => ordem.brawler === linha.brawler)?.funcao || undefined,
+    })),
     ...deles.map((linha) => ({ chave: chaveDaFicha("eles", linha.brawler), nome: linha.brawler, lado: "eles" as const, retrato: retratoDe(linha), ponto: plano.posicoes[chaveDaFicha("eles", linha.brawler)] ?? { x: 0.5, y: 0.16 } })),
-  ], [nossos, deles, plano.posicoes, retratoDe]);
+  ], [nossos, deles, plano.posicoes, plano.ordens, retratoDe]);
 
-  const duelos = useMemo(() => atribuirDuelosPorCounter(nossos, deles, "ally").map((duelo) => ({
+  // Os mesmos duelos 1v1 da matriz: quem joga contra quem, e em que lane.
+  const duelos = useMemo(() => posicionarNoMapa(atribuirDuelosPorCounter(nossos, deles, "ally"), (duelo) => inferDraftRole(duelo.ally.brawler)).map(({ position, item: duelo }) => ({
+    posicao: position,
     nosso: duelo.ally.brawler,
     deles: duelo.enemy.brawler,
+    linhaNossa: duelo.ally,
+    linhaDeles: duelo.enemy,
     vantagem: Math.max(0, Math.min(100, calculateLaneMatchup(duelo.ally, duelo.enemy).score)),
   })), [nossos, deles]);
+  const duelos3D = useMemo<DueloNo3D[]>(() => duelos.map((d) => ({ nosso: chaveDaFicha("nos", d.nosso), deles: chaveDaFicha("eles", d.deles), vantagem: d.vantagem })), [duelos]);
 
   const moverFicha = (chaveDaFichaMovida: string, ponto: PontoNoMapa) =>
     setPlano((atual) => ({ ...atual, posicoes: { ...atual.posicoes, [chaveDaFichaMovida]: pontoLivre(terreno, ponto) } }));
@@ -209,7 +248,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       mapaId,
       nossos: nossos.map((linha) => ({ brawler: linha.brawler, funcao: NOME_DA_FUNCAO[inferDraftRole(linha.brawler)] })),
       deles: deles.map((linha) => ({ brawler: linha.brawler, funcao: NOME_DA_FUNCAO[inferDraftRole(linha.brawler)] })),
-      duelos,
+      duelos: duelos.map(({ nosso, deles: delesNome, vantagem }) => ({ nosso, deles: delesNome, vantagem })),
       nosNome,
       // Os números de agora, no elo escolhido: a IA planeia com o jogo de hoje.
       numeros: [
@@ -333,6 +372,14 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
             <button key={item.id} type="button" onClick={() => setVista((atual) => ({ id: item.id, pedido: atual.pedido + 1 }))}>{item.nome}</button>
           ))}
         </div>
+        <label className="quadro-general-interruptor">
+          <input type="checkbox" checked={notasNoMapa} onChange={(e) => setNotasNoMapa(e.target.checked)} />
+          Notas no mapa
+        </label>
+        <label className="quadro-general-interruptor quadro-general-interruptor--seguinte">
+          <input type="checkbox" checked={passosFantasma} onChange={(e) => setPassosFantasma(e.target.checked)} />
+          Passos fantasma
+        </label>
         <button type="button" className="quadro-general-repor" onClick={() => setPlano(planoVazio(nomesNossos, nomesDeles))}>Repor tudo</button>
       </div>
       {ajuda && <p className="quadro-general-ajuda">{ajuda}</p>}
@@ -349,6 +396,9 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 fichas={fichas}
                 setas={plano.setas}
                 marcadores={plano.marcadores}
+                duelos={duelos3D}
+                trilhos={passosFantasma ? plano.trilhos : semTrilhos}
+                notasNoMapa={notasNoMapa}
                 ferramenta={ferramenta}
                 tipoDeSeta={tipoDeSeta}
                 tipoDeMarcador={tipoDeMarcador}
@@ -385,9 +435,9 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
 
         <aside className="quadro-general-ordens" aria-label="Ordens do general">
           {plano.resumo || plano.condicaoDeVitoria ? (
-            <div className="quadro-general-resumo">
-              {plano.resumo && <p>{plano.resumo}</p>}
-              {plano.condicaoDeVitoria && <p><b>Para ganhar:</b> {plano.condicaoDeVitoria}</p>}
+            <div className="qg-resumo">
+              {plano.resumo && <strong>{plano.resumo}</strong>}
+              {plano.condicaoDeVitoria && <span className="qg-chip qg-chip--ouro">🏆 {plano.condicaoDeVitoria}</span>}
             </div>
           ) : (
             <p className="quadro-general-vazio">
@@ -396,47 +446,73 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 : "Monta o teu plano: move os brawlers, desenha setas e põe símbolos. Fica guardado neste navegador."}
             </p>
           )}
-          {plano.previsao.length > 0 && (
-            <div className="quadro-general-previsao">
-              <span>PREVISÃO DO ADVERSÁRIO</span>
-              <ul>{plano.previsao.map((linha, i) => <li key={i}>{linha}</li>)}</ul>
+
+          {duelos.length > 0 && (
+            <div className="qg-duelos" aria-label="Duelos 1v1 por lane">
+              <span className="qg-titulo">DUELOS 1V1</span>
+              {duelos.map((d) => {
+                const estado = d.vantagem >= 55 ? "ganha" : d.vantagem <= 45 ? "perde" : "igual";
+                return (
+                  <div key={d.nosso} className={`qg-duelo qg-duelo--${estado}`}>
+                    <small>{d.posicao === "mid" ? "MID" : d.posicao === "left" ? "LANE ESQ." : "LANE DIR."}</small>
+                    <Retrato url={retratoDe(d.linhaNossa)} nome={d.nosso} lado="nos" />
+                    <b>{Math.round(d.vantagem)}%</b>
+                    <Retrato url={retratoDe(d.linhaDeles)} nome={d.deles} lado="eles" />
+                  </div>
+                );
+              })}
             </div>
           )}
+
           {plano.ordens.length > 0 && (
-            <ol className="quadro-general-lista">
+            <ol className="qg-ordens">
               {plano.ordens.map((ordem) => {
-                const simbolos = plano.marcadores.filter((m) => m.brawler === ordem.brawler);
-                const build = textoDaBuild(ordem.build);
+                const linha = nossos.find((l) => l.brawler === ordem.brawler);
+                const b = ordem.build;
                 return (
                   <li key={ordem.brawler}>
-                    <header><strong>{ordem.brawler}</strong>{ordem.funcao && <em>{ordem.funcao}</em>}</header>
-                    <p>{ordem.objetivo}</p>
-                    {ordem.quandoAvancar && <p className="quadro-general-avancar"><b>Quando avançar</b> {ordem.quandoAvancar}</p>}
-                    {ordem.cuidados.length > 0 && <ul className="quadro-general-cuidados">{ordem.cuidados.map((c, i) => <li key={i}>{c}</li>)}</ul>}
-                    {simbolos.length > 0 && (
-                      <ul className="quadro-general-simbolos-do-brawler">
-                        {simbolos.map((m) => <li key={m.id}><b style={{ color: COR_DO_MARCADOR[m.tipo] }} aria-hidden="true">{TIPOS_DE_MARCADOR.find((t) => t.id === m.tipo)?.simbolo}</b>{m.nota}</li>)}
-                      </ul>
+                    <header>
+                      <Retrato url={linha ? retratoDe(linha) : null} nome={ordem.brawler} lado="nos" />
+                      <div>
+                        <strong>{ordem.brawler}</strong>
+                        {ordem.funcao && <em>{ordem.funcao}</em>}
+                      </div>
+                    </header>
+                    {ordem.objetivo && <p className="qg-objetivo">🎯 {ordem.objetivo}</p>}
+                    <div className="qg-chips">
+                      {ordem.quandoAvancar && <span className="qg-chip qg-chip--verde">▲ {ordem.quandoAvancar}</span>}
+                      {ordem.cuidados.slice(0, 1).map((c, i) => <span key={i} className="qg-chip qg-chip--vermelho">⚠ {c}</span>)}
+                      {ordem.capacidades?.map((c) => <span key={c} className="qg-chip qg-chip--azul">{CAPACIDADES.find((item) => item.id === c)?.nome}</span>)}
+                    </div>
+                    {b && (b.gadget || b.poderEstelar || b.engrenagens.length > 0) && (
+                      <div className="qg-build" aria-label={`Build de ${ordem.brawler}: ${textoDaBuild(b)}`}>
+                        {b.gadget && <ItemDaBuild nome={b.gadget} imagem={b.imagens?.gadget} tipo="Gadget" />}
+                        {b.poderEstelar && <ItemDaBuild nome={b.poderEstelar} imagem={b.imagens?.poderEstelar} tipo="Poder estelar" />}
+                        {b.engrenagens.map((e, i) => <ItemDaBuild key={e} nome={e} imagem={b.imagens?.engrenagens?.[i]} tipo="Engrenagem" />)}
+                      </div>
                     )}
-                    {(build || ordem.capacidades?.length) ? (
-                      <footer>
-                        {build && <span className="quadro-general-build">{build}</span>}
-                        {ordem.capacidades?.map((c) => <span key={c} className="quadro-general-capacidade">{CAPACIDADES.find((item) => item.id === c)?.nome}</span>)}
-                      </footer>
-                    ) : null}
                   </li>
                 );
               })}
             </ol>
           )}
-          {plano.fases.length > 0 && (
-            <div className="quadro-general-fases">
-              {plano.fases.map((fase, i) => <p key={i}><b>{fase.nome}:</b> {fase.instrucao}</p>)}
+
+          {plano.previsao.length > 0 && (
+            <div className="qg-previsao">
+              <span className="qg-titulo">ADVERSÁRIO VAI…</span>
+              <ul>{plano.previsao.map((linha, i) => <li key={i}>{linha}</li>)}</ul>
             </div>
           )}
+
+          {plano.fases.length > 0 && (
+            <ol className="qg-fases">
+              {plano.fases.map((fase, i) => <li key={i}><b>{fase.nome}</b><span>{fase.instrucao}</span></li>)}
+            </ol>
+          )}
+
           {plano.marcadores.length > 0 && (
-            <div className="quadro-general-simbolos">
-              <span>SÍMBOLOS NO MAPA</span>
+            <details className="quadro-general-simbolos">
+              <summary>Editar notas dos símbolos ({plano.marcadores.length})</summary>
               <ul>
                 {plano.marcadores.map((marcador) => (
                   <li key={marcador.id}>
@@ -444,14 +520,14 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                     <input
                       aria-label="Nota do símbolo"
                       value={marcador.nota}
-                      maxLength={240}
+                      maxLength={60}
                       onChange={(e) => setPlano((atual) => ({ ...atual, marcadores: atual.marcadores.map((m) => (m.id === marcador.id ? { ...m, nota: e.target.value } : m)) }))}
                     />
                     <button type="button" aria-label="Apagar símbolo" onClick={() => apagar("marcador", marcador.id)}>×</button>
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           )}
           {plano.fontes && plano.fontes.length > 0 && (
             <details className="quadro-general-fontes">

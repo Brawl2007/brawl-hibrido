@@ -35,7 +35,24 @@ const PESO_DA_TEXTURA = 1.5;
  */
 const FRACAO_DE_ANEL = 0.07;
 const FRACAO_DE_ANEL_VIZINHO = 0.015;
+/** Abaixo disto uma casa é lisa: enchimento de círculo, não uma parede. */
+const TEXTURA_DE_ENCHIMENTO = 6;
 const ID_DE_OBJETIVO = "0";
+/**
+ * Água: a casa inteira pintada do azul claro da água, lisa. É o mesmo azul dos
+ * anéis de partida — mas um anel é uma linha fina, a água enche a casa.
+ */
+const FRACAO_DE_AGUA = 0.6;
+const ID_DE_AGUA = "1";
+/**
+ * Zona (Zona Estratégica): um disco azulado translúcido de 5 a 8 casas de
+ * diâmetro, pintado por cima do chão. Lido pela forma — redondo, liso e azul —
+ * porque a cor muda com o chão por baixo. Tudo o que está dentro do disco
+ * (menos o mato) fica chão de objetivo: antes, o disco era lido como água e o
+ * contorno como paredes, e apareciam blocos invisíveis.
+ */
+const ID_DE_ZONA = "2";
+const azulado = (cor: readonly number[]) => cor[2] - cor[0] > 70 && cor[1] - cor[0] > 40;
 const corDeAnel = (r: number, g: number, b: number) =>
   (r > 190 && g < 95 && b < 110) || (b > 215 && r < 70 && g > 120 && g < 185);
 const LETRAS = "abcdefghijklmnopqrstuvwxyz";
@@ -87,7 +104,8 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
 
   // Anéis: só contam em manchas de pelo menos 3 casas seguidas. Uma flor
   // vermelha num cacto é uma casa sozinha; uma base, uma zona ou uma baliza não.
-  const temAnel = medidas.map((medida) => medida.anel >= FRACAO_DE_ANEL);
+  const eAgua = medidas.map((medida) => medida.anel >= FRACAO_DE_AGUA && medida.textura < 14);
+  const temAnel = medidas.map((medida, i) => medida.anel >= FRACAO_DE_ANEL && !eAgua[i]);
   const emMancha = new Array<boolean>(medidas.length).fill(false);
   const visto = new Array<boolean>(medidas.length).fill(false);
   for (let inicio = 0; inicio < medidas.length; inicio++) {
@@ -99,23 +117,51 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
       for (const [dc, dl] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const c = coluna + dc, l = linha + dl, j = l * COLUNAS_DO_MAPA + c;
         // A mancha cresce para vizinhos com um pouco de anel: entre dois círculos de partida há pouco.
-        if (c < 0 || l < 0 || c >= COLUNAS_DO_MAPA || l >= LINHAS_DO_MAPA || visto[j] || medidas[j].anel < FRACAO_DE_ANEL_VIZINHO) continue;
+        if (c < 0 || l < 0 || c >= COLUNAS_DO_MAPA || l >= LINHAS_DO_MAPA || visto[j] || eAgua[j] || medidas[j].anel < FRACAO_DE_ANEL_VIZINHO) continue;
         visto[j] = true;
         mancha.push(j);
       }
     }
     if (mancha.length >= 3) for (const i of mancha) emMancha[i] = true;
   }
+  // O enchimento dos círculos de partida: casas lisas (sem contornos, que as
+  // paredes têm sempre) encostadas a um anel. Sem isto apareciam blocos dentro
+  // da base — nas bases a meio do mapa, como no Fute-Brawl.
+  for (let passagem = 0; passagem < 2; passagem++) {
+    const novos: number[] = [];
+    medidas.forEach((medida, i) => {
+      if (emMancha[i] || eAgua[i] || medida.textura >= TEXTURA_DE_ENCHIMENTO) return;
+      const coluna = i % COLUNAS_DO_MAPA, linha = Math.floor(i / COLUNAS_DO_MAPA);
+      const encostada = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dc, dl]) => {
+        const c = coluna + dc, l = linha + dl;
+        return c >= 0 && l >= 0 && c < COLUNAS_DO_MAPA && l < LINHAS_DO_MAPA && emMancha[l * COLUNAS_DO_MAPA + c];
+      });
+      if (encostada) novos.push(i);
+    });
+    for (const i of novos) emMancha[i] = true;
+  }
+
+  const eChao = medidas.map((medida, i) => distancia(medida.cor, chao[((i % COLUNAS_DO_MAPA) + Math.floor(i / COLUNAS_DO_MAPA)) % 2]) < DISTANCIA_DE_CHAO);
+  const naZona = zonasPelaForma(medidas, eChao, eAgua);
 
   // O resto junta-se por cor. O centro de cada grupo é a média do que já entrou.
   type Acumulado = { id: string; soma: Cor; casas: number; textura: number };
   const grupos: Acumulado[] = [];
   const letras: string[] = [];
-  let objetivos = 0;
+  let objetivos = 0, aguas = 0, zonas = 0;
   medidas.forEach((medida, i) => {
-    const paridade = ((i % COLUNAS_DO_MAPA) + Math.floor(i / COLUNAS_DO_MAPA)) % 2;
-    if (distancia(medida.cor, chao[paridade]) < DISTANCIA_DE_CHAO) {
+    if (eChao[i]) {
       letras.push(".");
+      return;
+    }
+    if (eAgua[i]) {
+      letras.push(ID_DE_AGUA);
+      aguas++;
+      return;
+    }
+    if (naZona[i]) {
+      letras.push(ID_DE_ZONA);
+      zonas++;
       return;
     }
     if (emMancha[i]) {
@@ -151,7 +197,53 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
   }));
   const rotulados = rotularPorRegra(semTipo, grelha);
   if (objetivos) rotulados.push({ id: ID_DE_OBJETIVO, cor: [40, 150, 230], casas: objetivos, textura: 0, tipo: "objetivo" });
+  if (aguas) rotulados.push({ id: ID_DE_AGUA, cor: [70, 180, 240], casas: aguas, textura: 0, tipo: "agua" });
+  if (zonas) rotulados.push({ id: ID_DE_ZONA, cor: [35, 100, 160], casas: zonas, textura: 0, tipo: "objetivo" });
   return { mapaId, colunas: COLUNAS_DO_MAPA, linhas: LINHAS_DO_MAPA, grelha, grupos: rotulados, rotulado: "regra" };
+}
+
+/**
+ * Os discos das zonas. Uma mancha de casas azuladas e lisas, redonda (caixa
+ * quase quadrada, 55–90% da caixa cheia), com 5 a 9 casas de lado. Devolve
+ * as casas dentro do círculo, menos as que parecem mato (textura de folhas).
+ */
+export function zonasPelaForma(medidas: ReadonlyArray<{ cor: readonly number[]; textura: number }>, eChao: readonly boolean[], eAgua: readonly boolean[]) {
+  const candidata = medidas.map((medida, i) => !eChao[i] && !eAgua[i] && azulado(medida.cor));
+  const dentro = new Array<boolean>(medidas.length).fill(false);
+  const visto = new Array<boolean>(medidas.length).fill(false);
+  for (let inicio = 0; inicio < medidas.length; inicio++) {
+    if (!candidata[inicio] || visto[inicio]) continue;
+    const mancha = [inicio];
+    visto[inicio] = true;
+    for (let k = 0; k < mancha.length; k++) {
+      const i = mancha[k], coluna = i % COLUNAS_DO_MAPA, linha = Math.floor(i / COLUNAS_DO_MAPA);
+      for (const [dc, dl] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const c = coluna + dc, l = linha + dl, j = l * COLUNAS_DO_MAPA + c;
+        if (c < 0 || l < 0 || c >= COLUNAS_DO_MAPA || l >= LINHAS_DO_MAPA || visto[j] || !candidata[j]) continue;
+        visto[j] = true;
+        mancha.push(j);
+      }
+    }
+    const colunas = mancha.map((i) => i % COLUNAS_DO_MAPA), linhas = mancha.map((i) => Math.floor(i / COLUNAS_DO_MAPA));
+    const largura = Math.max(...colunas) - Math.min(...colunas) + 1, altura = Math.max(...linhas) - Math.min(...linhas) + 1;
+    const texturas = mancha.map((i) => medidas[i].textura).sort((a, b) => a - b);
+    const mediana = texturas[Math.floor(texturas.length / 2)];
+    const cheia = mancha.length / (largura * altura);
+    const redonda = largura >= 5 && altura >= 5 && largura <= 9 && altura <= 9 && Math.abs(largura - altura) <= 1 && cheia >= 0.55 && cheia <= 0.92;
+    if (!redonda || mediana >= 12) continue;
+    const cx = (Math.max(...colunas) + Math.min(...colunas)) / 2, cy = (Math.max(...linhas) + Math.min(...linhas)) / 2;
+    const raio = Math.max(largura, altura) / 2 + 0.3;
+    for (let l = Math.floor(cy - raio); l <= Math.ceil(cy + raio); l++) {
+      for (let c = Math.floor(cx - raio); c <= Math.ceil(cx + raio); c++) {
+        if (c < 0 || l < 0 || c >= COLUNAS_DO_MAPA || l >= LINHAS_DO_MAPA || Math.hypot(c - cx, l - cy) > raio) continue;
+        const j = l * COLUNAS_DO_MAPA + c;
+        // O mato dentro da zona continua mato; o resto (chão tingido, contorno) é objetivo.
+        const pareceMato = medidas[j].textura >= 14 && medidas[j].textura <= 26 && !azulado(medidas[j].cor);
+        if (!eChao[j] && !eAgua[j] && !pareceMato) dentro[j] = true;
+      }
+    }
+  }
+  return dentro;
 }
 
 /* ------------------------------------------------------------------------ *
@@ -199,7 +291,9 @@ export async function imagemDaBrawlify(tipo: TipoDeImagem, id: string, buscar: t
  * O terreno de cada mapa, guardado.
  * ------------------------------------------------------------------------ */
 const terrenos = new Map<string, TerrenoDoMapa>();
-const chaveGuardada = (mapaId: string) => `terreno:v1:${mapaId}`;
+// v2: água e zonas lidas pela forma. As leituras antigas (zonas como água,
+// contornos como paredes) ficam para trás e cada mapa é lido de novo.
+const chaveGuardada = (mapaId: string) => `terreno:v2:${mapaId}`;
 
 async function guardar(terreno: TerrenoDoMapa) {
   terrenos.set(terreno.mapaId, terreno);

@@ -16,12 +16,14 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { MarcadorDoPlano, PontoNoMapa, SetaDoPlano, TipoDeMarcador, TipoDeSeta } from "@shared/quadroDoGeneral";
+import type { MarcadorDoPlano, PontoNoMapa, SetaDoPlano, TipoDeMarcador, TipoDeSeta, TrilhoDoPlano } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_MARCADOR } from "@shared/quadroDoGeneral";
 import { tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 
-export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa };
+export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string };
+/** Um duelo 1v1: a linha entre as duas fichas, com a vantagem da tua equipa. */
+export type DueloNo3D = { nosso: string; deles: string; vantagem: number };
 export type Ferramenta = "mover" | "seta" | "simbolo" | "apagar";
 export type Vista = "nossa" | "deles" | "cima" | "lado" | "rasante";
 /** Os botões de câmara no ecrã, para quem não tem rato (ou prefere clicar). */
@@ -34,6 +36,11 @@ type Props = {
   fichas: FichaNo3D[];
   setas: SetaDoPlano[];
   marcadores: MarcadorDoPlano[];
+  duelos: DueloNo3D[];
+  /** Passos fantasma: por onde cada brawler vai andar mais. Vazio = não desenhar. */
+  trilhos: TrilhoDoPlano[];
+  /** Escrever a nota ao lado de cada símbolo, no próprio mapa. */
+  notasNoMapa: boolean;
   ferramenta: Ferramenta;
   tipoDeSeta: TipoDeSeta;
   tipoDeMarcador: TipoDeMarcador;
@@ -79,10 +86,10 @@ const ALVO_DA_VISTA: Record<Vista, [number, number, number]> = {
 };
 
 /** O retrato num círculo com a cor da equipa e o nome por baixo. */
-function desenharFicha(nome: string, lado: "nos" | "eles", imagem: HTMLImageElement | null) {
+function desenharFicha(nome: string, lado: "nos" | "eles", imagem: HTMLImageElement | null, funcao?: string) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
-  canvas.height = 320;
+  canvas.height = 384;
   const ctx = canvas.getContext("2d")!;
   ctx.beginPath();
   ctx.arc(128, 124, 112, 0, Math.PI * 2);
@@ -117,15 +124,47 @@ function desenharFicha(nome: string, lado: "nos" | "eles", imagem: HTMLImageElem
   ctx.fill();
   ctx.fillStyle = "#fff";
   ctx.fillText(nome, 128, 285, 236);
+  // A função por baixo do nome: lê-se no mapa sem abrir nada.
+  if (funcao) {
+    ctx.font = "bold 30px sans-serif";
+    const larguraDaFuncao = Math.min(252, ctx.measureText(funcao).width + 24);
+    ctx.fillStyle = COR_DO_LADO[lado];
+    ctx.beginPath();
+    ctx.roundRect(128 - larguraDaFuncao / 2, 320, larguraDaFuncao, 46, 23);
+    ctx.fill();
+    ctx.fillStyle = "#06101c";
+    ctx.fillText(funcao, 128, 344, 240);
+  }
   const textura = new THREE.CanvasTexture(canvas);
   textura.colorSpace = THREE.SRGBColorSpace;
   return textura;
 }
 
-function desenharSimbolo(tipo: TipoDeMarcador) {
+/**
+ * O símbolo com a nota escrita ao lado — a explicação fica no mapa. O círculo
+ * fica à esquerda do desenho; o `center` do sprite põe-no em cima do ponto.
+ */
+function desenharSimbolo(tipo: TipoDeMarcador, nota?: string, dono?: string) {
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 128;
+  canvas.width = nota ? 640 : 128;
+  canvas.height = 128;
   const ctx = canvas.getContext("2d")!;
+  if (nota) {
+    ctx.font = "bold 40px sans-serif";
+    const texto = dono ? `${dono}: ${nota}` : nota;
+    const largura = Math.min(500, ctx.measureText(texto).width + 36);
+    ctx.fillStyle = "rgba(6,9,16,.9)";
+    ctx.beginPath();
+    ctx.roundRect(100, 30, largura, 68, 14);
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = COR_DO_MARCADOR[tipo];
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(texto, 120, 66, 470);
+  }
   ctx.beginPath();
   ctx.arc(64, 64, 54, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(6,9,16,.9)";
@@ -138,6 +177,52 @@ function desenharSimbolo(tipo: TipoDeMarcador) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(TIPOS_DE_MARCADOR.find((item) => item.id === tipo)?.simbolo ?? "•", 64, 68);
+  const textura = new THREE.CanvasTexture(canvas);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  return textura;
+}
+
+/** Um texto curto num balão, com a cor da seta. */
+function desenharEtiqueta(texto: string, cor: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 640;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = "bold 44px sans-serif";
+  const largura = Math.min(620, ctx.measureText(texto).width + 40);
+  ctx.fillStyle = "rgba(6,9,16,.88)";
+  ctx.beginPath();
+  ctx.roundRect(320 - largura / 2, 28, largura, 72, 36);
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = cor;
+  ctx.stroke();
+  ctx.fillStyle = cor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(texto, 320, 66, 590);
+  const textura = new THREE.CanvasTexture(canvas);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  return textura;
+}
+
+function desenharPercentagem(vantagem: number, cor: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 192;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "rgba(6,9,16,.92)";
+  ctx.beginPath();
+  ctx.roundRect(8, 12, 176, 72, 36);
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = cor;
+  ctx.stroke();
+  ctx.fillStyle = cor;
+  ctx.font = "bold 48px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${Math.round(vantagem)}%`, 96, 50);
   const textura = new THREE.CanvasTexture(canvas);
   textura.colorSpace = THREE.SRGBColorSpace;
   return textura;
@@ -181,6 +266,8 @@ export default function Quadro3D(props: Props) {
     grupoDasFichas: THREE.Group;
     grupoDasSetas: THREE.Group;
     grupoDosMarcadores: THREE.Group;
+    grupoDosDuelos: THREE.Group;
+    grupoDosTrilhos: THREE.Group;
     texturaDoMapa: { url: string | null; textura: THREE.Texture | null };
   } | null>(null);
 
@@ -214,7 +301,10 @@ export default function Quadro3D(props: Props) {
     const grupoDasFichas = new THREE.Group();
     const grupoDasSetas = new THREE.Group();
     const grupoDosMarcadores = new THREE.Group();
-    scene.add(grupoDoTerreno, grupoDasSetas, grupoDosMarcadores, grupoDasFichas);
+    // Os duelos à parte: o cursor não os apanha, para não taparem as fichas.
+    const grupoDosDuelos = new THREE.Group();
+    const grupoDosTrilhos = new THREE.Group();
+    scene.add(grupoDoTerreno, grupoDosTrilhos, grupoDosDuelos, grupoDasSetas, grupoDosMarcadores, grupoDasFichas);
 
     let sujo = true;
     let voo: { de: THREE.Vector3; para: THREE.Vector3; alvoDe: THREE.Vector3; alvoPara: THREE.Vector3; inicio: number } | null = null;
@@ -406,7 +496,7 @@ export default function Quadro3D(props: Props) {
     };
     ciclo();
 
-    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, texturaDoMapa: { url: null, textura: null } };
+    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, texturaDoMapa: { url: null, textura: null } };
 
     return () => {
       cancelAnimationFrame(quadro);
@@ -545,8 +635,8 @@ export default function Quadro3D(props: Props) {
     let cancelado = false;
     const desenhar = () => {
       if (cancelado) return;
-      for (const filho of [...c.grupoDasFichas.children]) {
-        c.grupoDasFichas.remove(filho);
+      for (const filho of [...c.grupoDasFichas.children, ...c.grupoDosDuelos.children]) {
+        filho.removeFromParent();
         filho.traverse((o) => {
           const malha = o as THREE.Mesh;
           malha.geometry?.dispose();
@@ -565,14 +655,31 @@ export default function Quadro3D(props: Props) {
         base.position.y = 0.08;
         const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 8), new THREE.MeshBasicMaterial({ color: COR_DO_LADO[ficha.lado] }));
         haste.position.y = 0.7;
-        const retrato = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharFicha(ficha.nome, ficha.lado, retratos.current.get(ficha.retrato ?? "") ?? null), depthTest: false }));
-        retrato.scale.set(1.9, 2.375, 1);
-        retrato.position.y = 2.2;
+        const retrato = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharFicha(ficha.nome, ficha.lado, retratos.current.get(ficha.retrato ?? "") ?? null, ficha.funcao), depthTest: false }));
+        retrato.scale.set(1.9, 2.85, 1);
+        retrato.position.y = 2.4;
         retrato.renderOrder = 20;
         grupo.add(base, haste, retrato);
         const mundo = paraMundo(ficha.ponto);
         grupo.position.set(mundo.x, 0, mundo.z);
         c.grupoDasFichas.add(grupo);
+      }
+      // Os duelos 1v1: linha tracejada entre os dois, cor pela vantagem, e a percentagem ao meio.
+      for (const duelo of atual.current.duelos) {
+        const a = atual.current.fichas.find((f) => f.chave === duelo.nosso);
+        const b = atual.current.fichas.find((f) => f.chave === duelo.deles);
+        if (!a || !b) continue;
+        const cor = duelo.vantagem >= 55 ? "#3ddc84" : duelo.vantagem <= 45 ? "#ff4d6d" : "#ffd23f";
+        const pa = paraMundo(a.ponto), pb = paraMundo(b.ponto);
+        pa.y = pb.y = 0.12;
+        const linha = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineDashedMaterial({ color: cor, dashSize: 0.45, gapSize: 0.3, transparent: true, opacity: 0.85, depthTest: false }));
+        linha.computeLineDistances();
+        linha.renderOrder = 4;
+        const etiqueta = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharPercentagem(duelo.vantagem, cor), depthTest: false }));
+        etiqueta.scale.set(1.5, 0.75, 1);
+        etiqueta.position.set((pa.x + pb.x) / 2, 0.6, (pa.z + pb.z) / 2);
+        etiqueta.renderOrder = 12;
+        c.grupoDosDuelos.add(linha, etiqueta);
       }
       c.pedirDesenho();
     };
@@ -586,7 +693,7 @@ export default function Quadro3D(props: Props) {
       imagem.src = url;
     }
     return () => { cancelado = true; };
-  }, [props.fichas]);
+  }, [props.fichas, props.duelos]);
 
   /* ---- Setas e símbolos. ---- */
   useEffect(() => {
@@ -594,8 +701,10 @@ export default function Quadro3D(props: Props) {
     if (!c) return;
     for (const filho of [...c.grupoDasSetas.children]) {
       c.grupoDasSetas.remove(filho);
-      (filho as THREE.Mesh).geometry.dispose();
-      ((filho as THREE.Mesh).material as THREE.Material).dispose();
+      if (!(filho as THREE.Sprite).isSprite) (filho as THREE.Mesh).geometry.dispose();
+      const material = (filho as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      material.map?.dispose();
+      material.dispose();
     }
     for (const seta of props.setas) {
       const malha = new THREE.Mesh(
@@ -605,6 +714,16 @@ export default function Quadro3D(props: Props) {
       malha.renderOrder = 5;
       malha.userData = { id: seta.id, tipo: "seta" };
       c.grupoDasSetas.add(malha);
+      // Porquê este movimento, escrito a meio da seta.
+      if (props.notasNoMapa && seta.nota) {
+        const de = paraMundo(seta.de), para = paraMundo(seta.para);
+        const etiqueta = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharEtiqueta(seta.nota, COR_DA_SETA[seta.tipo]), depthTest: false }));
+        etiqueta.scale.set(5, 1, 1);
+        etiqueta.position.set((de.x + para.x) / 2, 0.9, (de.z + para.z) / 2);
+        etiqueta.renderOrder = 14;
+        etiqueta.userData = { id: seta.id, tipo: "seta" };
+        c.grupoDasSetas.add(etiqueta);
+      }
     }
     for (const filho of [...c.grupoDosMarcadores.children]) {
       c.grupoDosMarcadores.remove(filho);
@@ -613,8 +732,14 @@ export default function Quadro3D(props: Props) {
       material.dispose();
     }
     for (const marcador of props.marcadores) {
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharSimbolo(marcador.tipo), depthTest: false }));
-      sprite.scale.set(1.25, 1.25, 1);
+      const comNota = props.notasNoMapa && Boolean(marcador.nota);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharSimbolo(marcador.tipo, comNota ? marcador.nota : undefined, comNota ? marcador.brawler : undefined), depthTest: false }));
+      if (comNota) {
+        sprite.scale.set(6.25, 1.25, 1);
+        sprite.center.set(64 / 640, 0.5);
+      } else {
+        sprite.scale.set(1.25, 1.25, 1);
+      }
       const mundo = paraMundo(marcador.ponto);
       sprite.position.set(mundo.x, 1.3, mundo.z);
       sprite.renderOrder = 15;
@@ -622,7 +747,56 @@ export default function Quadro3D(props: Props) {
       c.grupoDosMarcadores.add(sprite);
     }
     c.pedirDesenho();
-  }, [props.setas, props.marcadores]);
+  }, [props.setas, props.marcadores, props.notasNoMapa]);
+
+  /* ---- Passos fantasma: pegadas ao longo do caminho previsto. ---- */
+  useEffect(() => {
+    const c = cena.current;
+    if (!c) return;
+    for (const filho of [...c.grupoDosTrilhos.children]) {
+      filho.removeFromParent();
+      (filho as THREE.Mesh).geometry.dispose();
+      ((filho as THREE.Mesh).material as THREE.Material).dispose();
+    }
+    for (const lado of ["nos", "eles"] as const) {
+      const passos: Array<{ x: number; z: number; angulo: number; esquerdo: boolean; t: number }> = [];
+      for (const trilho of props.trilhos.filter((t) => t.lado === lado)) {
+        const pontos = trilho.pontos.map(paraMundo);
+        let esquerdo = false;
+        const total = pontos.slice(1).reduce((soma, p, i) => soma + p.distanceTo(pontos[i]), 0) || 1;
+        let andado = 0;
+        for (let i = 1; i < pontos.length; i++) {
+          const a = pontos[i - 1], b = pontos[i];
+          const troco = a.distanceTo(b);
+          const angulo = Math.atan2(b.x - a.x, b.z - a.z);
+          for (let d = 0.35; d < troco; d += 0.75) {
+            const p = a.clone().lerp(b, d / troco);
+            // Pé esquerdo e pé direito, um pouco para cada lado do caminho.
+            const lateral = (esquerdo ? 1 : -1) * 0.2;
+            passos.push({ x: p.x + Math.cos(angulo) * lateral, z: p.z - Math.sin(angulo) * lateral, angulo, esquerdo, t: (andado + d) / total });
+            esquerdo = !esquerdo;
+          }
+          andado += troco;
+        }
+      }
+      if (!passos.length) continue;
+      const pe = new THREE.CircleGeometry(0.19, 14);
+      pe.scale(1, 1.7, 1);
+      pe.rotateX(-Math.PI / 2);
+      const pegadas = new THREE.InstancedMesh(pe, new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.9, depthTest: false }), passos.length);
+      const cor = new THREE.Color(COR_DO_LADO[lado]);
+      const matriz = new THREE.Matrix4();
+      passos.forEach((passo, i) => {
+        matriz.makeRotationY(passo.angulo).setPosition(passo.x, 0.05, passo.z);
+        pegadas.setMatrixAt(i, matriz);
+        // Mais forte no fim do caminho: é aí que o brawler acaba por lutar.
+        pegadas.setColorAt(i, cor.clone().multiplyScalar(0.7 + 0.3 * passo.t));
+      });
+      pegadas.renderOrder = 3;
+      c.grupoDosTrilhos.add(pegadas);
+    }
+    c.pedirDesenho();
+  }, [props.trilhos]);
 
   /* ---- Vistas. ---- */
   useEffect(() => {

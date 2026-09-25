@@ -20,6 +20,7 @@ import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } 
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
 import { guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
+import { obterCatalogo } from "./catalogoDeBuilds";
 import { TIPOS_DE_CASA } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
@@ -86,6 +87,13 @@ export const appRouter = router({
     terreno: publicProcedure
       .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
       .query(({ input }) => obterTerreno(input.mapaId)),
+    /** De onde veio a lista de builds e quantos itens tem (sem a lista): para confirmar que chega. */
+    catalogo: publicProcedure.query(async () => {
+      const catalogo = await obterCatalogo();
+      return catalogo
+        ? { origem: catalogo.origem, brawlers: Object.keys(catalogo.brawlers).length, engrenagens: catalogo.engrenagens.length, lidoEm: catalogo.lidoEm }
+        : null;
+    }),
     /** O dono corrige o tipo de um grupo de cor à mão. */
     corrigirTerreno: protectedProcedure
       .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/), rotulos: z.array(z.object({ id: z.string().max(2), tipo: z.enum(TIPOS_DE_CASA as unknown as [string, ...string[]]) })).max(40) }))

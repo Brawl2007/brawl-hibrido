@@ -14,7 +14,8 @@ import {
 import { aplicarRotulos, grelhaEmTexto, pontoLivre, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
-import { escolherModelo, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
+import { conferirBuilds, escolherModelo, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
+import { imagemSegura, lerCatalogo } from "./catalogoDeBuilds";
 
 const NOSSOS = ["Nori", "Lou", "R-T"];
 const DELES = ["Bolt", "Lumi", "Sandy"];
@@ -63,6 +64,9 @@ const pintarMapa: Pintura = (coluna, linha, x, y) => {
   // Uma zona a meio do mapa (anel azul em 3×3 casas) e uma flor vermelha sozinha num cacto.
   if (linha >= 19 && linha <= 21 && coluna >= 9 && coluna <= 11) return x < 9 || x > 20 ? [4, 171, 252] : [60, 120, 170];
   if (linha === 5 && coluna === 18) return x > 10 && x < 20 && y > 10 && y < 20 ? [230, 60, 80] : [60, 110, 40];
+  // Uma piscina (o azul claro da água, a casa inteira) e o disco de uma zona (azulado, liso, redondo).
+  if (linha >= 2 && linha <= 3 && coluna >= 14 && coluna <= 16) return [60, 175, 240];
+  if (Math.hypot(coluna - 16, linha - 26) <= 3.2) return [30, 95, 160];
   return null;
 };
 
@@ -78,6 +82,12 @@ describe("ler o terreno da imagem do mapa", () => {
     expect(tipoDaCasa(terreno, 7, 11)).toBe("chao");
   });
 
+  it("a água é água, e o disco de uma zona é objetivo (não água nem paredes invisíveis)", () => {
+    expect(tipoDaCasa(terreno, 15, 2)).toBe("agua");
+    for (const [coluna, linha] of [[16, 26], [14, 25], [18, 27], [16, 23]]) expect(tipoDaCasa(terreno, coluna, linha), `${coluna},${linha}`).toBe("objetivo");
+    expect(tipoDaCasa(terreno, 16, 30)).toBe("chao");
+  });
+
   it("o anel de uma zona é objetivo em qualquer sítio do mapa; uma flor vermelha sozinha não", () => {
     for (const [coluna, linha] of [[9, 19], [10, 20], [11, 21]]) expect(tipoDaCasa(terreno, coluna, linha), `${coluna},${linha}`).toBe("objetivo");
     expect(tipoDaCasa(terreno, 18, 5)).not.toBe("objetivo");
@@ -88,7 +98,7 @@ describe("ler o terreno da imagem do mapa", () => {
     expect(linhas).toHaveLength(33);
     expect(linhas[10]).toBe("10 .....#####...........");
     expect(linhas[15]).toBe('15 ............"""".....');
-    expect(linhas[23]).toBe("23 ..~~~~...............");
+    expect(linhas[23]).toBe("23 ..~~~~.........ooo...");
   });
 
   it("uma imagem que não é um mapa 21×33 é recusada, não lida torta", () => {
@@ -183,6 +193,106 @@ describe("a resposta da IA passa por um filtro antes de chegar ao mapa", () => {
   it("uma resposta sem ordens para a tua equipa é um erro, não um plano vazio", () => {
     expect(() => lerPlanoDaIA({ ordens: [{ brawler: "Inventado" }] }, NOSSOS, DELES)).toThrow(/sem ordens/);
     expect(() => lerPlanoDaIA("texto solto", NOSSOS, DELES)).toThrow();
+  });
+});
+
+describe("água e paredes nas ordens da IA", () => {
+  const terreno = lerTerrenoDaImagem(lerPng(pngDoMapa(pintarMapa)), "15000001");
+  const naAgua = { col: 15, linha: 2 };
+  const plano = lerPlanoDaIA({
+    ordens: [
+      { brawler: "Lou", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: naAgua, capacidades: [] },
+      { brawler: "Nori", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: naAgua, capacidades: ["atravessa-agua"] },
+    ],
+    setas: [
+      { brawler: "Lou", tipo: "recuo", de: { col: 15, linha: 8 }, para: naAgua },
+      { brawler: "Nori", tipo: "avanco", de: { col: 15, linha: 8 }, para: naAgua },
+    ],
+    marcadores: [
+      { tipo: "agua", ponto: naAgua, nota: "Atravessar aqui", brawler: "Nori" },
+      { tipo: "defesa", ponto: naAgua, nota: "Defender", brawler: "Lou" },
+      { tipo: "destruir", ponto: { col: 7, linha: 10 }, nota: "Partir", brawler: "Lou" },
+    ],
+    inimigos: [{ brawler: "bolt", posicao: { col: 7, linha: 10 } }, { brawler: "Inventado", posicao: { col: 1, linha: 1 } }],
+  }, NOSSOS, DELES, new Date(), terreno);
+  const tipoEm = (ponto: { x: number; y: number }) => tipoDaCasa(terreno, Math.floor(ponto.x * 21), Math.floor(ponto.y * 33));
+
+  it("quem não atravessa água nunca é mandado para a água; quem atravessa pode", () => {
+    expect(tipoEm(plano.posicoes[chaveDaFicha("nos", "Lou")])).not.toBe("agua");
+    expect(tipoEm(plano.posicoes[chaveDaFicha("nos", "Nori")])).toBe("agua");
+    expect(tipoEm(plano.setas.find((s) => s.brawler === "Lou")!.para)).not.toBe("agua");
+    expect(tipoEm(plano.setas.find((s) => s.brawler === "Nori")!.para)).toBe("agua");
+  });
+
+  it("\"atravessar água\" e \"partir paredes\" ficam onde apontam; os outros símbolos saem da água", () => {
+    const [agua, defesa, destruir] = plano.marcadores;
+    expect(tipoEm(agua.ponto)).toBe("agua");
+    expect(tipoEm(defesa.ponto)).not.toBe("agua");
+    expect(tipoEm(destruir.ponto)).toBe("parede");
+  });
+
+  it("passos fantasma: só brawlers do draft, sem paredes, 2 casas no mínimo", () => {
+    const comTrilhos = lerPlanoDaIA({
+      ordens: [{ brawler: "Lou", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 3, linha: 20 } }],
+      trilhos: [
+        { brawler: "lou", pontos: [{ col: 7, linha: 12 }, { col: 7, linha: 10 }, { col: 7, linha: 8 }] },
+        { brawler: "BOLT", pontos: [{ col: 3, linha: 3 }, { col: 3, linha: 8 }] },
+        { brawler: "Inventado", pontos: [{ col: 1, linha: 1 }, { col: 2, linha: 2 }] },
+        { brawler: "Lumi", pontos: [{ col: 1, linha: 1 }] },
+      ],
+    }, NOSSOS, DELES, new Date(), terreno);
+    expect(comTrilhos.trilhos.map((t) => [t.brawler, t.lado, t.pontos.length])).toEqual([["Lou", "nos", 3], ["Bolt", "eles", 2]]);
+    expect(comTrilhos.trilhos[0].pontos.every((p) => tipoEm(p) !== "parede")).toBe(true);
+  });
+
+  it("a IA pode pôr os adversários onde prevê que vão estar, fora das paredes", () => {
+    const bolt = plano.posicoes[chaveDaFicha("eles", "Bolt")];
+    expect(bolt).not.toEqual(posicoesIniciais(NOSSOS, DELES)[chaveDaFicha("eles", "Bolt")]);
+    expect(tipoEm(bolt)).not.toBe("parede");
+    expect(plano.posicoes[chaveDaFicha("eles", "Lumi")]).toEqual(posicoesIniciais(NOSSOS, DELES)[chaveDaFicha("eles", "Lumi")]);
+  });
+});
+
+describe("builds: só da lista real, com os desenhos", () => {
+  const catalogo = lerCatalogo(
+    { list: [{ id: 16000030, name: "LOU", gadgets: [{ id: 23000300, name: "Ice Block", imageUrl: "https://cdn.brawlify.com/gadgets/borderless/23000300.png" }], starPowers: [{ id: 23000301, name: "Supercool", imageUrl: "https://evil.example/x.png" }] }] },
+    { list: [{ id: 62000002, name: "Damage" }, { id: 62000000, name: "Speed" }] },
+    "brawlify",
+  );
+
+  it("lê a lista e só aceita desenhos do CDN da Brawlify", () => {
+    expect(catalogo.brawlers.lou.gadgets[0]).toEqual({ id: 23000300, nome: "Ice Block", imagem: "https://cdn.brawlify.com/gadgets/borderless/23000300.png" });
+    expect(catalogo.brawlers.lou.poderes[0].imagem).toBe("https://cdn.brawlify.com/star-powers/borderless/23000301.png");
+    expect(catalogo.engrenagens[0].imagem).toBe("https://cdn.brawlify.com/gears/regular/62000002.png");
+    expect(imagemSegura("javascript:alert(1)")).toBeNull();
+  });
+
+  it("um nome fora da lista sai; o que está fica com o nome certo e o desenho; sem lista, a build sai toda", () => {
+    const plano = lerPlanoDaIA({ ordens: [
+      { brawler: "Lou", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 3, linha: 20 }, build: { gadget: "ice block", poderEstelar: "Poder Inventado", engrenagens: ["damage", "Asas"] } },
+      { brawler: "Nori", funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 5, linha: 20 }, build: { gadget: "Qualquer", poderEstelar: "Outro", engrenagens: [] } },
+    ] }, NOSSOS, DELES);
+    conferirBuilds(plano, catalogo);
+    expect(plano.ordens.find((o) => o.brawler === "Lou")!.build).toEqual({
+      gadget: "Ice Block",
+      poderEstelar: "",
+      engrenagens: ["Damage"],
+      imagens: { gadget: "https://cdn.brawlify.com/gadgets/borderless/23000300.png", poderEstelar: null, engrenagens: ["https://cdn.brawlify.com/gears/regular/62000002.png"] },
+    });
+    expect(plano.ordens.find((o) => o.brawler === "Nori")!.build).toBeUndefined();
+  });
+
+  it("a lista vai no pedido, para a IA escolher em vez de inventar", () => {
+    const texto = textoDoPedido(pedido, false, null, null, new Date(), opcoesDeBuild(catalogo, NOSSOS));
+    expect(texto).toContain("- Lou: gadgets [Ice Block]; poderes estelares [Supercool]");
+    expect(texto).toContain("- Nori: (sem lista)");
+    expect(texto).toContain("Engrenagens: [Damage | Speed]");
+    expect(texto).toContain("20 SEGUNDOS");
+  });
+
+  it("um plano guardado não traz desenhos de outros endereços", () => {
+    const guardado = JSON.stringify({ ordens: [{ brawler: "Lou", funcao: "x", objetivo: "y", cuidados: [], build: { gadget: "Ice Block", poderEstelar: "", engrenagens: [], imagens: { gadget: "javascript:alert(1)", engrenagens: ["https://cdn.brawlify.com/gears/regular/1.png"] } } }] });
+    expect(lerPlanoGuardado(guardado, NOSSOS, DELES).ordens[0].build?.imagens).toEqual({ gadget: null, poderEstelar: null, engrenagens: ["https://cdn.brawlify.com/gears/regular/1.png"] });
   });
 });
 
