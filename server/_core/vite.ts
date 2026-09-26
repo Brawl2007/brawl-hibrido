@@ -3,6 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
+import { cabecalhosDeCache } from "./cacheDosFicheiros";
 import { servePrecompressed } from "./precompressedStatic";
 
 export async function setupVite(app: Express, server: Server) {
@@ -65,11 +66,21 @@ export function serveStatic(app: Express) {
     );
   }
 
+  // O tempo de cache de cada ficheiro (ver cacheDosFicheiros.ts): sem isto
+  // tudo saía com max-age=0 e a Vercel não guardava nada.
+  app.use(cabecalhosDeCache());
   app.use(servePrecompressed(distPath));
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, { cacheControl: false }));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  app.use("*", (req, res) => {
+    // Um ficheiro com hash que já não existe (de uma versão anterior) não é
+    // uma página: responder com o index.html, guardado um ano, estragava-o.
+    if (req.originalUrl.startsWith("/assets/")) {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(404).end();
+      return;
+    }
+    res.sendFile(path.resolve(distPath, "index.html"), { cacheControl: false });
   });
 }

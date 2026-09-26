@@ -264,3 +264,78 @@ describe("os modelos originais, os ataques e os supers de cada brawler", () => {
     expect(quadro).toMatch(/duracaoMs: Math\.max\([^\n]*camara,/);
   });
 });
+
+describe("v150: revisão do site (telemóvel, textos, retratos, títulos)", () => {
+  const css = ler("client/src/layout-v143.css");
+  it("a pesquisa do Draft não vira um quadrado no telemóvel, e a barra 50/50 fica em cima", () => {
+    expect(css).toContain(".mesa-centro .recommendation-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }");
+    expect(css).toContain(".mesa-centro .recommendation-toolbar .draft-search { flex: 1 1 100%;");
+    expect(css).toContain(".mesa-centro .draft-probability-center.is-compacto { order: 0; width: auto; min-height: 0;");
+    expect(css).toContain(".brawlers-toolbar > .brawler-search { flex: 0 0 auto; }");
+  });
+  it("no Draft já não há a seta ↑ que levava ao Início", () => {
+    expect(ler("client/src/pages/Draft.tsx")).not.toContain("draft-back-home");
+  });
+  it("a página que não existe está em português, com o menu do site", () => {
+    const pagina = ler("client/src/pages/NotFound.tsx");
+    expect(pagina).toContain("<BarraDoSite />");
+    expect(pagina).toContain("Esta página não existe");
+    expect(pagina).not.toMatch(/Page Not Found|Go Home/);
+  });
+  it("sem inglês nem nomes técnicos à vista", () => {
+    const ficha = ler("client/src/pages/BrawlerDetail.tsx");
+    expect(ficha).not.toMatch(/strong against|Struggles against|Ranked SSE|Win Rate \$\{/i);
+    expect(ler("client/src/pages/Brawlers.tsx")).not.toMatch(/"cópia do site"|rankedSync\.version \?/);
+    expect(ler("client/src/pages/Home.tsx")).not.toContain('"Meta snapshot"');
+    expect(ler("client/src/components/MobileNav.tsx")).toContain('label: "Matriz 1v1"');
+  });
+  it("os retratos mostram as iniciais quando a imagem falha", () => {
+    expect(ler("client/src/components/Retrato.tsx")).toContain("onError={() => setFalhou(src)}");
+    for (const pagina of ["Draft", "Home", "Brawlers", "BrawlerDetail", "MatchupMatrix"]) {
+      const fonte = ler(`client/src/pages/${pagina}.tsx`);
+      expect(fonte, pagina).toContain("<Retrato ");
+      // Retratos como imagem de fundo não sabem que falharam.
+      expect(fonte, pagina).not.toMatch(/avatar"? style=\{[^}]*backgroundImage/);
+    }
+  });
+});
+
+describe("v151: telemóvel e rapidez", () => {
+  const q3d = ler("client/src/components/Quadro3D.tsx");
+  const quadro = ler("client/src/components/QuadroDoGeneral.tsx");
+  it("no mapa 3D, um dedo desce a página e dois dedos rodam e aproximam", () => {
+    expect(q3d).toContain("controls.touches = { TWO: THREE.TOUCH.DOLLY_ROTATE };");
+    expect(q3d).toContain('renderer.domElement.style.touchAction = "pan-y";');
+    // Agarrar um brawler (ou desenhar) continua a ser do mapa.
+    expect(q3d).toContain('if (ferramenta !== "mover" || emAlgo) evento.preventDefault();');
+    expect(q3d).toContain('addEventListener("touchstart", aoTocar, { passive: false })');
+    expect(q3d).toContain('removeEventListener("touchstart", aoTocar)');
+  });
+  it("no telemóvel, as opções do mapa ficam atrás de um botão", () => {
+    expect(quadro).toContain('className="quadro-general-mais" aria-expanded={opcoesAbertas}');
+    expect(ler("client/src/layout-v143.css")).toContain(".quadro-general-barra:not(.com-opcoes) > .quadro-general-vistas");
+  });
+  it("o general e a importação de lotes não vêm no primeiro carregamento do Draft", () => {
+    const draft = ler("client/src/pages/Draft.tsx");
+    expect(draft).not.toMatch(/^import \{ QuadroDoGeneral \}/m);
+    expect(draft).toContain("const QuadroDoGeneral = lazy(carregarQuadroDoGeneral);");
+    // Escrito aos bocados: o verificador de imports lê cadeias parecidas com imports, até nos testes.
+    expect(ler("client/src/components/FilaDeColagem.tsx")).toContain("const ImportarLote = lazy(() => imp" + 'ort("./Importar' + 'Lote"));');
+  });
+});
+
+describe("a pré-visualização quando se partilha o link", () => {
+  const html = ler("client/index.html");
+  it("título, descrição e imagem com endereço completo, no HTML", () => {
+    expect(html).toContain('<meta property="og:title" content="Brawl Híbrido — Draft do Ranked com dados" />');
+    expect(html).toContain('<meta property="og:image" content="https://brawl-hibrido.vercel.app/partilha.png" />');
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />');
+    expect(existsSync(resolve(process.cwd(), "client/public/partilha.png"))).toBe(true);
+  });
+  it("a imagem tem 1200×630 e cabe no limite do WhatsApp (menos de 300 KB)", () => {
+    const png = readFileSync(resolve(process.cwd(), "client/public/partilha.png"));
+    expect(png.readUInt32BE(16)).toBe(1200);
+    expect(png.readUInt32BE(20)).toBe(630);
+    expect(png.length).toBeLessThan(300 * 1024);
+  });
+});

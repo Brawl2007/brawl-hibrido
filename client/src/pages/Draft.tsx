@@ -1,3 +1,4 @@
+import { Retrato } from "@/components/Retrato";
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
@@ -9,7 +10,7 @@ import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
 import FilaDeColagem from "@/components/FilaDeColagem";
-import { Fragment, memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, lazy, memo, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -46,7 +47,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useEhDono } from "@/lib/ehDono";
-import { QuadroDoGeneral } from "@/components/QuadroDoGeneral";
+/*
+ * O quadro do general (com o plano da IA e o esquema dos dados) só aparece
+ * no fim do draft, mas vinha no primeiro carregamento da página: ~100 KB a
+ * mais antes de se poder escolher o primeiro ban no telemóvel. Carrega à
+ * parte, e é pedido uns segundos depois de a página abrir, para já estar
+ * pronto quando o draft fechar.
+ */
+const carregarQuadroDoGeneral = () => import("@/components/QuadroDoGeneral").then((m) => ({ default: m.QuadroDoGeneral }));
+const QuadroDoGeneral = lazy(carregarQuadroDoGeneral);
 import { trpc } from "@/lib/trpc";
 import { useSyncRefresh, type ProcessHealth } from "@/lib/useSyncRefresh";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
@@ -371,7 +380,7 @@ function SyncStatusChip({ capturedAt, sourceReadAt, syncState, blockedSources }:
   if (bundled) {
     return (
       <span className="live-chip" title="A mostrar o catálogo incluído no projeto. A sincronização ainda não trouxe dados novos nesta sessão.">
-        <span className="live-dot" /> Catálogo local
+        <span className="live-dot" /> Dados guardados
       </span>
     );
   }
@@ -1077,7 +1086,7 @@ function FilledSlot({ row, step, onClear, teammateNames, mapTeams }: { row: Rank
     : [];
   const slotButton = (
     <button className={`draft-slot filled-slot ${step.kind}-slot`} onClick={onClear} title="Clique para remover esta escolha">
-      <span className="slot-image" style={brawlerImageFor(row) ? { backgroundImage: `url(${brawlerImageFor(row)})` } : undefined}>{!brawlerImageFor(row) && row.brawler.slice(0, 2).toUpperCase()}</span>
+      <span className="slot-image com-retrato"><Retrato src={brawlerImageFor(row)} nome={row.brawler} /></span>
       <span className="slot-copy"><strong>{row.brawler}</strong><small>{step.kind === "ban" ? "BAN" : `${role.toUpperCase()} · WR ${formatMetric(winRate)}`}</small></span>
       <span className="slot-remove"><X size={13} /></span>
     </button>
@@ -1222,7 +1231,7 @@ function DraftScoreReference({ entries, mapName, pickNumber }: { entries: Contex
           return (
             <li key={row.brawler} className="hybrid-usage-row">
               <span className="hybrid-usage-rank">#{rank}</span>
-              <span className="hybrid-usage-avatar" style={image ? { backgroundImage: `url(${image})` } : undefined}>{!image && row.brawler.slice(0, 2).toUpperCase()}</span>
+              <span className="hybrid-usage-avatar com-retrato"><Retrato src={image} nome={row.brawler} /></span>
               <span className="hybrid-usage-copy"><strong>{row.brawler}</strong><small>{pickNumber ? `Pick global ${pickNumber}` : "Draft fechado"} · Base {basePoints.toFixed(2)}</small></span>
               <span className="hybrid-usage-value"><b>{finalPoints.toFixed(2)}</b><small>PTS FINAIS{openingBonusActive ? " · abertura ativa" : ""}</small></span>
             </li>
@@ -1368,7 +1377,7 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
   return (
     <button className={`draft-recommendation ${locked ? "is-locked" : ""} ${banned ? "is-ban-eligible" : ""} ${hasSameClassPenalty ? "has-class-penalty" : ""}`} onClick={() => onSelect(row.brawler)} disabled={locked} title={banned ? "Ban registado: brawler excluído da pool competitiva" : undefined}>
       <span className="recommendation-rank">{String(index + 1).padStart(2, "0")}</span>
-      <span className="recommendation-avatar" style={brawlerImage ? { backgroundImage: `url(${brawlerImage})` } : undefined}>{!brawlerImage && row.brawler.slice(0, 2).toUpperCase()}</span>
+      <span className="recommendation-avatar com-retrato"><Retrato src={brawlerImage} nome={row.brawler} /></span>
       <span className="recommendation-main">
         <strong>{row.brawler} {banned && <em className="recommendation-ban-note">BAN · EXCLUÍDO</em>}</strong>
         <small>{role === "side" ? "LANE" : role.toUpperCase()} · Vitória {formatMetric(roleWinRate)} · Uso {formatMetric(row.usage)}</small>
@@ -1475,9 +1484,9 @@ function MatchupDuelCard({ item, nos = "Azul", eles = "Vermelha" }: { item: Scor
     <article className={`matchup-duel matchup-duel--${lane.position} ${isFavorable ? "is-favorable" : isRisky ? "is-risky" : "is-even"}`}>
       <div className="matchup-duel-top"><span>{laneLabel}</span><strong className={isFavorable ? "is-favorable" : isRisky ? "is-risky" : "is-even"}>{state}</strong></div>
       <div className="matchup-duel-players">
-        <div className="matchup-player matchup-player--ally"><span className="matchup-player-avatar">{brawlerImageFor(lane.ally) ? <img src={brawlerImageFor(lane.ally)!} alt="" /> : lane.ally.brawler.slice(0, 2)}</span><div><small>{NOS}</small><strong>{lane.ally.brawler}</strong></div></div>
+        <div className="matchup-player matchup-player--ally"><span className="matchup-player-avatar"><Retrato src={brawlerImageFor(lane.ally)} nome={lane.ally.brawler} /></span><div><small>{NOS}</small><strong>{lane.ally.brawler}</strong></div></div>
         <div className="matchup-duel-score"><strong>{matchup.score.toFixed(0)}<small>%</small></strong><span>VS</span></div>
-        <div className="matchup-player matchup-player--enemy"><div><small>{ELES}</small><strong>{lane.enemy.brawler}</strong></div><span className="matchup-player-avatar">{brawlerImageFor(lane.enemy) ? <img src={brawlerImageFor(lane.enemy)!} alt="" /> : lane.enemy.brawler.slice(0, 2)}</span></div>
+        <div className="matchup-player matchup-player--enemy"><div><small>{ELES}</small><strong>{lane.enemy.brawler}</strong></div><span className="matchup-player-avatar"><Retrato src={brawlerImageFor(lane.enemy)} nome={lane.enemy.brawler} /></span></div>
       </div>
       <div className="matchup-duel-bar" aria-label={`${matchup.score.toFixed(0)}% de vantagem para ${nos}: ${lane.ally.brawler}`}><i style={{ width: `${matchup.score}%` }} /><b style={{ left: `${matchup.score}%` }} /></div>
       {lane.motivo && <p className="matchup-duel-reason">{lane.motivo}</p>}
@@ -1517,7 +1526,7 @@ function FichaNoMapa({ row, lado }: { row?: RankedRow; lado: "ally" | "enemy" })
   const imagem = brawlerImageFor(row);
   return (
     <div className={`duel-map-token duel-map-token--${lado}`}>
-      <span className="duel-map-portrait">{imagem ? <img src={imagem} alt="" loading="lazy" decoding="async" /> : row.brawler.slice(0, 2).toUpperCase()}</span>
+      <span className="duel-map-portrait"><Retrato src={imagem} nome={row.brawler} loading="lazy" /></span>
       <strong>{row.brawler}</strong>
       <small>{nomeDaFuncao[inferDraftRole(row.brawler)]}</small>
     </div>
@@ -1762,7 +1771,7 @@ function FinalWinProbability({ blueRows, redRows, myTeam }: { blueRows: RankedRo
   const myProbability = myTeam === "blue" ? estimate.blueWinProbability : estimate.redWinProbability;
   return (
     <section className="final-win-probability" aria-label="Estimativa final de vitória">
-      <div className="final-win-heading"><div><div className="section-kicker"><Trophy size={13} /> Final draft read <span>MODEL ESTIMATE</span></div><h3>Probabilidade estimada de vitória</h3><p>Leitura final do modelo com Win Rate, Hybrid Score e diferença de composição. Não é uma odd oficial nem substitui a execução em jogo.</p></div><div className="final-win-call"><span>{myTeam === "blue" ? "TU · AZUL" : "TU · VERMELHA"}</span><strong>{myProbability}%</strong><small>{estimate.advantageLabel}</small></div></div>
+      <div className="final-win-heading"><div><div className="section-kicker"><Trophy size={13} /> Leitura final <span>ESTIMATIVA</span></div><h3>Probabilidade estimada de vitória</h3><p>Leitura final com a vitória, o Score Híbrido e a diferença de composição. Não é uma odd oficial nem substitui a execução em jogo.</p></div><div className="final-win-call"><span>{myTeam === "blue" ? "TU · AZUL" : "TU · VERMELHA"}</span><strong>{myProbability}%</strong><small>{estimate.advantageLabel}</small></div></div>
       <div className="final-win-bars"><div className="final-win-team blue"><div><span>AZUL</span><strong>{estimate.blueWinProbability}%</strong></div><div className="final-win-track"><i style={{ width: `${estimate.blueWinProbability}%` }} /></div></div><div className="final-win-team red"><div><span>VERMELHA</span><strong>{estimate.redWinProbability}%</strong></div><div className="final-win-track"><i style={{ width: `${estimate.redWinProbability}%` }} /></div></div></div>
       {estimate.counterImpacts.length ? <p className="final-counter-note">Counters no cálculo: Azul +{estimate.blueCounterImpact.toFixed(1)} pp · Vermelha +{estimate.redCounterImpact.toFixed(1)} pp. O saldo inclui riscos cruzados contra os teus próprios picks.</p> : null}
     </section>
@@ -2307,6 +2316,11 @@ const ABAS_DO_CENTRO = [
 type AbaDoCentro = (typeof ABAS_DO_CENTRO)[number]["id"];
 
 export default function Draft() {
+  // O general pede-se em segundo plano, depois de a página estar de pé.
+  useEffect(() => {
+    const espera = window.setTimeout(() => { void carregarQuadroDoGeneral(); }, 4000);
+    return () => window.clearTimeout(espera);
+  }, []);
   const [showPickDetails, setShowPickDetails] = useState(false);
   const [painelAberto, setPainelAberto] = useState<PainelDoDraft | null>(null);
   const [abaDoCentro, setAbaDoCentro] = useState<AbaDoCentro>("sugestoes");
@@ -2895,6 +2909,7 @@ export default function Draft() {
               return (
                 <>
                 <section className="draft-final" ref={secaoFinalRef} aria-label="Depois do draft">
+                <Suspense fallback={<p className="quadro-general-a-carregar">A preparar o general…</p>}>
                 <QuadroDoGeneral
                   mapa={selectedMap ? { name: selectedMap.name, modeId: selectedMap.modeId } : undefined}
                   mapaId={selectedMap ? idDoMapa(selectedMap) : null}
@@ -2903,6 +2918,7 @@ export default function Draft() {
                   deles={myTeam === "blue" ? redPicks : bluePicks}
                   retratoDe={retratoNoQuadro}
                 />
+                </Suspense>
                 <LaneMatchupDesk myTeam={myTeam} semMapa mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
                 </section>
                 </>
@@ -2985,7 +3001,6 @@ export default function Draft() {
         </main>
         <footer className="app-footer"><span>BRAWL HÍBRIDO / DRAFT WORKSPACE</span><span>Decisões melhores, um slot de cada vez.</span></footer>
       </div>
-      <a className="scroll-top-button draft-back-home" href="/"><ArrowLeft size={17} /></a>
       <MobileNav pathname="/draft" />
     </div>
   );

@@ -8,8 +8,9 @@ import { DraftRolesProvider } from "./contexts/DraftRolesContext";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { lazy, Suspense } from "react";
-import { Route, Switch } from "wouter";
+import { lazy, Suspense, useEffect } from "react";
+import { Route, Switch, useLocation } from "wouter";
+import { tituloDaPagina } from "./lib/tituloDaPagina";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VersaoDoSite from "./components/VersaoDoSite";
 import { CounterSyncProvider } from "./contexts/CounterSyncContext";
@@ -24,7 +25,8 @@ const MatchupMatrix = lazy(() => import("./pages/MatchupMatrix"));
 const Entrar = lazy(() => import("./pages/Entrar"));
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
+  const [caminho] = useLocation();
+  useEffect(() => { document.title = tituloDaPagina(caminho); }, [caminho]);
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#0b0e14] text-slate-300 grid place-items-center text-sm tracking-[.12em] uppercase">A carregar arena…</div>}>
       <Switch>

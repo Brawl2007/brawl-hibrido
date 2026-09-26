@@ -76,7 +76,7 @@ export function servePrecompressed(distPath: string) {
        * espera um pedaço do ficheiro original. Os bundles não são pedidos por
        * troços, por isso o custo é nenhum e evita um erro muito difícil de ver.
        */
-      return res.sendFile(compressed, { acceptRanges: false }, (error) => {
+      return res.sendFile(compressed, { acceptRanges: false, cacheControl: false }, (error) => {
         if (error) next(error);
       });
     }

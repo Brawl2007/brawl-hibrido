@@ -1,3 +1,4 @@
+import { Retrato } from "@/components/Retrato";
 import { BarraDoSite } from "@/components/BarraDoSite";
 import { MobileNav } from "@/components/MobileNav";
 import { LOGO } from "@/lib/imagens";
@@ -113,7 +114,7 @@ function BrawlerCard({ item, selected, onSelect }: { item: BrawlerCatalogItem; s
   return (
     <Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} className={`brawler-catalog-card ${selected ? "is-selected" : ""}`} onClick={onSelect} aria-label={`Abrir perfil de ${item.brawler}`}>
       <div className="brawler-card-visual">
-        {image ? <img src={image} alt={`${item.brawler} — ${roleLabel(item.role)}`} loading="lazy" /> : <span>{item.brawler.slice(0, 2).toUpperCase()}</span>}
+        <Retrato src={image} nome={item.brawler} alt={`${item.brawler} — ${roleLabel(item.role)}`} loading="lazy" />
         {item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{roleLabel(item.role)}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}
         <span className={`brawler-tier-pill tier-${(item.bestRow.tier ?? "B").toLowerCase()}`}>{item.isRankedAvailable ? item.bestRow.tier ?? "—" : "—"}</span>
       </div>
@@ -141,12 +142,12 @@ function BrawlerDetail({ item, catalog, onPick }: { item: BrawlerCatalogItem; ca
   return (
     <section className="brawler-detail-panel" aria-live="polite">
       <div className="brawler-detail-hero">
-        <div className="brawler-detail-avatar">{image ? <img src={image} alt={item.brawler} /> : <span>{item.brawler.slice(0, 2).toUpperCase()}</span>}</div>
+        <div className="brawler-detail-avatar"><Retrato src={image} nome={item.brawler} alt={item.brawler} /></div>
         <div className="brawler-detail-title"><div className="section-kicker">BRAWLER PROFILE <span>1V1 MATCHUP INTELLIGENCE</span></div><h2>{item.brawler}</h2><div className="brawler-detail-tags">{item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{roleLabel(item.role)}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}<span className="brawler-detail-map">{item.isRankedAvailable ? `Melhor registo: ${item.bestRow.map} · ${item.bestRow.mode}` : "Sem aparições na rotação atual"}</span></div></div>
         <div className="brawler-detail-score"><small>HYBRID SCORE</small><strong>{item.isRankedAvailable ? formatScore(item.bestRow.score) : "—"}</strong><span>{item.isRankedAvailable ? `Tier ${item.bestRow.tier ?? "—"}` : "Aguardando dados Ranked"}</span></div>
       </div>
 
-      <div className="brawler-detail-metrics"><MetricChip label="Win Rate" value={item.isRankedAvailable ? formatMetric(item.winRate) : "Aguarda dados"} /><MetricChip label="Use Rate" value={item.isRankedAvailable ? formatMetric(item.usageRate) : "Aguarda dados"} accent="violet" /><MetricChip label="Countera" value={`${item.profile.counters.length}`} accent="amber" /><MetricChip label="É counterado por" value={`${item.profile.counteredBy.length}`} /></div>
+      <div className="brawler-detail-metrics"><MetricChip label="Vitória" value={item.isRankedAvailable ? formatMetric(item.winRate) : "Aguarda dados"} /><MetricChip label="Uso" value={item.isRankedAvailable ? formatMetric(item.usageRate) : "Aguarda dados"} accent="violet" /><MetricChip label="Countera" value={`${item.profile.counters.length}`} accent="amber" /><MetricChip label="É counterado por" value={`${item.profile.counteredBy.length}`} /></div>
 
       <div className="brawler-matchup-columns">
         <article className="matchup-list-card counters"><div className="matchup-list-head"><div><span className="section-kicker">PRESSÃO A FAVOR</span><h3>Countera</h3></div><span className="matchup-count">{item.profile.counters.length}</span></div><p>Alvos onde {item.brawler} tem uma resposta direta no catálogo atual.</p><div className="counter-name-list">{item.profile.counters.length ? item.profile.counters.map((name) => <CounterName key={name} name={name} onPick={selectCounter} />) : <span className="muted-empty">Sem relação explícita publicada.</span>}</div></article>
@@ -195,7 +196,7 @@ function AttackRangeTable({
             const image = imageFor(item);
             const hasOpeningBonus = isOpeningLongRangeEligible(item.brawler);
             return <tr key={item.brawler}>
-              <td><Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} className="attack-range-brawler"><span className="attack-range-avatar">{image ? <img src={image} alt="" loading="lazy" /> : item.brawler.slice(0, 2).toUpperCase()}</span><strong>{item.brawler}</strong></Link></td>
+              <td><Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} className="attack-range-brawler"><span className="attack-range-avatar"><Retrato src={image} nome={item.brawler} loading="lazy" /></span><strong>{item.brawler}</strong></Link></td>
               <td><span className={`attack-range-value ${range ? "" : "is-unavailable"}`}>{formatRangeBand(range)}</span>{!range && <small>A aguardar publicação</small>}</td>
               <td>{range ? <span className={`attack-range-band band-${range.id.toLowerCase()}`}>{range.id} · {range.label}</span> : <span className="attack-range-band is-unavailable">— · Sem faixa</span>}</td>
               <td>{hasOpeningBonus ? <span className="opening-bonus-pill"><Zap size={11} /> +{openingBonusRate * 100}%<small>{getOpeningBonusEligibilityLabel(item.brawler)}</small></span> : <span className="opening-bonus-pill is-inactive">—</span>}</td>
@@ -265,7 +266,8 @@ export default function Brawlers() {
       return comparison || left.item.brawler.localeCompare(right.item.brawler, "pt-PT");
     }), [filteredCatalog, rangeSort]);
   const selected = filteredCatalog.find((item) => item.brawler === selectedName) ?? catalog.find((item) => item.brawler === selectedName) ?? filteredCatalog[0] ?? catalog[0];
-  const sourceLabel = `${rankedSync.source === "sse" && rankedSync.syncState === "success" ? "atualizados" : rankedSync.syncState === "partial" ? "em parte" : "cópia do site"}${rankedSync.version ? ` · ${rankedSync.version}` : ""}`;
+  // Sem a versão técnica ("bundled-static"): quem joga só quer saber se os dados são de agora.
+  const sourceLabel = rankedSync.source === "sse" && rankedSync.syncState === "success" ? "atualizados" : rankedSync.syncState === "partial" ? "atualizados em parte" : "guardados no site";
   const capturedAt = rankedSync.capturedAt ?? statusQuery.data?.capturedAt;
 
   useEffect(() => {
@@ -279,7 +281,7 @@ export default function Brawlers() {
         <main className="brawlers-main">
           <section className="brawlers-hero"><div><h1>Todos os brawlers.<br /><em>Alcance e matchup.</em></h1><p>Procura um brawler e vê o alcance, quem ele countera e quem o countera.</p></div><div className="brawlers-hero-stats"><div><strong>{catalog.length || 106}</strong><span>brawlers</span></div><div><strong>6</strong><span>faixas de alcance</span></div></div></section>
 
-          <p className="brawlers-status-banner" title="Counters e counterados juntam todas as fontes. O BrawlScope dá listas por modo; o Brawl Planet e o PL Prodigy dão a leitura geral."><span className="tiny-live" /> {capturedAt ? `Dados de ${new Date(capturedAt).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "Dados guardados no site"} · {sourceLabel}</p>
+          <p className="brawlers-status-banner" title="Counters e counterados juntam todas as fontes. O BrawlScope dá listas por modo; o Brawl Planet e o PL Prodigy dão a leitura geral."><span className="tiny-live" /> {capturedAt ? `Dados de ${new Date(capturedAt).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })} · ${sourceLabel}` : `Dados ${sourceLabel}`}</p>
 
           <div className="inicio-abas" role="tablist" aria-label="O que ver">
             <button type="button" role="tab" aria-selected={aba === "catalogo"} className={aba === "catalogo" ? "is-active" : ""} onClick={() => setAba("catalogo")}>Brawlers e counters</button>

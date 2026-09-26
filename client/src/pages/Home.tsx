@@ -1,3 +1,4 @@
+import { Retrato } from "@/components/Retrato";
 /*
  * Brawl Híbrido — dashboard page.
  * Style reminder: Championship Arena — dark carbon surfaces, electric violet,
@@ -412,7 +413,7 @@ function MapSelector({
               ) : null}
               <span className="map-card-meta">
                 <strong className="bh-figure">{map.topScore.toFixed(2)}</strong>
-                <span className="map-card-meta-label">top score</span>
+                <span className="map-card-meta-label">melhor score</span>
                 {/*
                   * Comparação com a média da rotação — verdadeira e calculável.
                   * Substitui uma seta que apontava sempre para cima.
@@ -526,7 +527,7 @@ function RotationAverages({
             return (
               <div className="table-row table-body-row" role="row" key={`rotation-${row.brawler}`}>
                 <div className="rank-col row-index">{String(rank).padStart(2, "0")}</div>
-                <div className="brawler-col brawler-cell"><span className="brawler-avatar" style={brawlerImageFor(row.brawler, row.brawlerId) ? { backgroundImage: `url(${brawlerImageFor(row.brawler, row.brawlerId)})` } : undefined}>{!brawlerImageFor(row.brawler, row.brawlerId) && row.brawler.slice(0, 2).toUpperCase()}</span><span>{row.brawler}</span></div>
+                <div className="brawler-col brawler-cell"><span className="brawler-avatar com-retrato"><Retrato src={brawlerImageFor(row.brawler, row.brawlerId)} nome={row.brawler} /></span><span>{row.brawler}</span></div>
                 <div className="tier-col"><TierBadge tier={row.tier} /></div>
               <div className="usage-col usage-value">{row.mapCount}/{totalMapCount}</div>
                 <div className="score-col score-value">{formatScore(row.averageScore)}</div>
@@ -814,7 +815,7 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
       <div className="source-card-grid" aria-label={`Seis brawlers em destaque no ${current.label}`}>
         {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
           <div className="source-card-top"><span className="source-rank">{String(index + 1).padStart(2, "0")}</span><span className="source-tier"><TierBadge tier={row.tier} /></span></div>
-          <div className="source-brawler"><span className="source-avatar" style={brawlerImageFor(row.brawler, row.brawlerId) ? { backgroundImage: `url(${brawlerImageFor(row.brawler, row.brawlerId)})` } : undefined}>{!brawlerImageFor(row.brawler, row.brawlerId) && row.brawler.slice(0, 2).toUpperCase()}</span><strong>{row.brawler}</strong></div>
+          <div className="source-brawler"><span className="source-avatar com-retrato"><Retrato src={brawlerImageFor(row.brawler, row.brawlerId)} nome={row.brawler} /></span><strong>{row.brawler}</strong></div>
           <div className="source-metric-grid">{current.metrics.map((metric) => <div className="source-metric" key={metric.label}><span>{metric.label}</span><strong>{readMetric(row, metric.key)}</strong></div>)}</div>
           <div className="source-card-foot"><span className="source-dot" /> {row.dataStatus === "partial" ? "Dados parciais" : "Registo disponível"}</div>
         </motion.article>)}
@@ -841,7 +842,7 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
             return (
             <div className="source-full-row" role="row" key={`${row.map}-${row.brawler}`}>
               <span className="source-full-rank">{String(index + 1).padStart(2, "0")}</span>
-              <span className="source-full-brawler"><span className="source-full-avatar" style={brawlerImageFor(row.brawler, row.brawlerId) ? { backgroundImage: `url(${brawlerImageFor(row.brawler, row.brawlerId)})` } : undefined}>{!brawlerImageFor(row.brawler, row.brawlerId) && row.brawler.slice(0, 2).toUpperCase()}</span>{row.brawler}</span>
+              <span className="source-full-brawler"><span className="source-full-avatar com-retrato"><Retrato src={brawlerImageFor(row.brawler, row.brawlerId)} nome={row.brawler} /></span>{row.brawler}</span>
               <span><TierBadge tier={row.tier} /></span>
               {current.metrics.map((metric) => <span key={metric.label} className={readMetric(row, metric.key) === "—" ? "not-available" : "source-full-value"}>{readMetric(row, metric.key)}</span>)}
               <span className="source-full-status">
@@ -1029,7 +1030,7 @@ export default function Home() {
                 ? `As fontes não são lidas há mais de ${Math.round(LIMITE_DE_CONFIANCA_MS / 3600000)} horas. Os números não estão errados — são apenas de antes.`
                 : undefined}>
                 <Flame size={16} />
-                <span>{lastStatus === "running" ? "Sincronização em curso" : "Meta snapshot"}</span>
+                <span>{lastStatus === "running" ? "Sincronização em curso" : "Dados do meta"}</span>
                 <strong>{formatSyncDate(capturedAt)}</strong>
                 <em className="intro-badge-idade">{frescura.rotulo}</em>
               </div>
