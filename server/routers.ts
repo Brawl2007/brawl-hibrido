@@ -21,7 +21,7 @@ import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
 import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
-import { fornecedorDaChave, guardarChaveDeReserva, lerChaveDeReserva, modelosDaReserva, testarChaveDeReserva } from "./iaDeReserva";
+import { IDS_DAS_RESERVAS, fornecedorDaChave, fornecedorPorId, guardarChaveDeReserva, lerChavesDeReserva, listaDeFornecedores, modelosDasReservas, testarChaveDeReserva } from "./iaDeReserva";
 import { TIPOS_DE_CASA, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
@@ -136,35 +136,40 @@ export const appRouter = router({
     estado: protectedProcedure.query(async ({ ctx }) => {
       exigirDono(ctx, "ver a chave da IA");
       const { key, origin } = await lerChaveDaGemini();
-      const reserva = await lerChaveDeReserva();
+      const reservas = await lerChavesDeReserva();
       return {
         configured: Boolean(key),
         origin,
         hint: key ? `····${key.slice(-4)}` : null,
-        // A IA de reserva (Groq ou OpenRouter): só se existe, de quem é e os últimos quatro.
-        reserva: {
-          configured: Boolean(reserva.key),
-          fornecedor: reserva.key ? fornecedorDaChave(reserva.key)?.nome ?? null : null,
-          hint: reserva.key ? `····${reserva.key.slice(-4)}` : null,
-        },
+        // As IAs de reserva: de quem é cada chave e os últimos quatro caracteres. A chave nunca sai daqui.
+        reservas: reservas.map((r) => ({ id: r.fornecedor.id, nome: r.fornecedor.nome, origin: r.origin, hint: `····${r.key.slice(-4)}` })),
+        fornecedores: listaDeFornecedores(),
       };
     }),
     /** Os modelos que cada chave tem, para o dono escolher qual faz o plano. Não gasta pedidos de geração. */
     modelos: protectedProcedure.query(async ({ ctx }) => {
       exigirDono(ctx, "ver os modelos da IA");
       const gemini = await modelosDaGemini().catch(() => null);
-      const reserva = await modelosDaReserva().catch(() => null);
-      return { gemini, reserva };
+      const reservas = await modelosDasReservas().catch(() => ({}));
+      return { gemini, reservas };
     }),
     guardarChaveDeReserva: protectedProcedure
-      .input(z.object({ key: z.string().trim().max(256) }))
+      .input(z.object({ fornecedor: z.enum(["auto", ...IDS_DAS_RESERVAS]).default("auto"), key: z.string().trim().max(256) }))
       .mutation(async ({ ctx, input }) => {
         exigirDono(ctx, "guardar a chave da IA de reserva");
-        if (input.key && !fornecedorDaChave(input.key)) {
-          return { saved: false, test: { ok: false, reason: "Não reconheço esta chave: as da Groq começam por gsk_ e as da OpenRouter por sk-or-." } };
+        const pelaForma = input.key ? fornecedorDaChave(input.key) : null;
+        if (input.fornecedor === "auto" && !input.key) return { saved: false, test: { ok: false, reason: "Diz de que IA é a chave a apagar." } };
+        if (input.fornecedor === "auto" && !pelaForma) {
+          return { saved: false, test: { ok: false, reason: "Não reconheço esta chave pela forma. Escolhe de que IA é (Mistral e Requesty não têm forma própria)." } };
         }
-        await guardarChaveDeReserva(input.key || null);
-        return { saved: Boolean(input.key), test: input.key ? await testarChaveDeReserva() : { ok: false, reason: "Chave apagada." } };
+        // Uma chave com a forma de outra IA foi colada no sítio errado.
+        if (input.fornecedor !== "auto" && pelaForma && pelaForma.id !== input.fornecedor) {
+          return { saved: false, test: { ok: false, reason: `Esta chave parece da ${pelaForma.nome}, não da ${fornecedorPorId(input.fornecedor).nome}.` } };
+        }
+        if (input.key && (input.key.length < 20 || /\s/.test(input.key))) return { saved: false, test: { ok: false, reason: "Esta chave não parece completa." } };
+        const id = input.fornecedor === "auto" ? pelaForma!.id : input.fornecedor;
+        await guardarChaveDeReserva(id, input.key || null);
+        return { saved: Boolean(input.key), fornecedor: id, test: input.key ? await testarChaveDeReserva(id) : { ok: false, reason: "Chave apagada." } };
       }),
     guardarChave: protectedProcedure
       .input(z.object({ key: z.string().trim().max(256) }))
@@ -187,7 +192,11 @@ export const appRouter = router({
         elo: z.string().max(20).nullish(),
         // Qual IA faz o plano. Os modelos só valem se estiverem na lista da chave (o servidor confere).
         ia: z.object({
-          ordem: z.enum(["gemini-primeiro", "reserva-primeiro", "so-gemini", "so-reserva"]),
+          principal: z.enum(["gemini", "reserva", ...IDS_DAS_RESERVAS]).nullish(),
+          soEssa: z.boolean().optional(),
+          modelos: z.record(z.string().max(20), z.string().trim().max(160).nullable()).optional(),
+          // A forma antiga, de um separador aberto antes da mudança.
+          ordem: z.enum(["gemini-primeiro", "reserva-primeiro", "so-gemini", "so-reserva"]).optional(),
           modeloGemini: z.string().trim().max(80).nullish(),
           modeloReserva: z.string().trim().max(160).nullish(),
         }).optional(),
@@ -196,7 +205,7 @@ export const appRouter = router({
         exigirDono(ctx, "pedir um plano à IA");
         const { ia, ...pedido } = input;
         try {
-          return await pedirPlanoAoGeneral(pedido, fetch, ia ?? { ordem: "gemini-primeiro" });
+          return await pedirPlanoAoGeneral(pedido, fetch, ia ?? {});
         } catch (erro) {
           const mensagem = erro instanceof ErroDoGeneral || erro instanceof Error ? erro.message : "A IA falhou.";
           throw new TRPCError({ code: erro instanceof ErroDoGeneral ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR", message: mensagem });

@@ -36,7 +36,7 @@ import { TIPOS_DE_CASA, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { getSetting, setSetting } from "./appSettings";
 import { guardarRotulosDaIA, imagemDaBrawlify, obterTerreno } from "./terrenoDoMapa";
 import { acharNaLista, normalizarNome, obterCatalogo, type CatalogoDeBuilds } from "./catalogoDeBuilds";
-import { gerarJsonNaReserva, lerChaveDeReserva } from "./iaDeReserva";
+import { type ChaveDeReserva, gerarJsonNaReserva, lerChavesDeReserva, listaDeFornecedores } from "./iaDeReserva";
 
 export const GEMINI_API_KEY_SETTING = "geminiApiKey";
 // Configurável só para testes locais com uma Gemini falsa; em produção é sempre a da Google.
@@ -133,12 +133,33 @@ export function modelosDoPedido(ordem: readonly string[], escolhido?: string | n
   return lista.slice(0, MODELOS_POR_PEDIDO);
 }
 
-/** Qual IA faz o plano, escolhida pelo dono no quadro. */
+/**
+ * Qual IA faz o plano, escolhida pelo dono no quadro: a principal ("gemini" ou
+ * uma reserva, como "groq"), se as outras entram quando ela falha, e o modelo
+ * de cada uma. A forma antiga (`ordem`, `modeloGemini`, `modeloReserva`)
+ * continua a valer, para um separador aberto antes da mudança.
+ */
 export type EscolhaDaIA = {
-  ordem: "gemini-primeiro" | "reserva-primeiro" | "so-gemini" | "so-reserva";
+  principal?: string | null;
+  soEssa?: boolean;
+  modelos?: Partial<Record<string, string | null>>;
+  ordem?: "gemini-primeiro" | "reserva-primeiro" | "so-gemini" | "so-reserva";
   modeloGemini?: string | null;
   modeloReserva?: string | null;
 };
+
+/** A escolha na forma nova. "reserva" quer dizer "a primeira reserva que houver". */
+export function normalizarEscolha(escolha: EscolhaDaIA = {}) {
+  const modelos: Partial<Record<string, string | null>> = { ...(escolha.modelos ?? {}) };
+  if (escolha.modeloGemini && !modelos.gemini) modelos.gemini = escolha.modeloGemini;
+  let principal = escolha.principal ?? null;
+  let soEssa = Boolean(escolha.soEssa);
+  if (!principal && escolha.ordem) {
+    principal = escolha.ordem.includes("gemini") ? "gemini" : "reserva";
+    soEssa = escolha.ordem.startsWith("so-");
+  }
+  return { principal, soEssa, modelos, modeloReserva: escolha.modeloReserva ?? null };
+}
 
 /** Os modelos que a chave da Gemini tem, pela ordem em que se tentam (para o dono escolher). */
 export async function modelosDaGemini(buscar: Buscar = fetch) {
@@ -422,14 +443,19 @@ let pedidoEmCurso = false;
 export async function pedirPlanoAoGeneral(
   pedido: PedidoDePlano,
   buscar: Buscar = fetch,
-  escolha: EscolhaDaIA = { ordem: "gemini-primeiro" },
+  escolhaRecebida: EscolhaDaIA = {},
 ): Promise<{ plano: PlanoDoGeneral; modelo: string; comImagem: boolean; comPesquisa: boolean; terreno: TerrenoDoMapa | null }> {
-  const gemini = escolha.ordem === "so-reserva" ? "" : (await lerChaveDaGemini()).key;
-  const reserva = escolha.ordem === "so-gemini" ? "" : (await lerChaveDeReserva()).key;
-  if (!gemini && !reserva) {
+  const escolha = normalizarEscolha(escolhaRecebida);
+  const todasAsReservas = await lerChavesDeReserva();
+  const principal = escolha.principal === "reserva" ? todasAsReservas[0]?.fornecedor.id ?? "reserva" : escolha.principal;
+  const soReservas = escolha.soEssa && principal !== "gemini";
+  const gemini = soReservas ? "" : (await lerChaveDaGemini()).key;
+  const reservas = escolha.soEssa ? todasAsReservas.filter((r) => r.fornecedor.id === principal) : todasAsReservas;
+  if (!gemini && !reservas.length) {
+    const nomeDaReserva = listaDeFornecedores().find((f) => f.id === principal)?.nome;
     throw new ErroDoGeneral(
-      escolha.ordem === "so-reserva" ? "Escolheste só a IA de reserva, mas ainda não há chave dela (Groq ou OpenRouter)."
-        : escolha.ordem === "so-gemini" ? "Escolheste só a Gemini, mas ainda não há chave dela (é gratuita em aistudio.google.com/apikey)."
+      soReservas ? `Escolheste só a IA de reserva${nomeDaReserva ? ` (${nomeDaReserva})` : ""}, mas ainda não há chave dela.`
+        : escolha.soEssa ? "Escolheste só a Gemini, mas ainda não há chave dela (é gratuita em aistudio.google.com/apikey)."
           : "Ainda não há chave da Gemini. Cola-a no quadro do general (é gratuita em aistudio.google.com/apikey).",
     );
   }
@@ -440,7 +466,7 @@ export async function pedirPlanoAoGeneral(
     // chega (e o botão "Pedir à IA para ler o terreno" continua lá). Eram três
     // pedidos do limite gratuito gastos antes de o plano começar.
     const terreno = pedido.mapaId ? await obterTerreno(pedido.mapaId, buscar) : null;
-    const modelos = gemini ? await modelosPara(gemini, buscar).then((ordem) => modelosDoPedido(ordem, escolha.modeloGemini)).catch(() => [] as string[]) : [];
+    const modelos = gemini ? await modelosPara(gemini, buscar).then((ordem) => modelosDoPedido(ordem, escolha.modelos.gemini)).catch(() => [] as string[]) : [];
     const atualidade = gemini && modelos.length ? await pesquisarAtualidade(gemini, modelos, pedido, buscar) : null;
     const imagem = await imagemParaAIA(pedido.mapaId, buscar);
     const catalogo = await obterCatalogo(buscar).catch(() => null);
@@ -449,16 +475,18 @@ export async function pedirPlanoAoGeneral(
     if (imagem) partes.push({ inline_data: imagem });
 
     const pelaGemini = async () => {
-      const { json, modelo } = await gerarJson(gemini, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano", 1200, escolha.modeloGemini);
+      const { json, modelo } = await gerarJson(gemini, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano", 1200, escolha.modelos.gemini);
       return { json, modelo, comImagem: Boolean(imagem) };
     };
-    const pelaReserva = () => gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar, 0.4, escolha.modeloReserva);
-    // Pela ordem escolhida; se a primeira falhar (limite, em baixo), a outra.
-    const tentativas = [
-      ...(escolha.ordem === "reserva-primeiro" ? [] : gemini ? [{ nome: "Gemini", fazer: pelaGemini }] : []),
-      ...(reserva ? [{ nome: "reserva", fazer: pelaReserva }] : []),
-      ...(escolha.ordem === "reserva-primeiro" && gemini ? [{ nome: "Gemini", fazer: pelaGemini }] : []),
+    const pelaReserva = (reserva: ChaveDeReserva) => () =>
+      gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar, 0.4, escolha.modelos[reserva.fornecedor.id] ?? escolha.modeloReserva);
+    // A principal primeiro; se falhar (limite, em baixo), as outras pela ordem de sempre:
+    // a Gemini e depois as reservas.
+    const todas = [
+      ...(gemini ? [{ id: "gemini", nome: "Gemini", fazer: pelaGemini }] : []),
+      ...reservas.map((r) => ({ id: r.fornecedor.id as string, nome: r.fornecedor.nome, fazer: pelaReserva(r) })),
     ];
+    const tentativas = [...todas.filter((t) => t.id === principal), ...todas.filter((t) => t.id !== principal)];
     const falhas: string[] = [];
     let resposta: { json: unknown; modelo: string; comImagem: boolean } | null = null;
     for (const tentativa of tentativas) {

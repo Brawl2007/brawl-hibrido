@@ -113,29 +113,49 @@ function textoDaBuild(build: PlanoDoGeneral["ordens"][number]["build"]) {
 
 const numeroOuNulo = (valor: unknown) => (typeof valor === "number" && Number.isFinite(valor) ? Math.max(0, Math.min(100, valor)) : null);
 
-type EscolhaDaIA = { ordem: "gemini-primeiro" | "reserva-primeiro" | "so-gemini" | "so-reserva"; modeloGemini?: string | null; modeloReserva?: string | null };
-const CHAVE_DA_ESCOLHA = "brawl-hibrido:ia-do-general:v1";
-const ORDENS_DA_IA: Array<{ id: EscolhaDaIA["ordem"]; nome: string }> = [
-  { id: "gemini-primeiro", nome: "Gemini; se falhar, a reserva" },
-  { id: "reserva-primeiro", nome: "Reserva (Groq/OpenRouter); se falhar, a Gemini" },
-  { id: "so-gemini", nome: "Só a Gemini" },
-  { id: "so-reserva", nome: "Só a reserva" },
-];
+/**
+ * Que IA faz o plano: a principal ("gemini", ou uma reserva como "groq"), se as
+ * outras entram quando ela falha, e o modelo de cada uma. "reserva" quer dizer
+ * "a primeira reserva que houver" (vem da escolha antiga).
+ */
+type EscolhaDaIA = { principal: string; soEssa: boolean; modelos: Record<string, string | null> };
+const CHAVE_DA_ESCOLHA = "brawl-hibrido:ia-do-general:v2";
+const CHAVE_DA_ESCOLHA_ANTIGA = "brawl-hibrido:ia-do-general:v1";
+const ID_DE_IA = /^[a-z]{3,20}$/;
 function lerEscolhaDaIA(): EscolhaDaIA {
   try {
     const guardada = JSON.parse(window.localStorage.getItem(CHAVE_DA_ESCOLHA) ?? "null") as Partial<EscolhaDaIA> | null;
-    if (guardada && ORDENS_DA_IA.some((o) => o.id === guardada.ordem)) {
+    if (guardada && typeof guardada.principal === "string" && ID_DE_IA.test(guardada.principal)) {
+      const modelos: Record<string, string | null> = {};
+      for (const [id, modelo] of Object.entries(guardada.modelos ?? {})) {
+        if (ID_DE_IA.test(id) && typeof modelo === "string" && modelo) modelos[id] = modelo.slice(0, 160);
+      }
+      return { principal: guardada.principal, soEssa: guardada.soEssa === true, modelos };
+    }
+    // A escolha de antes (Gemini ou "a reserva", com ou sem a outra).
+    const antiga = JSON.parse(window.localStorage.getItem(CHAVE_DA_ESCOLHA_ANTIGA) ?? "null") as { ordem?: string; modeloGemini?: unknown } | null;
+    if (antiga && typeof antiga.ordem === "string") {
       return {
-        ordem: guardada.ordem!,
-        modeloGemini: typeof guardada.modeloGemini === "string" ? guardada.modeloGemini.slice(0, 80) : null,
-        modeloReserva: typeof guardada.modeloReserva === "string" ? guardada.modeloReserva.slice(0, 160) : null,
+        principal: antiga.ordem.includes("gemini") ? "gemini" : "reserva",
+        soEssa: antiga.ordem.startsWith("so-"),
+        modelos: typeof antiga.modeloGemini === "string" && antiga.modeloGemini ? { gemini: antiga.modeloGemini.slice(0, 80) } : {},
       };
     }
   } catch {
     // Estragada ou sem armazenamento: fica a de origem.
   }
-  return { ordem: "gemini-primeiro", modeloGemini: null, modeloReserva: null };
+  return { principal: "gemini", soEssa: false, modelos: {} };
 }
+
+type Fornecedor = { id: string; nome: string; ondeCriar: string; exemplo: string; reconheceSozinha: boolean };
+type EstadoDaIA = {
+  configured: boolean;
+  origin: string;
+  hint: string | null;
+  reservas?: Array<{ id: string; nome: string; origin: string; hint: string }>;
+  fornecedores?: Fornecedor[];
+};
+type ModelosDasIAs = { gemini: string[] | null; reservas: Record<string, { fornecedor: string; modelos: string[]; erro: string | null }> };
 
 function lerGuardado(chave: string) {
   try {
@@ -247,19 +267,24 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     onSuccess: (resultado) => { if (mapaId) utils.general.terreno.setData({ mapaId }, resultado as never); },
     onError: (e) => toast.error(e.message || "Não foi possível corrigir."),
   });
-  const estado = estadoQuery.data as { configured: boolean; origin: string; hint: string | null; reserva?: { configured: boolean; fornecedor: string | null; hint: string | null } } | undefined;
+  const estado = estadoQuery.data as EstadoDaIA | undefined;
+  const reservas = estado?.reservas ?? [];
+  const fornecedores = estado?.fornecedores ?? [];
   const [novaChaveDeReserva, setNovaChaveDeReserva] = useState("");
+  const [fornecedorDaNovaChave, setFornecedorDaNovaChave] = useState("auto");
   const guardarChaveDeReserva = trpc.general.guardarChaveDeReserva.useMutation({
-    onSuccess: (resultado) => {
+    onSuccess: (resultado, pedido) => {
       const teste = resultado.test as { ok: boolean; reason: string };
-      if (teste.ok) toast.success("IA de reserva guardada.", { description: teste.reason });
+      if (!pedido.key) toast.success("Chave apagada.");
+      else if (teste.ok) toast.success("IA de reserva guardada.", { description: teste.reason });
       else toast.error(resultado.saved ? "Chave guardada, mas foi recusada." : "Chave não guardada.", { description: teste.reason });
-      if (resultado.saved || !novaChaveDeReserva) setNovaChaveDeReserva("");
+      if (resultado.saved) setNovaChaveDeReserva("");
       void estadoQuery.refetch();
+      void utils.general.modelos.invalidate();
     },
     onError: (e) => toast.error(e.message || "Não foi possível guardar a chave."),
   });
-  const temAlgumaIA = Boolean(estado?.configured || estado?.reserva?.configured);
+  const temAlgumaIA = Boolean(estado?.configured || reservas.length);
 
   // Que IA faz o plano (e com que modelo): escolha do dono, guardada neste navegador.
   const [escolhaDaIA, setEscolhaDaIA] = useState<EscolhaDaIA>(() => lerEscolhaDaIA());
@@ -270,9 +295,19 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       // Sem armazenamento, vale só nesta visita.
     }
   }, [escolhaDaIA]);
+  // As IAs com chave, pela ordem em que se tentam quando a principal falha.
+  const iasComChave = [
+    ...(estado?.configured ? [{ id: "gemini", nome: "Gemini" }] : []),
+    ...reservas.map((r) => ({ id: r.id, nome: r.nome })),
+  ];
+  // "A reserva" (da escolha antiga) passa a ser a primeira reserva com chave.
+  const principalAgora = escolhaDaIA.principal === "reserva" ? reservas[0]?.id ?? "gemini" : escolhaDaIA.principal;
+  const nomeDaPrincipal = iasComChave.find((ia) => ia.id === principalAgora)?.nome ?? iasComChave[0]?.nome ?? "—";
   const [verModelos, setVerModelos] = useState(false);
   const modelosQuery = trpc.general.modelos.useQuery(undefined, { enabled: ehDono && verModelos, staleTime: 10 * 60_000, retry: false });
-  const modelos = modelosQuery.data as { gemini: string[] | null; reserva: { fornecedor: string; modelos: string[] } | null } | undefined;
+  const modelos = modelosQuery.data as ModelosDasIAs | undefined;
+  const mudarModelo = (id: string, modelo: string) =>
+    setEscolhaDaIA((atual) => ({ ...atual, modelos: { ...atual.modelos, [id]: modelo || null } }));
 
   // O momento da partida que está no ecrã: as suas posições, setas, símbolos e paredes partidas.
   const camadas = camadasDoMomento(plano, momento);
@@ -357,7 +392,11 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       ],
       dadosDe: capturedAt ?? null,
       elo: ELOS_BRAWL_PLANET.find((item) => item.id === elo)?.nome ?? null,
-      ia: escolhaDaIA,
+      ia: {
+        principal: (iasComChave.some((ia) => ia.id === principalAgora) ? principalAgora : iasComChave[0]?.id ?? "gemini") as never,
+        soEssa: escolhaDaIA.soEssa,
+        modelos: Object.fromEntries(Object.entries(escolhaDaIA.modelos).filter(([id, m]) => m && iasComChave.some((ia) => ia.id === id))),
+      },
     });
   };
 
@@ -426,52 +465,82 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 </button>
                 <small>
                   {estado?.configured ? `Gemini · chave ${estado.hint}` : "Sem Gemini"}
-                  {estado?.reserva?.configured ? ` · reserva: ${estado.reserva.fornecedor ?? "?"} ${estado.reserva.hint}` : ""}
+                  {reservas.length ? ` · reservas: ${reservas.map((r) => `${r.nome} ${r.hint}`).join(", ")}` : ""}
                   {pedirPlano.isPending ? " · pode demorar até um minuto" : ""}
                 </small>
               </>
             )}
             {temAlgumaIA && (
               <details className="quadro-general-reserva" onToggle={(e) => setVerModelos(e.currentTarget.open)}>
-                <summary>Que IA faz o plano: {ORDENS_DA_IA.find((o) => o.id === escolhaDaIA.ordem)?.nome.toLowerCase()}{escolhaDaIA.modeloGemini || escolhaDaIA.modeloReserva ? " · modelo escolhido" : ""}</summary>
+                <summary>
+                  Que IA faz o plano: {nomeDaPrincipal}{escolhaDaIA.soEssa ? " (só essa)" : iasComChave.length > 1 ? "; se falhar, as outras" : ""}
+                  {Object.values(escolhaDaIA.modelos).some(Boolean) ? " · modelo escolhido" : ""}
+                </summary>
                 <div className="quadro-general-escolha">
                   <label>
-                    <span>Ordem</span>
-                    <select value={escolhaDaIA.ordem} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, ordem: e.target.value as EscolhaDaIA["ordem"] }))}>
-                      {ORDENS_DA_IA.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                    <span>IA principal</span>
+                    <select value={iasComChave.some((ia) => ia.id === principalAgora) ? principalAgora : iasComChave[0]?.id ?? ""} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, principal: e.target.value }))}>
+                      {iasComChave.map((ia) => <option key={ia.id} value={ia.id}>{ia.nome}</option>)}
                     </select>
                   </label>
                   <label>
-                    <span>Modelo da Gemini</span>
-                    <select value={escolhaDaIA.modeloGemini ?? ""} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, modeloGemini: e.target.value || null }))} disabled={!modelos?.gemini?.length}>
-                      <option value="">O melhor (flash; nunca o lite)</option>
-                      {(modelos?.gemini ?? []).map((m) => <option key={m} value={m}>{m}{/lite/.test(m) ? " (lite — mais fraco)" : ""}</option>)}
+                    <span>Se ela falhar</span>
+                    <select value={escolhaDaIA.soEssa ? "so" : "outras"} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, soEssa: e.target.value === "so" }))}>
+                      <option value="outras">Tentar as outras IAs com chave</option>
+                      <option value="so">Parar (usar só esta)</option>
                     </select>
                   </label>
-                  <label>
-                    <span>Modelo da reserva{modelos?.reserva ? ` (${modelos.reserva.fornecedor})` : ""}</span>
-                    <select value={escolhaDaIA.modeloReserva ?? ""} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, modeloReserva: e.target.value || null }))} disabled={!modelos?.reserva?.modelos.length}>
-                      <option value="">O melhor que houver</option>
-                      {(modelos?.reserva?.modelos ?? []).map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </label>
+                  {iasComChave.map((ia) => {
+                    const lista = ia.id === "gemini" ? modelos?.gemini ?? [] : modelos?.reservas?.[ia.id]?.modelos ?? [];
+                    const erro = ia.id === "gemini" ? null : modelos?.reservas?.[ia.id]?.erro;
+                    return (
+                      <label key={ia.id}>
+                        <span>Modelo · {ia.nome}{erro ? " — a chave falhou" : ""}</span>
+                        <select value={escolhaDaIA.modelos[ia.id] ?? ""} onChange={(e) => mudarModelo(ia.id, e.target.value)} disabled={!lista.length} title={erro ?? undefined}>
+                          <option value="">{ia.id === "gemini" ? "O melhor (flash; nunca o lite)" : "O melhor que houver"}</option>
+                          {lista.map((m) => <option key={m} value={m}>{m}{ia.id === "gemini" && /lite/.test(m) ? " (lite — mais fraco)" : ""}</option>)}
+                        </select>
+                      </label>
+                    );
+                  })}
                   <small>{modelosQuery.isLoading ? "A ler os modelos das tuas chaves…" : "Se o modelo escolhido estiver no limite, tenta o seguinte da lista."}</small>
                 </div>
               </details>
             )}
             <details className="quadro-general-reserva">
-              <summary>{estado?.reserva?.configured ? `IA de reserva: ${estado.reserva.fornecedor} ${estado.reserva.hint}` : "IA de reserva (quando a Google chegar ao limite)"}</summary>
-              <form className="quadro-general-chave" onSubmit={(e) => { e.preventDefault(); guardarChaveDeReserva.mutate({ key: novaChaveDeReserva }); }}>
-                <label htmlFor="chave-reserva">Chave gratuita da Groq ou da OpenRouter</label>
+              <summary>{reservas.length ? `IAs de reserva: ${reservas.map((r) => r.nome).join(", ")}` : "IAs de reserva (quando a Google chegar ao limite)"}</summary>
+              {reservas.length > 0 && (
+                <ul className="quadro-general-reservas">
+                  {reservas.map((r) => (
+                    <li key={r.id}>
+                      <span>{r.nome} <code>{r.hint}</code>{r.origin === "ambiente" ? " (do ambiente)" : ""}</span>
+                      {r.origin === "site" && (
+                        <button type="button" disabled={guardarChaveDeReserva.isPending} onClick={() => guardarChaveDeReserva.mutate({ fornecedor: r.id as never, key: "" })}>Apagar</button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form className="quadro-general-chave" onSubmit={(e) => { e.preventDefault(); if (novaChaveDeReserva.trim()) guardarChaveDeReserva.mutate({ fornecedor: fornecedorDaNovaChave as never, key: novaChaveDeReserva }); }}>
+                <label htmlFor="chave-reserva">Juntar a chave gratuita de outra IA</label>
                 <div>
-                  <input id="chave-reserva" type="password" autoComplete="off" value={novaChaveDeReserva} onChange={(e) => setNovaChaveDeReserva(e.target.value)} placeholder="gsk_… ou sk-or-…" />
-                  <button type="submit" disabled={guardarChaveDeReserva.isPending || (novaChaveDeReserva.trim().length > 0 && novaChaveDeReserva.trim().length < 20)}>
-                    {novaChaveDeReserva.trim() ? "Guardar" : estado?.reserva?.configured ? "Apagar" : "Guardar"}
-                  </button>
+                  <select aria-label="De que IA é a chave" value={fornecedorDaNovaChave} onChange={(e) => setFornecedorDaNovaChave(e.target.value)}>
+                    <option value="auto">Reconhecer pela chave</option>
+                    {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                  <input id="chave-reserva" type="password" autoComplete="off" value={novaChaveDeReserva} onChange={(e) => setNovaChaveDeReserva(e.target.value)}
+                    placeholder={fornecedores.find((f) => f.id === fornecedorDaNovaChave)?.exemplo ?? "gsk_…, sk-or-…, github_pat_…, hf_…, csk-…"} />
+                  <button type="submit" disabled={guardarChaveDeReserva.isPending || novaChaveDeReserva.trim().length < 20}>Guardar</button>
                 </div>
                 <small>
-                  Cria-a em <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com/keys</a> ou{" "}
-                  <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai/keys</a>. Só é usada quando a Gemini falha. Fica no servidor e nunca volta ao navegador.
+                  Cria-a em{" "}
+                  {fornecedores.map((f, i) => (
+                    <span key={f.id}>
+                      {i ? (i === fornecedores.length - 1 ? " ou " : ", ") : ""}
+                      <a href={`https://${f.ondeCriar}`} target="_blank" rel="noopener noreferrer">{f.nome}</a>
+                    </span>
+                  ))}
+                  . A Mistral e a Requesty não se reconhecem pela chave: escolhe-as na lista. Fica no servidor e nunca volta ao navegador.
                 </small>
               </form>
             </details>

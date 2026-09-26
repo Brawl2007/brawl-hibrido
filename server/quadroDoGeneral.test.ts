@@ -1,4 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// As definições (chaves coladas no site) ficam em memória: sem base de dados nos testes.
+const definicoes = vi.hoisted(() => new Map<string, string>());
+vi.mock("./appSettings", async (original) => ({
+  ...(await original<typeof import("./appSettings")>()),
+  getSetting: async (chave: string) => definicoes.get(chave) ?? null,
+  setSetting: async (chave: string, valor: string | null) => { if (valor) definicoes.set(chave, valor); else definicoes.delete(chave); },
+}));
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -18,7 +26,7 @@ import { aplicarRotulos, caminhoLivre, corrigirCasas, grelhaEmTexto, linhaLivre,
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
 import { conferirBuilds, escolherModelo, modelosDoPedido, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
-import { fornecedorDaChave, ordenarModelosDeReserva } from "./iaDeReserva";
+import { fornecedorDaChave, guardarChaveDeReserva, lerChavesDeReserva, lerJsonDaResposta, modelosDasReservas, ordenarModelosDeReserva } from "./iaDeReserva";
 import { imagemSegura, lerCatalogo } from "./catalogoDeBuilds";
 
 const NOSSOS = ["Nori", "Lou", "R-T"];
@@ -894,6 +902,125 @@ describe("IA de reserva (Groq ou OpenRouter) quando a Gemini chega ao limite", (
     const mensagem = "erro" in resultado ? resultado.erro.message : "";
     expect(mensagem).toMatch(/limite gratuito/);
     expect(mensagem).toMatch(/Groq recusou a chave.*console\.groq\.com\/keys/);
+  });
+});
+
+describe("várias IAs de reserva e a escolha da principal", () => {
+  const BASE = "http://reserva.falsa/v1";
+  type Pedido = { url: string; headers: Record<string, string>; corpo: any };
+  /** Um fornecedor falso: a lista de modelos no caminho dele, a conversa no caminho dele. */
+  function fornecedorFalso(config: { modelos: unknown; caminhoDosModelos?: string; caminhoDaConversa?: string; resposta?: Resposta }) {
+    const pedidos: Pedido[] = [];
+    const buscar = (async (url: string, init?: RequestInit) => {
+      const corpo = init?.body ? JSON.parse(String(init.body)) : null;
+      pedidos.push({ url, headers: (init?.headers ?? {}) as Record<string, string>, corpo });
+      const json = (r: Resposta) => new Response(JSON.stringify(r.corpo ?? {}), { status: r.status });
+      if (url === `${BASE}${config.caminhoDosModelos ?? "/models"}`) return json({ status: 200, corpo: config.modelos });
+      if (url === `${BASE}${config.caminhoDaConversa ?? "/chat/completions"}`) {
+        return json(config.resposta ?? { status: 200, corpo: { choices: [{ message: { content: JSON.stringify(planoMinimo) } }] } });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    return { pedidos, buscar };
+  }
+  async function comChaves(chaves: Partial<Record<string, string>>, correr: () => Promise<void>, gemini = false) {
+    definicoes.clear();
+    for (const [id, chave] of Object.entries(chaves)) definicoes.set(`iaReserva.${id}`, chave!);
+    if (gemini) process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+    process.env.IA_RESERVA_BASE = BASE;
+    try {
+      await correr();
+    } finally {
+      definicoes.clear();
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.IA_RESERVA_BASE;
+    }
+  }
+  const unica = (prefixo: string) => `${prefixo}${"x".repeat(24)}${String(++contador).padStart(6, "0")}`;
+
+  it("cada chave diz de quem é pela forma; a Mistral e a Requesty não têm forma", () => {
+    expect(fornecedorDaChave("github_pat_11ABCDEFG0123456789_abcdefghijklmnop")?.id).toBe("github");
+    expect(fornecedorDaChave("ghp_abcdefghijklmnopqrstuvwxyz0123456789")?.id).toBe("github");
+    expect(fornecedorDaChave("hf_abcdefghijklmnopqrstuvwxyzABCD")?.id).toBe("huggingface");
+    expect(fornecedorDaChave("csk-abcdefghijklmnopqrstuvwxyz0123")?.id).toBe("cerebras");
+    expect(fornecedorDaChave("Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56")).toBeNull();
+    // A Requesty só com modelos de preço zero, quando a lista diz o preço.
+    expect(ordenarModelosDeReserva([
+      { id: "openai/gpt-4.1", veImagens: true, escreveTexto: true, gratuito: false },
+      { id: "google/gemma-3-27b-it", veImagens: true, escreveTexto: true, gratuito: true },
+    ], "preco")).toEqual(["google/gemma-3-27b-it"]);
+    // Raciocínio antes do JSON (DeepSeek R1, Qwen3) não estraga a leitura.
+    expect(lerJsonDaResposta('<think>penso em {x}</think>\n```json\n{"a":1}\n```')).toEqual({ a: 1 });
+  });
+
+  it("GitHub Models: catálogo em lista, conversa em /inference, 4000 tokens e imagem só ao modelo que a vê", async () => {
+    const github = fornecedorFalso({
+      caminhoDosModelos: "/catalog/models",
+      caminhoDaConversa: "/inference/chat/completions",
+      modelos: [
+        { id: "openai/text-embedding-3-large", supported_input_modalities: ["text"], supported_output_modalities: ["embeddings"] },
+        { id: "deepseek/DeepSeek-R1", supported_input_modalities: ["text"], supported_output_modalities: ["text"] },
+        { id: "openai/gpt-4.1", supported_input_modalities: ["text", "image"], supported_output_modalities: ["text"] },
+      ],
+    });
+    const chave = unica("github_pat_");
+    await comChaves({ github: chave }, async () => {
+      expect((await modelosDasReservas(github.buscar)).github?.modelos).toEqual(["openai/gpt-4.1", "deepseek/DeepSeek-R1"]);
+      const r = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, github.buscar, { principal: "github", soEssa: true, modelos: {} });
+      expect(r.modelo).toBe("GitHub Models · openai/gpt-4.1");
+      const conversa = github.pedidos.find((p) => p.url.endsWith("/inference/chat/completions"))!;
+      expect(conversa.headers.authorization).toBe(`Bearer ${chave}`);
+      expect(conversa.headers.accept).toBe("application/vnd.github+json");
+      expect(conversa.corpo.max_tokens).toBe(4000);
+      expect(github.pedidos.every((p) => !p.url.includes(chave))).toBe(true);
+    });
+  });
+
+  it("a principal escolhida faz o plano; com \"só essa\", as outras nunca são chamadas", async () => {
+    const mistral = fornecedorFalso({ modelos: { data: [{ id: "mistral-embed", capabilities: { completion_chat: false } }, { id: "mistral-medium-latest", capabilities: { completion_chat: true, vision: true } }] } });
+    const falhaNaMistral = fornecedorFalso({ modelos: { data: [{ id: "mistral-medium-latest", capabilities: { completion_chat: true } }] }, resposta: { status: 429, corpo: { message: "Requests rate limit exceeded" } } });
+    const gemini = geminiFalsa({ modelos: ["gemini-3-flash"] });
+    const junto = (reserva: ReturnType<typeof fornecedorFalso>) => ((url: string, init?: RequestInit) => (url.startsWith(BASE) ? reserva.buscar(url, init) : gemini.buscar(url, init))) as typeof fetch;
+
+    await comChaves({ mistral: unica("Mk"), groq: unica("gsk_") }, async () => {
+      // A Mistral (escolhida à mão, sem forma de chave) faz o plano; a Gemini não gasta nada no plano.
+      const r = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, junto(mistral), { principal: "mistral", modelos: { mistral: "mistral-medium-latest" } });
+      expect(r.modelo).toBe("Mistral · mistral-medium-latest");
+      expect(gemini.geracoes()).toEqual([]);
+      expect((await lerChavesDeReserva()).map((c) => c.fornecedor.id)).toEqual(["groq", "mistral"]);
+    }, true);
+
+    await comChaves({ mistral: unica("Mk") }, async () => {
+      // "Só essa": a Mistral no limite e a Gemini com chave, mas não é chamada.
+      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, junto(falhaNaMistral), { principal: "mistral", soEssa: true })).rejects.toThrow(/Mistral também não conseguiu/);
+      expect(gemini.geracoes()).toEqual([]);
+      // Sem "só essa", a Gemini apanha o plano quando a Mistral falha.
+      const r = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, junto(falhaNaMistral), { principal: "mistral", soEssa: false });
+      expect(r.modelo).toMatch(/gemini-3-flash/);
+    }, true);
+
+    await comChaves({}, async () => {
+      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, gemini.buscar, { principal: "cerebras", soEssa: true })).rejects.toThrow(/só a IA de reserva \(Cerebras\)/);
+    }, true);
+  });
+
+  it("a chave antiga (uma só reserva) continua a valer, e uma nova do mesmo fornecedor substitui-a", async () => {
+    const antiga = unica("gsk_");
+    definicoes.set("iaReservaApiKey", antiga);
+    try {
+      expect((await lerChavesDeReserva()).map((c) => [c.fornecedor.id, c.key])).toEqual([["groq", antiga]]);
+      const nova = unica("gsk_");
+      await guardarChaveDeReserva("groq", nova);
+      expect(definicoes.has("iaReservaApiKey")).toBe(false);
+      expect((await lerChavesDeReserva()).map((c) => c.key)).toEqual([nova]);
+      // Uma chave da OpenRouter não apaga a antiga da Groq.
+      definicoes.set("iaReservaApiKey", antiga);
+      definicoes.delete("iaReserva.groq");
+      await guardarChaveDeReserva("openrouter", unica("sk-or-"));
+      expect((await lerChavesDeReserva()).map((c) => c.fornecedor.id)).toEqual(["groq", "openrouter"]);
+    } finally {
+      definicoes.clear();
+    }
   });
 });
 

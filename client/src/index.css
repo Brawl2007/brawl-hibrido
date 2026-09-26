@@ -4020,7 +4020,7 @@ main { max-width: 1600px; margin: 0 auto; }
   cursor: pointer;
 }
 .quadro-general-pedir:disabled { opacity: .7; cursor: progress; }
-.quadro-general-chave { display: grid; gap: 6px; }
+.quadro-general-chave { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .quadro-general-chave label { color: var(--bh-text); font-size: 12px; font-weight: 700; }
 .quadro-general-chave div { display: flex; gap: 6px; }
 .quadro-general-chave input { min-width: 0; flex: 1; min-height: 34px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .35); color: var(--bh-text); }
@@ -4231,9 +4231,15 @@ main { max-width: 1600px; margin: 0 auto; }
   .qg-reproduzir { flex: 1 1 100%; }
 }
 /* A IA de reserva (Groq ou OpenRouter): discreta, fechada por defeito. */
-.quadro-general-reserva { margin-top: 6px; }
+.quadro-general-reserva { justify-self: stretch; min-width: 0; margin-top: 6px; }
 .quadro-general-reserva summary { color: var(--bh-text-dim); font-size: 12px; cursor: pointer; }
 .quadro-general-reserva[open] summary { margin-bottom: 6px; }
 .quadro-general-escolha { display: grid; gap: 8px; }
 .quadro-general-escolha label { display: grid; gap: 3px; font-size: 12px; color: var(--bh-text-dim); }
-.quadro-general-escolha select { max-width: 100%; padding: 6px 8px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .3); color: var(--bh-text); }
+.quadro-general-chave select { flex: 0 1 150px; min-width: 0; min-height: 34px; padding: 0 8px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .35); color: var(--bh-text); }
+@media (max-width: 520px) { .quadro-general-chave div { flex-wrap: wrap; } .quadro-general-chave select { flex-basis: 100%; } }
+.quadro-general-reservas { display: grid; gap: 4px; margin: 0 0 8px; padding: 0; list-style: none; }
+.quadro-general-reservas li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; border: 1px solid var(--bh-line); border-radius: 8px; font-size: 12px; color: var(--bh-text); }
+.quadro-general-reservas code { color: var(--bh-text-dim); }
+.quadro-general-reservas button { min-height: 28px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(255, 255, 255, .06); color: var(--bh-text); cursor: pointer; }
+.quadro-general-escolha select { width: 100%; max-width: 100%; padding: 6px 8px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .3); color: var(--bh-text); }
