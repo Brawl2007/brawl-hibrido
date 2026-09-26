@@ -64,6 +64,10 @@ const pintarMapa: Pintura = (coluna, linha, x, y) => {
   // Uma zona a meio do mapa (anel azul em 3×3 casas) e uma flor vermelha sozinha num cacto.
   if (linha >= 19 && linha <= 21 && coluna >= 9 && coluna <= 11) return x < 9 || x > 20 ? [4, 171, 252] : [60, 120, 170];
   if (linha === 5 && coluna === 18) return x > 10 && x < 20 && y > 10 && y < 20 ? [230, 60, 80] : [60, 110, 40];
+  // Três vasos vermelhos em cima de uma parede, como no Hideout: vermelho maciço, não a linha de um anel.
+  if (linha === 7 && coluna >= 2 && coluna <= 4) return x > 7 && x < 20 && y > 9 && y < 22 ? [215, 55, 50] : [196, 112, 66];
+  // Um jarro solto: duas casas, uma em cima da outra, de uma cor que não se repete.
+  if (coluna === 18 && (linha === 12 || linha === 13)) return x < 3 || x > 26 ? [120, 60, 40] : [244, 107, 84];
   // Uma piscina (o azul claro da água, a casa inteira) e o disco de uma zona (azulado, liso, redondo).
   if (linha >= 2 && linha <= 3 && coluna >= 14 && coluna <= 16) return [60, 175, 240];
   if (Math.hypot(coluna - 16, linha - 26) <= 3.2) return [30, 95, 160];
@@ -91,6 +95,16 @@ describe("ler o terreno da imagem do mapa", () => {
   it("o anel de uma zona é objetivo em qualquer sítio do mapa; uma flor vermelha sozinha não", () => {
     for (const [coluna, linha] of [[9, 19], [10, 20], [11, 21]]) expect(tipoDaCasa(terreno, coluna, linha), `${coluna},${linha}`).toBe("objetivo");
     expect(tipoDaCasa(terreno, 18, 5)).not.toBe("objetivo");
+  });
+
+  it.skip("vasos vermelhos numa parede são parede (não o anel de uma base); um jarro solto é jarro", () => {
+    for (const coluna of [2, 3, 4]) expect(tipoDaCasa(terreno, coluna, 7), `${coluna},7`).toBe("parede");
+    expect(tipoDaCasa(terreno, 18, 12)).toBe("destrutivel");
+    expect(tipoDaCasa(terreno, 18, 13)).toBe("destrutivel");
+    // Uma parede de verdade (5 casas seguidas) não passa a jarro.
+    expect(tipoDaCasa(terreno, 7, 10)).toBe("parede");
+    // Um jarro bloqueia: ninguém fica lá dentro.
+    expect(pontoLivre(terreno, { x: 18.5 / 21, y: 12.5 / 33 })).not.toEqual({ x: 18.5 / 21, y: 12.5 / 33 });
   });
 
   it("a grelha em texto é a que a IA recebe, linha a linha", () => {

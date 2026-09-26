@@ -87,10 +87,10 @@ export const appRouter = router({
     terreno: publicProcedure
       .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
       .query(({ input }) => obterTerreno(input.mapaId)),
-    /** As medidas de cada casa de umas linhas (cor, textura, vermelho, azul): para afinar a leitura do terreno. */
+    /** As medidas de cada casa de até 4 mapas (cor, textura, vermelho, azul), compactas: para afinar a leitura do terreno. */
     diagnosticoDoTerreno: publicProcedure
-      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/), de: z.number().int().min(0).max(32), ate: z.number().int().min(0).max(32) }))
-      .query(({ input }) => diagnosticoDoMapa(input.mapaId, input.de, Math.min(input.ate, input.de + 5))),
+      .input(z.object({ mapaIds: z.array(z.string().regex(/^\d{5,9}$/)).min(1).max(4) }))
+      .query(async ({ input }) => Object.fromEntries(await Promise.all(input.mapaIds.map(async (id) => [id, await diagnosticoDoMapa(id)] as const)))),
     /** De onde veio a lista de builds e quantos itens tem (sem a lista): para confirmar que chega. */
     catalogo: publicProcedure.query(async () => {
       const catalogo = await obterCatalogo();

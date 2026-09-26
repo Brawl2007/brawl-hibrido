@@ -35,6 +35,9 @@ const PESO_DA_TEXTURA = 1.5;
  */
 const FRACAO_DE_ANEL = 0.07;
 const FRACAO_DE_ANEL_VIZINHO = 0.015;
+/** Uma casa com mais do que isto de vermelho está pintada por inteiro: é um vaso ou uma flor, não a linha de um anel. */
+const FRACAO_MACICA = 0.3;
+const MAXIMO_DE_OBJETO_VERMELHO = 6;
 /** Abaixo disto uma casa é lisa: enchimento de círculo, não uma parede. */
 const TEXTURA_DE_ENCHIMENTO = 6;
 const ID_DE_OBJETIVO = "0";
@@ -52,6 +55,8 @@ const ID_DE_AGUA = "1";
  * contorno como paredes, e apareciam blocos invisíveis.
  */
 const ID_DE_ZONA = "2";
+/** Jarros, vasos e barris soltos (ver `marcarJarros`). */
+const ID_DE_JARRO = "3";
 const azulado = (cor: readonly number[]) => cor[2] - cor[0] > 70 && cor[1] - cor[0] > 40;
 const anelVermelho = (r: number, g: number, b: number) => r > 190 && g < 95 && b < 110;
 const anelAzul = (r: number, g: number, b: number) => b > 215 && r < 70 && g > 120 && g < 185;
@@ -113,18 +118,31 @@ export function medirCasas(imagem: ImagemRGBA, casa = imagem.largura / (COLUNAS_
   return medidas;
 }
 
-/** Para afinar a leitura: as medidas de cada casa de umas linhas, em texto curto. */
-export function diagnosticoDasCasas(imagem: ImagemRGBA, deLinha: number, ateLinha: number) {
-  const medidas = medirCasas(imagem);
-  const um = (v: number) => Math.round(v);
-  const linhas: string[] = [];
-  for (let linha = Math.max(0, deLinha); linha <= Math.min(LINHAS_DO_MAPA - 1, ateLinha); linha++) {
-    for (let coluna = 0; coluna < COLUNAS_DO_MAPA; coluna++) {
-      const m = medidas[linha * COLUNAS_DO_MAPA + coluna];
-      linhas.push(`${linha},${coluna} cor=${m.cor.map(um).join("/")} t=${um(m.textura)} v=${m.vermelho.toFixed(2)} a=${m.azul.toFixed(2)} resto=${m.resto.cor.map(um).join("/")} rt=${um(m.resto.textura)}`);
-    }
+const hex2 = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+
+/**
+ * Para afinar a leitura: as medidas de cada casa, 20 algarismos hexadecimais
+ * por casa — cor (6), textura (2), % vermelho (2), % azul (2), cor do resto
+ * (6), textura do resto (2). `lerMedidasCompactas` desfaz.
+ */
+export function medidasCompactas(medidas: readonly MedidaDaCasa[]) {
+  return medidas.map((m) => [...m.cor, m.textura, m.vermelho * 100, m.azul * 100, ...m.resto.cor, m.resto.textura].map(hex2).join("")).join("");
+}
+
+export function lerMedidasCompactas(texto: string): MedidaDaCasa[] {
+  const medidas: MedidaDaCasa[] = [];
+  for (let i = 0; i + 20 <= texto.length; i += 20) {
+    const v = Array.from({ length: 10 }, (_, k) => parseInt(texto.slice(i + 2 * k, i + 2 * k + 2), 16));
+    medidas.push({
+      cor: [v[0], v[1], v[2]],
+      textura: v[3],
+      vermelho: v[4] / 100,
+      azul: v[5] / 100,
+      anel: (v[4] + v[5]) / 100,
+      resto: { cor: [v[6], v[7], v[8]], textura: v[9] },
+    });
   }
-  return linhas;
+  return medidas;
 }
 
 export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoDoMapa {
@@ -132,8 +150,11 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
   if (!Number.isInteger(casa) || casa < 8 || Math.abs(imagem.altura / (LINHAS_DO_MAPA + 2) - casa) > 0.01) {
     throw new Error(`A imagem tem ${imagem.largura}×${imagem.altura}: não é um mapa de 21×33 casas.`);
   }
-  const medidas = medirCasas(imagem, casa);
+  return terrenoDasMedidas(medirCasas(imagem, casa), mapaId);
+}
 
+/** O terreno a partir das medidas de cada casa (separado da imagem para se poder afinar com medidas guardadas). */
+export function terrenoDasMedidas(medidas: readonly MedidaDaCasa[], mapaId: string): TerrenoDoMapa {
   // O xadrez do chão: a cor mais repetida em cada paridade.
   const chao = [0, 1].map((paridade) => {
     const contagem = new Map<string, { n: number; cor: Cor }>();
@@ -149,7 +170,8 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
 
   // Anéis: só contam em manchas de pelo menos 3 casas seguidas. Uma flor
   // vermelha num cacto é uma casa sozinha; uma base, uma zona ou uma baliza não.
-  const eAgua = medidas.map((medida) => medida.anel >= FRACAO_DE_AGUA && medida.textura < 14);
+  // Só o azul: uma casa toda vermelha é um objeto (vasos, flores), nunca água.
+  const eAgua = medidas.map((medida) => medida.azul >= FRACAO_DE_AGUA && medida.textura < 14);
   const temAnel = medidas.map((medida, i) => medida.anel >= FRACAO_DE_ANEL && !eAgua[i]);
   const emMancha = new Array<boolean>(medidas.length).fill(false);
   const visto = new Array<boolean>(medidas.length).fill(false);
@@ -167,7 +189,11 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
         mancha.push(j);
       }
     }
-    if (mancha.length >= 3) for (const i of mancha) emMancha[i] = true;
+    // Vasos e flores vermelhas numa parede (o Hideout tem três seguidos): a casa
+    // é vermelho MACIÇO (~40%), e um anel é uma linha fina (5 a 20%). Uma
+    // mancha curta toda maciça é um objeto, não um anel.
+    const objetoVermelho = mancha.length <= MAXIMO_DE_OBJETO_VERMELHO && mancha.every((i) => medidas[i].vermelho >= FRACAO_MACICA);
+    if (mancha.length >= 3 && !objetoVermelho) for (const i of mancha) emMancha[i] = true;
   }
   // O enchimento dos círculos de partida: casas lisas (sem contornos, que as
   // paredes têm sempre) encostadas a um anel. Sem isto apareciam blocos dentro
@@ -241,10 +267,68 @@ export function lerTerrenoDaImagem(imagem: ImagemRGBA, mapaId: string): TerrenoD
     textura: Math.round((grupo.textura / grupo.casas) * 10) / 10,
   }));
   const rotulados = rotularPorRegra(semTipo, grelha);
+  // Os jarros ainda não se leem sozinhos: a regra tem de ser afinada com medidas reais (ver `marcarJarros`).
+  const { grelha: comJarros, jarros } = { grelha, jarros: 0 };
   if (objetivos) rotulados.push({ id: ID_DE_OBJETIVO, cor: [40, 150, 230], casas: objetivos, textura: 0, tipo: "objetivo" });
   if (aguas) rotulados.push({ id: ID_DE_AGUA, cor: [70, 180, 240], casas: aguas, textura: 0, tipo: "agua" });
   if (zonas) rotulados.push({ id: ID_DE_ZONA, cor: [35, 100, 160], casas: zonas, textura: 0, tipo: "objetivo" });
-  return { mapaId, colunas: COLUNAS_DO_MAPA, linhas: LINHAS_DO_MAPA, grelha, grupos: rotulados, rotulado: "regra" };
+  if (jarros) {
+    for (const grupo of rotulados) grupo.casas = contar(comJarros, grupo.id);
+    rotulados.push({ id: ID_DE_JARRO, cor: [200, 110, 80], casas: jarros, textura: 0, tipo: "destrutivel" });
+  }
+  return { mapaId, colunas: COLUNAS_DO_MAPA, linhas: LINHAS_DO_MAPA, grelha: comJarros, grupos: rotulados.filter((g) => g.casas > 0), rotulado: "regra" };
+}
+
+const contar = (grelha: string, id: string) => grelha.split(id).length - 1;
+
+/**
+ * Jarros, vasos e barris soltos: uma peça de uma casa (ou duas, uma em cima
+ * da outra — o desenho do jarro é alto) sem mais nenhum obstáculo à volta, com
+ * pelo menos uma casa de uma cor rara no mapa (no máximo 4 casas dessa cor).
+ * As paredes de verdade são blocos maiores ou encostados a outros; uma cerca
+ * de postes tem a cor das paredes, que se repete.
+ */
+export function marcarJarros(grelha: string, grupos: readonly GrupoDeCor[], colunas = COLUNAS_DO_MAPA) {
+  const linhas = Math.ceil(grelha.length / colunas);
+  const tipoDe = new Map(grupos.map((g) => [g.id, g]));
+  const bloqueia = (i: number) => tipoDe.get(grelha[i])?.tipo === "parede";
+  const letras = grelha.split("");
+  let jarros = 0;
+  const visto = new Set<number>();
+  for (let inicio = 0; inicio < grelha.length; inicio++) {
+    if (visto.has(inicio) || !bloqueia(inicio)) continue;
+    // A peça: casas de parede ligadas pelos lados.
+    const peca = [inicio];
+    visto.add(inicio);
+    for (let k = 0; k < peca.length; k++) {
+      const i = peca[k], c = i % colunas, l = Math.floor(i / colunas);
+      for (const [dc, dl] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const cc = c + dc, ll = l + dl, j = ll * colunas + cc;
+        if (cc < 0 || ll < 0 || cc >= colunas || ll >= linhas || visto.has(j) || !bloqueia(j)) continue;
+        visto.add(j);
+        peca.push(j);
+      }
+    }
+    if (peca.length > 2) continue;
+    if (peca.length === 2 && Math.abs(peca[0] - peca[1]) !== colunas) continue;
+    // Solta: nenhuma outra parede nas oito casas à volta.
+    const naPeca = new Set(peca);
+    const encostada = peca.some((i) => {
+      const c = i % colunas, l = Math.floor(i / colunas);
+      for (let dl = -1; dl <= 1; dl++) for (let dc = -1; dc <= 1; dc++) {
+        const cc = c + dc, ll = l + dl, j = ll * colunas + cc;
+        if (cc < 0 || ll < 0 || cc >= colunas || ll >= linhas || naPeca.has(j)) continue;
+        if (bloqueia(j)) return true;
+      }
+      return false;
+    });
+    if (encostada) continue;
+    const corRara = peca.some((i) => (tipoDe.get(grelha[i])?.casas ?? Infinity) <= 4);
+    if (!corRara) continue;
+    for (const i of peca) letras[i] = ID_DE_JARRO;
+    jarros += peca.length;
+  }
+  return { grelha: letras.join(""), jarros };
 }
 
 /**
@@ -382,9 +466,9 @@ export async function guardarRotulosDaIA(terreno: TerrenoDoMapa, rotulos: unknow
   return rotulado;
 }
 
-/** As medidas das casas de umas linhas de um mapa, lidas agora da imagem. Para afinar a leitura. */
-export async function diagnosticoDoMapa(mapaId: string, deLinha: number, ateLinha: number, buscar: typeof fetch = fetch) {
+/** As medidas de todas as casas de um mapa, lidas agora da imagem, em texto compacto. Para afinar a leitura. */
+export async function diagnosticoDoMapa(mapaId: string, buscar: typeof fetch = fetch) {
   const imagem = await imagemDaBrawlify("mapa", mapaId, buscar);
   if (!imagem || imagem.tipo !== "image/png") return null;
-  return diagnosticoDasCasas(lerPng(imagem.dados), deLinha, ateLinha);
+  return medidasCompactas(medirCasas(lerPng(imagem.dados)));
 }

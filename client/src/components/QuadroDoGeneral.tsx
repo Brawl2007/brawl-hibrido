@@ -55,7 +55,7 @@ type Props = {
 };
 
 const NOME_DA_FUNCAO = { mid: "mid", side: "lane", flex: "flex" } as const;
-const NOME_DO_TIPO_DE_CASA: Record<TipoDeCasa, string> = { chao: "Chão", parede: "Parede", mato: "Mato", agua: "Água", objetivo: "Objetivo" };
+const NOME_DO_TIPO_DE_CASA: Record<TipoDeCasa, string> = { chao: "Chão", parede: "Parede", mato: "Mato", agua: "Água", objetivo: "Objetivo", destrutivel: "Jarro / barril" };
 const VISTAS: Array<{ id: Vista; nome: string }> = [
   { id: "nossa", nome: "Da nossa base" },
   { id: "deles", nome: "Da base deles" },

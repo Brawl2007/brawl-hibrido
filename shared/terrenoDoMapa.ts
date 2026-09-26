@@ -17,8 +17,14 @@
  * regra aproximada, depois — quando o dono tem a IA ligada — a IA olha para a
  * imagem e diz o que cada grupo é, uma vez por mapa, e fica guardado.
  */
-export type TipoDeCasa = "chao" | "parede" | "mato" | "agua" | "objetivo";
-export const TIPOS_DE_CASA: readonly TipoDeCasa[] = ["chao", "parede", "mato", "agua", "objetivo"];
+/**
+ * `destrutivel`: jarros, vasos e barris soltos. Bloqueiam como uma parede, mas
+ * partem-se com ataques normais — não são cobertura em que se possa confiar.
+ */
+export type TipoDeCasa = "chao" | "parede" | "mato" | "agua" | "objetivo" | "destrutivel";
+export const TIPOS_DE_CASA: readonly TipoDeCasa[] = ["chao", "parede", "mato", "agua", "objetivo", "destrutivel"];
+/** Bloqueia a passagem (e os tiros) enquanto estiver de pé. */
+export const bloqueiaPassagem = (tipo: TipoDeCasa) => tipo === "parede" || tipo === "destrutivel";
 
 export const COLUNAS_DO_MAPA = 21;
 export const LINHAS_DO_MAPA = 33;
@@ -41,16 +47,20 @@ export type TerrenoDoMapa = {
   grelha: string;
   grupos: GrupoDeCor[];
   rotulado: "regra" | "ia";
+  /** Casas corrigidas à mão pelo dono (índice da casa → tipo). Valem mais do que o grupo. */
+  correcoes?: Record<string, TipoDeCasa>;
 };
 
 export function tipoDaCasa(terreno: TerrenoDoMapa, coluna: number, linha: number): TipoDeCasa {
   if (coluna < 0 || linha < 0 || coluna >= terreno.colunas || linha >= terreno.linhas) return "parede";
+  const corrigida = terreno.correcoes?.[linha * terreno.colunas + coluna];
+  if (corrigida) return corrigida;
   const letra = terreno.grelha[linha * terreno.colunas + coluna];
   if (!letra || letra === ".") return "chao";
   return terreno.grupos.find((grupo) => grupo.id === letra)?.tipo ?? "chao";
 }
 
-export const SIMBOLO_DO_TIPO: Record<TipoDeCasa, string> = { chao: ".", parede: "#", mato: "\"", agua: "~", objetivo: "o" };
+export const SIMBOLO_DO_TIPO: Record<TipoDeCasa, string> = { chao: ".", parede: "#", mato: "\"", agua: "~", objetivo: "o", destrutivel: "*" };
 
 /**
  * A grelha em texto, para a IA: uma linha por linha do mapa, com o número à
@@ -86,7 +96,7 @@ export function centroDaCasa(terreno: Pick<TerrenoDoMapa, "colunas" | "linhas">,
  */
 export function pontoLivre(terreno: TerrenoDoMapa | null | undefined, ponto: { x: number; y: number }, opcoes: { atravessaAgua?: boolean } = {}) {
   if (!terreno) return ponto;
-  const bloqueia = (tipo: TipoDeCasa) => tipo === "parede" || (tipo === "agua" && !opcoes.atravessaAgua);
+  const bloqueia = (tipo: TipoDeCasa) => bloqueiaPassagem(tipo) || (tipo === "agua" && !opcoes.atravessaAgua);
   const { coluna, linha } = casaDoPonto(terreno, ponto);
   if (!bloqueia(tipoDaCasa(terreno, coluna, linha))) return ponto;
   for (let raio = 1; raio < Math.max(terreno.colunas, terreno.linhas); raio++) {
@@ -163,5 +173,23 @@ export function terrenoValido(valor: unknown): valor is TerrenoDoMapa {
     && typeof t.grelha === "string"
     && t.grelha.length === t.colunas * t.linhas
     && Array.isArray(t.grupos)
-    && t.grupos.every((grupo) => typeof grupo.id === "string" && TIPOS_DE_CASA.includes(grupo.tipo));
+    && t.grupos.every((grupo) => typeof grupo.id === "string" && TIPOS_DE_CASA.includes(grupo.tipo))
+    && (t.correcoes === undefined || (typeof t.correcoes === "object" && t.correcoes !== null
+      && Object.entries(t.correcoes).every(([indice, tipo]) => /^\d+$/.test(indice) && Number(indice) < t.grelha.length && TIPOS_DE_CASA.includes(tipo))));
+}
+
+/**
+ * Corrige casas à mão. `null` apaga a correção (volta ao que a imagem diz).
+ * Casas fora do mapa e tipos desconhecidos ficam de fora.
+ */
+export function corrigirCasas(terreno: TerrenoDoMapa, casas: ReadonlyArray<{ coluna: number; linha: number; tipo: TipoDeCasa | null }>): TerrenoDoMapa {
+  const correcoes: Record<string, TipoDeCasa> = { ...(terreno.correcoes ?? {}) };
+  for (const { coluna, linha, tipo } of casas) {
+    if (!Number.isInteger(coluna) || !Number.isInteger(linha) || coluna < 0 || linha < 0 || coluna >= terreno.colunas || linha >= terreno.linhas) continue;
+    const indice = String(linha * terreno.colunas + coluna);
+    if (tipo === null) delete correcoes[indice];
+    else if (TIPOS_DE_CASA.includes(tipo)) correcoes[indice] = tipo;
+  }
+  const { correcoes: _antigas, ...resto } = terreno;
+  return Object.keys(correcoes).length ? { ...resto, correcoes } : resto;
 }
