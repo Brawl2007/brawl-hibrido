@@ -18,12 +18,17 @@
  * disso chega ao ecrã.
  */
 import { inferDraftRole, posicionarNoMapa, type DraftRole } from "./draft";
-import { COLUNAS_DO_MAPA, LINHAS_DO_MAPA, bloqueiaPassagem, centroDaCasa, corrigirCasas, grelhaEmTexto, pontoLivre, tipoDaCasa, type TerrenoDoMapa } from "./terrenoDoMapa";
+import { COLUNAS_DO_MAPA, LINHAS_DO_MAPA, bloqueiaPassagem, caminhoLivre, centroDaCasa, corrigirCasas, grelhaEmTexto, pontoLivre, tipoDaCasa, type TerrenoDoMapa } from "./terrenoDoMapa";
 
 export type PontoNoMapa = { x: number; y: number };
 export type TipoDeSeta = "avanco" | "recuo" | "rotacao";
-/** `nota`: porquê este movimento, em poucas palavras — fica escrita no mapa, a meio da seta. */
-export type SetaDoPlano = { id: string; de: PontoNoMapa; para: PontoNoMapa; tipo: TipoDeSeta; brawler?: string; nota?: string };
+/**
+ * `nota`: porquê este movimento, em poucas palavras — fica escrita no mapa, a meio da seta.
+ * `caminho`: os pontos de viragem entre `de` e `para`, quando o caminho direto passa por
+ * uma parede — a seta contorna-a, como o brawler teria de fazer.
+ */
+export type SetaDoPlano = { id: string; de: PontoNoMapa; para: PontoNoMapa; tipo: TipoDeSeta; brawler?: string; nota?: string; caminho?: PontoNoMapa[] };
+export const MAXIMO_DE_VIRAGENS = 10;
 /** Build sugerida. Vazio quando a IA não tem a certeza — melhor nada do que um nome inventado. */
 export type BuildDoBrawler = {
   gadget: string;
@@ -42,6 +47,7 @@ export const CAPACIDADES: ReadonlyArray<{ id: Capacidade; nome: string }> = [
 /** Passos fantasma: o caminho que a IA prevê que um brawler vai percorrer mais vezes. */
 export type TrilhoDoPlano = { id: string; brawler: string; lado: "nos" | "eles"; pontos: PontoNoMapa[] };
 export const MAXIMO_DE_TRILHOS = 6;
+export const MAXIMO_DE_PONTOS_DO_TRILHO = 14;
 
 export type OrdemDoBrawler = {
   brawler: string;
@@ -286,6 +292,7 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
   // A ordem das fichas é a do draft, não a da resposta.
   ordens.sort((a, b) => nossos.indexOf(a.brawler) - nossos.indexOf(b.brawler));
   const atravessaAgua = (nome?: string) => Boolean(nome && ordens.find((o) => o.brawler === nome)?.capacidades?.includes("atravessa-agua"));
+  const saltaParedes = (nome?: string) => Boolean(nome && ordens.find((o) => o.brawler === nome)?.capacidades?.includes("salta-paredes"));
 
   // Onde a IA prevê que os adversários vão estar (opcional).
   const porNomeDeles = new Map(deles.map((nome) => [normalizarNome(nome), nome]));
@@ -304,13 +311,21 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
       const seta = entrada as Record<string, unknown>;
       const brawler = porNome.get(normalizarNome(texto(seta.brawler, 40)));
       // A ponta de uma seta é para onde o brawler vai: nunca uma parede, e água só para quem a atravessa.
-      const de = lerPonto(seta.de);
+      const deBruto = lerPonto(seta.de);
       const paraBruto = lerPonto(seta.para);
-      const para = paraBruto && pontoLivre(terrenoAqui, paraBruto, { atravessaAgua: atravessaAgua(brawler) });
-      if (!de || !para || Math.hypot(para.x - de.x, para.y - de.y) < 0.03) continue;
+      if (!deBruto || !paraBruto) continue;
+      const opcoes = { atravessaAgua: atravessaAgua(brawler) };
+      // E o caminho também: quem não salta paredes contorna-as. Sem caminho possível, a seta não entra.
+      const rota = saltaParedes(brawler)
+        ? [deBruto, pontoLivre(terrenoAqui, paraBruto, opcoes)]
+        : caminhoLivre(terrenoAqui, deBruto, paraBruto, opcoes);
+      if (!rota) continue;
+      const de = rota[0], para = rota[rota.length - 1];
+      if (Math.hypot(para.x - de.x, para.y - de.y) < 0.03) continue;
+      const caminho = rota.slice(1, -1).slice(0, MAXIMO_DE_VIRAGENS);
       const tipo = TIPOS_DE_SETA.some((item) => item.id === seta.tipo) ? (seta.tipo as TipoDeSeta) : "avanco";
       const notaDaSeta = texto(seta.nota, 50);
-      setas.push({ id: `${prefixo}${setas.length + 1}`, de, para, tipo, ...(brawler ? { brawler } : {}), ...(notaDaSeta ? { nota: notaDaSeta } : {}) });
+      setas.push({ id: `${prefixo}${setas.length + 1}`, de, para, tipo, ...(brawler ? { brawler } : {}), ...(notaDaSeta ? { nota: notaDaSeta } : {}), ...(caminho.length ? { caminho } : {}) });
     }
     return setas;
   };
@@ -415,11 +430,20 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
     const brawler = nosso ?? deles_;
     if (!brawler) continue;
     const lado = nosso ? "nos" : "eles";
-    const pontos = (Array.isArray(trilho.pontos) ? trilho.pontos : [])
+    const opcoes = { atravessaAgua: lado === "nos" && atravessaAgua(brawler) };
+    const brutos = (Array.isArray(trilho.pontos) ? trilho.pontos : [])
       .map((p) => lerPonto(p))
       .filter((p): p is PontoNoMapa => Boolean(p))
-      .map((p) => pontoLivre(terreno, p, { atravessaAgua: lado === "nos" && atravessaAgua(brawler) }))
       .slice(0, 6);
+    // Os passos seguem o caminho por onde se anda: à volta das paredes, como as setas.
+    const pontos: PontoNoMapa[] = [];
+    for (let k = 0; k < brutos.length; k++) {
+      if (k === 0) { pontos.push(pontoLivre(terreno, brutos[0], opcoes)); continue; }
+      const troco = lado === "nos" && saltaParedes(brawler) ? [pontos[pontos.length - 1], pontoLivre(terreno, brutos[k], opcoes)] : caminhoLivre(terreno, pontos[pontos.length - 1], brutos[k], opcoes);
+      if (!troco) break;
+      pontos.push(...troco.slice(1));
+    }
+    pontos.splice(MAXIMO_DE_PONTOS_DO_TRILHO);
     if (pontos.length >= 2) trilhos.push({ id: `ia-t${trilhos.length + 1}`, brawler, lado, pontos });
   }
 
@@ -547,6 +571,8 @@ export function textoDoPedido(pedido: PedidoDePlano, comImagem: boolean, terreno
     "7. momentos: exatamente 3 — \"inicio\", \"meio\" e \"fim\" da partida. Cada um com: quando (ex.: \"0:00–0:40\"), resumo (no máximo 10 palavras), seGanhar (o que fazer se estivermos À FRENTE, no máximo 8 palavras, ex.: \"recua e guarda a vantagem\") e sePerder (se estivermos ATRÁS, no máximo 8 palavras, ex.: \"junta os três e força o flanco\"). No \"meio\" e no \"fim\" dá também um quadro novo: posicoes (os 6 brawlers, nossos e deles, onde estão nesse momento — PODES trocar os nossos de lane ou de função se isso for melhor), setas (2 a 5), marcadores (3 a 6) e paredesPartidas (as casas \"#\" ou \"*\" que já foram partidas até esse momento por quem parte paredes; lista vazia se ninguém parte). Prevê o que muda: paredes que caem, quem ganhou vantagem, zonas que abrem.",
     "8. ameacas (2 a 4): quem é perigoso para quem, de lados opostos, e a exceção. perigoso e alvo são nomes do draft; texto no máximo 8 palavras (ex.: \"não chegues perto: morres rápido\"); excecao: quando deixa de valer, no máximo 6 palavras (ex.: \"Pearl com pouca vida\"). Usa-as para avisar os NOSSOS do que os mata, e para mostrar os NOSSOS que são perigosos para eles.",
     "9. trilhos (passos fantasma): para 3 a 6 brawlers — nossos E adversários — o caminho que vão percorrer mais vezes durante a partida, com 3 a 5 casas por ordem (de onde partem até onde lutam). Sem atravessar paredes nem água (salvo quem atravessa água).",
+    "",
+    "CAMINHOS: um brawler só anda por \".\", '\"' e \"o\". Paredes (\"#\") e jarros (\"*\") tapam o caminho; água (\"~\") só para quem atravessa água; atravessar paredes só com \"salta-paredes\". Setas e passos fantasma seguem por onde se anda: se o caminho direto estiver tapado, contorna pela abertura mais próxima (o site desvia a seta à volta da parede, e recusa as que não têm caminho).",
     "",
     "PAREDES: antes de mandar partir uma parede, vê quem da NOSSA equipa precisa dela — quem lança por cima (Sprout, Barley, Dynamike, Tick, Grom, Larry & Lawrie, Willow…) e quem se esconde atrás dela. Não partas essas: parte as que protegem os atiradores DELES ou que tapam o caminho até eles. Diz no símbolo \"destruir\" QUAIS e PORQUÊ.",
     "",
@@ -699,7 +725,13 @@ function limparBuild(build: BuildDoBrawler): BuildDoBrawler {
 function setasGuardadas(lista: unknown): SetaDoPlano[] {
   return (Array.isArray(lista) ? (lista as SetaDoPlano[]) : [])
     .filter((seta) => seta && typeof seta.de?.x === "number" && typeof seta.de?.y === "number" && typeof seta.para?.x === "number" && typeof seta.para?.y === "number" && TIPOS_DE_SETA.some((tipo) => tipo.id === seta.tipo))
-    .map((seta) => ({ ...seta, nota: typeof seta.nota === "string" ? seta.nota.slice(0, 50) : undefined }))
+    .map((seta) => ({
+      ...seta,
+      nota: typeof seta.nota === "string" ? seta.nota.slice(0, 50) : undefined,
+      caminho: Array.isArray(seta.caminho)
+        ? seta.caminho.filter((p) => typeof p?.x === "number" && typeof p?.y === "number").map((p) => ({ x: limitarAoMapa(p.x), y: limitarAoMapa(p.y) })).slice(0, MAXIMO_DE_VIRAGENS)
+        : undefined,
+    }))
     .slice(0, MAXIMO_DE_SETAS * 2);
 }
 
@@ -737,7 +769,7 @@ export function lerPlanoGuardado(bruto: string | null, nossos: readonly string[]
     const nomesDoDraft = new Set([...nossos, ...deles]);
     const trilhos = (Array.isArray(guardado.trilhos) ? guardado.trilhos : [])
       .filter((t) => t && nomesDoDraft.has(t.brawler) && (t.lado === "nos" || t.lado === "eles") && Array.isArray(t.pontos))
-      .map((t) => ({ ...t, pontos: t.pontos.filter((p) => typeof p?.x === "number" && typeof p?.y === "number").map((p) => ({ x: limitarAoMapa(p.x), y: limitarAoMapa(p.y) })).slice(0, 6) }))
+      .map((t) => ({ ...t, pontos: t.pontos.filter((p) => typeof p?.x === "number" && typeof p?.y === "number").map((p) => ({ x: limitarAoMapa(p.x), y: limitarAoMapa(p.y) })).slice(0, MAXIMO_DE_PONTOS_DO_TRILHO) }))
       .filter((t) => t.pontos.length >= 2)
       .slice(0, MAXIMO_DE_TRILHOS);
     const marcadores = marcadoresGuardados(guardado.marcadores);

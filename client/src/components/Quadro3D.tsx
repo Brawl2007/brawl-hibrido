@@ -17,6 +17,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CasaDoMapa, MarcadorDoPlano, PontoNoMapa, SetaDoPlano, TipoDeMarcador, TipoDeSeta, TrilhoDoPlano } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_MARCADOR } from "@shared/quadroDoGeneral";
 import { tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
@@ -317,6 +318,35 @@ function geometriaDaSeta(de: THREE.Vector3, para: THREE.Vector3) {
   geometria.rotateY(-Math.atan2(para.z - de.z, para.x - de.x));
   geometria.translate(de.x, 0.08, de.z);
   return geometria;
+}
+
+/**
+ * Uma seta que contorna paredes: troços retos pelos pontos de viragem, com a
+ * ponta só no último. Tudo numa geometria (o cursor apanha-a como uma seta só).
+ */
+function geometriaDaRota(pontos: THREE.Vector3[]) {
+  if (pontos.length <= 2) return geometriaDaSeta(pontos[0], pontos[pontos.length - 1]);
+  const partes: THREE.BufferGeometry[] = [];
+  const haste = 0.22;
+  for (let i = 0; i < pontos.length - 2; i++) {
+    const a = pontos[i], b = pontos[i + 1];
+    const comprimento = a.distanceTo(b);
+    const troco = new THREE.PlaneGeometry(comprimento, haste * 2);
+    troco.rotateX(-Math.PI / 2);
+    troco.rotateY(-Math.atan2(b.z - a.z, b.x - a.x));
+    troco.translate((a.x + b.x) / 2, 0.08, (a.z + b.z) / 2);
+    partes.push(troco.toNonIndexed());
+    // Um círculo em cada viragem, para a curva não ficar com dentes.
+    const junta = new THREE.CircleGeometry(haste, 12);
+    junta.rotateX(-Math.PI / 2);
+    junta.translate(b.x, 0.08, b.z);
+    partes.push(junta.toNonIndexed());
+  }
+  partes.push(geometriaDaSeta(pontos[pontos.length - 2], pontos[pontos.length - 1]).toNonIndexed());
+  for (const parte of partes) for (const nome of Object.keys(parte.attributes)) if (nome !== "position") parte.deleteAttribute(nome);
+  const junta = mergeGeometries(partes) ?? geometriaDaSeta(pontos[0], pontos[pontos.length - 1]);
+  for (const parte of partes) parte.dispose();
+  return junta;
 }
 
 export default function Quadro3D(props: Props) {
@@ -960,8 +990,9 @@ export default function Quadro3D(props: Props) {
       material.dispose();
     }
     for (const seta of props.setas) {
+      const rota = [seta.de, ...(seta.caminho ?? []), seta.para].map(paraMundo);
       const malha = new THREE.Mesh(
-        geometriaDaSeta(paraMundo(seta.de), paraMundo(seta.para)),
+        geometriaDaRota(rota),
         new THREE.MeshBasicMaterial({ color: COR_DA_SETA[seta.tipo], transparent: true, opacity: 0.92, depthTest: false, side: THREE.DoubleSide }),
       );
       malha.renderOrder = 5;
@@ -969,7 +1000,9 @@ export default function Quadro3D(props: Props) {
       c.grupoDasSetas.add(malha);
       // Porquê este movimento, escrito a meio da seta.
       if (props.notasNoMapa && seta.nota) {
-        const de = paraMundo(seta.de), para = paraMundo(seta.para);
+        // A meio do troço do meio do caminho.
+        const meio = Math.floor((rota.length - 1) / 2);
+        const de = rota[meio], para = rota[meio + 1];
         const etiqueta = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharEtiqueta(seta.nota, COR_DA_SETA[seta.tipo]), depthTest: false }));
         etiqueta.scale.set(5, 1, 1);
         etiqueta.position.set((de.x + para.x) / 2, 0.9, (de.z + para.z) / 2);

@@ -14,7 +14,7 @@ import {
   MAXIMO_DE_SETAS,
   type PedidoDePlano,
 } from "@shared/quadroDoGeneral";
-import { aplicarRotulos, corrigirCasas, grelhaEmTexto, pontoLivre, terrenoValido, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
+import { aplicarRotulos, caminhoLivre, corrigirCasas, grelhaEmTexto, linhaLivre, pontoLivre, terrenoValido, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
 import { conferirBuilds, escolherModelo, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
@@ -83,6 +83,16 @@ const pintarMapa: Pintura = (coluna, linha, x, y) => {
   // Uma parede de duas casas desenhada como na Brawlify: meia casa acima do sítio dela.
   if (coluna === 6 && linha === 16) return y >= 15 ? (y % 9 < 2 || x < 3 || x > 26 ? [90, 50, 20] : [200, 120, 60]) : null;
   if (coluna === 6 && (linha === 17 || linha === 18)) return (y + 15) % 9 < 2 || x < 3 || x > 26 ? [90, 50, 20] : [200, 120, 60];
+  // Por cima do mato (linhas 14–17, colunas 12–15): nas colunas 12–13 só chão à sombra e as pontas das
+  // folhas (como ao meio do Kaboom Canyon); nas 14–15 uma cerca de madeira com as folhas por baixo.
+  if (linha === 13 && coluna >= 12 && coluna <= 15) {
+    const xadrez = (coluna + linha) % 2 ? [234, 156, 114] : [252, 168, 120];
+    if (y >= 20) return x % 6 < 3 ? [70, 170, 60] : [45, 150, 50];
+    if (coluna <= 13) return y < 12 ? (xadrez.map((v) => Math.round(v * 0.85)) as [number, number, number]) : null;
+    // A cerca do Hideout: o topo da madeira tem a cor do chão à sombra; a madeira por baixo é que a denuncia.
+    if (y < 12) return xadrez.map((v) => Math.round(v * 0.85)) as [number, number, number];
+    return y % 7 < 2 ? [90, 60, 30] : [120, 95, 45];
+  }
   // Uma plataforma de salto: desenho liso no chão, a meio do mapa, com um aro fino (escuro e vermelho) à volta.
   if (coluna === 3 && linha === 28) return [136, 102, 75];
   if (coluna === 3 && (linha === 27 || linha === 29)) {
@@ -136,6 +146,14 @@ describe("ler o terreno da imagem do mapa", () => {
     expect(tipoDaCasa(terreno, 6, 16)).toBe("chao");
     expect(tipoDaCasa(terreno, 6, 17)).toBe("parede");
     expect(tipoDaCasa(terreno, 6, 18)).toBe("parede");
+  });
+
+  it("as pontas das folhas por cima do mato são chão; uma cerca por cima do mato continua parede", () => {
+    expect(tipoDaCasa(terreno, 12, 13)).toBe("chao");
+    expect(tipoDaCasa(terreno, 13, 13)).toBe("chao");
+    expect(tipoDaCasa(terreno, 14, 13)).toBe("parede");
+    expect(tipoDaCasa(terreno, 15, 13)).toBe("parede");
+    expect(tipoDaCasa(terreno, 13, 14)).toBe("mato");
   });
 
   it("a estrela do Caça-Estrelas (e a sombra dela) é objetivo; um desenho liso a meio do mapa também", () => {
@@ -308,7 +326,10 @@ describe("água e paredes nas ordens da IA", () => {
         { brawler: "Lumi", pontos: [{ col: 1, linha: 1 }] },
       ],
     }, NOSSOS, DELES, new Date(), terreno);
-    expect(comTrilhos.trilhos.map((t) => [t.brawler, t.lado, t.pontos.length])).toEqual([["Lou", "nos", 3], ["Bolt", "eles", 2]]);
+    expect(comTrilhos.trilhos.map((t) => [t.brawler, t.lado])).toEqual([["Lou", "nos"], ["Bolt", "eles"]]);
+    // O caminho do Lou passava pela parede da linha 10: agora contorna-a (mais pontos de viragem).
+    expect(comTrilhos.trilhos[0].pontos.length).toBeGreaterThan(3);
+    expect(comTrilhos.trilhos.every((t) => t.pontos.slice(1).every((p, i) => linhaLivre(terreno, t.pontos[i], p)))).toBe(true);
     expect(comTrilhos.trilhos[0].pontos.every((p) => tipoEm(p) !== "parede")).toBe(true);
   });
 
@@ -317,6 +338,58 @@ describe("água e paredes nas ordens da IA", () => {
     expect(bolt).not.toEqual(posicoesIniciais(NOSSOS, DELES)[chaveDaFicha("eles", "Bolt")]);
     expect(tipoEm(bolt)).not.toBe("parede");
     expect(plano.posicoes[chaveDaFicha("eles", "Lumi")]).toEqual(posicoesIniciais(NOSSOS, DELES)[chaveDaFicha("eles", "Lumi")]);
+  });
+});
+
+describe("setas e passos seguem por onde se anda (não atravessam paredes)", () => {
+  const terreno = lerTerrenoDaImagem(lerPng(pngDoMapa(pintarMapa)), "15000001");
+  const casa = (col: number, linha: number) => ({ x: (col + 0.5) / 21, y: (linha + 0.5) / 33 });
+  const ordem = (brawler: string, capacidades: string[] = []) => ({ brawler, funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col: 7, linha: 12 }, capacidades });
+  // A parede da linha 10 (colunas 5 a 9) está entre a linha 12 e a linha 8.
+  const plano = lerPlanoDaIA({
+    ordens: [ordem("Lou"), ordem("Nori", ["salta-paredes"])],
+    setas: [
+      { brawler: "Lou", tipo: "avanco", de: { col: 7, linha: 12 }, para: { col: 7, linha: 8 }, nota: "entra pelo meio" },
+      { brawler: "Nori", tipo: "avanco", de: { col: 7, linha: 12 }, para: { col: 7, linha: 8 } },
+      { brawler: "Lou", tipo: "avanco", de: { col: 12, linha: 20 }, para: { col: 14, linha: 20 } },
+    ],
+    trilhos: [{ brawler: "Lou", pontos: [{ col: 7, linha: 12 }, { col: 7, linha: 8 }] }],
+  }, NOSSOS, DELES, new Date(), terreno);
+  const semParedes = (pontos: Array<{ x: number; y: number }>) => pontos.slice(1).every((p, i) => linhaLivre(terreno, pontos[i], p));
+
+  it("quem não salta paredes contorna a parede: a seta ganha viragens e nenhum troço a atravessa", () => {
+    const lou = plano.setas[0];
+    expect(lou.caminho?.length).toBeGreaterThan(0);
+    expect(semParedes([lou.de, ...(lou.caminho ?? []), lou.para])).toBe(true);
+    expect(lou.para).toEqual(casa(7, 8));
+    // Sem parede no caminho, a seta fica reta.
+    expect(plano.setas[2].caminho).toBeUndefined();
+  });
+
+  it("quem salta paredes vai a direito", () => {
+    const nori = plano.setas[1];
+    expect(nori.caminho).toBeUndefined();
+    expect(linhaLivre(terreno, nori.de, nori.para)).toBe(false);
+  });
+
+  it("sem caminho possível, a seta não entra", () => {
+    // Fecha a casa (7,5) com paredes à volta.
+    const fechado = corrigirCasas(terreno, [-1, 0, 1].flatMap((dl) => [-1, 0, 1].filter((dc) => dl || dc).map((dc) => ({ coluna: 7 + dc, linha: 5 + dl, tipo: "parede" as const }))));
+    const semSaida = lerPlanoDaIA({ ordens: [ordem("Lou")], setas: [{ brawler: "Lou", tipo: "avanco", de: { col: 7, linha: 12 }, para: { col: 7, linha: 5 } }] }, NOSSOS, DELES, new Date(), fechado);
+    expect(semSaida.setas).toEqual([]);
+    expect(caminhoLivre(fechado, casa(7, 12), casa(7, 5))).toBeNull();
+  });
+
+  it("os passos fantasma também contornam a parede", () => {
+    const pontos = plano.trilhos[0].pontos;
+    expect(pontos.length).toBeGreaterThan(2);
+    expect(semParedes(pontos)).toBe(true);
+  });
+
+  it("um plano guardado mantém as viragens, sem lixo", () => {
+    const lido = lerPlanoGuardado(JSON.stringify({ setas: [{ ...plano.setas[0] }, { id: "x", tipo: "avanco", de: { x: 0.1, y: 0.1 }, para: { x: 0.2, y: 0.2 }, caminho: [{ x: 5, y: "a" }, { x: 0.15, y: 0.15 }] }] }), NOSSOS, DELES);
+    expect(lido.setas[0].caminho).toEqual(plano.setas[0].caminho);
+    expect(lido.setas[1].caminho).toEqual([{ x: 0.15, y: 0.15 }]);
   });
 });
 

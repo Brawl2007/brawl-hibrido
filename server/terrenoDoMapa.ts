@@ -90,6 +90,8 @@ export type MedidaDaCasa = {
   topo?: Cor;
   /** Variação de brilho da faixa de cima: o chão é liso (0), o topo de uma parede tem contornos. */
   texturaDoTopo?: number;
+  /** A cor da faixa de baixo: as pontas das folhas do mato de baixo aparecem aqui. */
+  fundo?: Cor;
 };
 
 /** Cor média e variação de brilho do miolo de cada casa (sem as bordas, que têm a sombra do vizinho). */
@@ -103,6 +105,13 @@ export function medirCasas(imagem: ImagemRGBA, casa = imagem.largura / (COLUNAS_
       let r = 0, g = 0, b = 0, n = 0, soma = 0, soma2 = 0, vermelho = 0, azul = 0;
       let rr = 0, rg = 0, rb = 0, rn = 0, rsoma = 0, rsoma2 = 0;
       let tr = 0, tg = 0, tb = 0, tn = 0, ts = 0, ts2 = 0;
+      let fr = 0, fg = 0, fb = 0, fn = 0;
+      for (let y = (linha + 2) * casa - Math.round(casa * 0.33); y < (linha + 2) * casa - 2; y++) {
+        for (let x = x0; x < x1; x++) {
+          const o = (y * imagem.largura + x) * 4;
+          fr += imagem.dados[o]; fg += imagem.dados[o + 1]; fb += imagem.dados[o + 2]; fn++;
+        }
+      }
       // A faixa de cima: do topo da casa (sem a borda) até um terço da altura.
       const yTopo0 = linha + 1, yTopo1 = (linha + 1) * casa + Math.round(casa * 0.33);
       for (let y = (yTopo0) * casa + 2; y < yTopo1; y++) {
@@ -141,6 +150,7 @@ export function medirCasas(imagem: ImagemRGBA, casa = imagem.largura / (COLUNAS_
           : { cor: [0, 0, 0], textura: 0 },
         topo: tn ? [tr / tn, tg / tn, tb / tn] : undefined,
         texturaDoTopo: tn ? Math.sqrt(Math.max(0, ts2 / tn - (ts / tn) ** 2)) : undefined,
+        fundo: fn ? [fr / fn, fg / fn, fb / fn] : undefined,
       });
     }
   }
@@ -229,7 +239,8 @@ export function terrenoDasMedidas(medidas: readonly MedidaDaCasa[], mapaId: stri
     });
   };
   // A borda de uma piscina (azul com o desenho da margem) é água como o resto dela.
-  for (let i = 0; i < medidas.length; i++) if (azulMacico(i) && encostadaAAgua(i)) eAgua[i] = true;
+  // (Com folhas por cima, como as esquinas das piscinas do Kaboom Canyon, a borda é lisa ou não — basta muito azul.)
+  for (let i = 0; i < medidas.length; i++) if (!eAgua[i] && !emMancha[i] && medidas[i].azul >= 0.4 && encostadaAAgua(i)) eAgua[i] = true;
   const objetoAzul = medidas.map((_, i) => azulMacico(i));
   // A sombra do objeto azul, na casa de baixo, também é dele (se não for chão nem outra coisa encostada).
   for (let i = 0; i + COLUNAS_DO_MAPA < medidas.length; i++) {
@@ -307,6 +318,22 @@ export function terrenoDasMedidas(medidas: readonly MedidaDaCasa[], mapaId: stri
 const contar = (grelha: string, id: string) => grelha.split(id).length - 1;
 
 /**
+ * A casa é só a mistura de duas cores (o chão em cima, as folhas em baixo)?
+ * Uma cerca de madeira com folhas por baixo não é: a madeira fica fora da mistura.
+ */
+function soMistura(media: readonly number[], a: readonly number[], b: readonly number[]) {
+  const d = a.map((v, k) => v - b[k]);
+  const t = Math.max(0, Math.min(1, (d[0] * (media[0] - b[0]) + d[1] * (media[1] - b[1]) + d[2] * (media[2] - b[2])) / (d[0] ** 2 + d[1] ** 2 + d[2] ** 2 || 1)));
+  return distancia(media, b.map((v, k) => v + t * d[k])) < 20;
+}
+
+/** Chão, ou chão à sombra: a cor do xadrez escurecida por igual nos três canais. */
+function chaoOuSombra(cor: readonly number[], doChao: readonly number[]) {
+  const k = (cor[0] * doChao[0] + cor[1] * doChao[1] + cor[2] * doChao[2]) / (doChao[0] ** 2 + doChao[1] ** 2 + doChao[2] ** 2);
+  return k > 0.55 && k < 1.05 && distancia(cor, doChao.map((v) => v * k)) < 10;
+}
+
+/**
  * O topo dos objetos altos. A Brawlify desenha paredes, postes, jarros e mato
  * meia casa acima do sítio onde estão; a casa de cima fica com chão na faixa
  * de cima e só o topo do objeto em baixo. Não é um bloco: passa a chão. Sem
@@ -326,6 +353,12 @@ export function tirarTopos(grelha: string, grupos: readonly GrupoDeCor[], medida
     const doChao = chao[((i % colunas) + Math.floor(i / colunas)) % 2];
     // Chão de verdade: a cor do xadrez quase exata, e lisa.
     if (topo && distancia(topo, doChao) < 10 && (medidas[i].texturaDoTopo ?? 99) < 3) letras[i] = ".";
+    // As pontas das folhas do mato de baixo, por baixo da sombra de uma caixa (Kaboom Canyon, ao meio):
+    // a faixa de baixo tem a cor desse mato e a de cima é chão (ou chão à sombra). Uma cerca em cima
+    // de mato também tem folhas em baixo, mas em cima tem a madeira dela.
+    const deBaixo = grupos.find((g) => g.id === grelha[i + colunas]);
+    const fundo = medidas[i].fundo;
+    if (deBaixo?.tipo === "mato" && fundo && topo && distancia(fundo, deBaixo.cor) < 75 && chaoOuSombra(topo, doChao) && soMistura(medidas[i].cor, topo, fundo)) letras[i] = ".";
   }
   return letras.join("");
 }
@@ -496,8 +529,9 @@ export async function imagemDaBrawlify(tipo: TipoDeImagem, id: string, buscar: t
 const terrenos = new Map<string, TerrenoDoMapa>();
 // v2: água e zonas lidas pela forma. v3: sem o topo dos objetos (a fila de
 // paredes a mais por cima de cada estrutura), vasos, jarros, a estrela do
-// Caça-Estrelas e as plataformas de salto. Cada mapa é lido de novo.
-const chaveGuardada = (mapaId: string) => `terreno:v3:${mapaId}`;
+// Caça-Estrelas e as plataformas de salto. v4: as pontas das folhas por cima
+// do mato (ao meio do Kaboom Canyon) e as esquinas das piscinas. Cada mapa é lido de novo.
+const chaveGuardada = (mapaId: string) => `terreno:v4:${mapaId}`;
 
 async function guardar(terreno: TerrenoDoMapa) {
   terrenos.set(terreno.mapaId, terreno);

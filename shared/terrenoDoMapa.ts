@@ -196,3 +196,79 @@ export function corrigirCasas(terreno: TerrenoDoMapa, casas: ReadonlyArray<{ col
   const { correcoes: _antigas, ...resto } = terreno;
   return Object.keys(correcoes).length ? { ...resto, correcoes } : resto;
 }
+
+type OpcoesDeCaminho = { atravessaAgua?: boolean };
+const casaBloqueia = (terreno: TerrenoDoMapa, coluna: number, linha: number, opcoes: OpcoesDeCaminho) => {
+  const tipo = tipoDaCasa(terreno, coluna, linha);
+  return bloqueiaPassagem(tipo) || (tipo === "agua" && !opcoes.atravessaAgua);
+};
+
+/** Dá para ir de `a` a `b` em linha reta sem pisar parede, jarro ou (para quem não nada) água? */
+export function linhaLivre(terreno: TerrenoDoMapa, a: { x: number; y: number }, b: { x: number; y: number }, opcoes: OpcoesDeCaminho = {}) {
+  const dx = (b.x - a.x) * terreno.colunas, dy = (b.y - a.y) * terreno.linhas;
+  const passos = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 0.2));
+  for (let k = 0; k <= passos; k++) {
+    const { coluna, linha } = casaDoPonto(terreno, { x: a.x + ((b.x - a.x) * k) / passos, y: a.y + ((b.y - a.y) * k) / passos });
+    if (casaBloqueia(terreno, coluna, linha, opcoes)) return false;
+  }
+  return true;
+}
+
+/**
+ * O caminho por onde um brawler anda de `a` a `b`: à volta das paredes, dos
+ * jarros e (para quem não nada) da água. Devolve os pontos de viragem, do
+ * primeiro ao último; em linha reta quando dá. `null` quando não há caminho.
+ *
+ * Porquê: uma seta desenhada a direito por cima de uma parede é uma ordem
+ * impossível (a Amber não salta paredes).
+ */
+export function caminhoLivre(terreno: TerrenoDoMapa | null | undefined, a: { x: number; y: number }, b: { x: number; y: number }, opcoes: OpcoesDeCaminho = {}): Array<{ x: number; y: number }> | null {
+  if (!terreno) return [a, b];
+  const inicio = pontoLivre(terreno, a, opcoes), fim = pontoLivre(terreno, b, opcoes);
+  if (linhaLivre(terreno, inicio, fim, opcoes)) return [inicio, fim];
+  const { colunas, linhas } = terreno;
+  const de = casaDoPonto(terreno, inicio), para = casaDoPonto(terreno, fim);
+  const indice = (c: number, l: number) => l * colunas + c;
+  const custo = new Array<number>(colunas * linhas).fill(Infinity);
+  const veio = new Array<number>(colunas * linhas).fill(-1);
+  const aberta: number[] = [indice(de.coluna, de.linha)];
+  custo[aberta[0]] = 0;
+  const estimativa = (i: number) => Math.hypot((i % colunas) - para.coluna, Math.floor(i / colunas) - para.linha);
+  const alvo = indice(para.coluna, para.linha);
+  while (aberta.length) {
+    // A grelha é pequena (693 casas): procurar o melhor numa lista chega.
+    let melhor = 0;
+    for (let k = 1; k < aberta.length; k++) if (custo[aberta[k]] + estimativa(aberta[k]) < custo[aberta[melhor]] + estimativa(aberta[melhor])) melhor = k;
+    const atual = aberta.splice(melhor, 1)[0];
+    if (atual === alvo) break;
+    const c = atual % colunas, l = Math.floor(atual / colunas);
+    for (const [dc, dl] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const cc = c + dc, ll = l + dl;
+      if (cc < 0 || ll < 0 || cc >= colunas || ll >= linhas || casaBloqueia(terreno, cc, ll, opcoes)) continue;
+      // Na diagonal não se corta a esquina de uma parede.
+      if (dc && dl && (casaBloqueia(terreno, c + dc, l, opcoes) || casaBloqueia(terreno, c, l + dl, opcoes))) continue;
+      const j = indice(cc, ll), novo = custo[atual] + (dc && dl ? Math.SQRT2 : 1);
+      if (novo >= custo[j]) continue;
+      custo[j] = novo;
+      veio[j] = atual;
+      if (!aberta.includes(j)) aberta.push(j);
+    }
+  }
+  if (custo[alvo] === Infinity) return null;
+  const casas: Array<{ x: number; y: number }> = [];
+  for (let i = alvo; i !== -1; i = veio[i]) casas.unshift(centroDaCasa(terreno, i % colunas, Math.floor(i / colunas)));
+  casas[0] = inicio;
+  casas[casas.length - 1] = fim;
+  // Só os pontos de viragem: de cada ponto, salta para o mais longe que se vê em linha reta.
+  const rota = [casas[0]];
+  let k = 0;
+  while (k < casas.length - 1) {
+    let longe = k + 1;
+    for (let m = casas.length - 1; m > k + 1; m--) {
+      if (linhaLivre(terreno, casas[k], casas[m], opcoes)) { longe = m; break; }
+    }
+    rota.push(casas[longe]);
+    k = longe;
+  }
+  return rota;
+}
