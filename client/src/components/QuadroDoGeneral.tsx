@@ -45,7 +45,7 @@ import {
 } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_CASA, pontoLivre, type TerrenoDoMapa, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import { qualidadeDeOrigem, type QualidadeDoMapa } from "./qualidadeDoMapa";
-import type { AlvoDoCursor, AmeacaNo3D, ComandoDeCamara, DueloNo3D, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
+import type { AlvoDoCursor, AmeacaNo3D, CamaraDaCena, ComandoDeCamara, DueloNo3D, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 
 const Quadro3D = lazy(() => import("./Quadro3D"));
@@ -88,6 +88,7 @@ const FERRAMENTAS: Array<{ id: Ferramenta; nome: string; ajuda: string }> = [
 /** Quanto tempo cada momento fica no ecrã ao "ver a partida". */
 const DURACAO_DA_CENA_MS = 15_000;
 const CHAVE_DA_QUALIDADE = "brawl-hibrido:graficos-3d:v1";
+const CHAVE_DA_CAMARA = "brawl-hibrido:camara-da-cena:v1";
 
 /** Um retrato pequeno, com a cor da equipa. */
 function Retrato({ url, nome, lado }: { url: string | null; nome: string; lado: "nos" | "eles" }) {
@@ -225,6 +226,14 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     setQualidade(nova);
     try { window.localStorage.setItem(CHAVE_DA_QUALIDADE, nova); } catch { /* só nesta visita */ }
   };
+  // A câmara da cena: um drone a passar por cada luta, ou como no jogo (alta, sempre com o mesmo ângulo).
+  const [camara, setCamara] = useState<CamaraDaCena>(() => {
+    try { return window.localStorage.getItem(CHAVE_DA_CAMARA) === "jogo" ? "jogo" : "drone"; } catch { return "drone"; }
+  });
+  const mudarCamara = (nova: CamaraDaCena) => {
+    setCamara(nova);
+    try { window.localStorage.setItem(CHAVE_DA_CAMARA, nova); } catch { /* só nesta visita */ }
+  };
   const [verAmeacas, setVerAmeacas] = useState(true);
   const semTrilhos = useMemo(() => [], []);
   const semAmeacas = useMemo<AmeacaNo3D[]>(() => [], []);
@@ -236,14 +245,14 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
    * Quadro3D); aqui os brawlers passam do início ao meio e ao fim, e a legenda
    * mostra uma instrução de cada vez — nunca duas por cima uma da outra.
    */
-  const [cinema, setCinema] = useState<{ n: number; duracaoMs: number; focos?: Array<{ chave: string; lento: boolean }> } | null>(null);
+  const [cinema, setCinema] = useState<{ n: number; duracaoMs: number; focos?: Array<{ chave: string; lento: boolean }>; camara?: CamaraDaCena } | null>(null);
   const aReproduzir = cinema !== null;
   // A legenda segue o drone: muda quando ele chega a outra luta (o Quadro3D avisa).
   const [etapa, setEtapa] = useState(-1);
   /** A cena de um plano: se a IA a realizou, os focos dela; senão, os duelos. */
   const cenaDe = (p: PlanoDoGeneral) => {
     const focos = (p.cena ?? []).map((c) => ({ chave: chaveDaFicha(c.ladoDoFoco, c.foco), lento: c.lento }));
-    return { n: Date.now(), duracaoMs: Math.max(DURACAO_DA_CENA_MS, focos.length * 2600 + 5000), ...(focos.length ? { focos } : {}) };
+    return { n: Date.now(), duracaoMs: Math.max(DURACAO_DA_CENA_MS, focos.length * 2600 + 5000), camara, ...(focos.length ? { focos } : {}) };
   };
   const comecarCena = () => setCinema(cenaDe(plano));
   useEffect(() => {
@@ -717,6 +726,13 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
           <select value={qualidade} onChange={(e) => mudarQualidade(e.target.value as QualidadeDoMapa)}>
             <option value="cinema">Cinema</option>
             <option value="rapido">Rápido</option>
+          </select>
+        </label>
+        <label className="quadro-general-opcao" title="Drone: passa por cada luta, em câmara lenta. Jogo: vista de cima como no Brawl Stars.">
+          Câmara
+          <select value={camara} onChange={(e) => mudarCamara(e.target.value as CamaraDaCena)}>
+            <option value="drone">Drone</option>
+            <option value="jogo">Como no jogo</option>
           </select>
         </label>
         {ameacas3D.length > 0 && (

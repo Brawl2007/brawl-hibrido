@@ -24,6 +24,8 @@ import { tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 import { criarMatoDeLaminas, montarRealismo, type QualidadeDoMapa, type Realismo } from "./realismo3D";
 import { ALTURA_DA_CARA, criarCorpo } from "./bonecos3D";
+import { habilidadeDe } from "./habilidades3D";
+import { criarBonecoOriginal, temModelo, type Acao, type BonecoOriginal } from "./modelosDosBrawlers";
 
 export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string; /** A classe (Lançador, Tank…): decide como ataca na cena. */ classe?: string };
 /** Um duelo 1v1: a linha entre as duas fichas, com a vantagem da tua equipa. */
@@ -35,6 +37,8 @@ export type AmeacaNo3D = { id: string; perigoso: string; alvo: string; texto: st
 export type Vista = "nossa" | "deles" | "cima" | "lado" | "rasante";
 /** Os botões de câmara no ecrã, para quem não tem rato (ou prefere clicar). */
 export type ComandoDeCamara = "rodar-esquerda" | "rodar-direita" | "subir" | "descer" | "aproximar" | "afastar";
+/** "drone": um só plano a passar por cada luta. "jogo": a câmara do Brawl Stars, alta e sempre com o mesmo ângulo, a seguir a ação. */
+export type CamaraDaCena = "drone" | "jogo";
 export type AlvoDoCursor = { tipo: "ficha" | "marcador"; id: string; x: number; y: number } | null;
 
 type Props = {
@@ -66,7 +70,7 @@ type Props = {
    * A cena de cinema: muda `n` para começar; `null` para parar. Durante a cena a
    * câmara faz vários planos sozinha e os duelos trocam tiros.
    */
-  cinema: { n: number; duracaoMs: number; focos?: Array<{ chave: string; lento: boolean }> } | null;
+  cinema: { n: number; duracaoMs: number; focos?: Array<{ chave: string; lento: boolean }>; camara?: CamaraDaCena } | null;
   onFimDoCinema?: () => void;
   /** Em que luta vai o drone: -1 a chegar, 0..n-1 cada luta, n a subir no fim. */
   onEtapaDoCinema?: (etapa: number) => void;
@@ -86,26 +90,6 @@ const PROFUNDIDADE = 33;
 const ALTURA_DA_PAREDE = 1;
 const ALTURA_DO_JARRO = 0.84;
 const COR_DO_LADO = { nos: "#37c8ff", eles: "#ff4d6d" } as const;
-/**
- * Como cada classe ataca na cena, para respeitar o que o brawler faz no jogo:
- * lançadores atiram em arco e rebenta no chão, atiradores disparam rajadas
- * retas e rápidas, tanques e assassinos investem até ao alvo, controladores
- * deixam uma zona, suportes curam-se a si e aos seus.
- */
-type EstiloDeAtaque = "arco" | "reto" | "investida" | "rajada" | "zona" | "cura";
-function estiloDaClasse(classe?: string): EstiloDeAtaque {
-  switch (classe) {
-    case "Lançador": return "arco";
-    case "Artilheiro": return "reto";
-    case "Tank":
-    case "Assassino": return "investida";
-    case "Destruidor": return "rajada";
-    case "Controlador": return "zona";
-    case "Suporte": return "cura";
-    default: return "reto";
-  }
-}
-
 /** A altura do retrato (a cara do boneco) por cima da base de cada brawler. */
 const ALTURA_DO_RETRATO = ALTURA_DA_CARA;
 
@@ -222,6 +206,29 @@ function desenharFicha(nome: string, lado: "nos" | "eles", imagem: HTMLImageElem
   // A função já não vai escrita por baixo do nome: com seis brawlers, as
   // etiquetas tapavam-se umas às outras. Lê-se ao passar o cursor.
   void funcao;
+  const textura = new THREE.CanvasTexture(canvas);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  return textura;
+}
+
+/** Só o nome, numa etiqueta com a cor da equipa (para quem tem o modelo original). */
+function desenharNome(nome: string, lado: "nos" | "eles") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = "bold 40px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const largura = Math.min(252, ctx.measureText(nome).width + 28);
+  ctx.fillStyle = "rgba(6,9,16,.8)";
+  ctx.beginPath();
+  ctx.roundRect(128 - largura / 2, 4, largura, 56, 12);
+  ctx.fill();
+  ctx.fillStyle = COR_DO_LADO[lado];
+  ctx.fillRect(128 - largura / 2 + 10, 52, largura - 20, 5);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(nome, 128, 31, 236);
   const textura = new THREE.CanvasTexture(canvas);
   textura.colorSpace = THREE.SRGBColorSpace;
   return textura;
@@ -384,7 +391,7 @@ export default function Quadro3D(props: Props) {
     comandar: (acao: ComandoDeCamara) => void;
     olharComo: (ponto: PontoNoMapa, para: PontoNoMapa) => void;
     deslizar: (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3) => void;
-    comecarFilme: (duracaoMs: number, focos?: Array<{ chave: string; lento: boolean }>) => void;
+    comecarFilme: (duracaoMs: number, focos?: Array<{ chave: string; lento: boolean }>, camara?: CamaraDaCena) => void;
     realismo: Realismo | null;
     pararFilme: () => void;
     grupoDoTerreno: THREE.Group;
@@ -657,10 +664,11 @@ export default function Quadro3D(props: Props) {
      * início → meio → fim), e aqui só se filma.
      */
     type Tiro = { balas: THREE.Sprite[]; clarao: THREE.Sprite; anel: THREE.Mesh; vantagem: number; nosso: string; deles: string };
-    let filme: { inicio: number; duracao: number; tiros: Tiro[]; relogio: number; ultimo: number; focos?: Array<{ chave: string; lento: boolean }>; etapa: number } | null = null;
+    let filme: { inicio: number; duracao: number; tiros: Tiro[]; relogio: number; ultimo: number; focos?: Array<{ chave: string; lento: boolean }>; etapa: number; camara: CamaraDaCena; lento: number } | null = null;
     const brilho = texturaDeBrilho();
     const fichaNoMundo = (chave: string) => grupoDasFichas.children.find((g) => g.userData.id === chave) ?? null;
     const classeDe = (chave: string) => atual.current.fichas.find((f) => f.chave === chave)?.classe;
+    const nomeDe = (chave: string) => atual.current.fichas.find((f) => f.chave === chave)?.nome;
     const luz = (escala: number, ordem: number) => {
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: brilho, color: "#ffffff", transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
       sprite.scale.setScalar(escala);
@@ -669,7 +677,7 @@ export default function Quadro3D(props: Props) {
       grupoDoFilme.add(sprite);
       return sprite;
     };
-    const comecarFilme = (duracao: number, focos?: Array<{ chave: string; lento: boolean }>) => {
+    const comecarFilme = (duracao: number, focos?: Array<{ chave: string; lento: boolean }>, camara: CamaraDaCena = "drone") => {
       pararFilme(false);
       const tiros = atual.current.duelos.map((duelo) => {
         const anel = new THREE.Mesh(new THREE.RingGeometry(0.7, 1, 40), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
@@ -678,7 +686,7 @@ export default function Quadro3D(props: Props) {
         grupoDoFilme.add(anel);
         return { balas: [luz(0.85, 30), luz(0.6, 30), luz(0.6, 30)], clarao: luz(1, 31), anel, vantagem: duelo.vantagem, nosso: duelo.nosso, deles: duelo.deles };
       });
-      filme = { inicio: performance.now(), duracao, tiros, relogio: 0, ultimo: performance.now(), focos: focos?.length ? focos : undefined, etapa: -2 };
+      filme = { inicio: performance.now(), duracao, tiros, relogio: 0, ultimo: performance.now(), focos: focos?.length ? focos : undefined, etapa: -2, camara, lento: 1 };
       controls.enabled = false;
       voo = null;
       // Durante a cena não há etiquetas por cima: fala a legenda.
@@ -690,9 +698,20 @@ export default function Quadro3D(props: Props) {
       g.children.forEach((filho, i) => {
         filho.position.x = 0;
         filho.position.z = 0;
-        if (i === 2) filho.position.y = ALTURA_DO_RETRATO;
-        if (i === 1) filho.position.y = 0;
+        if (i === 2) filho.position.y = filho.userData.altura ?? ALTURA_DO_RETRATO;
+        if (i === 1) {
+          filho.position.y = 0;
+          filho.rotation.y = filho.userData.rotacao ?? 0;
+        }
       });
+    };
+    /** O modelo original do brawler (se o tiveres): toca a animação pedida. */
+    const animar = (g: THREE.Object3D, acao: Acao) => (g.userData.boneco as BonecoOriginal | undefined)?.tocar(acao);
+    /** Vira o corpo para um ponto (o corpo olha para -z). */
+    const virarPara = (g: THREE.Object3D, ponto: THREE.Vector3) => {
+      const corpo = g.children[1];
+      const dx = ponto.x - g.position.x, dz = ponto.z - g.position.z;
+      if (corpo && Math.hypot(dx, dz) > 0.01) corpo.rotation.y = Math.atan2(-dx, -dz);
     };
     const pararFilme = (voltar = true) => {
       if (!filme) return;
@@ -701,7 +720,7 @@ export default function Quadro3D(props: Props) {
         (filho as THREE.Mesh).geometry?.dispose();
         ((filho as THREE.Mesh).material as THREE.Material).dispose();
       }
-      grupoDasFichas.children.forEach(assentar);
+      grupoDasFichas.children.forEach((g) => { assentar(g); animar(g, "parado"); });
       filme = null;
       controls.enabled = true;
       grupoDosDuelos.visible = true;
@@ -710,7 +729,11 @@ export default function Quadro3D(props: Props) {
       if (voltar) voarPara("nossa");
       sujo = true;
     };
-    /** Um tiro de um duelo, no instante `passado`, com o estilo de quem dispara. */
+    /**
+     * Um duelo no instante `passado`: cada um ataca à sua maneira (o Mortis dá
+     * dash, o Barley atira garrafas por cima…) e, de vez em quando, quem tem
+     * vantagem usa o super — maior, dourado e com a animação de super.
+     */
     const animarTiro = (tiro: Tiro, i: number, passado: number) => {
       const ga = fichaNoMundo(tiro.nosso), gb = fichaNoMundo(tiro.deles);
       for (const bala of tiro.balas) bala.visible = false;
@@ -721,53 +744,129 @@ export default function Quadro3D(props: Props) {
       // Quem tem vantagem ataca mais vezes.
       const nossoAtaca = tiro.vantagem >= 50 ? k % 3 !== 2 : k % 3 === 0;
       const atacante = nossoAtaca ? ga : gb, alvo = nossoAtaca ? gb : ga;
+      const chave = nossoAtaca ? tiro.nosso : tiro.deles;
       const de = atacante.position, para = alvo.position;
-      const cor = nossoAtaca ? COR_DO_LADO.nos : COR_DO_LADO.eles;
-      const estilo = estiloDaClasse(classeDe(nossoAtaca ? tiro.nosso : tiro.deles));
+      const corDoLado = nossoAtaca ? COR_DO_LADO.nos : COR_DO_LADO.eles;
+      const habilidade = habilidadeDe(nomeDe(chave), classeDe(chave));
+      // Um super a cada cinco ataques, só de quem está a ganhar o duelo.
+      const ehSuper = k % 5 === 4 && nossoAtaca === tiro.vantagem >= 50;
+      const estilo = ehSuper ? habilidade.super : habilidade.ataque;
+      const cor = ehSuper ? "#ffc93c" : habilidade.cor ?? corDoLado;
+      const grande = ehSuper ? 1.6 : 1;
       const clarao = tiro.clarao.material as THREE.SpriteMaterial;
       const anel = tiro.anel.material as THREE.MeshBasicMaterial;
       // Com o brilho do modo Cinema, os tiros passam do branco e acendem-se.
       const intensidade = realismo ? 3.2 : 1;
-      clarao.color.set(cor).multiplyScalar(intensidade);
+      const pintar = (sprite: THREE.Sprite, c: string, opacidade = 1) => {
+        const material = sprite.material as THREE.SpriteMaterial;
+        material.color.set(c).multiplyScalar(intensidade);
+        material.opacity = opacidade;
+      };
+      clarao.color.set(ehSuper ? "#ffc93c" : corDoLado).multiplyScalar(intensidade);
       anel.color.set(estilo === "cura" ? "#3ddc84" : cor).multiplyScalar(realismo ? 2 : 1);
-      // Quanto do ciclo é viagem; o resto é o impacto.
-      const viagem = estilo === "reto" || estilo === "rajada" ? 0.35 : estilo === "investida" ? 0.5 : 0.7;
+      // Quanto do ciclo é preparação/viagem; o resto é o impacto.
+      const viagem = estilo === "reto" || estilo === "rajada" || estilo === "raio" ? 0.35
+        : estilo === "dash" ? 0.28
+          : estilo === "investida" || estilo === "salto" || estilo === "onda" ? 0.5 : 0.7;
       const impacto = f >= viagem ? (f - viagem) / (1 - viagem) : 0;
       const u = Math.min(1, f / viagem);
       assentar(atacante);
-      if (estilo === "investida") {
-        // Vai até ao alvo e volta: o corpo inteiro avança.
-        const ida = Math.sin(Math.min(1, f / viagem) * Math.PI);
-        const direcao = para.clone().sub(de).setY(0);
-        const passo = direcao.multiplyScalar(0.72 * ida);
-        atacante.children.forEach((filho) => { filho.position.x = passo.x; filho.position.z = passo.z; });
-        tiro.balas[0].visible = f < viagem;
-        tiro.balas[0].position.copy(de).add(passo).setY(0.9);
-        (tiro.balas[0].material as THREE.SpriteMaterial).color.set(cor).multiplyScalar(intensidade);
-        tiro.balas[0].scale.setScalar(1.6);
+      assentar(alvo);
+      // Frente a frente; quem ataca faz a animação (de ataque, de super, ou corre se investe).
+      virarPara(atacante, para);
+      virarPara(alvo, de);
+      const corre = estilo === "investida" || estilo === "dash" || estilo === "salto";
+      animar(atacante, f >= viagem ? "parado" : ehSuper ? "super" : corre ? "anda" : "ataque");
+      animar(alvo, "parado");
+      const direcao = para.clone().sub(de).setY(0);
+      const mover = (passo: THREE.Vector3, altura = 0) => {
+        // O corpo (e a base e a cara) vai com ele; a altura é só do corpo e da cara.
+        atacante.children.forEach((filho, n) => {
+          filho.position.x = passo.x;
+          filho.position.z = passo.z;
+          if (n > 0) filho.position.y = (n === 2 ? filho.userData.altura ?? ALTURA_DO_RETRATO : 0) + altura;
+        });
+      };
+      if (estilo === "investida" || estilo === "dash" || estilo === "salto") {
+        // Investida: vai até ao alvo e volta. Dash: arranca e passa através dele
+        // (o Mortis), com um rasto. Salto: voa por cima e cai em cima dele.
+        const ida = estilo === "investida" ? Math.sin(u * Math.PI) : f < viagem ? u : 1 - impacto;
+        const alcance = estilo === "dash" ? 1.15 : estilo === "salto" ? 0.9 : 0.72;
+        const passo = direcao.clone().multiplyScalar(alcance * ida);
+        const altura = estilo === "salto" && f < viagem ? Math.sin(u * Math.PI) * 3 * grande : 0;
+        mover(passo, altura);
+        const rasto = estilo === "dash" ? 3 : 1;
+        for (let b = 0; b < rasto; b++) {
+          const bala = tiro.balas[b];
+          bala.visible = f < viagem;
+          const atras = direcao.clone().multiplyScalar(alcance * Math.max(0, ida - b * 0.12));
+          bala.position.copy(de).add(atras).setY(0.9 + altura);
+          pintar(bala, cor, 1 - b * 0.3);
+          bala.scale.setScalar((estilo === "dash" ? 1.3 : 1.6) * grande * (1 - b * 0.2));
+        }
+      } else if (estilo === "torreta") {
+        // A torre (ou o urso, o clone) aparece ao lado e dispara ao alvo.
+        const lado = new THREE.Vector3(direcao.z, 0, -direcao.x).normalize().multiplyScalar(1.4);
+        const torre = de.clone().add(lado);
+        const bala = tiro.balas[0];
+        tiro.balas[2].visible = true;
+        tiro.balas[2].position.copy(torre).setY(0.7);
+        tiro.balas[2].scale.setScalar(1.4 + Math.sin(passado / 120) * 0.1);
+        pintar(tiro.balas[2], cor, 0.9);
+        bala.visible = f < viagem;
+        bala.position.lerpVectors(torre, para, u).setY(1);
+        bala.scale.setScalar(0.9);
+        pintar(bala, cor);
+      } else if (estilo === "chuva") {
+        // Três bombas por cima, a cair à volta do alvo.
+        for (let b = 0; b < 3; b++) {
+          const ub = Math.min(1, Math.max(0, u - b * 0.1) / 0.8);
+          const angulo = (b / 3) * Math.PI * 2 + k;
+          const destino = para.clone().add(new THREE.Vector3(Math.cos(angulo), 0, Math.sin(angulo)).multiplyScalar(b === 0 ? 0 : 1.3));
+          const bala = tiro.balas[b];
+          bala.visible = f < viagem && ub > 0 && ub < 1;
+          bala.position.lerpVectors(de, destino, ub).setY(1 + Math.sin(ub * Math.PI) * 4);
+          bala.scale.setScalar(1.1 * grande);
+          pintar(bala, cor);
+        }
+      } else if (estilo === "raio") {
+        // Um feixe: as três luzes em linha até ao alvo, ao mesmo tempo.
+        for (let b = 0; b < 3; b++) {
+          const bala = tiro.balas[b];
+          bala.visible = f < viagem + 0.2;
+          bala.position.lerpVectors(de, para, (b + 1) / 3 * Math.min(1, u * 1.5)).setY(1);
+          bala.scale.setScalar((1.1 + Math.sin(passado / 40 + b) * 0.15) * grande);
+          pintar(bala, cor, 0.85);
+        }
+      } else if (estilo === "onda") {
+        // Uma onda larga que sai dele e avança até ao alvo.
+        const bala = tiro.balas[0];
+        bala.visible = f < viagem;
+        bala.position.lerpVectors(de, para, u).setY(0.6);
+        bala.scale.set(2.6 * grande, 1.2 * grande, 1);
+        pintar(bala, cor, 0.8);
       } else {
-        // Rajada: três balas seguidas. Nos outros, as duas de trás são o rasto da primeira.
+        // Arco, reto, rajada, zona, cura. Rajada: três balas seguidas; nos outros, as duas de trás são o rasto.
         const rajada = estilo === "rajada";
         for (let b = 0; b < 3; b++) {
           const ub = rajada ? Math.min(1, Math.max(0, u - b * 0.12) / (1 - 2 * 0.12)) : Math.max(0, u - b * 0.06);
           const bala = tiro.balas[b];
           bala.visible = f < viagem && ub > 0 && ub < 1;
-          (bala.material as THREE.SpriteMaterial).color.set(estilo === "cura" ? "#3ddc84" : cor).multiplyScalar(intensidade);
           const altura = estilo === "arco" ? 1 + Math.sin(ub * Math.PI) * 3.6 : estilo === "zona" ? 1 + Math.sin(ub * Math.PI) * 1.2 : 1.1;
           bala.position.lerpVectors(de, para, ub).setY(altura);
-          const tamanho = estilo === "zona" ? 1.9 : estilo === "reto" ? 1 : 1.25;
+          const tamanho = (estilo === "zona" ? 1.9 : estilo === "reto" ? 1 : 1.25) * grande;
           bala.scale.setScalar(rajada || b === 0 ? tamanho : tamanho * (1 - b * 0.3));
-          (bala.material as THREE.SpriteMaterial).opacity = rajada || b === 0 ? 1 : 0.55 - b * 0.15;
+          pintar(bala, estilo === "cura" ? "#3ddc84" : cor, rajada || b === 0 ? 1 : 0.55 - b * 0.15);
         }
       }
-      // Impacto: clarão no alvo; lançadores e controladores deixam uma onda no chão; o suporte cura-se.
+      // Impacto: clarão no alvo; o que rebenta no chão deixa uma onda; o suporte cura-se.
       clarao.opacity = impacto ? 1 - impacto : 0;
       tiro.clarao.position.copy(estilo === "cura" ? de : para).setY(1.1);
-      tiro.clarao.scale.setScalar(0.8 + impacto * (estilo === "arco" ? 3.6 : 2.4));
-      const comOnda = estilo === "arco" || estilo === "zona" || estilo === "cura";
+      tiro.clarao.scale.setScalar((0.8 + impacto * (estilo === "arco" || estilo === "chuva" || estilo === "salto" ? 3.6 : 2.4)) * grande);
+      const comOnda = estilo === "arco" || estilo === "zona" || estilo === "cura" || estilo === "chuva" || estilo === "salto" || ehSuper;
       anel.opacity = comOnda && impacto ? (1 - impacto) * 0.9 : 0;
       tiro.anel.position.copy(estilo === "cura" ? de : para).setY(0.12);
-      tiro.anel.scale.setScalar(0.5 + impacto * (estilo === "zona" ? 2.6 : 2));
+      tiro.anel.scale.setScalar((0.5 + impacto * (estilo === "zona" || estilo === "chuva" ? 2.6 : 2)) * grande);
     };
     const suave = (t: number) => t * t * (3 - 2 * t);
     const filmar = (agora: number) => {
@@ -818,6 +917,18 @@ export default function Quadro3D(props: Props) {
         }
       }
       poses.push({ pos: new THREE.Vector3(0, 34, 6), alvo: new THREE.Vector3(0, 0, 0) });
+      // Como no jogo: a câmara fica sempre alta, atrás da tua base e com o
+      // mesmo ângulo — só desliza de luta em luta (e afasta-se no início e no fim).
+      if (filme.camara === "jogo") {
+        poses.forEach((pose, i) => {
+          const longe = i === 0 || i === poses.length - 1;
+          // Afasta-se o bastante para os dois da luta caberem no ecrã.
+          const luta = lutas[Math.floor((i - 1) / 2)];
+          const zoom = longe || !luta ? 2.2 : Math.max(1, luta.a.distanceTo(luta.b) / 9);
+          pose.alvo.setY(0);
+          pose.pos.copy(pose.alvo).add(new THREE.Vector3(0, 13.5, 7.8).multiplyScalar(zoom));
+        });
+      }
       // O tempo de cada troço: as passagens pelas lutas (troços ímpares) levam
       // mais tempo do que as viagens entre elas.
       const pesos = poses.slice(1).map((_, i) => (i === 0 || i === poses.length - 2 ? 1.1 : i % 2 === 1 ? 1.6 : 0.8));
@@ -840,16 +951,21 @@ export default function Quadro3D(props: Props) {
         atual.current.onEtapaDoCinema?.(etapa);
       }
       const lento = naLuta ? 0.3 + 0.7 * Math.pow(Math.abs(u - 0.5) * 2, 2) : 1;
+      filme.lento = lento;
       filme.relogio += (agora - filme.ultimo) * lento;
       filme.ultimo = agora;
-      // Um drone nunca está parado: um balanço pequeno.
-      pos.y += Math.sin(passado * 0.0023) * 0.12;
-      pos.x += Math.sin(passado * 0.0017) * 0.1;
+      // Um drone nunca está parado: um balanço pequeno. A câmara do jogo está.
+      if (filme.camara === "drone") {
+        pos.y += Math.sin(passado * 0.0023) * 0.12;
+        pos.x += Math.sin(passado * 0.0017) * 0.1;
+      }
       camera.position.copy(pos);
       controls.target.copy(alvo);
       camera.lookAt(alvo);
       // Os brawlers mexem-se no sítio: estão em combate, não parados.
+      // Quem tem o modelo original já se mexe com as animações dele.
       grupoDasFichas.children.forEach((g, i) => {
+        if (g.userData.boneco) return;
         const retrato = g.children[2];
         const salto = Math.abs(Math.sin(filme!.relogio / 160 + i * 1.3)) * 0.18;
         if (retrato) retrato.position.y = ALTURA_DO_RETRATO + salto;
@@ -872,9 +988,23 @@ export default function Quadro3D(props: Props) {
     let vivoParado = true;
     let custo = 0;
     let quadro = 0;
+    let ultimaAnimacao = performance.now();
     const ciclo = () => {
       quadro = requestAnimationFrame(ciclo);
       const agora = performance.now();
+      // As animações dos modelos originais (a ~30 imagens por segundo, e mais
+      // devagar na câmara lenta da cena).
+      if (aVista && (filme || vivoParado) && agora - ultimaAnimacao > 33) {
+        const passo = Math.min(0.1, (agora - ultimaAnimacao) / 1000) * (filme ? filme.lento : 1);
+        ultimaAnimacao = agora;
+        for (const g of grupoDasFichas.children) {
+          const boneco = g.userData.boneco as BonecoOriginal | undefined;
+          if (boneco?.animado) {
+            boneco.avancar(passo);
+            sujo = true;
+          }
+        }
+      }
       if (realismo && aVista && (filme || (vivoParado && agora - ultimoVivo > 33))) {
         ultimoVivo = agora;
         realismo.animar(agora / 1000);
@@ -894,6 +1024,8 @@ export default function Quadro3D(props: Props) {
         const t = Math.min(1, (performance.now() - d.inicio) / 900);
         const suave = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         objeto.position.lerpVectors(d.de, d.para, suave);
+        // A andar até ao sítio novo (com o modelo original, a animação de andar).
+        animar(objeto, t >= 1 ? "parado" : "anda");
         if (t >= 1) deslizes.delete(objeto);
         sujo = true;
       }
@@ -1175,6 +1307,8 @@ export default function Quadro3D(props: Props) {
       for (const filho of [...c.grupoDasFichas.children, ...c.grupoDosDuelos.children]) {
         filho.removeFromParent();
         filho.traverse((o) => {
+          // O modelo original partilha a malha com a cópia em memória: não se deita fora.
+          if (o.userData.partilhado) return;
           const malha = o as THREE.Mesh;
           malha.geometry?.dispose();
           const material = malha.material as THREE.SpriteMaterial | undefined;
@@ -1192,8 +1326,10 @@ export default function Quadro3D(props: Props) {
         base.position.y = 0.08;
         base.castShadow = true;
         // O corpo do boneco (a forma vem da classe), virado para a base adversária.
-        const haste = criarCorpo(ficha.classe, COR_DO_LADO[ficha.lado]);
-        haste.rotation.y = ficha.lado === "nos" ? 0 : Math.PI;
+        // Fica dentro de um suporte: se houver o modelo original, troca-se lá dentro.
+        const haste = new THREE.Group();
+        haste.add(criarCorpo(ficha.classe, COR_DO_LADO[ficha.lado]));
+        haste.rotation.y = haste.userData.rotacao = ficha.lado === "nos" ? 0 : Math.PI;
         const retrato = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharFicha(ficha.nome, ficha.lado, retratos.current.get(ficha.retrato ?? "") ?? null, ficha.funcao), depthTest: false }));
         // Visto dos olhos dele: o retrato não aparece (tapava tudo); fica a base no chão.
         retrato.visible = ficha.chave !== vistoComo;
@@ -1203,6 +1339,29 @@ export default function Quadro3D(props: Props) {
         retrato.position.y = ALTURA_DO_RETRATO;
         retrato.renderOrder = 20;
         grupo.add(base, haste, retrato);
+        // O modelo original do brawler, se estiver na pasta: o corpo e a cara
+        // passam a ser dele; do retrato fica só o nome, por cima da cabeça.
+        if (temModelo(ficha.nome)) {
+          void criarBonecoOriginal(ficha.nome, 1.9).then((boneco) => {
+            if (!boneco) return;
+            if (cancelado || !grupo.parent) { boneco.dispose(); return; }
+            boneco.objeto.traverse((o) => { o.userData.partilhado = true; });
+            // O glTF olha para +z; o suporte conta com o corpo a olhar para -z.
+            boneco.objeto.rotation.y = Math.PI;
+            for (const velho of [...haste.children]) {
+              velho.removeFromParent();
+              velho.traverse((o) => { (o as THREE.Mesh).geometry?.dispose(); });
+            }
+            haste.add(boneco.objeto);
+            grupo.userData.boneco = boneco;
+            const nome = retrato.material.map;
+            retrato.material.map = desenharNome(ficha.nome, ficha.lado);
+            nome?.dispose();
+            retrato.scale.set(1.5, 0.375, 1);
+            retrato.position.y = retrato.userData.altura = 2.25;
+            c.pedirDesenho();
+          });
+        }
         const mundo = paraMundo(ficha.ponto);
         const antes = ultimaPosicao.current.get(ficha.chave);
         c.grupoDasFichas.add(grupo);
@@ -1393,7 +1552,7 @@ export default function Quadro3D(props: Props) {
 
   /* ---- A cena de cinema. ---- */
   useEffect(() => {
-    if (props.cinema) cena.current?.comecarFilme(props.cinema.duracaoMs, props.cinema.focos);
+    if (props.cinema) cena.current?.comecarFilme(props.cinema.duracaoMs, props.cinema.focos, props.cinema.camara);
     else cena.current?.pararFilme();
   }, [props.cinema?.n]);
 

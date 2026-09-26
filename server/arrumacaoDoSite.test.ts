@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
@@ -169,9 +169,10 @@ describe("o mapa 3D: menos texto e a cena da partida", () => {
   });
 
   it("cada brawler ataca à maneira da classe", () => {
-    expect(q3d).toContain('case "Lançador": return "arco";');
-    expect(q3d).toContain('case "Artilheiro": return "reto";');
-    expect(q3d).toMatch(/case "Tank":\s*case "Assassino": return "investida";/);
+    const habilidades = ler("client/src/components/habilidades3D.ts");
+    expect(habilidades).toContain('case "Lançador": return "arco";');
+    expect(habilidades).toContain('case "Artilheiro": return "reto";');
+    expect(habilidades).toMatch(/case "Tank":\s*case "Assassino": return "investida";/);
     expect(quadro).toContain("classe: getBrawlerClass(linha.brawler)");
   });
 
@@ -222,8 +223,44 @@ describe("os bonecos com corpo", () => {
     expect(bonecos).toContain('case "Lançador": {');
   });
   it("o corpo substitui o pau, olha para a base adversária e mantém a cara no lugar do retrato", () => {
-    expect(q3d).toContain("const haste = criarCorpo(ficha.classe, COR_DO_LADO[ficha.lado]);");
-    expect(q3d).toContain('haste.rotation.y = ficha.lado === "nos" ? 0 : Math.PI;');
+    expect(q3d).toContain("haste.add(criarCorpo(ficha.classe, COR_DO_LADO[ficha.lado]));");
+    expect(q3d).toContain('haste.rotation.y = haste.userData.rotacao = ficha.lado === "nos" ? 0 : Math.PI;');
     expect(q3d).toContain("const ALTURA_DO_RETRATO = ALTURA_DA_CARA;");
+  });
+});
+
+describe("os modelos originais, os ataques e os supers de cada brawler", () => {
+  const q3d = ler("client/src/components/Quadro3D.tsx");
+  const modelos = ler("client/src/components/modelosDosBrawlers.ts");
+  const quadro = ler("client/src/components/QuadroDoGeneral.tsx");
+
+  it("os .glb da pasta entram sozinhos e só se descarregam quando o mapa os pede", () => {
+    expect(modelos).toContain('import.meta.glob("../modelos/brawlers/*.glb", { query: "?url", import: "default" })');
+    expect(modelos).not.toContain("eager");
+    expect(existsSync(resolve(process.cwd(), "client/src/modelos/brawlers/LEIA-ME.md"))).toBe(true);
+    // O modelo troca o boneco; sem modelo fica o boneco.
+    expect(q3d).toContain("if (temModelo(ficha.nome)) {");
+    expect(q3d).toContain("grupo.userData.boneco = boneco;");
+    // A malha é partilhada com a cópia em memória: não se deita fora ao redesenhar.
+    expect(q3d).toContain("if (o.userData.partilhado) return;");
+  });
+
+  it("o super não se confunde com o ataque, e sem super usa o ataque", () => {
+    expect(modelos.indexOf("super: /super|ulti|especial/i")).toBeLessThan(modelos.indexOf("ataque: /attack"));
+    expect(modelos).toContain('(acao === "super" ? acoes.get("ataque") : undefined)');
+  });
+
+  it("as animações andam, e abrandam na câmara lenta", () => {
+    expect(q3d).toContain("* (filme ? filme.lento : 1)");
+    expect(q3d).toContain('animar(objeto, t >= 1 ? "parado" : "anda");');
+    expect(q3d).toContain('animar(atacante, f >= viagem ? "parado" : ehSuper ? "super" : corre ? "anda" : "ataque");');
+  });
+
+  it("a câmara como no jogo: alta, sempre com o mesmo ângulo, e fica guardada", () => {
+    expect(q3d).toContain('if (filme.camara === "jogo") {');
+    expect(q3d).toContain("new THREE.Vector3(0, 13.5, 7.8).multiplyScalar(zoom)");
+    expect(quadro).toContain('<option value="jogo">Como no jogo</option>');
+    expect(quadro).toContain('const CHAVE_DA_CAMARA = "brawl-hibrido:camara-da-cena:v1";');
+    expect(quadro).toMatch(/duracaoMs: Math\.max\([^\n]*camara,/);
   });
 });
