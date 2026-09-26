@@ -4212,3 +4212,21 @@ main { max-width: 1600px; margin: 0 auto; }
 }
 .quadro-general-interruptor--seguinte { margin-left: 0; }
 .qg-chip--gadget { background: rgba(61, 220, 132, .1); color: #b6f5cf; box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .35); }
+/* Os três momentos da partida (início, meio, fim) e as ameaças. */
+.qg-momentos { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-top: 12px; }
+.qg-momento { display: grid; gap: 2px; min-width: 96px; padding: 8px 14px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(255, 255, 255, .04); color: var(--bh-text-dim); text-align: left; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.qg-momento b { color: var(--bh-text); font-size: 13px; }
+.qg-momento small { font-size: 11px; }
+.qg-momento.is-active { border-color: var(--bh-gold); background: rgba(248, 184, 78, .14); }
+.qg-momento.is-active b { color: var(--bh-gold-soft); }
+.qg-momento-partidas { color: #ffb38a; }
+.qg-reproduzir { padding: 8px 14px; border: 1px solid rgba(55, 200, 255, .4); border-radius: 12px; background: rgba(55, 200, 255, .12); color: #8fdcff; font-weight: 800; cursor: pointer; }
+.qg-momento-texto { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, .25); }
+.qg-momento-texto strong { margin-right: 4px; color: var(--bh-text); font-size: 13px; }
+.qg-chip--ameaca { background: rgba(255, 77, 109, .1); color: #ffc2cd; box-shadow: inset 0 0 0 1px rgba(255, 77, 109, .45); }
+.qg-previsao--nossa { background: rgba(55, 200, 255, .08); box-shadow: inset 3px 0 0 #37c8ff; }
+.qg-previsao--nossa ul { color: #bfeaff; }
+@media (max-width: 700px) {
+  .qg-momento { flex: 1 1 28%; min-width: 0; }
+  .qg-reproduzir { flex: 1 1 100%; }
+}

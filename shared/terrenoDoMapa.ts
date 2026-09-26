@@ -122,6 +122,7 @@ export function pontoLivre(terreno: TerrenoDoMapa | null | undefined, ponto: { x
  * - um grupo pequeno e liso só nas duas primeiras ou duas últimas linhas é a
  *   base de partida (o enchimento dos círculos vermelhos e azuis) → objetivo;
  * - liso (textura < 10) e grande → água (ou uma zona desenhada — a IA corrige);
+ * - muito liso (textura < 6) e pequeno → desenho no chão (plataforma de salto) → objetivo;
  * - o maior grupo com textura de relva (10 a 30) → mato;
  * - o resto → parede, porque as paredes têm contornos e sombras.
  */
@@ -140,6 +141,8 @@ export function rotularPorRegra(grupos: readonly Omit<GrupoDeCor, "tipo">[], gre
     const naBase = casas.length > 0 && casas.length <= 12 && grupo.textura < 10 && casas.every(({ linha }) => linha <= 1 || linha >= linhas - 2);
     if (naBase) tipos.set(grupo.id, "objetivo");
     else if (grupo.textura < 10 && grupo.casas >= 8) tipos.set(grupo.id, "agua");
+    // Pequeno e liso a meio do mapa: desenho no chão (plataformas de salto, marcas), não parede — as paredes têm sempre contornos.
+    else if (grupo.textura < 6) tipos.set(grupo.id, "objetivo");
   }
   const mato = grupos
     .filter((grupo) => !tipos.has(grupo.id) && grupo.textura >= 10 && grupo.textura <= 30 && grupo.casas >= 6)

@@ -19,9 +19,9 @@ import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
-import { diagnosticoDoMapa, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
+import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
-import { TIPOS_DE_CASA } from "@shared/terrenoDoMapa";
+import { TIPOS_DE_CASA, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
   deleteProdigyLink,
@@ -87,10 +87,6 @@ export const appRouter = router({
     terreno: publicProcedure
       .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
       .query(({ input }) => obterTerreno(input.mapaId)),
-    /** As medidas de cada casa de até 4 mapas (cor, textura, vermelho, azul), compactas: para afinar a leitura do terreno. */
-    diagnosticoDoTerreno: publicProcedure
-      .input(z.object({ mapaIds: z.array(z.string().regex(/^\d{5,9}$/)).min(1).max(4) }))
-      .query(async ({ input }) => Object.fromEntries(await Promise.all(input.mapaIds.map(async (id) => [id, await diagnosticoDoMapa(id)] as const)))),
     /** De onde veio a lista de builds e quantos itens tem (sem a lista): para confirmar que chega. */
     catalogo: publicProcedure.query(async () => {
       const catalogo = await obterCatalogo();
@@ -106,6 +102,22 @@ export const appRouter = router({
         const terreno = await obterTerreno(input.mapaId);
         if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
         return guardarRotulosDaIA(terreno, input.rotulos);
+      }),
+    /** O dono corrige casas soltas à mão (um jarro lido como parede, uma parede que faltou). `null` volta ao que a imagem diz. */
+    corrigirCasas: protectedProcedure
+      .input(z.object({
+        mapaId: z.string().regex(/^\d{5,9}$/),
+        casas: z.array(z.object({
+          coluna: z.number().int().min(0).max(20),
+          linha: z.number().int().min(0).max(32),
+          tipo: z.enum(TIPOS_DE_CASA as unknown as [string, ...string[]]).nullable(),
+        })).min(1).max(60),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "corrigir o terreno");
+        const terreno = await obterTerreno(input.mapaId);
+        if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
+        return guardarCorrecoesDeCasas(terreno, input.casas as Array<{ coluna: number; linha: number; tipo: TipoDeCasa | null }>);
       }),
     /** A IA volta a olhar para a imagem e diz o que é cada grupo de cor. */
     rotularTerreno: protectedProcedure

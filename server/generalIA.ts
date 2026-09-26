@@ -232,10 +232,12 @@ async function gerarJson(
         ultima = erro;
         console.warn(`[General] ${tarefa}: ${modelo}${estrito ? "" : " (sem formato estrito)"} respondeu ${erro.status}: ${erro.detalhe}`);
         falhas.push(`${modelo}: ${erro.status}${erro.detalhe ? ` ${erro.detalhe.slice(0, 90)}` : ""}`);
-        if (!valeTentarOutro(erro.status)) throw erroDaGoogle(erro.status, erro.corpo);
+        // Um 400 que não é da chave, com o formato estrito, é o esquema que a Google não aceitou: repete-se sem ele.
+        const esquemaRecusado = estrito && erro.status === 400 && !/api key not valid|API_KEY_INVALID/i.test(erro.corpo);
+        if (!valeTentarOutro(erro.status) && !esquemaRecusado) throw erroDaGoogle(erro.status, erro.corpo);
         if (erro.status === 404) modelosDaChave.delete(chave);
-        // Só um erro interno justifica repetir o MESMO modelo sem o formato estrito.
-        if (!(estrito && erro.status === 500)) break;
+        // Só um erro interno ou um esquema recusado justificam repetir o MESMO modelo sem o formato estrito.
+        if (!(estrito && (erro.status === 500 || esquemaRecusado))) break;
       }
     }
     if (pausaMs) await esperar(pausaMs);
@@ -276,6 +278,7 @@ export function textoDosRotulos(terreno: TerrenoDoMapa) {
     "A imagem é um mapa de Brawl Stars visto de cima: 690×1050 píxeis, casas de 30 píxeis, com uma casa de margem à volta (a casa (0,0) começa no píxel (30,30)).",
     "Separei as casas que não são chão em grupos pela cor. Diz o que é cada grupo, olhando para esses sítios na imagem:",
     "- parede: bloqueia movimento e tiros (caixas, pedras, barris, cactos, cercas, plantas sólidas)",
+    "- destrutivel: jarro ou vaso solto que se parte com ataques normais (barris e caixas NÃO: são parede)",
     "- mato: arbustos/relva alta onde os brawlers se escondem",
     "- agua: água ou buraco, não se pode andar",
     "- objetivo: desenhado no chão e não bloqueia (círculos de partida, zonas, balizas, cofre, mina de gemas)",
@@ -285,7 +288,7 @@ export function textoDosRotulos(terreno: TerrenoDoMapa) {
   ].join("\n");
 }
 
-const FORMATO_DOS_ROTULOS = 'Responde só com JSON, sem mais nada, nesta forma: {"rotulos":[{"id":"a","tipo":"parede"}]} — tipo é um de: chao, parede, mato, agua, objetivo.';
+const FORMATO_DOS_ROTULOS = 'Responde só com JSON, sem mais nada, nesta forma: {"rotulos":[{"id":"a","tipo":"parede"}]} — tipo é um de: chao, parede, destrutivel, mato, agua, objetivo.';
 
 /** Pede os tipos à IA e guarda-os. Se falhar, fica a regra aproximada. */
 export async function rotularTerrenoComIA(terreno: TerrenoDoMapa, buscar: Buscar = fetch) {

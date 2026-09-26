@@ -3,15 +3,18 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { deflateSync } from "node:zlib";
 import {
+  camadasDoMomento,
   chaveDaFicha,
+  comCamadas,
   lerPlanoDaIA,
   lerPlanoGuardado,
   posicoesIniciais,
+  terrenoDoMomento,
   textoDoPedido,
   MAXIMO_DE_SETAS,
   type PedidoDePlano,
 } from "@shared/quadroDoGeneral";
-import { aplicarRotulos, grelhaEmTexto, pontoLivre, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
+import { aplicarRotulos, corrigirCasas, grelhaEmTexto, pontoLivre, terrenoValido, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
 import { conferirBuilds, escolherModelo, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
@@ -57,7 +60,8 @@ function pngDoMapa(pintar: Pintura, largura = 690, altura = 1050) {
 
 // Paredes: caixas com contorno escuro. Mato: relva às riscas. Água: lisa. Base: anel azul.
 const pintarMapa: Pintura = (coluna, linha, x, y) => {
-  if (linha === 10 && coluna >= 5 && coluna <= 9) return x < 3 || y < 3 || x > 26 || y > 26 ? [90, 50, 20] : [200, 120, 60];
+  // Tijolos: as paredes reais têm sempre contornos e desenho por dentro (textura).
+  if (linha === 10 && coluna >= 5 && coluna <= 9) return x < 3 || y < 3 || x > 26 || y > 26 || y % 9 < 2 ? [90, 50, 20] : [200, 120, 60];
   if (linha >= 14 && linha <= 17 && coluna >= 12 && coluna <= 15) return x % 6 < 3 ? [30, 140, 40] : [50, 170, 60];
   if (linha >= 22 && linha <= 24 && coluna >= 2 && coluna <= 5) return [40, 90, 200];
   if (linha === 32 && coluna >= 9 && coluna <= 11) return x < 9 || x > 20 ? [4, 171, 252] : null;
@@ -66,8 +70,26 @@ const pintarMapa: Pintura = (coluna, linha, x, y) => {
   if (linha === 5 && coluna === 18) return x > 10 && x < 20 && y > 10 && y < 20 ? [230, 60, 80] : [60, 110, 40];
   // Três vasos vermelhos em cima de uma parede, como no Hideout: vermelho maciço, não a linha de um anel.
   if (linha === 7 && coluna >= 2 && coluna <= 4) return x > 7 && x < 20 && y > 9 && y < 22 ? [215, 55, 50] : [196, 112, 66];
-  // Um jarro solto: duas casas, uma em cima da outra, de uma cor que não se repete.
-  if (coluna === 18 && (linha === 12 || linha === 13)) return x < 3 || x > 26 ? [120, 60, 40] : [244, 107, 84];
+  // Um jarro cor-de-rosa com uma risca vermelha, desenhado a subir para a casa de cima (como no Hideout).
+  if (coluna === 18 && linha === 13) {
+    if (x < 8 || x > 22) return null;
+    if (y >= 12 && y < 18) return [240, 80, 90];
+    return y % 5 === 0 ? [170, 90, 80] : [250, 130, 100];
+  }
+  if (coluna === 18 && linha === 12) return y >= 20 && x >= 8 && x <= 22 ? [250, 130, 100] : null;
+  // A estrela do Caça-Estrelas: azul maciço com desenho; a casa de baixo é a sombra dela.
+  if (coluna === 10 && linha === 16) return (x + y) % 7 < 2 ? [10, 60, 140] : [30, 160, 235];
+  if (coluna === 10 && linha === 17) return x > 6 && x < 24 && y < 14 ? [150, 110, 90] : null;
+  // Uma parede de duas casas desenhada como na Brawlify: meia casa acima do sítio dela.
+  if (coluna === 6 && linha === 16) return y >= 15 ? (y % 9 < 2 || x < 3 || x > 26 ? [90, 50, 20] : [200, 120, 60]) : null;
+  if (coluna === 6 && (linha === 17 || linha === 18)) return (y + 15) % 9 < 2 || x < 3 || x > 26 ? [90, 50, 20] : [200, 120, 60];
+  // Uma plataforma de salto: desenho liso no chão, a meio do mapa, com um aro fino (escuro e vermelho) à volta.
+  if (coluna === 3 && linha === 28) return [136, 102, 75];
+  if (coluna === 3 && (linha === 27 || linha === 29)) {
+    const dentro = linha === 27 ? 29 - y : y;
+    if (dentro === 7) return [230, 60, 70];
+    return dentro < 13 ? [110, 30, 40] : null;
+  }
   // Uma piscina (o azul claro da água, a casa inteira) e o disco de uma zona (azulado, liso, redondo).
   if (linha >= 2 && linha <= 3 && coluna >= 14 && coluna <= 16) return [60, 175, 240];
   if (Math.hypot(coluna - 16, linha - 26) <= 3.2) return [30, 95, 160];
@@ -97,14 +119,32 @@ describe("ler o terreno da imagem do mapa", () => {
     expect(tipoDaCasa(terreno, 18, 5)).not.toBe("objetivo");
   });
 
-  it.skip("vasos vermelhos numa parede são parede (não o anel de uma base); um jarro solto é jarro", () => {
+  it("vasos vermelhos numa parede são parede (não o anel de uma base); um jarro solto é jarro, só na casa dele", () => {
     for (const coluna of [2, 3, 4]) expect(tipoDaCasa(terreno, coluna, 7), `${coluna},7`).toBe("parede");
-    expect(tipoDaCasa(terreno, 18, 12)).toBe("destrutivel");
     expect(tipoDaCasa(terreno, 18, 13)).toBe("destrutivel");
+    // O topo do desenho do jarro, na casa de cima, é chão.
+    expect(tipoDaCasa(terreno, 18, 12)).toBe("chao");
+    // A flor vermelha num cacto verde continua parede, não jarro.
+    expect(tipoDaCasa(terreno, 18, 5)).toBe("parede");
     // Uma parede de verdade (5 casas seguidas) não passa a jarro.
     expect(tipoDaCasa(terreno, 7, 10)).toBe("parede");
     // Um jarro bloqueia: ninguém fica lá dentro.
-    expect(pontoLivre(terreno, { x: 18.5 / 21, y: 12.5 / 33 })).not.toEqual({ x: 18.5 / 21, y: 12.5 / 33 });
+    expect(pontoLivre(terreno, { x: 18.5 / 21, y: 13.5 / 33 })).not.toEqual({ x: 18.5 / 21, y: 13.5 / 33 });
+  });
+
+  it("o topo de uma parede desenhado na casa de cima não é mais uma parede", () => {
+    expect(tipoDaCasa(terreno, 6, 16)).toBe("chao");
+    expect(tipoDaCasa(terreno, 6, 17)).toBe("parede");
+    expect(tipoDaCasa(terreno, 6, 18)).toBe("parede");
+  });
+
+  it("a estrela do Caça-Estrelas (e a sombra dela) é objetivo; um desenho liso a meio do mapa também", () => {
+    expect(tipoDaCasa(terreno, 10, 16)).toBe("objetivo");
+    expect(tipoDaCasa(terreno, 10, 17)).toBe("objetivo");
+    expect(tipoDaCasa(terreno, 3, 28)).toBe("objetivo");
+    // O aro fino da plataforma também: não são blocos à volta dela.
+    expect(tipoDaCasa(terreno, 3, 27)).toBe("objetivo");
+    expect(tipoDaCasa(terreno, 3, 29)).toBe("objetivo");
   });
 
   it("a grelha em texto é a que a IA recebe, linha a linha", () => {
@@ -277,6 +317,102 @@ describe("água e paredes nas ordens da IA", () => {
     expect(bolt).not.toEqual(posicoesIniciais(NOSSOS, DELES)[chaveDaFicha("eles", "Bolt")]);
     expect(tipoEm(bolt)).not.toBe("parede");
     expect(plano.posicoes[chaveDaFicha("eles", "Lumi")]).toEqual(posicoesIniciais(NOSSOS, DELES)[chaveDaFicha("eles", "Lumi")]);
+  });
+});
+
+describe("três momentos da partida e ameaças", () => {
+  const terreno = lerTerrenoDaImagem(lerPng(pngDoMapa(pintarMapa)), "15000001");
+  const ordem = (brawler: string, col: number, linha: number) => ({ brawler, funcao: "f", objetivo: "o", quandoAvancar: "", cuidados: [], posicao: { col, linha } });
+  const plano = lerPlanoDaIA({
+    ordens: [ordem("Lou", 3, 20), ordem("Nori", 10, 20), ordem("R-T", 17, 20)],
+    momentos: [
+      { momento: "inicio", quando: "0:00–0:40", resumo: "Segurar lanes", seGanhar: "guarda a vantagem", sePerder: "recua para a base" },
+      {
+        momento: "meio", quando: "0:40–1:30", resumo: "Abrir o meio", seGanhar: "empurra", sePerder: "junta os três",
+        // A parede da linha 10 cai (7 e 8); a 3,3 é chão e não conta como parede partida.
+        paredesPartidas: [{ col: 7, linha: 10 }, { col: 8, linha: 10 }, { col: 3, linha: 3 }],
+        // Troca de lanes: o Lou passa para a direita e fica EM CIMA da parede que caiu.
+        posicoes: [{ brawler: "lou", posicao: { col: 7, linha: 10 } }, { brawler: "BOLT", posicao: { col: 9, linha: 12 } }, { brawler: "Inventado", posicao: { col: 1, linha: 1 } }],
+        setas: [{ brawler: "Lou", tipo: "avanco", de: { col: 7, linha: 12 }, para: { col: 7, linha: 8 }, nota: "entra pela brecha" }],
+        marcadores: [{ tipo: "destruir", ponto: { col: 7, linha: 10 }, nota: "partir: tapa o Bolt", brawler: "Lou" }],
+      },
+      { momento: "fim", quando: "1:30–2:00", resumo: "Fechar", seGanhar: "defende", sePerder: "arrisca tudo", paredesPartidas: [{ col: 9, linha: 10 }] },
+      { momento: "depois", quando: "x", resumo: "momento inventado", seGanhar: "", sePerder: "" },
+    ],
+    ameacas: [
+      { perigoso: "Bolt", alvo: "Lou", texto: "não chegues perto: morres", excecao: "só se o Bolt tiver pouca vida" },
+      { perigoso: "Nori", alvo: "Lumi", texto: "caça a Lumi", excecao: "não sei" },
+      { perigoso: "Bolt", alvo: "Lumi", texto: "mesmo lado: não conta" },
+      { perigoso: "Inventado", alvo: "Lou", texto: "x" },
+    ],
+  }, NOSSOS, DELES, new Date(), terreno);
+
+  it("três momentos com texto; um momento inventado fica de fora", () => {
+    expect(plano.momentos?.map((m) => m.momento)).toEqual(["inicio", "meio", "fim"]);
+    expect(plano.momentos?.[0]).toMatchObject({ quando: "0:00–0:40", seGanhar: "guarda a vantagem", sePerder: "recua para a base" });
+  });
+
+  it("paredes partidas: só paredes que existem, e continuam partidas no fim", () => {
+    expect(plano.quadros?.meio?.paredesPartidas).toEqual([{ coluna: 7, linha: 10 }, { coluna: 8, linha: 10 }]);
+    expect(plano.quadros?.fim?.paredesPartidas).toEqual([{ coluna: 7, linha: 10 }, { coluna: 8, linha: 10 }, { coluna: 9, linha: 10 }]);
+  });
+
+  it("no meio, um brawler pode ficar onde a parede caiu; o terreno desse momento já não a tem", () => {
+    expect(plano.quadros?.meio?.posicoes[chaveDaFicha("nos", "Lou")]).toEqual({ x: 7.5 / 21, y: 10.5 / 33 });
+    // No início a mesma casa era parede: lá ninguém fica.
+    expect(tipoDaCasa(terreno, 7, 10)).toBe("parede");
+    expect(tipoDaCasa(terrenoDoMomento(terreno, plano.quadros!.meio!.paredesPartidas)!, 7, 10)).toBe("chao");
+    // Um adversário também muda de sítio; nomes inventados não.
+    expect(plano.quadros?.meio?.posicoes[chaveDaFicha("eles", "Bolt")]).toEqual({ x: 9.5 / 21, y: 12.5 / 33 });
+    expect(Object.keys(plano.quadros!.meio!.posicoes).sort()).toEqual(Object.keys(plano.posicoes).sort());
+  });
+
+  it("o fim parte do meio: quem não mudou fica onde estava a meio", () => {
+    expect(plano.quadros?.fim?.posicoes[chaveDaFicha("nos", "Lou")]).toEqual(plano.quadros?.meio?.posicoes[chaveDaFicha("nos", "Lou")]);
+  });
+
+  it("um momento sem quadro próprio usa o do meio, e o início é o plano de cima", () => {
+    expect(camadasDoMomento(plano, "inicio").posicoes).toBe(plano.posicoes);
+    const semFim = { ...plano, quadros: { meio: plano.quadros!.meio! } };
+    expect(camadasDoMomento(semFim, "fim")).toBe(plano.quadros!.meio);
+    const mexido = comCamadas(plano, "meio", { ...plano.quadros!.meio!, setas: [] });
+    expect(mexido.quadros?.meio?.setas).toEqual([]);
+    expect(mexido.setas).toBe(plano.setas);
+  });
+
+  it("ameaças: lados opostos, nomes do draft; \"não sei\" não é exceção", () => {
+    expect(plano.ameacas).toEqual([
+      { id: "ia-a1", perigoso: "Bolt", ladoDoPerigoso: "eles", alvo: "Lou", texto: "não chegues perto: morres", excecao: "só se o Bolt tiver pouca vida" },
+      { id: "ia-a2", perigoso: "Nori", ladoDoPerigoso: "nos", alvo: "Lumi", texto: "caça a Lumi" },
+    ]);
+  });
+
+  it("tudo isto sobrevive a guardar e ler no navegador; lixo fica de fora", () => {
+    const lido = lerPlanoGuardado(JSON.stringify(plano), NOSSOS, DELES);
+    expect(lido.momentos).toEqual(plano.momentos);
+    expect(lido.quadros).toEqual(plano.quadros);
+    expect(lido.ameacas).toEqual(plano.ameacas);
+    const estragado = lerPlanoGuardado(JSON.stringify({
+      quadros: { meio: { posicoes: { "a:Lou": { x: 9, y: -1 } }, setas: [{ tipo: "x" }], marcadores: "lixo", paredesPartidas: [{ coluna: 99, linha: 1 }, { coluna: 2, linha: 3 }] } },
+      momentos: [{ momento: "nunca" }],
+      ameacas: [{ perigoso: "Inventado", alvo: "Lou", ladoDoPerigoso: "eles", texto: "x" }],
+    }), NOSSOS, DELES);
+    expect(estragado.quadros?.meio?.posicoes["a:Lou"]).toEqual({ x: 0.97, y: 0.03 });
+    expect(estragado.quadros?.meio?.setas).toEqual([]);
+    expect(estragado.quadros?.meio?.marcadores).toEqual([]);
+    expect(estragado.quadros?.meio?.paredesPartidas).toEqual([{ coluna: 2, linha: 3 }]);
+    expect(estragado.momentos).toBeUndefined();
+    expect(estragado.ameacas).toBeUndefined();
+  });
+
+  it("o pedido explica os momentos, as ameaças, os jarros e as paredes de que os nossos precisam", () => {
+    const texto = textoDoPedido(pedido, false, terreno, null, new Date());
+    expect(texto).toContain("\"inicio\", \"meio\" e \"fim\"");
+    expect(texto).toContain("seGanhar");
+    expect(texto).toContain("PODES trocar os nossos de lane");
+    expect(texto).toContain("ameacas");
+    expect(texto).toContain("Sprout");
+    expect(texto).toContain("\"*\" jarro/barril");
   });
 });
 
@@ -465,6 +601,18 @@ describe("a IA no servidor", () => {
     expect(livre.corpo.contents[0].parts.at(-1).text).toContain('"ordens":[{"brawler"');
   });
 
+  it("esquema recusado (400 que não é da chave): repete no mesmo modelo sem o formato estrito", async () => {
+    const { falsa, resultado } = await pedirCom({ plano: { "gemini-3-flash": erroGoogle(400, "INVALID_ARGUMENT", "The response schema is too complex.") } });
+    expect("ok" in resultado).toBe(true);
+    expect(falsa.geracoes()).toEqual(["gemini-3-flash", "gemini-3-flash:livre"]);
+  });
+
+  it("chave inválida (400) não se repete: pára logo com a mensagem da chave", async () => {
+    const { falsa, resultado } = await pedirCom({ plano: { "gemini-3-flash": erroGoogle(400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.") } });
+    expect("erro" in resultado && resultado.erro.message).toMatch(/não aceitou a chave/);
+    expect(falsa.geracoes()).toEqual(["gemini-3-flash"]);
+  });
+
   it("modelo sobrecarregado: passa ao seguinte", async () => {
     const { falsa, resultado } = await pedirCom({
       modelos: ["gemini-3-flash", "gemini-2.5-flash"],
@@ -515,12 +663,41 @@ describe("a IA no servidor", () => {
   });
 });
 
+describe("correções casa a casa (o dono corrige o que a imagem leu mal)", () => {
+  const terreno = lerTerrenoDaImagem(lerPng(pngDoMapa(pintarMapa)), "15000001");
+
+  it("a correção vale mais do que o grupo, e \"como na imagem\" (null) desfaz", () => {
+    expect(tipoDaCasa(terreno, 7, 10)).toBe("parede");
+    const corrigido = corrigirCasas(terreno, [{ coluna: 7, linha: 10, tipo: "destrutivel" }, { coluna: 0, linha: 0, tipo: "parede" }]);
+    expect(tipoDaCasa(corrigido, 7, 10)).toBe("destrutivel");
+    expect(tipoDaCasa(corrigido, 0, 0)).toBe("parede");
+    expect(terrenoValido(corrigido)).toBe(true);
+    const desfeito = corrigirCasas(corrigido, [{ coluna: 7, linha: 10, tipo: null }, { coluna: 0, linha: 0, tipo: null }]);
+    expect(tipoDaCasa(desfeito, 7, 10)).toBe("parede");
+    expect(desfeito.correcoes).toBeUndefined();
+  });
+
+  it("casas fora do mapa e tipos inventados ficam de fora; um terreno guardado com lixo é recusado", () => {
+    const corrigido = corrigirCasas(terreno, [{ coluna: 99, linha: 0, tipo: "parede" }, { coluna: 1, linha: 1, tipo: "lava" as never }]);
+    expect(corrigido.correcoes).toBeUndefined();
+    expect(terrenoValido({ ...terreno, correcoes: { "5": "lava" } })).toBe(false);
+    expect(terrenoValido({ ...terreno, correcoes: { "99999": "parede" } })).toBe(false);
+  });
+
+  it("os rótulos da IA não apagam as correções do dono", () => {
+    const corrigido = corrigirCasas(terreno, [{ coluna: 7, linha: 10, tipo: "chao" }]);
+    const rotulado = aplicarRotulos(corrigido, [{ id: corrigido.grelha[10 * 21 + 7], tipo: "mato" }]);
+    expect(tipoDaCasa(rotulado, 7, 10)).toBe("chao");
+    expect(tipoDaCasa(rotulado, 8, 10)).toBe("mato");
+  });
+});
+
 describe("o que é só do dono", () => {
   const rotas = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
   const general = rotas.slice(rotas.indexOf("general: router({"), rotas.indexOf("draftRoles: router({"));
 
   it("chave, plano e correções exigem o dono; o terreno é público", () => {
-    for (const nome of ["estado", "guardarChave", "pedirPlano", "corrigirTerreno", "rotularTerreno"]) {
+    for (const nome of ["estado", "guardarChave", "pedirPlano", "corrigirTerreno", "corrigirCasas", "rotularTerreno"]) {
       const bloco = general.slice(general.indexOf(`${nome}:`));
       const corpo = bloco.slice(0, bloco.indexOf("}),") + 3);
       expect(corpo, nome).toContain("protectedProcedure");

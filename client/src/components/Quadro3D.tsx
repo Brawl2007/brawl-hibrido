@@ -16,7 +16,8 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { MarcadorDoPlano, PontoNoMapa, SetaDoPlano, TipoDeMarcador, TipoDeSeta, TrilhoDoPlano } from "@shared/quadroDoGeneral";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import type { CasaDoMapa, MarcadorDoPlano, PontoNoMapa, SetaDoPlano, TipoDeMarcador, TipoDeSeta, TrilhoDoPlano } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_MARCADOR } from "@shared/quadroDoGeneral";
 import { tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
@@ -24,7 +25,10 @@ import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string };
 /** Um duelo 1v1: a linha entre as duas fichas, com a vantagem da tua equipa. */
 export type DueloNo3D = { nosso: string; deles: string; vantagem: number };
-export type Ferramenta = "mover" | "seta" | "simbolo" | "apagar";
+/** `casa`: só para o dono — clicar numa casa corrige o tipo dela. */
+export type Ferramenta = "mover" | "seta" | "simbolo" | "apagar" | "casa";
+/** Uma ameaça: um círculo vermelho à volta de quem é perigoso, com o aviso para quem não se deve aproximar. */
+export type AmeacaNo3D = { id: string; perigoso: string; alvo: string; texto: string; excecao?: string };
 export type Vista = "nossa" | "deles" | "cima" | "lado" | "rasante";
 /** Os botões de câmara no ecrã, para quem não tem rato (ou prefere clicar). */
 export type ComandoDeCamara = "rodar-esquerda" | "rodar-direita" | "subir" | "descer" | "aproximar" | "afastar";
@@ -41,6 +45,13 @@ type Props = {
   trilhos: TrilhoDoPlano[];
   /** Escrever a nota ao lado de cada símbolo, no próprio mapa. */
   notasNoMapa: boolean;
+  /** Paredes que já caíram no momento mostrado: ficam escombros. */
+  paredesPartidas: CasaDoMapa[];
+  ameacas: AmeacaNo3D[];
+  /** Pôr a câmara atrás de um brawler, a olhar para onde ele joga. Muda `n` para pedir outra vez. */
+  perspetiva: { chave: string; n: number } | null;
+  /** Ferramenta "casa": a casa clicada. */
+  onCasa?: (coluna: number, linha: number) => void;
   ferramenta: Ferramenta;
   tipoDeSeta: TipoDeSeta;
   tipoDeMarcador: TipoDeMarcador;
@@ -60,7 +71,7 @@ type Props = {
 const LARGURA = 21;
 const PROFUNDIDADE = 33;
 const ALTURA_DA_PAREDE = 1;
-const ALTURA_DO_MATO = 0.6;
+const ALTURA_DO_JARRO = 0.84;
 const COR_DO_LADO = { nos: "#37c8ff", eles: "#ff4d6d" } as const;
 
 const paraMundo = (ponto: PontoNoMapa) => new THREE.Vector3((ponto.x - 0.5) * LARGURA, 0, (ponto.y - 0.5) * PROFUNDIDADE);
@@ -83,6 +94,65 @@ const ALVO_DA_VISTA: Record<Vista, [number, number, number]> = {
   cima: [0, 0, 0],
   lado: [0, 0, 0],
   rasante: [0, 0.6, 6],
+};
+
+/** O fundo: um céu escuro em degradê, para o mapa não flutuar no preto. */
+function fundoDoCeu() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  const degrade = ctx.createLinearGradient(0, 0, 0, 256);
+  degrade.addColorStop(0, "#1d3557");
+  degrade.addColorStop(0.55, "#0f1b2d");
+  degrade.addColorStop(1, "#070b14");
+  ctx.fillStyle = degrade;
+  ctx.fillRect(0, 0, 4, 256);
+  const textura = new THREE.CanvasTexture(canvas);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  return textura;
+}
+
+/** Um aviso de ameaça: "⚠ Shade: não chegues perto" e, por baixo, a exceção. */
+function desenharAmeaca(titulo: string, excecao?: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 720;
+  canvas.height = excecao ? 176 : 104;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = "bold 42px sans-serif";
+  const largura = Math.min(700, Math.max(ctx.measureText(titulo).width, excecao ? ctx.measureText(`exceto: ${excecao}`).width * 0.86 : 0) + 44);
+  ctx.fillStyle = "rgba(40,6,12,.92)";
+  ctx.beginPath();
+  ctx.roundRect(360 - largura / 2, 8, largura, canvas.height - 16, 18);
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "#ff4d6d";
+  ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffd5dc";
+  ctx.fillText(titulo, 360, 54, 680);
+  if (excecao) {
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = "#ffd23f";
+    ctx.fillText(`exceto: ${excecao}`, 360, 124, 680);
+  }
+  const textura = new THREE.CanvasTexture(canvas);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  return textura;
+}
+
+/** O perfil de um jarro de barro, rodado à volta do eixo. */
+function geometriaDoJarro() {
+  const perfil = [[0, 0], [0.24, 0], [0.33, 0.1], [0.37, 0.32], [0.31, 0.56], [0.19, 0.7], [0.22, 0.78], [0.2, ALTURA_DO_JARRO], [0, ALTURA_DO_JARRO]]
+    .map(([x, y]) => new THREE.Vector2(x, y));
+  return new THREE.LatheGeometry(perfil, 14);
+}
+
+/** Um número pseudo-aleatório fixo por casa: o mato e os escombros não mudam de forma a cada desenho. */
+const aleatorio = (semente: number) => {
+  const x = Math.sin(semente * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
 };
 
 /** O retrato num círculo com a cor da equipa e o nome por baixo. */
@@ -254,6 +324,10 @@ export default function Quadro3D(props: Props) {
   // Os callbacks mudam a cada render; os ouvintes do three.js leem sempre o mais recente.
   const atual = useRef(props);
   atual.current = props;
+  // Onde cada ficha foi desenhada da última vez: ao mudar de momento, anda de lá para cá.
+  const ultimaPosicao = useRef(new Map<string, THREE.Vector3>());
+  // Na vista de um brawler, o retrato dele esconde-se: não tapa o mapa à frente.
+  const vistoComo = props.perspetiva?.chave ?? null;
   const cena = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -262,12 +336,15 @@ export default function Quadro3D(props: Props) {
     pedirDesenho: () => void;
     voarPara: (vista: Vista) => void;
     comandar: (acao: ComandoDeCamara) => void;
+    olharComo: (ponto: PontoNoMapa, para: PontoNoMapa) => void;
+    deslizar: (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3) => void;
     grupoDoTerreno: THREE.Group;
     grupoDasFichas: THREE.Group;
     grupoDasSetas: THREE.Group;
     grupoDosMarcadores: THREE.Group;
     grupoDosDuelos: THREE.Group;
     grupoDosTrilhos: THREE.Group;
+    grupoDasAmeacas: THREE.Group;
     texturaDoMapa: { url: string | null; textura: THREE.Texture | null };
   } | null>(null);
 
@@ -285,14 +362,29 @@ export default function Quadro3D(props: Props) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setClearColor("#0b1320");
+    // Sombras suaves: as paredes e o mato projetam sombra no chão, e o mapa ganha relevo.
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     elemento.appendChild(renderer.domElement);
     renderer.domElement.style.touchAction = "none";
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight("#ffffff", "#334155", 1.6));
-    const sol = new THREE.DirectionalLight("#ffffff", 1.5);
-    sol.position.set(-8, 20, 10);
-    scene.add(sol);
+    scene.background = fundoDoCeu();
+    scene.fog = new THREE.Fog("#0b1320", 55, 120);
+    scene.add(new THREE.HemisphereLight("#e8f4ff", "#3a2f25", 1.35));
+    const sol = new THREE.DirectionalLight("#fff3e0", 1.9);
+    sol.position.set(-10, 24, 12);
+    sol.castShadow = true;
+    sol.shadow.mapSize.set(2048, 2048);
+    sol.shadow.camera.left = -16;
+    sol.shadow.camera.right = 16;
+    sol.shadow.camera.top = 22;
+    sol.shadow.camera.bottom = -22;
+    sol.shadow.camera.near = 1;
+    sol.shadow.camera.far = 70;
+    sol.shadow.bias = -0.0006;
+    sol.shadow.normalBias = 0.02;
+    scene.add(sol, sol.target);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
     camera.position.set(...POSICAO_DA_VISTA.nossa);
@@ -304,9 +396,18 @@ export default function Quadro3D(props: Props) {
     // Os duelos à parte: o cursor não os apanha, para não taparem as fichas.
     const grupoDosDuelos = new THREE.Group();
     const grupoDosTrilhos = new THREE.Group();
-    scene.add(grupoDoTerreno, grupoDosTrilhos, grupoDosDuelos, grupoDasSetas, grupoDosMarcadores, grupoDasFichas);
+    // As ameaças também não se apanham com o cursor.
+    const grupoDasAmeacas = new THREE.Group();
+    scene.add(grupoDoTerreno, grupoDosTrilhos, grupoDasAmeacas, grupoDosDuelos, grupoDasSetas, grupoDosMarcadores, grupoDasFichas);
 
     let sujo = true;
+    // Deslizes: um brawler que muda de sítio (de um momento da partida para outro) anda até lá.
+    const deslizes = new Map<THREE.Object3D, { de: THREE.Vector3; para: THREE.Vector3; inicio: number }>();
+    const deslizar = (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3) => {
+      objeto.position.copy(de);
+      deslizes.set(objeto, { de, para, inicio: performance.now() });
+      sujo = true;
+    };
     let voo: { de: THREE.Vector3; para: THREE.Vector3; alvoDe: THREE.Vector3; alvoPara: THREE.Vector3; inicio: number } | null = null;
     const pedirDesenho = () => { sujo = true; };
 
@@ -395,6 +496,8 @@ export default function Quadro3D(props: Props) {
       const { ferramenta } = atual.current;
       if (arrasto) {
         const ponto = paraPlano(arrasto.objeto.position);
+        // Largada à mão: fica onde foi largada, sem deslizar de volta.
+        if (arrasto.tipo === "ficha") ultimaPosicao.current.set(arrasto.id, paraMundo(ponto));
         if (arrasto.tipo === "ficha") atual.current.onMoverFicha(arrasto.id, ponto);
         else atual.current.onMoverMarcador(arrasto.id, ponto);
         arrasto = null;
@@ -416,6 +519,11 @@ export default function Quadro3D(props: Props) {
       if (ferramenta === "simbolo") {
         const p = pontoNoChao();
         if (p) atual.current.onNovoMarcador(atual.current.tipoDeMarcador, paraPlano(p));
+      } else if (ferramenta === "casa") {
+        const p = pontoNoChao();
+        if (p && Math.abs(p.x) < LARGURA / 2 && Math.abs(p.z) < PROFUNDIDADE / 2) {
+          atual.current.onCasa?.(Math.floor(p.x + LARGURA / 2), Math.floor(p.z + PROFUNDIDADE / 2));
+        }
       } else if (ferramenta === "apagar") {
         const alvo = idDe(tocado(grupoDosMarcadores)) ?? idDe(tocado(grupoDasSetas));
         if (alvo && (alvo.tipo === "marcador" || alvo.tipo === "seta")) atual.current.onApagar(alvo.tipo, alvo.id);
@@ -490,13 +598,30 @@ export default function Quadro3D(props: Props) {
         if (t >= 1) voo = null;
         sujo = true;
       }
+      for (const [objeto, d] of deslizes) {
+        const t = Math.min(1, (performance.now() - d.inicio) / 900);
+        const suave = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        objeto.position.lerpVectors(d.de, d.para, suave);
+        if (t >= 1) deslizes.delete(objeto);
+        sujo = true;
+      }
       if (!sujo) return;
       sujo = false;
       renderer.render(scene, camera);
     };
     ciclo();
 
-    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, texturaDoMapa: { url: null, textura: null } };
+    // Atrás do brawler, um pouco acima, a olhar para onde ele joga: para os adversários (ou para o meio, se já estiver colado a eles).
+    const olharComo = (ponto: PontoNoMapa, para: PontoNoMapa) => {
+      const p = paraMundo(ponto);
+      let direcao = paraMundo(para).sub(p).setY(0);
+      if (direcao.length() < 1.5) direcao = new THREE.Vector3(0, 0, 0).sub(p).setY(0);
+      if (direcao.length() < 0.5) direcao.set(0, 0, -1);
+      direcao.normalize();
+      voar(p.clone().addScaledVector(direcao, -2.2).setY(3.2), p.clone().addScaledVector(direcao, 8).setY(0.3));
+    };
+
+    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, olharComo, deslizar, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, grupoDasAmeacas, texturaDoMapa: { url: null, textura: null } };
 
     return () => {
       cancelAnimationFrame(quadro);
@@ -541,49 +666,59 @@ export default function Quadro3D(props: Props) {
       const materialDoChao = new THREE.MeshLambertMaterial(textura ? { map: textura } : { color: "#2f6b3c" });
       const chao = new THREE.Mesh(new THREE.PlaneGeometry(LARGURA, PROFUNDIDADE), materialDoChao);
       chao.rotation.x = -Math.PI / 2;
+      chao.receiveShadow = true;
       // A imagem tem uma casa de margem à volta: o chão mostra só o mapa.
       const uv = chao.geometry.attributes.uv as THREE.BufferAttribute;
       for (let i = 0; i < uv.count; i++) uv.setXY(i, (1 + uv.getX(i) * LARGURA) / 23, (1 + uv.getY(i) * PROFUNDIDADE) / 35);
       c.grupoDoTerreno.add(chao);
-      // A moldura: um rebordo escuro à volta, para o mapa não flutuar.
-      const moldura = new THREE.Mesh(new THREE.BoxGeometry(LARGURA + 1, 0.6, PROFUNDIDADE + 1), new THREE.MeshLambertMaterial({ color: "#101826" }));
-      moldura.position.y = -0.31;
+      // A moldura: um rebordo de pedra escura à volta, para o mapa não flutuar.
+      const moldura = new THREE.Mesh(new RoundedBoxGeometry(LARGURA + 1.2, 0.8, PROFUNDIDADE + 1.2, 2, 0.25), new THREE.MeshStandardMaterial({ color: "#16202f", roughness: 0.9 }));
+      moldura.position.y = -0.41;
+      moldura.receiveShadow = true;
       c.grupoDoTerreno.add(moldura);
 
       const terreno = atual.current.terreno;
       if (terreno) {
-        for (const [tipo, altura] of [["parede", ALTURA_DA_PAREDE], ["mato", ALTURA_DO_MATO]] as const) {
+        const partidas = new Set(atual.current.paredesPartidas.map((casa) => casa.linha * terreno.colunas + casa.coluna));
+        const corDaCasa = (coluna: number, linha: number) => {
+          const grupo = terreno.grupos.find((g) => g.id === terreno.grelha[linha * terreno.colunas + coluna]);
+          return new THREE.Color(`rgb(${(grupo?.cor ?? [120, 120, 120]).join(",")})`);
+        };
+        const casasDe = (tipo: string) => {
           const casas: Array<{ coluna: number; linha: number; cor: THREE.Color }> = [];
           for (let linha = 0; linha < terreno.linhas; linha++) {
             for (let coluna = 0; coluna < terreno.colunas; coluna++) {
-              if (tipoDaCasa(terreno, coluna, linha) !== tipo) continue;
-              const grupo = terreno.grupos.find((g) => g.id === terreno.grelha[linha * terreno.colunas + coluna]);
-              const cor = new THREE.Color(`rgb(${(grupo?.cor ?? [120, 120, 120]).join(",")})`);
-              casas.push({ coluna, linha, cor: cor.multiplyScalar(tipo === "parede" ? 0.62 : 0.8) });
+              if (tipoDaCasa(terreno, coluna, linha) === tipo) casas.push({ coluna, linha, cor: corDaCasa(coluna, linha) });
             }
           }
-          if (!casas.length) continue;
-          // Os lados: uma caixa por casa, todas numa só malha instanciada.
-          const lados = new THREE.InstancedMesh(
-            new THREE.BoxGeometry(1, altura, 1),
-            new THREE.MeshLambertMaterial({ transparent: tipo === "mato", opacity: tipo === "mato" ? 0.88 : 1 }),
-            casas.length,
-          );
-          const matriz = new THREE.Matrix4();
-          casas.forEach((casa, i) => {
-            matriz.makeTranslation(casa.coluna - LARGURA / 2 + 0.5, altura / 2, casa.linha - PROFUNDIDADE / 2 + 0.5);
-            lados.setMatrixAt(i, matriz);
-            lados.setColorAt(i, casa.cor);
+          return casas;
+        };
+        const centro = (coluna: number, linha: number) => [coluna - LARGURA / 2 + 0.5, linha - PROFUNDIDADE / 2 + 0.5] as const;
+        const matriz = new THREE.Matrix4();
+
+        // Paredes: blocos de cantos redondos, com sombra. As partidas neste momento ficam em escombros.
+        const todasAsParedes = casasDe("parede");
+        const paredes = todasAsParedes.filter((casa) => !partidas.has(casa.linha * terreno.colunas + casa.coluna));
+        const escombros = todasAsParedes.filter((casa) => partidas.has(casa.linha * terreno.colunas + casa.coluna));
+        if (paredes.length) {
+          const blocos = new THREE.InstancedMesh(new RoundedBoxGeometry(0.98, ALTURA_DA_PAREDE, 0.98, 2, 0.09), new THREE.MeshStandardMaterial({ roughness: 0.82 }), paredes.length);
+          paredes.forEach((casa, i) => {
+            const [x, z] = centro(casa.coluna, casa.linha);
+            matriz.makeTranslation(x, ALTURA_DA_PAREDE / 2, z);
+            blocos.setMatrixAt(i, matriz);
+            blocos.setColorAt(i, casa.cor.clone().multiplyScalar(0.62));
           });
-          c.grupoDoTerreno.add(lados);
+          blocos.castShadow = true;
+          blocos.receiveShadow = true;
+          c.grupoDoTerreno.add(blocos);
           // Os topos: a mesma imagem, recortada casa a casa. O desenho da
           // Brawlify põe o topo dos objetos um pouco acima da casa; daí o desvio.
           if (textura) {
-            const desvio = tipo === "parede" ? 0.4 : 0.25;
+            const desvio = 0.4;
             const posicoes: number[] = [], uvs: number[] = [], indices: number[] = [];
-            casas.forEach(({ coluna, linha }, i) => {
-              const x0 = coluna - LARGURA / 2, z0 = linha - PROFUNDIDADE / 2, y = altura + 0.002;
-              posicoes.push(x0, y, z0, x0 + 1, y, z0, x0 + 1, y, z0 + 1, x0, y, z0 + 1);
+            paredes.forEach(({ coluna, linha }, i) => {
+              const x0 = coluna - LARGURA / 2 + 0.03, z0 = linha - PROFUNDIDADE / 2 + 0.03, y = ALTURA_DA_PAREDE + 0.003;
+              posicoes.push(x0, y, z0, x0 + 0.94, y, z0, x0 + 0.94, y, z0 + 0.94, x0, y, z0 + 0.94);
               const u0 = (coluna + 1) / 23, u1 = (coluna + 2) / 23;
               const vTopo = 1 - (linha + 1 - desvio) / 35, vFundo = 1 - (linha + 2 - desvio) / 35;
               uvs.push(u0, vTopo, u1, vTopo, u1, vFundo, u0, vFundo);
@@ -595,9 +730,80 @@ export default function Quadro3D(props: Props) {
             geometria.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
             geometria.setIndex(indices);
             geometria.computeVertexNormals();
-            const topos = new THREE.Mesh(geometria, new THREE.MeshLambertMaterial({ map: textura, transparent: tipo === "mato", opacity: tipo === "mato" ? 0.92 : 1 }));
+            const topos = new THREE.Mesh(geometria, new THREE.MeshLambertMaterial({ map: textura }));
+            topos.receiveShadow = true;
             c.grupoDoTerreno.add(topos);
           }
+        }
+        if (escombros.length) {
+          // Quatro pedaços por casa, tombados, da cor da parede.
+          const pedacos = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.2, 0), new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), escombros.length * 4);
+          escombros.forEach((casa, i) => {
+            const [x, z] = centro(casa.coluna, casa.linha);
+            for (let k = 0; k < 4; k++) {
+              const semente = (casa.linha * 31 + casa.coluna) * 7 + k;
+              const escala = 0.7 + aleatorio(semente) * 0.7;
+              matriz.compose(
+                new THREE.Vector3(x + (aleatorio(semente + 1) - 0.5) * 0.7, 0.1 * escala, z + (aleatorio(semente + 2) - 0.5) * 0.7),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(aleatorio(semente + 3) * 3, aleatorio(semente + 4) * 3, 0)),
+                new THREE.Vector3(escala, escala * 0.6, escala),
+              );
+              pedacos.setMatrixAt(i * 4 + k, matriz);
+              pedacos.setColorAt(i * 4 + k, casa.cor.clone().multiplyScalar(0.5));
+            }
+          });
+          pedacos.castShadow = true;
+          c.grupoDoTerreno.add(pedacos);
+        }
+
+        // Mato: tufos redondos de folhas (três por casa), com a cor do próprio mapa.
+        const matos = casasDe("mato");
+        if (matos.length) {
+          const tufos = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.42, 1), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), matos.length * 3);
+          matos.forEach((casa, i) => {
+            const [x, z] = centro(casa.coluna, casa.linha);
+            for (let k = 0; k < 3; k++) {
+              const semente = (casa.linha * 31 + casa.coluna) * 5 + k;
+              const escala = 0.85 + aleatorio(semente) * 0.35;
+              matriz.compose(
+                new THREE.Vector3(x + (aleatorio(semente + 1) - 0.5) * 0.45, 0.28 + aleatorio(semente + 2) * 0.12, z + (aleatorio(semente + 3) - 0.5) * 0.45),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(0, aleatorio(semente + 4) * 6, 0)),
+                new THREE.Vector3(escala, escala * 0.85, escala),
+              );
+              tufos.setMatrixAt(i * 3 + k, matriz);
+              tufos.setColorAt(i * 3 + k, casa.cor.clone().multiplyScalar(0.72 + aleatorio(semente + 5) * 0.3));
+            }
+          });
+          tufos.castShadow = true;
+          tufos.receiveShadow = true;
+          c.grupoDoTerreno.add(tufos);
+        }
+
+        // Jarros e barris soltos: partem-se com ataques normais.
+        const jarros = casasDe("destrutivel").filter((casa) => !partidas.has(casa.linha * terreno.colunas + casa.coluna));
+        if (jarros.length) {
+          const vasos = new THREE.InstancedMesh(geometriaDoJarro(), new THREE.MeshStandardMaterial({ color: "#c8643c", roughness: 0.7 }), jarros.length);
+          jarros.forEach((casa, i) => {
+            const [x, z] = centro(casa.coluna, casa.linha);
+            matriz.makeTranslation(x, 0, z);
+            vasos.setMatrixAt(i, matriz);
+          });
+          vasos.castShadow = true;
+          c.grupoDoTerreno.add(vasos);
+        }
+
+        // Água: uma película azul brilhante por cima da imagem.
+        const aguas = casasDe("agua");
+        if (aguas.length) {
+          const placa = new THREE.PlaneGeometry(1, 1);
+          placa.rotateX(-Math.PI / 2);
+          const pelicula = new THREE.InstancedMesh(placa, new THREE.MeshStandardMaterial({ color: "#49b6ff", transparent: true, opacity: 0.38, roughness: 0.15, metalness: 0.2 }), aguas.length);
+          aguas.forEach((casa, i) => {
+            const [x, z] = centro(casa.coluna, casa.linha);
+            matriz.makeTranslation(x, 0.04, z);
+            pelicula.setMatrixAt(i, matriz);
+          });
+          c.grupoDoTerreno.add(pelicula);
         }
       }
       c.pedirDesenho();
@@ -625,7 +831,7 @@ export default function Quadro3D(props: Props) {
       () => construir(null),
     );
     return () => { cancelado = true; };
-  }, [props.imagem, props.terreno]);
+  }, [props.imagem, props.terreno, props.paredesPartidas]);
 
   /* ---- Os brawlers. ---- */
   const retratos = useRef(new Map<string, HTMLImageElement | null>());
@@ -653,16 +859,23 @@ export default function Quadro3D(props: Props) {
           new THREE.MeshLambertMaterial({ color: COR_DO_LADO[ficha.lado], emissive: COR_DO_LADO[ficha.lado], emissiveIntensity: 0.35 }),
         );
         base.position.y = 0.08;
+        base.castShadow = true;
         const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 8), new THREE.MeshBasicMaterial({ color: COR_DO_LADO[ficha.lado] }));
         haste.position.y = 0.7;
         const retrato = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharFicha(ficha.nome, ficha.lado, retratos.current.get(ficha.retrato ?? "") ?? null, ficha.funcao), depthTest: false }));
+        // Visto dos olhos dele: o retrato não aparece (tapava tudo); fica a base no chão.
+        retrato.visible = ficha.chave !== vistoComo;
+        haste.visible = ficha.chave !== vistoComo;
         retrato.scale.set(1.9, 2.85, 1);
         retrato.position.y = 2.4;
         retrato.renderOrder = 20;
         grupo.add(base, haste, retrato);
         const mundo = paraMundo(ficha.ponto);
-        grupo.position.set(mundo.x, 0, mundo.z);
+        const antes = ultimaPosicao.current.get(ficha.chave);
         c.grupoDasFichas.add(grupo);
+        if (antes && antes.distanceTo(mundo) > 0.05) c.deslizar(grupo, antes.clone(), mundo);
+        else grupo.position.copy(mundo);
+        ultimaPosicao.current.set(ficha.chave, mundo);
       }
       // Os duelos 1v1: linha tracejada entre os dois, cor pela vantagem, e a percentagem ao meio.
       for (const duelo of atual.current.duelos) {
@@ -693,7 +906,47 @@ export default function Quadro3D(props: Props) {
       imagem.src = url;
     }
     return () => { cancelado = true; };
-  }, [props.fichas, props.duelos]);
+  }, [props.fichas, props.duelos, vistoComo]);
+
+  /* ---- Ameaças: círculo vermelho à volta de quem é perigoso, com o aviso. ---- */
+  useEffect(() => {
+    const c = cena.current;
+    if (!c) return;
+    for (const filho of [...c.grupoDasAmeacas.children]) {
+      filho.removeFromParent();
+      const malha = filho as THREE.Mesh;
+      malha.geometry?.dispose();
+      const material = malha.material as THREE.MeshBasicMaterial;
+      material.map?.dispose();
+      material.dispose();
+    }
+    const porPerigoso = new Map<string, number>();
+    for (const ameaca of props.ameacas) {
+      const ficha = props.fichas.find((f) => f.chave === ameaca.perigoso);
+      if (!ficha) continue;
+      const p = paraMundo(ficha.ponto);
+      const ordem = porPerigoso.get(ameaca.perigoso) ?? 0;
+      porPerigoso.set(ameaca.perigoso, ordem + 1);
+      if (ordem === 0) {
+        const anel = new THREE.Mesh(new THREE.RingGeometry(2.25, 2.45, 56), new THREE.MeshBasicMaterial({ color: "#ff4d6d", transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }));
+        anel.rotation.x = -Math.PI / 2;
+        anel.position.set(p.x, 0.09, p.z);
+        anel.renderOrder = 6;
+        const disco = new THREE.Mesh(new THREE.CircleGeometry(2.25, 56), new THREE.MeshBasicMaterial({ color: "#ff4d6d", transparent: true, opacity: 0.12, depthTest: false, side: THREE.DoubleSide }));
+        disco.rotation.x = -Math.PI / 2;
+        disco.position.set(p.x, 0.07, p.z);
+        disco.renderOrder = 2;
+        c.grupoDasAmeacas.add(disco, anel);
+      }
+      const aviso = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharAmeaca(`⚠ ${ameaca.alvo}: ${ameaca.texto}`, ameaca.excecao), depthTest: false }));
+      const alto = ameaca.excecao ? 1.7 : 1;
+      aviso.scale.set(6.9, alto, 1);
+      aviso.position.set(p.x, 4.5 + ordem * 1.9, p.z);
+      aviso.renderOrder = 16;
+      c.grupoDasAmeacas.add(aviso);
+    }
+    c.pedirDesenho();
+  }, [props.ameacas, props.fichas]);
 
   /* ---- Setas e símbolos. ---- */
   useEffect(() => {
@@ -805,6 +1058,16 @@ export default function Quadro3D(props: Props) {
   useEffect(() => {
     if (props.comando) cena.current?.comandar(props.comando.acao);
   }, [props.comando]);
+  useEffect(() => {
+    if (!props.perspetiva) return;
+    const ficha = atual.current.fichas.find((f) => f.chave === props.perspetiva!.chave);
+    if (!ficha) return;
+    const adversarios = atual.current.fichas.filter((f) => f.lado !== ficha.lado);
+    const centro = adversarios.length
+      ? { x: adversarios.reduce((s, f) => s + f.ponto.x, 0) / adversarios.length, y: adversarios.reduce((s, f) => s + f.ponto.y, 0) / adversarios.length }
+      : { x: 0.5, y: 0.5 };
+    cena.current?.olharComo(ficha.ponto, centro);
+  }, [props.perspetiva]);
 
   return <div ref={caixa} className="quadro3d-palco" />;
 }
