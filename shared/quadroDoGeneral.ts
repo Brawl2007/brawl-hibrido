@@ -94,6 +94,12 @@ export type TextoDoMomento = { momento: MomentoDoPlano; quando: string; resumo: 
  */
 export type AmeacaDoPlano = { id: string; perigoso: string; ladoDoPerigoso: "nos" | "eles"; alvo: string; texto: string; excecao?: string };
 export const MAXIMO_DE_AMEACAS = 5;
+/**
+ * Um plano da cena de cinema que abre a partida, escolhido pela IA: a luta de
+ * quem a câmara segue, o que a legenda diz e se é em câmara lenta.
+ */
+export type PlanoDeCena = { foco: string; ladoDoFoco: "nos" | "eles"; legenda: string; lento: boolean };
+export const MAXIMO_DE_PLANOS_DE_CENA = 6;
 export const MAXIMO_DE_PAREDES_PARTIDAS = 40;
 
 export type PlanoDoGeneral = {
@@ -117,6 +123,8 @@ export type PlanoDoGeneral = {
   /** As camadas do meio e do fim; o início são as camadas de cima. */
   quadros?: Partial<Record<Exclude<MomentoDoPlano, "inicio">, CamadasDoMomento>>;
   ameacas?: AmeacaDoPlano[];
+  /** A cena de ~15 s, realizada pela IA. Sem ela, a câmara segue os duelos sozinha. */
+  cena?: PlanoDeCena[];
 };
 
 /** As camadas de um momento. Um momento que ainda não tem as suas usa as do início. */
@@ -396,6 +404,19 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
     };
   }
 
+  // A cena: a IA realiza. Só vale quem está no draft; a legenda é curta.
+  const cena: PlanoDeCena[] = [];
+  for (const entrada of Array.isArray(resposta.cena) ? resposta.cena : []) {
+    if (cena.length >= MAXIMO_DE_PLANOS_DE_CENA) break;
+    const item = (entrada ?? {}) as Record<string, unknown>;
+    const bruto = normalizarNome(texto(item.foco, 40));
+    const deles = porNomeDeles.get(bruto), nosso = porNome.get(bruto);
+    const foco = nosso ?? deles;
+    const legenda = texto(item.legenda, 90);
+    if (!foco || !legenda) continue;
+    cena.push({ foco, ladoDoFoco: nosso ? "nos" : "eles", legenda, lento: item.lento === true });
+  }
+
   // Ameaças: quem é perigoso para quem (lados opostos), e a exceção.
   const ameacas: AmeacaDoPlano[] = [];
   for (const entrada of Array.isArray(resposta.ameacas) ? resposta.ameacas : []) {
@@ -469,6 +490,7 @@ export function lerPlanoDaIA(bruto: unknown, nossos: readonly string[], deles: r
     ...(momentos.length ? { momentos } : {}),
     ...(Object.keys(quadros).length ? { quadros } : {}),
     ...(ameacas.length ? { ameacas } : {}),
+    ...(cena.length ? { cena } : {}),
   };
 }
 
@@ -570,6 +592,7 @@ export function textoDoPedido(pedido: PedidoDePlano, comImagem: boolean, terreno
     "6. marcadores (5 a 10): a explicação no mapa. Cada um com nota de no máximo 5 palavras e, se for de um brawler, o nome dele. Tipos: \"ataque\", \"defesa\", \"controlo\" (segurar passagem), \"posicao\" (assumir posição), \"emboscada\" (esconder neste mato), \"flanco\", \"cobertura\" (usar ESTA parede para tapar tiros), \"gadget\" (usar o gadget AQUI; a nota diz a situação), \"destruir\" (partir estas paredes — só quem parte paredes), \"agua\" (atravessar aqui — só quem atravessa), \"abertura\" (corredor aberto), \"perigo\", \"foco\" (alvo prioritário).",
     "7. momentos: exatamente 3 — \"inicio\", \"meio\" e \"fim\" da partida. Cada um com: quando (ex.: \"0:00–0:40\"), resumo (no máximo 10 palavras), seGanhar (o que fazer se estivermos À FRENTE, no máximo 8 palavras, ex.: \"recua e guarda a vantagem\") e sePerder (se estivermos ATRÁS, no máximo 8 palavras, ex.: \"junta os três e força o flanco\"). No \"meio\" e no \"fim\" dá também um quadro novo: posicoes (os 6 brawlers, nossos e deles, onde estão nesse momento — PODES trocar os nossos de lane ou de função se isso for melhor), setas (2 a 5), marcadores (3 a 6) e paredesPartidas (as casas \"#\" ou \"*\" que já foram partidas até esse momento por quem parte paredes; lista vazia se ninguém parte). Prevê o que muda: paredes que caem, quem ganhou vantagem, zonas que abrem.",
     "8. ameacas (2 a 4): quem é perigoso para quem, de lados opostos, e a exceção. perigoso e alvo são nomes do draft; texto no máximo 8 palavras (ex.: \"não chegues perto: morres rápido\"); excecao: quando deixa de valer, no máximo 6 palavras (ex.: \"Pearl com pouca vida\"). Usa-as para avisar os NOSSOS do que os mata, e para mostrar os NOSSOS que são perigosos para eles.",
+    "10. cena (4 a 6 planos): és o realizador da cena de 15 segundos que abre a partida — um drone que voa de luta em luta. Cada plano: foco (nome de um brawler do draft: a câmara vai até à luta dele), legenda (no máximo 12 palavras: o que vai acontecer ali ou a ordem, ex.: \"Amber queima o mato: Shade não se esconde\") e lento (true só nos momentos-chave — um counter a funcionar, um super decisivo). Pela ordem em que devem aparecer; começa pela luta que decide a partida.",
     "9. trilhos (passos fantasma): para 3 a 6 brawlers — nossos E adversários — o caminho que vão percorrer mais vezes durante a partida, com 3 a 5 casas por ordem (de onde partem até onde lutam). Sem atravessar paredes nem água (salvo quem atravessa água).",
     "",
     "CAMINHOS: um brawler só anda por \".\", '\"' e \"o\". Paredes (\"#\") e jarros (\"*\") tapam o caminho; água (\"~\") só para quem atravessa água; atravessar paredes só com \"salta-paredes\". Setas e passos fantasma seguem por onde se anda: se o caminho direto estiver tapado, contorna pela abertura mais próxima (o site desvia a seta à volta da parede, e recusa as que não têm caminho).",
@@ -639,6 +662,14 @@ export const ESQUEMA_DO_PLANO = {
         required: ["momento", "quando", "resumo", "seGanhar", "sePerder"],
       },
     },
+    cena: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: { foco: { type: "STRING" }, legenda: { type: "STRING" }, lento: { type: "BOOLEAN" } },
+        required: ["foco", "legenda"],
+      },
+    },
     ameacas: {
       type: "ARRAY",
       items: {
@@ -691,6 +722,7 @@ export const FORMATO_DO_PLANO_EM_TEXTO = [
   '{"momento":"meio","quando":"...","resumo":"...","seGanhar":"...","sePerder":"...","posicoes":[{"brawler":"Nome","posicao":{"col":10,"linha":16}}],"setas":[],"marcadores":[],"paredesPartidas":[{"col":9,"linha":15}]},',
   '{"momento":"fim","quando":"...","resumo":"...","seGanhar":"...","sePerder":"...","posicoes":[],"setas":[],"marcadores":[],"paredesPartidas":[]}],',
   '"ameacas":[{"perigoso":"Nome","alvo":"Nome","texto":"...","excecao":"..."}],',
+  '"cena":[{"foco":"Nome","legenda":"...","lento":true}],',
   '"ordens":[{"brawler":"Nome","funcao":"...","objetivo":"...","quandoAvancar":"...","usarGadget":"...","cuidados":["..."],"posicao":{"col":10,"linha":20},"build":{"gadget":"...","poderEstelar":"...","engrenagens":["..."]},"capacidades":["parte-paredes"]}],',
   '"setas":[{"brawler":"Nome","tipo":"avanco","de":{"col":10,"linha":20},"para":{"col":10,"linha":14},"nota":"porquê, curto"}],',
   '"marcadores":[{"tipo":"emboscada","ponto":{"col":13,"linha":15},"nota":"...","brawler":"Nome"}],',
@@ -801,6 +833,10 @@ export function lerPlanoGuardado(bruto: string | null, nossos: readonly string[]
       .filter((a) => a && nomesDoDraft.has(a.perigoso) && nomesDoDraft.has(a.alvo) && (a.ladoDoPerigoso === "nos" || a.ladoDoPerigoso === "eles") && typeof a.texto === "string")
       .map((a) => ({ id: textoCurto(a.id, 20) || "a", perigoso: a.perigoso, ladoDoPerigoso: a.ladoDoPerigoso, alvo: a.alvo, texto: a.texto.slice(0, 60), ...(typeof a.excecao === "string" && a.excecao ? { excecao: a.excecao.slice(0, 60) } : {}) }))
       .slice(0, MAXIMO_DE_AMEACAS);
+    const cena = (Array.isArray(guardado.cena) ? guardado.cena : [])
+      .filter((c) => c && nomesDoDraft.has(c.foco) && (c.ladoDoFoco === "nos" || c.ladoDoFoco === "eles") && typeof c.legenda === "string" && c.legenda)
+      .map((c) => ({ foco: c.foco, ladoDoFoco: c.ladoDoFoco, legenda: c.legenda.slice(0, 90), lento: c.lento === true }))
+      .slice(0, MAXIMO_DE_PLANOS_DE_CENA);
     return {
       ...base,
       resumo: typeof guardado.resumo === "string" ? guardado.resumo : "",
@@ -817,6 +853,7 @@ export function lerPlanoGuardado(bruto: string | null, nossos: readonly string[]
       ...(momentos.length ? { momentos } : {}),
       ...(Object.keys(quadros).length ? { quadros } : {}),
       ...(ameacas.length ? { ameacas } : {}),
+      ...(cena.length ? { cena } : {}),
       fontes: Array.isArray(guardado.fontes)
         ? guardado.fontes.filter((f) => f && typeof f.titulo === "string" && typeof f.url === "string" && /^https:\/\//.test(f.url)).slice(0, 8)
         : undefined,

@@ -44,6 +44,7 @@ import {
   type TipoDeSeta,
 } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_CASA, pontoLivre, type TerrenoDoMapa, type TipoDeCasa } from "@shared/terrenoDoMapa";
+import { qualidadeDeOrigem, type QualidadeDoMapa } from "./qualidadeDoMapa";
 import type { AlvoDoCursor, AmeacaNo3D, ComandoDeCamara, DueloNo3D, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 
@@ -86,8 +87,7 @@ const FERRAMENTAS: Array<{ id: Ferramenta; nome: string; ajuda: string }> = [
 ];
 /** Quanto tempo cada momento fica no ecrã ao "ver a partida". */
 const DURACAO_DA_CENA_MS = 15_000;
-/** Seis legendas de 2 s: por momento, o que se passa e uma instrução. */
-const LEGENDAS_POR_CENA = 6;
+const CHAVE_DA_QUALIDADE = "brawl-hibrido:graficos-3d:v1";
 
 /** Um retrato pequeno, com a cor da equipa. */
 function Retrato({ url, nome, lado }: { url: string | null; nome: string; lado: "nos" | "eles" }) {
@@ -211,6 +211,20 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   // instruções leem-se na lista, no cursor e na legenda da cena.
   const [notasNoMapa, setNotasNoMapa] = useState(false);
   const [passosFantasma, setPassosFantasma] = useState(true);
+  // Gráficos: Cinema (luz e materiais realistas) num computador, Rápido num telemóvel.
+  const [qualidade, setQualidade] = useState<QualidadeDoMapa>(() => {
+    try {
+      const guardada = window.localStorage.getItem(CHAVE_DA_QUALIDADE);
+      if (guardada === "cinema" || guardada === "rapido") return guardada;
+    } catch {
+      // Sem armazenamento: fica a de origem.
+    }
+    return qualidadeDeOrigem();
+  });
+  const mudarQualidade = (nova: QualidadeDoMapa) => {
+    setQualidade(nova);
+    try { window.localStorage.setItem(CHAVE_DA_QUALIDADE, nova); } catch { /* só nesta visita */ }
+  };
   const [verAmeacas, setVerAmeacas] = useState(true);
   const semTrilhos = useMemo(() => [], []);
   const semAmeacas = useMemo<AmeacaNo3D[]>(() => [], []);
@@ -222,19 +236,24 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
    * Quadro3D); aqui os brawlers passam do início ao meio e ao fim, e a legenda
    * mostra uma instrução de cada vez — nunca duas por cima uma da outra.
    */
-  const [cinema, setCinema] = useState<{ n: number; duracaoMs: number } | null>(null);
+  const [cinema, setCinema] = useState<{ n: number; duracaoMs: number; focos?: Array<{ chave: string; lento: boolean }> } | null>(null);
   const aReproduzir = cinema !== null;
-  const [legendaAtual, setLegendaAtual] = useState(0);
-  const comecarCena = () => setCinema({ n: Date.now(), duracaoMs: DURACAO_DA_CENA_MS });
+  // A legenda segue o drone: muda quando ele chega a outra luta (o Quadro3D avisa).
+  const [etapa, setEtapa] = useState(-1);
+  /** A cena de um plano: se a IA a realizou, os focos dela; senão, os duelos. */
+  const cenaDe = (p: PlanoDoGeneral) => {
+    const focos = (p.cena ?? []).map((c) => ({ chave: chaveDaFicha(c.ladoDoFoco, c.foco), lento: c.lento }));
+    return { n: Date.now(), duracaoMs: Math.max(DURACAO_DA_CENA_MS, focos.length * 2600 + 5000), ...(focos.length ? { focos } : {}) };
+  };
+  const comecarCena = () => setCinema(cenaDe(plano));
   useEffect(() => {
     if (!cinema) return;
     const inicio = Date.now();
     setMomento("inicio");
-    setLegendaAtual(0);
+    setEtapa(-1);
     const relogio = window.setInterval(() => {
       const passado = Date.now() - inicio;
       setMomento(MOMENTOS[Math.min(MOMENTOS.length - 1, Math.floor(passado / (cinema.duracaoMs / MOMENTOS.length)))].id);
-      setLegendaAtual(Math.min(LEGENDAS_POR_CENA - 1, Math.floor(passado / (cinema.duracaoMs / LEGENDAS_POR_CENA))));
     }, 150);
     return () => window.clearInterval(relogio);
   }, [cinema?.n]);
@@ -267,7 +286,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       }));
       setMomento("inicio");
       // Assim que o plano chega, a cena mostra-o: é o que se vê enquanto a partida começa.
-      setCinema({ n: Date.now(), duracaoMs: DURACAO_DA_CENA_MS });
+      setCinema(cenaDe(novo));
       if (resultado.terreno && mapaId) utils.general.terreno.setData({ mapaId }, resultado.terreno as never);
       toast.success(`O general deu as ordens em ${resultado.segundos} s.`, {
         description: `${resultado.modelo}${resultado.comImagem ? " · viu o mapa" : ""}${resultado.comPesquisa ? " · pesquisou a informação atual" : ""}. Passa o cursor pelos brawlers.`,
@@ -467,20 +486,24 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     };
   })();
 
-  // As legendas da cena: por cada momento, o que se passa e uma instrução.
-  // Sem plano da IA, contam os duelos de cada lane.
-  const legendas = (() => {
-    const lanes = duelos.map((d) => `${d.posicao === "mid" ? "Mid" : d.posicao === "left" ? "Lane esquerda" : "Lane direita"}: ${d.nosso} contra ${d.deles} · ${Math.round(d.vantagem)}%`);
-    const ordens = plano.ordens.filter((o) => o.objetivo).map((o) => `${o.brawler}: ${o.objetivo}`);
-    const avisos = (plano.ameacas ?? []).map((a) => `⚠ ${a.perigoso} → ${a.alvo}: ${a.texto}`);
-    const extra = [...ordens, ...avisos, ...lanes];
-    const lista: string[] = [];
-    MOMENTOS.forEach((m, i) => {
-      const texto = plano.momentos?.find((t) => t.momento === m.id);
-      lista.push(`${m.nome}${texto?.quando ? ` · ${texto.quando}` : ""}${texto?.resumo ? ` — ${texto.resumo}` : ""}`);
-      lista.push(i === MOMENTOS.length - 1 && plano.condicaoDeVitoria ? `🏆 ${plano.condicaoDeVitoria}` : extra[i] ?? lanes[i] ?? "");
-    });
-    return lista;
+  // As legendas da cena, uma por etapa do drone: a chegada, uma por luta, e o
+  // fim. Se a IA realizou a cena, as legendas das lutas são as dela.
+  const legendaDaEtapa = (() => {
+    const inicio = plano.momentos?.find((t) => t.momento === "inicio");
+    const fim = plano.momentos?.find((t) => t.momento === "fim");
+    if (etapa < 0) return `Início${inicio?.quando ? ` · ${inicio.quando}` : ""}${inicio?.resumo ? ` — ${inicio.resumo}` : ""}`;
+    if (plano.cena?.length) {
+      if (etapa < plano.cena.length) return plano.cena[etapa].legenda;
+    } else {
+      const ordemDasLanes = { left: 0, mid: 1, right: 2 } as const;
+      const lanes = [...duelos].sort((a, b) => ordemDasLanes[a.posicao] - ordemDasLanes[b.posicao]);
+      const luta = lanes[etapa];
+      if (luta) {
+        const ordem = plano.ordens.find((o) => o.brawler === luta.nosso && o.objetivo);
+        return ordem ? `${luta.nosso}: ${ordem.objetivo}` : `${luta.posicao === "mid" ? "Mid" : luta.posicao === "left" ? "Lane esquerda" : "Lane direita"}: ${luta.nosso} contra ${luta.deles} · ${Math.round(luta.vantagem)}%`;
+      }
+    }
+    return plano.condicaoDeVitoria ? `🏆 ${plano.condicaoDeVitoria}` : `Fim${fim?.resumo ? ` — ${fim.resumo}` : ""}`;
   })();
 
   const ajuda = FERRAMENTAS.find((item) => item.id === ferramenta)?.ajuda;
@@ -689,6 +712,13 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
           <input type="checkbox" checked={passosFantasma} onChange={(e) => setPassosFantasma(e.target.checked)} />
           Passos fantasma
         </label>
+        <label className="quadro-general-opcao" title="Cinema: céu, luz de fim de tarde, pedra, água e erva realistas. Rápido: leve, para telemóveis.">
+          Gráficos
+          <select value={qualidade} onChange={(e) => mudarQualidade(e.target.value as QualidadeDoMapa)}>
+            <option value="cinema">Cinema</option>
+            <option value="rapido">Rápido</option>
+          </select>
+        </label>
         {ameacas3D.length > 0 && (
           <label className="quadro-general-interruptor quadro-general-interruptor--seguinte">
             <input type="checkbox" checked={verAmeacas} onChange={(e) => setVerAmeacas(e.target.checked)} />
@@ -741,6 +771,8 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
           ) : (
             <Suspense fallback={<div className="quadro3d-palco quadro3d-a-carregar">A preparar o mapa em 3D…</div>}>
               <Quadro3D
+                key={qualidade}
+                qualidade={qualidade}
                 imagem={mapaId ? `/api/imagens/mapa/${mapaId}.png` : null}
                 terreno={terreno}
                 fichas={fichas}
@@ -761,6 +793,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 comando={comando}
                 cinema={cinema}
                 onFimDoCinema={() => setCinema(null)}
+                onEtapaDoCinema={setEtapa}
                 onMoverFicha={moverFicha}
                 onMoverMarcador={(id, ponto) => mudarCamadas((atuais) => ({ ...atuais, marcadores: atuais.marcadores.map((m) => (m.id === id ? { ...m, ponto } : m)) }))}
                 onNovaSeta={acrescentarSeta}
@@ -773,7 +806,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
           )}
           {aReproduzir && (
             <div className="qg-cinema" aria-live="polite">
-              <p key={legendaAtual} className="qg-legenda">{legendas[legendaAtual] || legendas[legendaAtual - 1] || ""}</p>
+              <p key={etapa} className="qg-legenda">{legendaDaEtapa}</p>
               <button type="button" className="qg-cinema-parar" onClick={() => setCinema(null)}>Saltar ▸▸</button>
             </div>
           )}

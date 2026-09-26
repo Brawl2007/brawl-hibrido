@@ -22,6 +22,7 @@ import type { CasaDoMapa, MarcadorDoPlano, PontoNoMapa, SetaDoPlano, TipoDeMarca
 import { TIPOS_DE_MARCADOR } from "@shared/quadroDoGeneral";
 import { tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
+import { criarMatoDeLaminas, montarRealismo, type QualidadeDoMapa, type Realismo } from "./realismo3D";
 
 export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string; /** A classe (Lançador, Tank…): decide como ataca na cena. */ classe?: string };
 /** Um duelo 1v1: a linha entre as duas fichas, com a vantagem da tua equipa. */
@@ -64,8 +65,12 @@ type Props = {
    * A cena de cinema: muda `n` para começar; `null` para parar. Durante a cena a
    * câmara faz vários planos sozinha e os duelos trocam tiros.
    */
-  cinema: { n: number; duracaoMs: number } | null;
+  cinema: { n: number; duracaoMs: number; focos?: Array<{ chave: string; lento: boolean }> } | null;
   onFimDoCinema?: () => void;
+  /** Em que luta vai o drone: -1 a chegar, 0..n-1 cada luta, n a subir no fim. */
+  onEtapaDoCinema?: (etapa: number) => void;
+  /** "cinema": luz, materiais e efeitos a imitar a vida real. "rapido": leve. Mudar obriga a montar a cena de novo (usar como `key`). */
+  qualidade?: QualidadeDoMapa;
   onMoverFicha: (chave: string, ponto: PontoNoMapa) => void;
   onMoverMarcador: (id: string, ponto: PontoNoMapa) => void;
   onNovaSeta: (seta: Omit<SetaDoPlano, "id">) => void;
@@ -378,7 +383,8 @@ export default function Quadro3D(props: Props) {
     comandar: (acao: ComandoDeCamara) => void;
     olharComo: (ponto: PontoNoMapa, para: PontoNoMapa) => void;
     deslizar: (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3) => void;
-    comecarFilme: (duracaoMs: number) => void;
+    comecarFilme: (duracaoMs: number, focos?: Array<{ chave: string; lento: boolean }>) => void;
+    realismo: Realismo | null;
     pararFilme: () => void;
     grupoDoTerreno: THREE.Group;
     grupoDasFichas: THREE.Group;
@@ -413,7 +419,8 @@ export default function Quadro3D(props: Props) {
     const scene = new THREE.Scene();
     scene.background = fundoDoCeu();
     scene.fog = new THREE.Fog("#0b1320", 55, 120);
-    scene.add(new THREE.HemisphereLight("#e8f4ff", "#3a2f25", 1.35));
+    const hemisferio = new THREE.HemisphereLight("#e8f4ff", "#3a2f25", 1.35);
+    scene.add(hemisferio);
     const sol = new THREE.DirectionalLight("#fff3e0", 1.9);
     sol.position.set(-10, 24, 12);
     sol.castShadow = true;
@@ -430,6 +437,15 @@ export default function Quadro3D(props: Props) {
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
     camera.position.set(...POSICAO_DA_VISTA.nossa);
+    // Modo Cinema: céu físico, reflexos, materiais com relevo, brilho, poeira.
+    let realismo: Realismo | null = null;
+    if (atual.current.qualidade === "cinema") {
+      try {
+        realismo = montarRealismo(renderer, scene, camera, sol, hemisferio);
+      } catch {
+        realismo = null; // se a placa gráfica não aguentar, fica o modo leve
+      }
+    }
 
     const grupoDoTerreno = new THREE.Group();
     const grupoDasFichas = new THREE.Group();
@@ -623,6 +639,7 @@ export default function Quadro3D(props: Props) {
       const { clientWidth, clientHeight } = elemento;
       if (!clientWidth || !clientHeight) return;
       renderer.setSize(clientWidth, clientHeight);
+      realismo?.redimensionar(clientWidth, clientHeight);
       camera.aspect = clientWidth / clientHeight;
       camera.updateProjectionMatrix();
       pedirDesenho();
@@ -639,7 +656,7 @@ export default function Quadro3D(props: Props) {
      * início → meio → fim), e aqui só se filma.
      */
     type Tiro = { balas: THREE.Sprite[]; clarao: THREE.Sprite; anel: THREE.Mesh; vantagem: number; nosso: string; deles: string };
-    let filme: { inicio: number; duracao: number; tiros: Tiro[]; relogio: number; ultimo: number } | null = null;
+    let filme: { inicio: number; duracao: number; tiros: Tiro[]; relogio: number; ultimo: number; focos?: Array<{ chave: string; lento: boolean }>; etapa: number } | null = null;
     const brilho = texturaDeBrilho();
     const fichaNoMundo = (chave: string) => grupoDasFichas.children.find((g) => g.userData.id === chave) ?? null;
     const classeDe = (chave: string) => atual.current.fichas.find((f) => f.chave === chave)?.classe;
@@ -651,7 +668,7 @@ export default function Quadro3D(props: Props) {
       grupoDoFilme.add(sprite);
       return sprite;
     };
-    const comecarFilme = (duracao: number) => {
+    const comecarFilme = (duracao: number, focos?: Array<{ chave: string; lento: boolean }>) => {
       pararFilme(false);
       const tiros = atual.current.duelos.map((duelo) => {
         const anel = new THREE.Mesh(new THREE.RingGeometry(0.7, 1, 40), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
@@ -660,7 +677,7 @@ export default function Quadro3D(props: Props) {
         grupoDoFilme.add(anel);
         return { balas: [luz(0.85, 30), luz(0.6, 30), luz(0.6, 30)], clarao: luz(1, 31), anel, vantagem: duelo.vantagem, nosso: duelo.nosso, deles: duelo.deles };
       });
-      filme = { inicio: performance.now(), duracao, tiros, relogio: 0, ultimo: performance.now() };
+      filme = { inicio: performance.now(), duracao, tiros, relogio: 0, ultimo: performance.now(), focos: focos?.length ? focos : undefined, etapa: -2 };
       controls.enabled = false;
       voo = null;
       // Durante a cena não há etiquetas por cima: fala a legenda.
@@ -707,8 +724,10 @@ export default function Quadro3D(props: Props) {
       const estilo = estiloDaClasse(classeDe(nossoAtaca ? tiro.nosso : tiro.deles));
       const clarao = tiro.clarao.material as THREE.SpriteMaterial;
       const anel = tiro.anel.material as THREE.MeshBasicMaterial;
-      clarao.color.set(cor);
-      anel.color.set(estilo === "cura" ? "#3ddc84" : cor);
+      // Com o brilho do modo Cinema, os tiros passam do branco e acendem-se.
+      const intensidade = realismo ? 3.2 : 1;
+      clarao.color.set(cor).multiplyScalar(intensidade);
+      anel.color.set(estilo === "cura" ? "#3ddc84" : cor).multiplyScalar(realismo ? 2 : 1);
       // Quanto do ciclo é viagem; o resto é o impacto.
       const viagem = estilo === "reto" || estilo === "rajada" ? 0.35 : estilo === "investida" ? 0.5 : 0.7;
       const impacto = f >= viagem ? (f - viagem) / (1 - viagem) : 0;
@@ -722,7 +741,7 @@ export default function Quadro3D(props: Props) {
         atacante.children.forEach((filho) => { filho.position.x = passo.x; filho.position.z = passo.z; });
         tiro.balas[0].visible = f < viagem;
         tiro.balas[0].position.copy(de).add(passo).setY(0.9);
-        (tiro.balas[0].material as THREE.SpriteMaterial).color.set(cor);
+        (tiro.balas[0].material as THREE.SpriteMaterial).color.set(cor).multiplyScalar(intensidade);
         tiro.balas[0].scale.setScalar(1.6);
       } else {
         // Rajada: três balas seguidas. Nos outros, as duas de trás são o rasto da primeira.
@@ -731,7 +750,7 @@ export default function Quadro3D(props: Props) {
           const ub = rajada ? Math.min(1, Math.max(0, u - b * 0.12) / (1 - 2 * 0.12)) : Math.max(0, u - b * 0.06);
           const bala = tiro.balas[b];
           bala.visible = f < viagem && ub > 0 && ub < 1;
-          (bala.material as THREE.SpriteMaterial).color.set(estilo === "cura" ? "#3ddc84" : cor);
+          (bala.material as THREE.SpriteMaterial).color.set(estilo === "cura" ? "#3ddc84" : cor).multiplyScalar(intensidade);
           const altura = estilo === "arco" ? 1 + Math.sin(ub * Math.PI) * 3.6 : estilo === "zona" ? 1 + Math.sin(ub * Math.PI) * 1.2 : 1.1;
           bala.position.lerpVectors(de, para, ub).setY(altura);
           const tamanho = estilo === "zona" ? 1.9 : estilo === "reto" ? 1 : 1.25;
@@ -764,16 +783,29 @@ export default function Quadro3D(props: Props) {
        * e sobe no fim para o mapa inteiro. As poses dependem de onde os
        * brawlers estão agora, por isso o voo acompanha-os quando avançam.
        */
-      const lutas = filme.tiros
-        .map((tiro) => ({ a: fichaNoMundo(tiro.nosso)?.position, b: fichaNoMundo(tiro.deles)?.position }))
-        .filter((l): l is { a: THREE.Vector3; b: THREE.Vector3 } => Boolean(l.a && l.b))
-        .sort((l1, l2) => (l1.a.x + l1.b.x) - (l2.a.x + l2.b.x));
+      // As lutas a visitar: as que a IA escolheu, pela ordem dela; senão, os duelos da esquerda para a direita.
+      const parDe = (chave: string) => {
+        const tiro = filme!.tiros.find((t) => t.nosso === chave || t.deles === chave);
+        return tiro ? (tiro.nosso === chave ? tiro.deles : tiro.nosso) : null;
+      };
+      const lutas = filme.focos
+        ? filme.focos.map((foco) => {
+          const a = fichaNoMundo(foco.chave)?.position;
+          const par = parDe(foco.chave);
+          const b = par ? fichaNoMundo(par)?.position : a;
+          return { a, b, lento: foco.lento };
+        }).filter((l): l is { a: THREE.Vector3; b: THREE.Vector3; lento: boolean } => Boolean(l.a && l.b))
+        : filme.tiros
+          .map((tiro) => ({ a: fichaNoMundo(tiro.nosso)?.position, b: fichaNoMundo(tiro.deles)?.position, lento: true }))
+          .filter((l): l is { a: THREE.Vector3; b: THREE.Vector3; lento: boolean } => Boolean(l.a && l.b))
+          .sort((l1, l2) => (l1.a.x + l1.b.x) - (l2.a.x + l2.b.x));
       const poses: Array<{ pos: THREE.Vector3; alvo: THREE.Vector3 }> = [{ pos: new THREE.Vector3(0, 24, 30), alvo: new THREE.Vector3(0, 0, 0) }];
       for (const luta of lutas) {
         const meio = luta.a.clone().add(luta.b).multiplyScalar(0.5);
         const linha = luta.b.clone().sub(luta.a).setY(0);
         const distancia = Math.max(4, linha.length());
-        const lado = new THREE.Vector3(linha.z, 0, -linha.x).normalize();
+        // Sem par (um brawler sozinho): a câmara fica do lado da nossa base.
+        const lado = linha.length() > 0.01 ? new THREE.Vector3(linha.z, 0, -linha.x).normalize() : new THREE.Vector3(0, 0, 1);
         if (lado.z < 0) lado.negate();
         const raio = distancia * 0.75 + 4;
         const altura = 3.4 + distancia * 0.34;
@@ -798,7 +830,13 @@ export default function Quadro3D(props: Props) {
       const pos = caminho.getPoint(param);
       const alvo = olhar.getPoint(param);
       // Numa luta (troços ímpares) o tempo abranda: câmara lenta.
-      const naLuta = troco % 2 === 1 && troco < pesos.length - 1;
+      const naLuta = troco % 2 === 1 && troco < pesos.length - 1 && (lutas[Math.floor((troco - 1) / 2)]?.lento ?? true);
+      // A etapa: -1 a chegar, uma por luta, e a última a subir no fim.
+      const etapa = troco === 0 ? -1 : troco >= pesos.length - 1 ? lutas.length : Math.floor((troco - 1) / 2);
+      if (etapa !== filme.etapa) {
+        filme.etapa = etapa;
+        atual.current.onEtapaDoCinema?.(etapa);
+      }
       const lento = naLuta ? 0.3 + 0.7 * Math.pow(Math.abs(u - 0.5) * 2, 2) : 1;
       filme.relogio += (agora - filme.ultimo) * lento;
       filme.ultimo = agora;
@@ -818,10 +856,22 @@ export default function Quadro3D(props: Props) {
       sujo = true;
     };
 
+    // No modo Cinema o mapa está vivo (vento no mato, água, poeira): desenha-se
+    // a ~30 imagens por segundo, mas só enquanto está à vista.
+    let aVista = true;
+    const vigia = new IntersectionObserver(([entrada]) => { aVista = entrada.isIntersecting; });
+    vigia.observe(elemento);
+    let ultimoVivo = 0;
     let quadro = 0;
     const ciclo = () => {
       quadro = requestAnimationFrame(ciclo);
-      filmar(performance.now());
+      const agora = performance.now();
+      if (realismo && aVista && (filme || agora - ultimoVivo > 33)) {
+        ultimoVivo = agora;
+        realismo.animar(agora / 1000);
+        sujo = true;
+      }
+      filmar(agora);
       if (voo) {
         const t = Math.min(1, (performance.now() - voo.inicio) / 600);
         const suave = 1 - Math.pow(1 - t, 3);
@@ -840,7 +890,8 @@ export default function Quadro3D(props: Props) {
       }
       if (!sujo) return;
       sujo = false;
-      renderer.render(scene, camera);
+      if (realismo) realismo.desenhar();
+      else renderer.render(scene, camera);
     };
     ciclo();
 
@@ -854,11 +905,13 @@ export default function Quadro3D(props: Props) {
       voar(p.clone().addScaledVector(direcao, -2.2).setY(3.2), p.clone().addScaledVector(direcao, 8).setY(0.3));
     };
 
-    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, olharComo, deslizar, comecarFilme, pararFilme: () => pararFilme(), grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, grupoDasAmeacas, texturaDoMapa: { url: null, textura: null } };
+    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, olharComo, deslizar, comecarFilme, pararFilme: () => pararFilme(), realismo, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, grupoDasAmeacas, texturaDoMapa: { url: null, textura: null } };
 
     return () => {
       cancelAnimationFrame(quadro);
       observador.disconnect();
+      vigia.disconnect();
+      realismo?.dispose();
       controls.dispose();
       renderer.domElement.removeEventListener("pointerdown", aoCarregar);
       renderer.domElement.removeEventListener("pointermove", aoMover);
@@ -885,6 +938,8 @@ export default function Quadro3D(props: Props) {
     const c = cena.current;
     if (!c) return;
     const limpar = () => {
+      // Os materiais animados do terreno antigo deixam de ser animados.
+      c.realismo?.materiaisAnimados.clear();
       for (const filho of [...c.grupoDoTerreno.children]) {
         c.grupoDoTerreno.remove(filho);
         (filho as THREE.Mesh).geometry?.dispose();
@@ -896,7 +951,15 @@ export default function Quadro3D(props: Props) {
     const construir = (textura: THREE.Texture | null) => {
       if (cancelado) return;
       limpar();
-      const materialDoChao = new THREE.MeshLambertMaterial(textura ? { map: textura } : { color: "#2f6b3c" });
+      const real = c.realismo;
+      // No modo Cinema, o chão ganha grão (relevo fino) e reage à luz do céu.
+      const materialDoChao = real
+        ? new THREE.MeshStandardMaterial({ ...(textura ? { map: textura } : { color: "#2f6b3c" }), normalMap: real.texturas.chaoNormais, normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.94 })
+        : new THREE.MeshLambertMaterial(textura ? { map: textura } : { color: "#2f6b3c" });
+      if (real) {
+        // O grão repete-se, a imagem do mapa não: cada textura tem a sua transformação.
+        real.texturas.chaoNormais.repeat.set(9, 14);
+      }
       const chao = new THREE.Mesh(new THREE.PlaneGeometry(LARGURA, PROFUNDIDADE), materialDoChao);
       chao.rotation.x = -Math.PI / 2;
       chao.receiveShadow = true;
@@ -905,7 +968,9 @@ export default function Quadro3D(props: Props) {
       for (let i = 0; i < uv.count; i++) uv.setXY(i, (1 + uv.getX(i) * LARGURA) / 23, (1 + uv.getY(i) * PROFUNDIDADE) / 35);
       c.grupoDoTerreno.add(chao);
       // A moldura: um rebordo de pedra escura à volta, para o mapa não flutuar.
-      const moldura = new THREE.Mesh(new RoundedBoxGeometry(LARGURA + 1.2, 0.8, PROFUNDIDADE + 1.2, 2, 0.25), new THREE.MeshStandardMaterial({ color: "#16202f", roughness: 0.9 }));
+      const moldura = new THREE.Mesh(new RoundedBoxGeometry(LARGURA + 1.2, 0.8, PROFUNDIDADE + 1.2, 2, 0.25), real
+        ? new THREE.MeshStandardMaterial({ color: "#5b534b", map: real.texturas.pedra, normalMap: real.texturas.pedraNormais, roughness: 0.9 })
+        : new THREE.MeshStandardMaterial({ color: "#16202f", roughness: 0.9 }));
       moldura.position.y = -0.41;
       moldura.receiveShadow = true;
       c.grupoDoTerreno.add(moldura);
@@ -934,12 +999,16 @@ export default function Quadro3D(props: Props) {
         const paredes = todasAsParedes.filter((casa) => !partidas.has(casa.linha * terreno.colunas + casa.coluna));
         const escombros = todasAsParedes.filter((casa) => partidas.has(casa.linha * terreno.colunas + casa.coluna));
         if (paredes.length) {
-          const blocos = new THREE.InstancedMesh(new RoundedBoxGeometry(0.98, ALTURA_DA_PAREDE, 0.98, 2, 0.09), new THREE.MeshStandardMaterial({ roughness: 0.82 }), paredes.length);
+          // Pedra a sério no modo Cinema: juntas, lascas e relevo; a cor é a da parede no mapa.
+          const materialDaParede = real
+            ? new THREE.MeshStandardMaterial({ map: real.texturas.pedra, normalMap: real.texturas.pedraNormais, normalScale: new THREE.Vector2(1.3, 1.3), roughness: 0.86 })
+            : new THREE.MeshStandardMaterial({ roughness: 0.82 });
+          const blocos = new THREE.InstancedMesh(new RoundedBoxGeometry(0.98, ALTURA_DA_PAREDE, 0.98, 2, 0.09), materialDaParede, paredes.length);
           paredes.forEach((casa, i) => {
             const [x, z] = centro(casa.coluna, casa.linha);
             matriz.makeTranslation(x, ALTURA_DA_PAREDE / 2, z);
             blocos.setMatrixAt(i, matriz);
-            blocos.setColorAt(i, casa.cor.clone().multiplyScalar(0.62));
+            blocos.setColorAt(i, casa.cor.clone().multiplyScalar(real ? 0.85 : 0.62));
           });
           blocos.castShadow = true;
           blocos.receiveShadow = true;
@@ -963,7 +1032,7 @@ export default function Quadro3D(props: Props) {
             geometria.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
             geometria.setIndex(indices);
             geometria.computeVertexNormals();
-            const topos = new THREE.Mesh(geometria, new THREE.MeshLambertMaterial({ map: textura }));
+            const topos = new THREE.Mesh(geometria, real ? new THREE.MeshStandardMaterial({ map: textura, roughness: 0.9 }) : new THREE.MeshLambertMaterial({ map: textura }));
             topos.receiveShadow = true;
             c.grupoDoTerreno.add(topos);
           }
@@ -1010,12 +1079,21 @@ export default function Quadro3D(props: Props) {
           tufos.castShadow = true;
           tufos.receiveShadow = true;
           c.grupoDoTerreno.add(tufos);
+          // Modo Cinema: por cima dos tufos, lâminas de erva a baloiçar ao vento.
+          if (real) {
+            c.grupoDoTerreno.add(criarMatoDeLaminas(matos.map((casa) => {
+              const [x, z] = centro(casa.coluna, casa.linha);
+              return { x, z, cor: casa.cor };
+            }), real));
+          }
         }
 
         // Jarros e barris soltos: partem-se com ataques normais.
         const jarros = casasDe("destrutivel").filter((casa) => !partidas.has(casa.linha * terreno.colunas + casa.coluna));
         if (jarros.length) {
-          const vasos = new THREE.InstancedMesh(geometriaDoJarro(), new THREE.MeshStandardMaterial({ color: "#c8643c", roughness: 0.7 }), jarros.length);
+          const vasos = new THREE.InstancedMesh(geometriaDoJarro(), real
+            ? new THREE.MeshStandardMaterial({ color: "#c8643c", roughness: 0.62, normalMap: real.texturas.chaoNormais, normalScale: new THREE.Vector2(0.4, 0.4) })
+            : new THREE.MeshStandardMaterial({ color: "#c8643c", roughness: 0.7 }), jarros.length);
           jarros.forEach((casa, i) => {
             const [x, z] = centro(casa.coluna, casa.linha);
             matriz.makeTranslation(x, 0, z);
@@ -1030,7 +1108,15 @@ export default function Quadro3D(props: Props) {
         if (aguas.length) {
           const placa = new THREE.PlaneGeometry(1, 1);
           placa.rotateX(-Math.PI / 2);
-          const pelicula = new THREE.InstancedMesh(placa, new THREE.MeshStandardMaterial({ color: "#49b6ff", transparent: true, opacity: 0.38, roughness: 0.15, metalness: 0.2 }), aguas.length);
+          // Modo Cinema: água funda e lisa, com ondulação que se mexe e reflete o céu.
+          const materialDaAgua = real
+            ? new THREE.MeshStandardMaterial({ color: "#1f6fa8", transparent: true, opacity: 0.8, roughness: 0.05, metalness: 0.1, normalMap: real.texturas.aguaNormais, normalScale: new THREE.Vector2(0.7, 0.7), envMapIntensity: 1.6 })
+            : new THREE.MeshStandardMaterial({ color: "#49b6ff", transparent: true, opacity: 0.38, roughness: 0.15, metalness: 0.2 });
+          if (real) {
+            materialDaAgua.userData.ondula = true;
+            real.materiaisAnimados.add(materialDaAgua);
+          }
+          const pelicula = new THREE.InstancedMesh(placa, materialDaAgua, aguas.length);
           aguas.forEach((casa, i) => {
             const [x, z] = centro(casa.coluna, casa.linha);
             matriz.makeTranslation(x, 0.04, z);
@@ -1293,7 +1379,7 @@ export default function Quadro3D(props: Props) {
 
   /* ---- A cena de cinema. ---- */
   useEffect(() => {
-    if (props.cinema) cena.current?.comecarFilme(props.cinema.duracaoMs);
+    if (props.cinema) cena.current?.comecarFilme(props.cinema.duracaoMs, props.cinema.focos);
     else cena.current?.pararFilme();
   }, [props.cinema?.n]);
 

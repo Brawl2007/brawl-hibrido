@@ -183,7 +183,30 @@ describe("o mapa 3D: menos texto e a cena da partida", () => {
 
   it("a cena arranca sozinha quando o plano chega, com legendas uma de cada vez", () => {
     const sucesso = quadro.slice(quadro.indexOf("const pedirPlano = trpc.general.pedirPlano.useMutation"), quadro.indexOf("const rotularTerreno"));
-    expect(sucesso).toContain("setCinema({ n: Date.now(), duracaoMs: DURACAO_DA_CENA_MS });");
-    expect(quadro).toContain('<p key={legendaAtual} className="qg-legenda">');
+    expect(sucesso).toContain("setCinema(cenaDe(novo));");
+    // A legenda segue o drone (uma por luta), não um relógio à parte.
+    expect(quadro).toContain('<p key={etapa} className="qg-legenda">{legendaDaEtapa}</p>');
+    expect(quadro).toContain("onEtapaDoCinema={setEtapa}");
+  });
+});
+
+describe("gráficos Cinema", () => {
+  const real = ler("client/src/components/realismo3D.ts");
+  const q3d = ler("client/src/components/Quadro3D.tsx");
+  it("luz de céu, tons neutros e brilho só no que passa do branco", () => {
+    expect(real).toContain("renderer.toneMapping = THREE.NeutralToneMapping;");
+    expect(real).toContain("scene.environment = ambiente;");
+    expect(real).toContain("new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.55, 1.0)");
+    // O céu físico não vai para o fundo: o brilho espalhava-o e o mapa ficava branco.
+    expect(real).not.toContain("scene.add(ceu)");
+  });
+  it("o 3D não entra na página do Draft: a escolha da qualidade vive sem three.js", () => {
+    expect(ler("client/src/components/qualidadeDoMapa.ts")).not.toMatch(/from "three/);
+    expect(ler("client/src/components/QuadroDoGeneral.tsx")).not.toMatch(/from "\.\/realismo3D"/);
+    expect(ler("client/src/components/QuadroDoGeneral.tsx")).toContain("key={qualidade}");
+  });
+  it("mato de lâminas ao vento e água que ondula, só no modo Cinema", () => {
+    expect(q3d).toContain("if (real) {\n            c.grupoDoTerreno.add(criarMatoDeLaminas(");
+    expect(q3d).toContain("materialDaAgua.userData.ondula = true;");
   });
 });

@@ -20,6 +20,7 @@ import {
   terrenoDoMomento,
   textoDoPedido,
   MAXIMO_DE_SETAS,
+  FORMATO_DO_PLANO_EM_TEXTO,
   type PedidoDePlano,
 } from "@shared/quadroDoGeneral";
 import { aplicarRotulos, caminhoLivre, corrigirCasas, grelhaEmTexto, linhaLivre, pontoLivre, terrenoValido, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
@@ -1050,6 +1051,32 @@ describe("o plano chega antes da partida começar", () => {
     expect(Date.now() - inicio).toBeLessThan(1000);
     expect(await ateAo(Promise.resolve("ok"), 50, null)).toBe("ok");
     expect(await ateAo(Promise.reject(new Error("x")), 50, "reserva")).toBe("reserva");
+  });
+});
+
+describe("a IA realiza a cena", () => {
+  it("guarda até 6 planos com foco do draft, legenda curta e câmara lenta", () => {
+    const planos = [
+      { foco: "Lou", legenda: "Lou congela o mid", lento: true },
+      { foco: "Bolt", legenda: "Bolt entra pelo mato" },
+      { foco: "Inventado", legenda: "não existe" },
+      { foco: "Nori", legenda: "" },
+      ...Array.from({ length: 8 }, () => ({ foco: "R-T", legenda: "mais um" })),
+    ];
+    const plano = lerPlanoDaIA({ ...planoMinimo, cena: planos }, NOSSOS, DELES, new Date(), null);
+    expect(plano.cena?.length).toBe(6);
+    expect(plano.cena?.[0]).toEqual({ foco: "Lou", ladoDoFoco: "nos", legenda: "Lou congela o mid", lento: true });
+    expect(plano.cena?.[1]).toEqual({ foco: "Bolt", ladoDoFoco: "eles", legenda: "Bolt entra pelo mato", lento: false });
+    expect(plano.cena?.some((c) => c.foco === "Inventado" || c.foco === "Nori")).toBe(false);
+    // E sobrevive a ser guardado e lido de novo.
+    const relido = lerPlanoGuardado(JSON.stringify(plano), NOSSOS, DELES);
+    expect(relido.cena).toEqual(plano.cena);
+  });
+
+  it("o pedido explica a cena e o esquema aceita-a", () => {
+    const texto = textoDoPedido(pedido, false, null, null, new Date());
+    expect(texto).toContain("10. cena (4 a 6 planos)");
+    expect(FORMATO_DO_PLANO_EM_TEXTO).toContain('"cena":[{"foco":"Nome","legenda":"...","lento":true}]');
   });
 });
 

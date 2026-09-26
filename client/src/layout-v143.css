@@ -338,7 +338,8 @@
 @keyframes qg-faixa { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .qg-legenda { position: absolute; left: 50%; bottom: 12%; max-width: min(760px, 88%); margin: 0; padding: 10px 18px; transform: translateX(-50%);
   border-radius: 10px; background: rgba(4, 8, 18, .72); color: #fff; font-family: "Lilita One", sans-serif; font-size: clamp(15px, 2vw, 22px);
-  line-height: 1.25; text-align: center; text-shadow: 0 2px 0 rgba(0, 0, 0, .6); animation: qg-legenda 2s ease-in-out both; }
-@keyframes qg-legenda { 0% { opacity: 0; transform: translate(-50%, 10px); } 12%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+  line-height: 1.25; text-align: center; text-shadow: 0 2px 0 rgba(0, 0, 0, .6); animation: qg-legenda .6s ease-out both; }
+/* Entra e fica: cada legenda dura o tempo da luta em que o drone está. */
+@keyframes qg-legenda { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .qg-cinema-parar { position: absolute; top: calc(9% + 8px); right: 10px; pointer-events: auto; padding: 5px 10px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 8px; background: rgba(0, 0, 0, .5); color: #fff; font-size: 12px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .qg-legenda, .qg-cinema::before, .qg-cinema::after { animation: none; } }
