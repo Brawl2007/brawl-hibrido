@@ -114,6 +114,14 @@ async function modelosPara(fornecedor: Fornecedor, chave: string, buscar: Buscar
   return ordem;
 }
 
+/** Os modelos da chave de reserva, pela ordem em que se tentam (para o dono escolher). */
+export async function modelosDaReserva(buscar: Buscar = fetch) {
+  const { key } = await lerChaveDeReserva();
+  const fornecedor = key ? fornecedorDaChave(key) : null;
+  if (!key || !fornecedor) return null;
+  return { fornecedor: fornecedor.nome, modelos: await modelosPara(fornecedor, key, buscar) };
+}
+
 /** Testa a chave pedindo a lista de modelos. Não gasta pedidos de geração. */
 export async function testarChaveDeReserva(buscar: Buscar = fetch) {
   const { key } = await lerChaveDeReserva();
@@ -146,10 +154,12 @@ export function lerJsonDaResposta(texto: string): unknown {
  * que o modelo não aceita (400) repete-se sem o modo JSON e sem imagem. Chave
  * recusada pára logo.
  */
-export async function gerarJsonNaReserva(chave: string, texto: string, imagem: { mime_type: string; data: string } | null, buscar: Buscar = fetch, temperatura = 0.4) {
+export async function gerarJsonNaReserva(chave: string, texto: string, imagem: { mime_type: string; data: string } | null, buscar: Buscar = fetch, temperatura = 0.4, escolhido?: string | null) {
   const fornecedor = fornecedorDaChave(chave);
   if (!fornecedor) throw new ErroDaReserva("A chave da IA de reserva não é da Groq nem da OpenRouter.");
-  const modelos = (await modelosPara(fornecedor, chave, buscar)).slice(0, MODELOS_POR_PEDIDO);
+  const todos = await modelosPara(fornecedor, chave, buscar);
+  // O modelo escolhido pelo dono vai à frente — só se estiver na lista da chave.
+  const modelos = (escolhido && todos.includes(escolhido) ? [escolhido, ...todos.filter((m) => m !== escolhido)] : todos).slice(0, MODELOS_POR_PEDIDO);
   const falhas: string[] = [];
   for (const modelo of modelos) {
     for (const simples of [false, true]) {

@@ -4234,3 +4234,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .quadro-general-reserva { margin-top: 6px; }
 .quadro-general-reserva summary { color: var(--bh-text-dim); font-size: 12px; cursor: pointer; }
 .quadro-general-reserva[open] summary { margin-bottom: 6px; }
+.quadro-general-escolha { display: grid; gap: 8px; }
+.quadro-general-escolha label { display: grid; gap: 3px; font-size: 12px; color: var(--bh-text-dim); }
+.quadro-general-escolha select { max-width: 100%; padding: 6px 8px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .3); color: var(--bh-text); }

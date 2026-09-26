@@ -18,10 +18,10 @@ import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
-import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
+import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
 import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
-import { fornecedorDaChave, guardarChaveDeReserva, lerChaveDeReserva, testarChaveDeReserva } from "./iaDeReserva";
+import { fornecedorDaChave, guardarChaveDeReserva, lerChaveDeReserva, modelosDaReserva, testarChaveDeReserva } from "./iaDeReserva";
 import { TIPOS_DE_CASA, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
@@ -149,6 +149,13 @@ export const appRouter = router({
         },
       };
     }),
+    /** Os modelos que cada chave tem, para o dono escolher qual faz o plano. Não gasta pedidos de geração. */
+    modelos: protectedProcedure.query(async ({ ctx }) => {
+      exigirDono(ctx, "ver os modelos da IA");
+      const gemini = await modelosDaGemini().catch(() => null);
+      const reserva = await modelosDaReserva().catch(() => null);
+      return { gemini, reserva };
+    }),
     guardarChaveDeReserva: protectedProcedure
       .input(z.object({ key: z.string().trim().max(256) }))
       .mutation(async ({ ctx, input }) => {
@@ -178,11 +185,18 @@ export const appRouter = router({
         numeros: z.array(z.object({ brawler: z.string().trim().max(40), lado: z.enum(["nos", "eles"]), vitoria: z.number().min(0).max(100).nullable(), uso: z.number().min(0).max(100).nullable() })).max(10).optional(),
         dadosDe: z.string().max(40).nullish(),
         elo: z.string().max(20).nullish(),
+        // Qual IA faz o plano. Os modelos só valem se estiverem na lista da chave (o servidor confere).
+        ia: z.object({
+          ordem: z.enum(["gemini-primeiro", "reserva-primeiro", "so-gemini", "so-reserva"]),
+          modeloGemini: z.string().trim().max(80).nullish(),
+          modeloReserva: z.string().trim().max(160).nullish(),
+        }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         exigirDono(ctx, "pedir um plano à IA");
+        const { ia, ...pedido } = input;
         try {
-          return await pedirPlanoAoGeneral(input);
+          return await pedirPlanoAoGeneral(pedido, fetch, ia ?? { ordem: "gemini-primeiro" });
         } catch (erro) {
           const mensagem = erro instanceof ErroDoGeneral || erro instanceof Error ? erro.message : "A IA falhou.";
           throw new TRPCError({ code: erro instanceof ErroDoGeneral ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR", message: mensagem });

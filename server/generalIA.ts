@@ -118,21 +118,32 @@ export function escolherModelo(lista: readonly ModeloDaLista[]) {
 
 const modelosDaChave = new Map<string, string[]>();
 /** Quantos modelos diferentes se tentam por pedido: chega para passar um sobrecarregado sem demorar minutos. */
-const MODELOS_POR_PEDIDO = 4;
+const MODELOS_POR_PEDIDO = 3;
 
 /**
- * Os modelos de um pedido: "flash" e "flash-lite" alternados. No plano
- * gratuito cada modelo tem o seu limite, e os "lite" têm limites bem maiores:
- * quando os "flash" chegam ao limite (429), um "lite" ainda responde.
+ * Os modelos de um pedido. Os "flash-lite" ficam de fora: fazem planos fracos
+ * (o dono viu-o), e quando os "flash" chegam ao limite quem faz o plano é a
+ * IA de reserva. Só entram se forem os únicos da chave — ou se o dono escolher
+ * um deles à mão, e aí vai à frente.
  */
-export function modelosDoPedido(ordem: readonly string[]) {
-  const lite = ordem.filter((m) => /lite/.test(m)), outros = ordem.filter((m) => !/lite/.test(m));
-  const mistura: string[] = [];
-  for (let i = 0; i < Math.max(lite.length, outros.length); i++) {
-    if (outros[i]) mistura.push(outros[i]);
-    if (lite[i]) mistura.push(lite[i]);
-  }
-  return mistura.slice(0, MODELOS_POR_PEDIDO);
+export function modelosDoPedido(ordem: readonly string[], escolhido?: string | null) {
+  const semLite = ordem.filter((m) => !/lite/.test(m));
+  const base = semLite.length ? semLite : [...ordem];
+  const lista = escolhido && ordem.includes(escolhido) ? [escolhido, ...base.filter((m) => m !== escolhido)] : base;
+  return lista.slice(0, MODELOS_POR_PEDIDO);
+}
+
+/** Qual IA faz o plano, escolhida pelo dono no quadro. */
+export type EscolhaDaIA = {
+  ordem: "gemini-primeiro" | "reserva-primeiro" | "so-gemini" | "so-reserva";
+  modeloGemini?: string | null;
+  modeloReserva?: string | null;
+};
+
+/** Os modelos que a chave da Gemini tem, pela ordem em que se tentam (para o dono escolher). */
+export async function modelosDaGemini(buscar: Buscar = fetch) {
+  const { key } = await lerChaveDaGemini();
+  return key ? modelosPara(key, buscar) : [];
 }
 
 async function modelosPara(chave: string, buscar: Buscar) {
@@ -216,8 +227,9 @@ async function gerarJson(
   formatoEmTexto: string,
   tarefa: string,
   pausaMs = 1200,
+  escolhido?: string | null,
 ): Promise<{ json: unknown; modelo: string }> {
-  const modelos = modelosDoPedido(await modelosPara(chave, buscar));
+  const modelos = modelosDoPedido(await modelosPara(chave, buscar), escolhido);
   const falhas: string[] = [];
   let ultima: FalhaDaGoogle | null = null;
   for (const modelo of modelos) {
@@ -407,10 +419,20 @@ let pedidoEmCurso = false;
  * Pede o plano. Um de cada vez: um segundo clique enquanto o primeiro corre
  * gastaria um pedido do limite gratuito para nada.
  */
-export async function pedirPlanoAoGeneral(pedido: PedidoDePlano, buscar: Buscar = fetch): Promise<{ plano: PlanoDoGeneral; modelo: string; comImagem: boolean; comPesquisa: boolean; terreno: TerrenoDoMapa | null }> {
-  const { key } = await lerChaveDaGemini();
-  const reserva = (await lerChaveDeReserva()).key;
-  if (!key && !reserva) throw new ErroDoGeneral("Ainda não há chave da Gemini. Cola-a no quadro do general (é gratuita em aistudio.google.com/apikey).");
+export async function pedirPlanoAoGeneral(
+  pedido: PedidoDePlano,
+  buscar: Buscar = fetch,
+  escolha: EscolhaDaIA = { ordem: "gemini-primeiro" },
+): Promise<{ plano: PlanoDoGeneral; modelo: string; comImagem: boolean; comPesquisa: boolean; terreno: TerrenoDoMapa | null }> {
+  const gemini = escolha.ordem === "so-reserva" ? "" : (await lerChaveDaGemini()).key;
+  const reserva = escolha.ordem === "so-gemini" ? "" : (await lerChaveDeReserva()).key;
+  if (!gemini && !reserva) {
+    throw new ErroDoGeneral(
+      escolha.ordem === "so-reserva" ? "Escolheste só a IA de reserva, mas ainda não há chave dela (Groq ou OpenRouter)."
+        : escolha.ordem === "so-gemini" ? "Escolheste só a Gemini, mas ainda não há chave dela (é gratuita em aistudio.google.com/apikey)."
+          : "Ainda não há chave da Gemini. Cola-a no quadro do general (é gratuita em aistudio.google.com/apikey).",
+    );
+  }
   if (pedidoEmCurso) throw new ErroDoGeneral("Já há um plano a ser pensado. Espera que termine.");
   pedidoEmCurso = true;
   try {
@@ -418,30 +440,38 @@ export async function pedirPlanoAoGeneral(pedido: PedidoDePlano, buscar: Buscar 
     // chega (e o botão "Pedir à IA para ler o terreno" continua lá). Eram três
     // pedidos do limite gratuito gastos antes de o plano começar.
     const terreno = pedido.mapaId ? await obterTerreno(pedido.mapaId, buscar) : null;
-    const modelos = key ? await modelosPara(key, buscar).then(modelosDoPedido).catch(() => [] as string[]) : [];
-    const atualidade = key && modelos.length ? await pesquisarAtualidade(key, modelos, pedido, buscar) : null;
+    const modelos = gemini ? await modelosPara(gemini, buscar).then((ordem) => modelosDoPedido(ordem, escolha.modeloGemini)).catch(() => [] as string[]) : [];
+    const atualidade = gemini && modelos.length ? await pesquisarAtualidade(gemini, modelos, pedido, buscar) : null;
     const imagem = await imagemParaAIA(pedido.mapaId, buscar);
     const catalogo = await obterCatalogo(buscar).catch(() => null);
     const texto = textoDoPedido(pedido, Boolean(imagem), terreno, atualidade, new Date(), opcoesDeBuild(catalogo, pedido.nossos.map((n) => n.brawler)));
     const partes: ParteDoPedido[] = [{ text: texto }];
     if (imagem) partes.push({ inline_data: imagem });
 
-    let resposta: { json: unknown; modelo: string; comImagem: boolean };
-    try {
-      if (!key) throw new ErroDoGeneral("Sem chave da Gemini.");
-      const { json, modelo } = await gerarJson(key, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano");
-      resposta = { json, modelo, comImagem: Boolean(imagem) };
-    } catch (erroDaGemini) {
-      // A Google no limite (ou em baixo): a IA de reserva faz o plano, se houver chave.
-      if (!reserva) throw erroDaGemini;
-      console.warn("[General] A Gemini não fez o plano; passa à IA de reserva:", erroDaGemini instanceof Error ? erroDaGemini.message : erroDaGemini);
+    const pelaGemini = async () => {
+      const { json, modelo } = await gerarJson(gemini, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano", 1200, escolha.modeloGemini);
+      return { json, modelo, comImagem: Boolean(imagem) };
+    };
+    const pelaReserva = () => gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar, 0.4, escolha.modeloReserva);
+    // Pela ordem escolhida; se a primeira falhar (limite, em baixo), a outra.
+    const tentativas = [
+      ...(escolha.ordem === "reserva-primeiro" ? [] : gemini ? [{ nome: "Gemini", fazer: pelaGemini }] : []),
+      ...(reserva ? [{ nome: "reserva", fazer: pelaReserva }] : []),
+      ...(escolha.ordem === "reserva-primeiro" && gemini ? [{ nome: "Gemini", fazer: pelaGemini }] : []),
+    ];
+    const falhas: string[] = [];
+    let resposta: { json: unknown; modelo: string; comImagem: boolean } | null = null;
+    for (const tentativa of tentativas) {
       try {
-        resposta = await gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar);
-      } catch (erroDaReserva) {
-        const primeira = key && erroDaGemini instanceof Error ? `${erroDaGemini.message} ` : "";
-        throw new ErroDoGeneral(`${primeira}${erroDaReserva instanceof Error ? erroDaReserva.message : String(erroDaReserva)}`);
+        resposta = await tentativa.fazer();
+        break;
+      } catch (erro) {
+        const mensagem = erro instanceof Error ? erro.message : String(erro);
+        falhas.push(mensagem);
+        console.warn(`[General] ${tentativa.nome} não fez o plano:`, mensagem);
       }
     }
+    if (!resposta) throw new ErroDoGeneral(falhas.join(" "));
     const plano = conferirBuilds(lerPlanoDaIA(resposta.json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno), catalogo);
     if (atualidade?.fontes.length) plano.fontes = atualidade.fontes;
     return { plano, modelo: resposta.modelo, comImagem: resposta.comImagem, comPesquisa: Boolean(atualidade), terreno };

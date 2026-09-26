@@ -799,9 +799,48 @@ describe("IA de reserva (Groq ou OpenRouter) quando a Gemini chega ao limite", (
     }
   }
 
-  it("cada pedido alterna flash e flash-lite (limites separados)", () => {
-    expect(modelosDoPedido(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.8-flash-lite", "gemini-3.7-flash-lite"]))
-      .toEqual(["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.7-flash", "gemini-3.7-flash-lite"]);
+  it("o lite nunca entra por defeito; só se for escolhido (e aí vai à frente) ou se for o único", () => {
+    const lista = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.8-flash-lite", "gemini-3.7-flash-lite"];
+    expect(modelosDoPedido(lista)).toEqual(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"]);
+    expect(modelosDoPedido(lista, "gemini-3.7-flash")).toEqual(["gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.6-flash"]);
+    expect(modelosDoPedido(lista, "gemini-3.8-flash-lite")).toEqual(["gemini-3.8-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash"]);
+    // Um nome que a chave não tem é ignorado.
+    expect(modelosDoPedido(lista, "gemini-inventado")).toEqual(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"]);
+    expect(modelosDoPedido(["gemini-3-flash-lite"])).toEqual(["gemini-3-flash-lite"]);
+  });
+
+  it("\"reserva primeiro\": a reserva faz o plano sem gastar a Gemini no plano; com o modelo escolhido à frente", async () => {
+    const reserva = reservaFalsa();
+    const gemini = geminiFalsa({ modelos: ["gemini-3-flash"] });
+    const buscar = ((url: string, init?: RequestInit) => (url.startsWith(BASE) ? reserva.buscar(url, init) : gemini.buscar(url, init))) as typeof fetch;
+    process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+    process.env.IA_RESERVA_API_KEY = `gsk_chave-de-teste-da-groq-${String(++contador).padStart(4, "0")}`;
+    process.env.IA_RESERVA_BASE = BASE;
+    try {
+      const r = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, buscar, { ordem: "reserva-primeiro", modeloReserva: "llama-3.3-70b-versatile" });
+      expect(r.modelo).toBe("Groq · llama-3.3-70b-versatile");
+      expect(gemini.geracoes()).toEqual([]);
+      // "Só a Gemini": nem com a Gemini no limite a reserva é chamada.
+      const antes = reserva.pedidos.length;
+      const semReserva = geminiFalsa({ modelos: ["gemini-3-flash"], plano: { "gemini-3-flash": erroGoogle(429, "RESOURCE_EXHAUSTED", "Quota exceeded.") } });
+      const soGemini = ((url: string, init?: RequestInit) => (url.startsWith(BASE) ? reserva.buscar(url, init) : semReserva.buscar(url, init))) as typeof fetch;
+      process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, soGemini, { ordem: "so-gemini" })).rejects.toThrow(/limite gratuito/);
+      expect(reserva.pedidos.length).toBe(antes);
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.IA_RESERVA_API_KEY;
+      delete process.env.IA_RESERVA_BASE;
+    }
+  });
+
+  it("\"só a reserva\" sem chave dela diz isso mesmo", async () => {
+    process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+    try {
+      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, geminiFalsa({}).buscar, { ordem: "so-reserva" })).rejects.toThrow(/só a IA de reserva/);
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+    }
   });
 
   it("o fornecedor sabe-se pela chave; na OpenRouter só modelos gratuitos", () => {
@@ -863,7 +902,7 @@ describe("o que é só do dono", () => {
   const general = rotas.slice(rotas.indexOf("general: router({"), rotas.indexOf("draftRoles: router({"));
 
   it("chave, plano e correções exigem o dono; o terreno é público", () => {
-    for (const nome of ["estado", "guardarChave", "guardarChaveDeReserva", "pedirPlano", "corrigirTerreno", "corrigirCasas", "rotularTerreno"]) {
+    for (const nome of ["estado", "modelos", "guardarChave", "guardarChaveDeReserva", "pedirPlano", "corrigirTerreno", "corrigirCasas", "rotularTerreno"]) {
       const bloco = general.slice(general.indexOf(`${nome}:`));
       const corpo = bloco.slice(0, bloco.indexOf("}),") + 3);
       expect(corpo, nome).toContain("protectedProcedure");

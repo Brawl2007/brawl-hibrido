@@ -113,6 +113,30 @@ function textoDaBuild(build: PlanoDoGeneral["ordens"][number]["build"]) {
 
 const numeroOuNulo = (valor: unknown) => (typeof valor === "number" && Number.isFinite(valor) ? Math.max(0, Math.min(100, valor)) : null);
 
+type EscolhaDaIA = { ordem: "gemini-primeiro" | "reserva-primeiro" | "so-gemini" | "so-reserva"; modeloGemini?: string | null; modeloReserva?: string | null };
+const CHAVE_DA_ESCOLHA = "brawl-hibrido:ia-do-general:v1";
+const ORDENS_DA_IA: Array<{ id: EscolhaDaIA["ordem"]; nome: string }> = [
+  { id: "gemini-primeiro", nome: "Gemini; se falhar, a reserva" },
+  { id: "reserva-primeiro", nome: "Reserva (Groq/OpenRouter); se falhar, a Gemini" },
+  { id: "so-gemini", nome: "Só a Gemini" },
+  { id: "so-reserva", nome: "Só a reserva" },
+];
+function lerEscolhaDaIA(): EscolhaDaIA {
+  try {
+    const guardada = JSON.parse(window.localStorage.getItem(CHAVE_DA_ESCOLHA) ?? "null") as Partial<EscolhaDaIA> | null;
+    if (guardada && ORDENS_DA_IA.some((o) => o.id === guardada.ordem)) {
+      return {
+        ordem: guardada.ordem!,
+        modeloGemini: typeof guardada.modeloGemini === "string" ? guardada.modeloGemini.slice(0, 80) : null,
+        modeloReserva: typeof guardada.modeloReserva === "string" ? guardada.modeloReserva.slice(0, 160) : null,
+      };
+    }
+  } catch {
+    // Estragada ou sem armazenamento: fica a de origem.
+  }
+  return { ordem: "gemini-primeiro", modeloGemini: null, modeloReserva: null };
+}
+
 function lerGuardado(chave: string) {
   try {
     return window.localStorage.getItem(chave);
@@ -237,6 +261,19 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   });
   const temAlgumaIA = Boolean(estado?.configured || estado?.reserva?.configured);
 
+  // Que IA faz o plano (e com que modelo): escolha do dono, guardada neste navegador.
+  const [escolhaDaIA, setEscolhaDaIA] = useState<EscolhaDaIA>(() => lerEscolhaDaIA());
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHAVE_DA_ESCOLHA, JSON.stringify(escolhaDaIA));
+    } catch {
+      // Sem armazenamento, vale só nesta visita.
+    }
+  }, [escolhaDaIA]);
+  const [verModelos, setVerModelos] = useState(false);
+  const modelosQuery = trpc.general.modelos.useQuery(undefined, { enabled: ehDono && verModelos, staleTime: 10 * 60_000, retry: false });
+  const modelos = modelosQuery.data as { gemini: string[] | null; reserva: { fornecedor: string; modelos: string[] } | null } | undefined;
+
   // O momento da partida que está no ecrã: as suas posições, setas, símbolos e paredes partidas.
   const camadas = camadasDoMomento(plano, momento);
   const terrenoAqui = useMemo(() => terrenoDoMomento(terreno, camadas.paredesPartidas), [terreno, camadas.paredesPartidas]);
@@ -320,6 +357,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       ],
       dadosDe: capturedAt ?? null,
       elo: ELOS_BRAWL_PLANET.find((item) => item.id === elo)?.nome ?? null,
+      ia: escolhaDaIA,
     });
   };
 
@@ -392,6 +430,34 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                   {pedirPlano.isPending ? " · pode demorar até um minuto" : ""}
                 </small>
               </>
+            )}
+            {temAlgumaIA && (
+              <details className="quadro-general-reserva" onToggle={(e) => setVerModelos(e.currentTarget.open)}>
+                <summary>Que IA faz o plano: {ORDENS_DA_IA.find((o) => o.id === escolhaDaIA.ordem)?.nome.toLowerCase()}{escolhaDaIA.modeloGemini || escolhaDaIA.modeloReserva ? " · modelo escolhido" : ""}</summary>
+                <div className="quadro-general-escolha">
+                  <label>
+                    <span>Ordem</span>
+                    <select value={escolhaDaIA.ordem} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, ordem: e.target.value as EscolhaDaIA["ordem"] }))}>
+                      {ORDENS_DA_IA.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Modelo da Gemini</span>
+                    <select value={escolhaDaIA.modeloGemini ?? ""} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, modeloGemini: e.target.value || null }))} disabled={!modelos?.gemini?.length}>
+                      <option value="">O melhor (flash; nunca o lite)</option>
+                      {(modelos?.gemini ?? []).map((m) => <option key={m} value={m}>{m}{/lite/.test(m) ? " (lite — mais fraco)" : ""}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Modelo da reserva{modelos?.reserva ? ` (${modelos.reserva.fornecedor})` : ""}</span>
+                    <select value={escolhaDaIA.modeloReserva ?? ""} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, modeloReserva: e.target.value || null }))} disabled={!modelos?.reserva?.modelos.length}>
+                      <option value="">O melhor que houver</option>
+                      {(modelos?.reserva?.modelos ?? []).map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </label>
+                  <small>{modelosQuery.isLoading ? "A ler os modelos das tuas chaves…" : "Se o modelo escolhido estiver no limite, tenta o seguinte da lista."}</small>
+                </div>
+              </details>
             )}
             <details className="quadro-general-reserva">
               <summary>{estado?.reserva?.configured ? `IA de reserva: ${estado.reserva.fornecedor} ${estado.reserva.hint}` : "IA de reserva (quando a Google chegar ao limite)"}</summary>
