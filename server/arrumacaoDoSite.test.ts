@@ -148,3 +148,11 @@ describe("o plano da IA chega antes da partida", () => {
     expect(ler("server/routers.ts")).toContain("rapido: z.boolean().optional(),");
   });
 });
+
+describe("a pesquisa das sugestões", () => {
+  it("apaga-se assim que o brawler é escolhido", () => {
+    const draft = ler("client/src/pages/Draft.tsx");
+    const escolher = draft.slice(draft.indexOf("const assignBrawler = useCallback"), draft.indexOf("}, [scheduleContextualAnalysis]);"));
+    expect(escolher).toContain('setQuery("");');
+  });
+});

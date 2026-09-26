@@ -2374,6 +2374,7 @@ export default function Draft() {
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const [roleFilter, setRoleFilter] = useState<DraftRoleFilter>("Todas");
   const [rosterPage, setRosterPage] = useState(1);
+  const pesquisaRef = useRef<HTMLInputElement>(null);
   const analysisRefreshFrameRef = useRef<number | null>(null);
 
   const firstPendingStepIndex = choices.findIndex((choice, index) => choice === null && !skipped[index]);
@@ -2610,6 +2611,12 @@ export default function Draft() {
     if (currentActiveStepIndex === null) { toast.info("O draft está completo ou os passos restantes foram ignorados."); return; }
     if (currentLockedNames.has(name)) { toast.info(`${name} já está bloqueado neste draft.`); return; }
     const nextChoices = currentChoices.map((choice, index) => index === currentActiveStepIndex ? name : choice);
+    // A pesquisa apaga-se assim que o brawler entra e o cursor fica lá: o
+    // próximo escreve-se logo, sem clicar outra vez na caixa.
+    if (pesquisaRef.current?.value) {
+      setQuery("");
+      requestAnimationFrame(() => pesquisaRef.current?.focus());
+    }
     setRosterPage(1);
     setChoices(nextChoices);
     setSelectedStepIndex(null);
@@ -2810,7 +2817,7 @@ export default function Draft() {
                   </div>
                   {abaDoCentro === "sugestoes" && <section className="recommendations-section" id="ranked-picks" aria-label={`Sugestões para a ${suggestionTeam === "blue" ? "Azul" : "Vermelha"}`}>
                     <div className="recommendation-toolbar">
-                      <label className="draft-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") escolherOPrimeiro(); }} placeholder="Procurar brawler…" aria-label="Procurar brawler no draft" />{query && <button aria-label="Limpar pesquisa" onClick={() => setQuery("")}><X size={14} /></button>}</label>
+                      <label className="draft-search"><Search size={16} /><input ref={pesquisaRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") escolherOPrimeiro(); }} placeholder="Procurar brawler…" aria-label="Procurar brawler no draft" />{query && <button aria-label="Limpar pesquisa" onClick={() => setQuery("")}><X size={14} /></button>}</label>
                       <div className="draft-role-filter" role="group" aria-label="Filtrar sugestões por posição">{(["Todas", "side", "mid", "flex"] as DraftRoleFilter[]).map((option) => <button key={option} className={roleFilter === option ? "is-active" : ""} onClick={() => setRoleFilter(option)}>{draftRoleLabels[option]}</button>)}</div>
                       <label className="mesa-ordem"><span className="sr-only">Ordenar sugestões</span>
                         <select value={rankingOrder} onChange={event => setRankingOrder(event.target.value as "base" | "context")}>
