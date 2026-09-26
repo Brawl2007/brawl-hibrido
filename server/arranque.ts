@@ -29,6 +29,14 @@ export function resetArranqueParaTestes() {
   arranque = undefined;
 }
 
+/**
+ * Só o que passa pela base de dados precisa do arranque: as rotas `/api/`.
+ * A página e os ficheiros do site servem-se sem esperar por ele.
+ */
+export function precisaDoArranque(caminho: string) {
+  return caminho === "/api" || caminho.startsWith("/api/");
+}
+
 export function garantirArranque(): Promise<void> {
   if (!arranque) {
     arranque = executar().catch((erro) => {

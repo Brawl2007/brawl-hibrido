@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { REPAROS_DE_ENUM, apenasCriacoes, instrucaoDeAlargamento, separarInstrucoes, valoresDoEnum } from "./ensureTables";
+import { REPAROS_DE_ENUM, apenasCriacoes, instrucaoDeAlargamento, instrucoesEmFalta, nomeDaTabela, separarInstrucoes, valoresDoEnum } from "./ensureTables";
+import { precisaDoArranque } from "./arranque";
 
 /**
  * Ver o cabeçalho de `ensureTables.ts`: num alojamento gratuito não há terminal
@@ -144,5 +145,53 @@ describe("reparo de colunas já criadas", () => {
     expect(valoresDoEnum("enum('a','b','c')")).toEqual(["a", "b", "c"]);
     expect(valoresDoEnum("ENUM('um')")).toEqual(["um"]);
     expect(valoresDoEnum("int(11)")).toEqual([]);
+  });
+});
+
+/**
+ * Cada instância da Vercel que acorda corria as 16 criações antes do primeiro
+ * pedido. Agora pergunta que tabelas há e só cria as que faltam.
+ */
+describe("arranque mais rápido: só o que falta", () => {
+  const criacoes = () => apenasCriacoes(separarInstrucoes(instalador()));
+
+  it("lê o nome de cada tabela do instalador", () => {
+    for (const instrucao of criacoes()) expect(nomeDaTabela(instrucao)).toMatch(/^[a-z0-9_]+$/);
+    expect(nomeDaTabela("CREATE TABLE IF NOT EXISTS `ranked_sync_config` (`id` int)")).toBe("ranked_sync_config");
+  });
+
+  it("com todas as tabelas já criadas, não corre nenhuma instrução", () => {
+    const todas = new Set(criacoes().map((i) => nomeDaTabela(i)!.toLowerCase()));
+    expect(instrucoesEmFalta(criacoes(), todas)).toEqual([]);
+  });
+
+  it("com uma tabela em falta, corre só essa", () => {
+    const todas = new Set(criacoes().map((i) => nomeDaTabela(i)!.toLowerCase()));
+    todas.delete("users");
+    const faltam = instrucoesEmFalta(criacoes(), todas);
+    expect(faltam).toHaveLength(1);
+    expect(nomeDaTabela(faltam[0])).toBe("users");
+  });
+
+  it("uma base vazia corre tudo, e o que não se consegue ler corre sempre", () => {
+    expect(instrucoesEmFalta(criacoes(), new Set())).toHaveLength(criacoes().length);
+    expect(instrucoesEmFalta(["CREATE TABLE IF NOT EXISTS \"estranha\" (x int)"], new Set(["estranha"]))).toHaveLength(1);
+  });
+
+  it("o instalador pergunta que tabelas há antes de criar", () => {
+    const codigo = readFileSync(resolve(process.cwd(), "server/ensureTables.ts"), "utf-8");
+    expect(codigo).toContain("information_schema.TABLES");
+    expect(codigo).toMatch(/instrucoesEmFalta\(instrucoes, existentes\)/);
+  });
+
+  it("a página e os ficheiros do site não esperam pelo arranque; a API espera", () => {
+    expect(precisaDoArranque("/")).toBe(false);
+    expect(precisaDoArranque("/draft")).toBe(false);
+    expect(precisaDoArranque("/assets/index-abc.js")).toBe(false);
+    expect(precisaDoArranque("/apiario")).toBe(false);
+    expect(precisaDoArranque("/api/trpc/counterSync.snapshot")).toBe(true);
+    expect(precisaDoArranque("/api/cron/sync")).toBe(true);
+    const vercel = readFileSync(resolve(process.cwd(), "server/_core/index.vercel.ts"), "utf-8");
+    expect(vercel).toContain("if (!precisaDoArranque(req.path)) return next();");
   });
 });

@@ -20,7 +20,7 @@
     radial-gradient(52% 40% at 97% 6%, rgba(34, 211, 238, .13), transparent 62%),
     radial-gradient(96% 52% at 50% 100%, rgba(124, 58, 237, .11), transparent 72%) !important;
 }
-.site-version-badge { position: fixed; top: 6px; right: 10px; z-index: 60; pointer-events: none; background: #ffce45; color: #19213a; padding: 4px 9px; border: 2px solid #111a33; border-radius: 7px; font: 900 12px/1.1 sans-serif; box-shadow: 0 2px 0 #03091d; }
+.site-version-badge { position: fixed; top: 6px; right: 10px; z-index: 60; pointer-events: none; background: #ffce45; color: #19213a; padding: 4px 9px; border: 2px solid #111a33; border-radius: 7px; font: 900 13px/1.1 sans-serif; box-shadow: 0 2px 0 #03091d; }
 .draft-shell .draft-main { max-width: 1720px; padding: 22px 24px 48px; gap: 18px; }
 .draft-shell .draft-contextbar { order: 0; margin: 0; padding: 16px 20px; border: 1px solid #415591; border-radius: 16px; background: linear-gradient(115deg, #233d83, #392566); box-shadow: 0 5px 0 #050b20; }
 /*
@@ -45,7 +45,7 @@
 .draft-shell .draft-content > .recommendations-section { width: 100%; margin: 0; border: 1px solid #354574; border-radius: 18px; background: #111b37 !important; box-shadow: 0 5px 0 #050b20; overflow: hidden; }
 .draft-shell .draft-arena-header { padding: 18px; background: linear-gradient(110deg,#193b72,#342349); }
 .draft-shell .draft-arena-header h2 { font-size: 28px; margin: 6px 0; }
-.draft-shell .draft-arena-header p { font-size: 12px; color: #bdcbed; }
+.draft-shell .draft-arena-header p { font-size: 13px; color: #bdcbed; }
 .draft-shell .draft-arena-map-status { display: none; }
 .draft-shell .draft-action-zone { display: block; padding: 14px; }
 .draft-shell .draft-progress { margin-bottom: 14px; padding: 0; gap: 10px; flex-wrap: wrap; }
@@ -68,11 +68,11 @@
 .draft-shell .team-heading h3 { font-size: 23px; }
 .draft-shell .team-kicker { display: none; }
 .draft-shell .team-heading-meta { gap: 5px; }
-.draft-shell .team-perspective { font-size: 9px; }
+.draft-shell .team-perspective { font-size: 11px; }
 .draft-shell .slot-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 6px; }
 .draft-shell .draft-slot { min-height: 48px; border-radius: 8px; padding: 6px; }
 .draft-shell .draft-slot .slot-copy { min-width: 0; }
-.draft-shell .draft-slot .slot-copy strong { white-space: normal; font-size: 12px; overflow-wrap: anywhere; }
+.draft-shell .draft-slot .slot-copy strong { white-space: normal; font-size: 13px; overflow-wrap: anywhere; }
 .draft-shell .draft-slot.is-active { border-color: #ffd453; background: #544729; box-shadow: 0 0 0 2px #ffd45338; }
 .draft-shell .draft-board-grid .draft-probability-center { order: 1; grid-column: 1/-1; width: auto; min-height: 0; padding: 12px; background: #0a142c; border-radius: 10px; }
 .draft-shell .draft-probability-center strong { font-size: 24px; }
@@ -82,17 +82,17 @@
 .draft-shell .draft-arena-map-control > small { display: none; }
 .draft-shell .draft-select { width: 100%; margin: 8px 0; }
 .arena-more { padding: 12px 16px; border-top: 1px solid #304168; }
-.arena-more summary { cursor: pointer; color: #d1def7; font-size: 13px; font-weight: 700; min-height: 24px; }
+.arena-more summary { cursor: pointer; color: #d1def7; font-size: 13.5px; font-weight: 700; min-height: 24px; }
 .arena-more[open] summary { color: #ffcf4b; margin-bottom: 12px; }
 .arena-options { padding: 12px 0 0; }
 .arena-options-body { display: grid; gap: 16px; }
 .draft-shell .recommendations-section { padding: 18px; }
 .draft-shell .recommendations-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
 .draft-shell .recommendations-heading h2 { font-size: 27px; margin: 4px 0; }
-.draft-shell .recommendations-heading p { font-size: 12px; line-height: 1.5; margin: 0; color: #aebfdf; }
-.turn-team { display: inline-block; font: 800 11px/1.5 sans-serif; vertical-align: middle; padding: 3px 8px; border-radius: 6px; background: #255da3; color: #fff; }
+.draft-shell .recommendations-heading p { font-size: 13px; line-height: 1.5; margin: 0; color: #aebfdf; }
+.turn-team { display: inline-block; font: 800 12.5px/1.5 sans-serif; vertical-align: middle; padding: 3px 8px; border-radius: 6px; background: #255da3; color: #fff; }
 .turn-team.red { background: #a43c63; }
-.pick-details-toggle { flex-shrink: 0; padding: 10px; border: 1px solid #4a5e8b; border-radius: 8px; color: #e1ebff; font-size: 12px; background: #233252; cursor: pointer; }
+.pick-details-toggle { flex-shrink: 0; padding: 10px; border: 1px solid #4a5e8b; border-radius: 8px; color: #e1ebff; font-size: 13px; background: #233252; cursor: pointer; }
 .pick-details-toggle[aria-pressed="true"] { color: #ffcf4b; border-color: #ffcf4b; }
 .draft-shell .recommendation-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
 .draft-shell .draft-search-voice { flex: 1 1 230px; min-width: 0; }
@@ -109,9 +109,9 @@
 .draft-shell .draft-recommendation-list > :first-child .recommendation-rank { color: #ffcf4b; }
 .draft-shell .recommendation-main { min-width: 0; }
 .draft-shell .recommendation-main > strong { font-size: 18px; color: #fff; }
-.draft-shell .recommendation-main > small { font-size: 11px; line-height: 1.5; white-space: normal; }
+.draft-shell .recommendation-main > small { font-size: 12.5px; line-height: 1.5; white-space: normal; }
 .draft-shell .recommendation-metrics b { color: #ffda66; font-size: 25px; }
-.draft-shell .recommendation-metrics small { font-size: 8px; }
+.draft-shell .recommendation-metrics small { font-size: 10.5px; }
 .draft-shell .recommendation-side,.draft-shell .recommendation-action { display: none; }
 .draft-shell .pick-brief { color: #b3c5e6; margin-top: 4px; }
 .draft-shell .with-details .draft-recommendation { align-items: start; contain-intrinsic-size: auto 650px; }
@@ -158,12 +158,12 @@
 .draft-shell .with-details .recommendation-bonus-chip { flex-wrap: wrap; max-width: 100%; }
 .draft-shell .with-details .recommendation-bonus-source { flex: 1 1 100%; }
 .draft-shell .with-details .recommendation-counter-audit :is(small,b,span),
-.draft-shell .with-details .recommendation-main > small { font-size: 12px !important; line-height: 1.5; letter-spacing: normal; }
-.ranking-order-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #d1def7; font-size: 12px; }
+.draft-shell .with-details .recommendation-main > small { font-size: 13px !important; line-height: 1.5; letter-spacing: normal; }
+.ranking-order-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #d1def7; font-size: 13px; }
 .ranking-order-control select { min-width: 0; max-width: 100%; padding: 9px; background: #182744; border: 1px solid #4a5e8b; border-radius: 8px; color: #ffe078; }
 .ranking-order-control small { flex-basis: 100%; line-height: 1.5; }
 /* v57: comparisons are visible again and reachable directly from the board. */
-.duel-jump-link { display: inline-flex; align-items: center; padding: 10px 12px; border: 1px solid #ffcf4b; border-radius: 9px; color: #ffe078; background: #182744; font-size: 12px; font-weight: 700; text-decoration: none; }
+.duel-jump-link { display: inline-flex; align-items: center; padding: 10px 12px; border: 1px solid #ffcf4b; border-radius: 9px; color: #ffe078; background: #182744; font-size: 13px; font-weight: 700; text-decoration: none; }
 .duel-jump-link:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .draft-shell #matchup-matrix { scroll-margin-top: 24px; }
 .draft-shell .matchup-score-rise-bonuses > span { white-space: normal; flex-wrap: wrap; overflow-wrap: anywhere; }
@@ -175,7 +175,7 @@
 .duel-points-overview > div { display:grid; gap:6px; padding:14px; border:1px solid #365577; border-radius:12px; min-width:0; }
 .duel-points-overview span { font-weight:800; overflow-wrap:anywhere; }
 .duel-points-overview strong { font-size:24px; color:#fff; }
-.duel-points-overview small { font-size:12px; color:#bfd0e6; }
+.duel-points-overview small { font-size:13px; color:#bfd0e6; }
 .duel-points-overview b { color:#ffd75a; }
 .duel-details > summary { cursor:pointer; padding:12px 0; font-weight:700; color:#ffd75a; }
 .duel-details .matchup-score-rise-grid { grid-template-columns:1fr; }
@@ -224,7 +224,7 @@
   border: 1px solid var(--bh-warning);
   border-radius: 999px;
   color: var(--bh-warning);
-  font-size: 0.72rem;
+  font-size: .79rem;
   font-style: normal;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -252,7 +252,7 @@
   flex-basis: 100%;
   margin-top: 4px;
   color: var(--bh-text-dim);
-  font-size: 11px;
+  font-size: 12.5px;
   font-style: normal;
   line-height: 1.35;
   white-space: normal;

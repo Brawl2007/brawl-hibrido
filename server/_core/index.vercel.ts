@@ -16,7 +16,7 @@ import { handleObservedMatchCollectionScheduled } from "../observedMatchSchedule
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
 import { getLiveSyncState } from "../liveSync";
-import { garantirArranque } from "../arranque";
+import { garantirArranque, precisaDoArranque } from "../arranque";
 
 /**
  * O navegador já tem esta versão?
@@ -50,8 +50,15 @@ export function createApp() {
    * pedido que cada instância atender: criar as tabelas em falta e carregar a
    * chave da API guardada. É memorizado, por isso os pedidos seguintes desta
    * instância não pagam nada.
+   *
+   * Só os pedidos a `/api/` esperam por ele. A página e os ficheiros do site
+   * não tocam na base de dados, e fazê-los esperar pelas tabelas era atrasar a
+   * primeira abertura de quem apanhasse uma instância acabada de acordar.
    */
-  app.use((_req, _res, next) => { void garantirArranque().finally(() => next()); });
+  app.use((req, _res, next) => {
+    if (!precisaDoArranque(req.path)) return next();
+    void garantirArranque().finally(() => next());
+  });
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

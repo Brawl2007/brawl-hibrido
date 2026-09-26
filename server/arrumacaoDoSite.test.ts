@@ -339,3 +339,56 @@ describe("a pré-visualização quando se partilha o link", () => {
     expect(png.length).toBeLessThan(300 * 1024);
   });
 });
+
+/**
+ * v152 — letras maiores. Havia 241 tamanhos entre 6 e 9 px (na página Brawlers,
+ * 358 de 460 textos ficavam abaixo de 11 px). Estes testes impedem que uma
+ * regra nova volte a pôr letra minúscula.
+ */
+describe("v152 — letras legíveis", () => {
+  const folhas = ["client/src/index.css", "client/src/layout-v143.css", "client/src/arena-v55.css"];
+
+  it("nenhum texto abaixo de 9 px, em px ou em rem", () => {
+    for (const folha of folhas) {
+      const css = ler(folha);
+      for (const m of css.matchAll(/font-size:\s*([0-9]*\.?[0-9]+)px/g)) expect(Number(m[1]), `${folha}: ${m[0]}`).toBeGreaterThanOrEqual(9);
+      for (const m of css.matchAll(/font:\s*[0-9]{3}\s+([0-9.]+)px/g)) expect(Number(m[1]), `${folha}: ${m[0]}`).toBeGreaterThanOrEqual(9);
+      for (const m of css.matchAll(/font-size:\s*([0-9]*\.?[0-9]+)rem/g)) expect(Number(m[1]) * 16, `${folha}: ${m[0]}`).toBeGreaterThanOrEqual(9);
+    }
+  });
+
+  it("a maior parte do texto miúdo passou dos 10 px", () => {
+    const tamanhos = folhas.flatMap((folha) => Array.from(ler(folha).matchAll(/font-size:\s*([0-9]*\.?[0-9]+)px/g), (m) => Number(m[1])));
+    const miudos = tamanhos.filter((t) => t < 10).length;
+    expect(miudos).toBeLessThan(20);
+  });
+
+  it("onde a letra maior partia a linha, a fila fica inteira", () => {
+    const css = ler("client/src/layout-v143.css");
+    const bloco = css.slice(css.indexOf("/* v152"));
+    expect(bloco).toMatch(/\.draft-contextbar \.seletor-elo-botoes \{[^}]*flex-wrap: nowrap/);
+    expect(ler("client/src/index.css")).toMatch(/\.brawler-filter-group button \{[^}]*white-space: nowrap/);
+    // O "56 counters · 49 respostas" dos cartões desce de linha em vez de ser cortado.
+    expect(ler("client/src/index.css")).not.toMatch(/\.brawler-card-copy span \{[^}]*text-overflow: ellipsis/);
+  });
+});
+
+/**
+ * v152 — o ficheiro inicial deixou de trazer os catálogos dos counters. O
+ * `CounterSyncProvider` envolve o site todo; importava de
+ * `counterSourceRelations`, que arrasta centenas de KB de dados estáticos.
+ */
+describe("v152 — ficheiro inicial sem os catálogos dos counters", () => {
+  it("o provider importa o estado leve, não as relações", () => {
+    const provider = ler("client/src/contexts/CounterSyncContext.tsx");
+    expect(provider).toContain('from "@shared/counterSyncEstado"');
+    expect(provider).not.toContain("@shared/counterSourceRelations");
+  });
+
+  it("o estado leve não importa nenhum catálogo", () => {
+    const estado = ler("shared/counterSyncEstado.ts");
+    const importacoes = Array.from(estado.matchAll(/from "([^"]+)"/g), (m) => m[1]);
+    expect(importacoes.sort()).toEqual(["./counterSyncSnapshot", "./versaoDoMotor"]);
+    expect(estado).toMatch(/import type \{ CounterSyncSnapshotPayload \} from "\.\/counterSyncSnapshot"/);
+  });
+});

@@ -146,6 +146,40 @@ async function repararEnums(db: NonNullable<Awaited<ReturnType<typeof getDb>>>) 
   }
 }
 
+/** O nome da tabela de uma instrução `CREATE TABLE IF NOT EXISTS \`nome\``. */
+export function nomeDaTabela(instrucao: string): string | undefined {
+  return /^CREATE TABLE IF NOT EXISTS\s+`?([A-Za-z0-9_]+)`?/i.exec(instrucao)?.[1];
+}
+
+/**
+ * Só as criações das tabelas que ainda não existem.
+ *
+ * Cada instância da Vercel que acorda corria as 16 criações, uma a uma, antes
+ * de responder ao primeiro pedido — 16 idas à base de dados para, quase sempre,
+ * não criar nada. Agora pergunta-se uma vez que tabelas há e só se cria o que
+ * falta. Uma instrução cujo nome não se consiga ler corre sempre: na dúvida,
+ * cria-se, como antes.
+ */
+export function instrucoesEmFalta(instrucoes: readonly string[], existentes: ReadonlySet<string>) {
+  return instrucoes.filter((instrucao) => {
+    const nome = nomeDaTabela(instrucao);
+    return !nome || !existentes.has(nome.toLowerCase());
+  });
+}
+
+/** As tabelas que a base já tem, em minúsculas — ou undefined se não der para perguntar. */
+async function tabelasExistentes(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<Set<string> | undefined> {
+  try {
+    const resultado = await db.execute(sql`SELECT TABLE_NAME AS nome FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()`);
+    const rows: unknown = Array.isArray(resultado) ? resultado[0] : resultado;
+    const linhas = (Array.isArray(rows) ? rows : []) as Array<{ nome?: string; TABLE_NAME?: string }>;
+    return new Set(linhas.map((linha) => String(linha.nome ?? linha.TABLE_NAME ?? "").toLowerCase()).filter(Boolean));
+  } catch {
+    // Sem resposta, corre tudo: o IF NOT EXISTS garante que não estraga nada.
+    return undefined;
+  }
+}
+
 export async function ensureTables(): Promise<{ criadas: number; total: number } | undefined> {
   if (jaCorreu) return undefined;
   jaCorreu = true;
@@ -160,8 +194,10 @@ export async function ensureTables(): Promise<{ criadas: number; total: number }
   }
 
   const instrucoes = apenasCriacoes(separarInstrucoes(conteudo));
+  const existentes = await tabelasExistentes(db);
+  const aCorrer = existentes ? instrucoesEmFalta(instrucoes, existentes) : instrucoes;
   let criadas = 0;
-  for (const instrucao of instrucoes) {
+  for (const instrucao of aCorrer) {
     try {
       await db.execute(sql.raw(instrucao));
       criadas += 1;
@@ -175,6 +211,6 @@ export async function ensureTables(): Promise<{ criadas: number; total: number }
 
   await repararEnums(db);
 
-  console.log(`[Tabelas] Instalador corrido: ${criadas} de ${instrucoes.length} instruções sem erro.`);
-  return { criadas, total: instrucoes.length };
+  if (aCorrer.length > 0) console.log(`[Tabelas] Instalador corrido: ${criadas} de ${aCorrer.length} instruções sem erro.`);
+  return { criadas, total: aCorrer.length };
 }

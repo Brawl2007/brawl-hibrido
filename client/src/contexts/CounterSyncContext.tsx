@@ -1,5 +1,5 @@
 import { vigiarStream } from "@/lib/vigiarStream";
-import { setCounterSyncSnapshot } from "@shared/counterSourceRelations";
+import { setCounterSyncSnapshot } from "@shared/counterSyncEstado";
 import { applyCounterSnapshotToClientState, type CounterSyncClientState } from "@shared/counterSyncClient";
 import { parseCounterSnapshotEvent, type CounterSnapshotSseEvent } from "@shared/counterSyncSnapshot";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useRef, useCallback } from "react";
