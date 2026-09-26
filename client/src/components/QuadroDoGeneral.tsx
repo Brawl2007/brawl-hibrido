@@ -223,7 +223,19 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     onSuccess: (resultado) => { if (mapaId) utils.general.terreno.setData({ mapaId }, resultado as never); },
     onError: (e) => toast.error(e.message || "Não foi possível corrigir."),
   });
-  const estado = estadoQuery.data as { configured: boolean; origin: string; hint: string | null } | undefined;
+  const estado = estadoQuery.data as { configured: boolean; origin: string; hint: string | null; reserva?: { configured: boolean; fornecedor: string | null; hint: string | null } } | undefined;
+  const [novaChaveDeReserva, setNovaChaveDeReserva] = useState("");
+  const guardarChaveDeReserva = trpc.general.guardarChaveDeReserva.useMutation({
+    onSuccess: (resultado) => {
+      const teste = resultado.test as { ok: boolean; reason: string };
+      if (teste.ok) toast.success("IA de reserva guardada.", { description: teste.reason });
+      else toast.error(resultado.saved ? "Chave guardada, mas foi recusada." : "Chave não guardada.", { description: teste.reason });
+      if (resultado.saved || !novaChaveDeReserva) setNovaChaveDeReserva("");
+      void estadoQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message || "Não foi possível guardar a chave."),
+  });
+  const temAlgumaIA = Boolean(estado?.configured || estado?.reserva?.configured);
 
   // O momento da partida que está no ecrã: as suas posições, setas, símbolos e paredes partidas.
   const camadas = camadasDoMomento(plano, momento);
@@ -369,14 +381,35 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         </div>
         {ehDono && (
           <div className="quadro-general-ia">
-            {estado?.configured ? (
+            {temAlgumaIA && (
               <>
                 <button type="button" className="quadro-general-pedir" onClick={pedir} disabled={pedirPlano.isPending}>
                   {pedirPlano.isPending ? "O general está a analisar o mapa…" : temPlanoDaIA ? "Pedir novo plano à IA" : "Pedir o plano ao general (IA)"}
                 </button>
-                <small>Gemini · chave {estado.hint}{pedirPlano.isPending ? " · pode demorar até um minuto" : ""}</small>
+                <small>
+                  {estado?.configured ? `Gemini · chave ${estado.hint}` : "Sem Gemini"}
+                  {estado?.reserva?.configured ? ` · reserva: ${estado.reserva.fornecedor ?? "?"} ${estado.reserva.hint}` : ""}
+                  {pedirPlano.isPending ? " · pode demorar até um minuto" : ""}
+                </small>
               </>
-            ) : (
+            )}
+            <details className="quadro-general-reserva">
+              <summary>{estado?.reserva?.configured ? `IA de reserva: ${estado.reserva.fornecedor} ${estado.reserva.hint}` : "IA de reserva (quando a Google chegar ao limite)"}</summary>
+              <form className="quadro-general-chave" onSubmit={(e) => { e.preventDefault(); guardarChaveDeReserva.mutate({ key: novaChaveDeReserva }); }}>
+                <label htmlFor="chave-reserva">Chave gratuita da Groq ou da OpenRouter</label>
+                <div>
+                  <input id="chave-reserva" type="password" autoComplete="off" value={novaChaveDeReserva} onChange={(e) => setNovaChaveDeReserva(e.target.value)} placeholder="gsk_… ou sk-or-…" />
+                  <button type="submit" disabled={guardarChaveDeReserva.isPending || (novaChaveDeReserva.trim().length > 0 && novaChaveDeReserva.trim().length < 20)}>
+                    {novaChaveDeReserva.trim() ? "Guardar" : estado?.reserva?.configured ? "Apagar" : "Guardar"}
+                  </button>
+                </div>
+                <small>
+                  Cria-a em <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com/keys</a> ou{" "}
+                  <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai/keys</a>. Só é usada quando a Gemini falha. Fica no servidor e nunca volta ao navegador.
+                </small>
+              </form>
+            </details>
+            {estado?.configured ? null : (
               <form className="quadro-general-chave" onSubmit={(e) => { e.preventDefault(); guardarChave.mutate({ key: novaChave }); }}>
                 <label htmlFor="chave-gemini">Chave gratuita da Gemini</label>
                 <div>

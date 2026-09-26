@@ -36,6 +36,7 @@ import { TIPOS_DE_CASA, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { getSetting, setSetting } from "./appSettings";
 import { guardarRotulosDaIA, imagemDaBrawlify, obterTerreno } from "./terrenoDoMapa";
 import { acharNaLista, normalizarNome, obterCatalogo, type CatalogoDeBuilds } from "./catalogoDeBuilds";
+import { gerarJsonNaReserva, lerChaveDeReserva } from "./iaDeReserva";
 
 export const GEMINI_API_KEY_SETTING = "geminiApiKey";
 // Configurável só para testes locais com uma Gemini falsa; em produção é sempre a da Google.
@@ -117,7 +118,22 @@ export function escolherModelo(lista: readonly ModeloDaLista[]) {
 
 const modelosDaChave = new Map<string, string[]>();
 /** Quantos modelos diferentes se tentam por pedido: chega para passar um sobrecarregado sem demorar minutos. */
-const MODELOS_POR_PEDIDO = 3;
+const MODELOS_POR_PEDIDO = 4;
+
+/**
+ * Os modelos de um pedido: "flash" e "flash-lite" alternados. No plano
+ * gratuito cada modelo tem o seu limite, e os "lite" têm limites bem maiores:
+ * quando os "flash" chegam ao limite (429), um "lite" ainda responde.
+ */
+export function modelosDoPedido(ordem: readonly string[]) {
+  const lite = ordem.filter((m) => /lite/.test(m)), outros = ordem.filter((m) => !/lite/.test(m));
+  const mistura: string[] = [];
+  for (let i = 0; i < Math.max(lite.length, outros.length); i++) {
+    if (outros[i]) mistura.push(outros[i]);
+    if (lite[i]) mistura.push(lite[i]);
+  }
+  return mistura.slice(0, MODELOS_POR_PEDIDO);
+}
 
 async function modelosPara(chave: string, buscar: Buscar) {
   const fixo = (process.env.GEMINI_MODEL ?? "").trim();
@@ -201,7 +217,7 @@ async function gerarJson(
   tarefa: string,
   pausaMs = 1200,
 ): Promise<{ json: unknown; modelo: string }> {
-  const modelos = (await modelosPara(chave, buscar)).slice(0, MODELOS_POR_PEDIDO);
+  const modelos = modelosDoPedido(await modelosPara(chave, buscar));
   const falhas: string[] = [];
   let ultima: FalhaDaGoogle | null = null;
   for (const modelo of modelos) {
@@ -393,29 +409,42 @@ let pedidoEmCurso = false;
  */
 export async function pedirPlanoAoGeneral(pedido: PedidoDePlano, buscar: Buscar = fetch): Promise<{ plano: PlanoDoGeneral; modelo: string; comImagem: boolean; comPesquisa: boolean; terreno: TerrenoDoMapa | null }> {
   const { key } = await lerChaveDaGemini();
-  if (!key) throw new ErroDoGeneral("Ainda não há chave da Gemini. Cola-a no quadro do general (é gratuita em aistudio.google.com/apikey).");
+  const reserva = (await lerChaveDeReserva()).key;
+  if (!key && !reserva) throw new ErroDoGeneral("Ainda não há chave da Gemini. Cola-a no quadro do general (é gratuita em aistudio.google.com/apikey).");
   if (pedidoEmCurso) throw new ErroDoGeneral("Já há um plano a ser pensado. Espera que termine.");
   pedidoEmCurso = true;
   try {
-    const modelos = await modelosPara(key, buscar);
-    let terreno = pedido.mapaId ? await obterTerreno(pedido.mapaId, buscar) : null;
-    // Na primeira vez em cada mapa, a IA diz o que é cada cor; fica guardado para sempre.
-    if (terreno && terreno.rotulado === "regra") {
-      try {
-        terreno = await rotularTerrenoComIA(terreno, buscar);
-      } catch (erro) {
-        console.warn("[General] Rótulos do terreno por IA falharam; fica a regra:", erro instanceof Error ? erro.message : erro);
-      }
-    }
-    const atualidade = await pesquisarAtualidade(key, modelos, pedido, buscar);
+    // O terreno já não é rotulado pela IA a cada plano: a leitura pela imagem
+    // chega (e o botão "Pedir à IA para ler o terreno" continua lá). Eram três
+    // pedidos do limite gratuito gastos antes de o plano começar.
+    const terreno = pedido.mapaId ? await obterTerreno(pedido.mapaId, buscar) : null;
+    const modelos = key ? await modelosPara(key, buscar).then(modelosDoPedido).catch(() => [] as string[]) : [];
+    const atualidade = key && modelos.length ? await pesquisarAtualidade(key, modelos, pedido, buscar) : null;
     const imagem = await imagemParaAIA(pedido.mapaId, buscar);
     const catalogo = await obterCatalogo(buscar).catch(() => null);
-    const partes: ParteDoPedido[] = [{ text: textoDoPedido(pedido, Boolean(imagem), terreno, atualidade, new Date(), opcoesDeBuild(catalogo, pedido.nossos.map((n) => n.brawler))) }];
+    const texto = textoDoPedido(pedido, Boolean(imagem), terreno, atualidade, new Date(), opcoesDeBuild(catalogo, pedido.nossos.map((n) => n.brawler)));
+    const partes: ParteDoPedido[] = [{ text: texto }];
     if (imagem) partes.push({ inline_data: imagem });
-    const { json, modelo } = await gerarJson(key, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano");
-    const plano = conferirBuilds(lerPlanoDaIA(json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno), catalogo);
+
+    let resposta: { json: unknown; modelo: string; comImagem: boolean };
+    try {
+      if (!key) throw new ErroDoGeneral("Sem chave da Gemini.");
+      const { json, modelo } = await gerarJson(key, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano");
+      resposta = { json, modelo, comImagem: Boolean(imagem) };
+    } catch (erroDaGemini) {
+      // A Google no limite (ou em baixo): a IA de reserva faz o plano, se houver chave.
+      if (!reserva) throw erroDaGemini;
+      console.warn("[General] A Gemini não fez o plano; passa à IA de reserva:", erroDaGemini instanceof Error ? erroDaGemini.message : erroDaGemini);
+      try {
+        resposta = await gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar);
+      } catch (erroDaReserva) {
+        const primeira = key && erroDaGemini instanceof Error ? `${erroDaGemini.message} ` : "";
+        throw new ErroDoGeneral(`${primeira}${erroDaReserva instanceof Error ? erroDaReserva.message : String(erroDaReserva)}`);
+      }
+    }
+    const plano = conferirBuilds(lerPlanoDaIA(resposta.json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno), catalogo);
     if (atualidade?.fontes.length) plano.fontes = atualidade.fontes;
-    return { plano, modelo, comImagem: Boolean(imagem), comPesquisa: Boolean(atualidade), terreno };
+    return { plano, modelo: resposta.modelo, comImagem: resposta.comImagem, comPesquisa: Boolean(atualidade), terreno };
   } finally {
     pedidoEmCurso = false;
   }

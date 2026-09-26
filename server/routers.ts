@@ -21,6 +21,7 @@ import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
 import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
+import { fornecedorDaChave, guardarChaveDeReserva, lerChaveDeReserva, testarChaveDeReserva } from "./iaDeReserva";
 import { TIPOS_DE_CASA, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
@@ -135,8 +136,29 @@ export const appRouter = router({
     estado: protectedProcedure.query(async ({ ctx }) => {
       exigirDono(ctx, "ver a chave da IA");
       const { key, origin } = await lerChaveDaGemini();
-      return { configured: Boolean(key), origin, hint: key ? `····${key.slice(-4)}` : null };
+      const reserva = await lerChaveDeReserva();
+      return {
+        configured: Boolean(key),
+        origin,
+        hint: key ? `····${key.slice(-4)}` : null,
+        // A IA de reserva (Groq ou OpenRouter): só se existe, de quem é e os últimos quatro.
+        reserva: {
+          configured: Boolean(reserva.key),
+          fornecedor: reserva.key ? fornecedorDaChave(reserva.key)?.nome ?? null : null,
+          hint: reserva.key ? `····${reserva.key.slice(-4)}` : null,
+        },
+      };
     }),
+    guardarChaveDeReserva: protectedProcedure
+      .input(z.object({ key: z.string().trim().max(256) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "guardar a chave da IA de reserva");
+        if (input.key && !fornecedorDaChave(input.key)) {
+          return { saved: false, test: { ok: false, reason: "Não reconheço esta chave: as da Groq começam por gsk_ e as da OpenRouter por sk-or-." } };
+        }
+        await guardarChaveDeReserva(input.key || null);
+        return { saved: Boolean(input.key), test: input.key ? await testarChaveDeReserva() : { ok: false, reason: "Chave apagada." } };
+      }),
     guardarChave: protectedProcedure
       .input(z.object({ key: z.string().trim().max(256) }))
       .mutation(async ({ ctx, input }) => {

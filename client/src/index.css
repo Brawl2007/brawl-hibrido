@@ -4230,3 +4230,7 @@ main { max-width: 1600px; margin: 0 auto; }
   .qg-momento { flex: 1 1 28%; min-width: 0; }
   .qg-reproduzir { flex: 1 1 100%; }
 }
+/* A IA de reserva (Groq ou OpenRouter): discreta, fechada por defeito. */
+.quadro-general-reserva { margin-top: 6px; }
+.quadro-general-reserva summary { color: var(--bh-text-dim); font-size: 12px; cursor: pointer; }
+.quadro-general-reserva[open] summary { margin-bottom: 6px; }

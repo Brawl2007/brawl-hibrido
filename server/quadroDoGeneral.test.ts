@@ -17,7 +17,8 @@ import {
 import { aplicarRotulos, caminhoLivre, corrigirCasas, grelhaEmTexto, linhaLivre, pontoLivre, terrenoValido, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
-import { conferirBuilds, escolherModelo, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
+import { conferirBuilds, escolherModelo, modelosDoPedido, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
+import { fornecedorDaChave, ordenarModelosDeReserva } from "./iaDeReserva";
 import { imagemSegura, lerCatalogo } from "./catalogoDeBuilds";
 
 const NOSSOS = ["Nori", "Lou", "R-T"];
@@ -765,12 +766,104 @@ describe("correções casa a casa (o dono corrige o que a imagem leu mal)", () =
   });
 });
 
+describe("IA de reserva (Groq ou OpenRouter) quando a Gemini chega ao limite", () => {
+  const BASE = "http://reserva.falsa/v1";
+  function reservaFalsa(config: { modelos?: string[]; plano?: Resposta; porModelo?: Record<string, Resposta> } = {}) {
+    const pedidos: Array<{ url: string; headers: Record<string, string>; corpo: any }> = [];
+    const buscar = (async (url: string, init?: RequestInit) => {
+      const corpo = init?.body ? JSON.parse(String(init.body)) : null;
+      pedidos.push({ url, headers: (init?.headers ?? {}) as Record<string, string>, corpo });
+      const json = (r: Resposta) => new Response(JSON.stringify(r.corpo ?? {}), { status: r.status, headers: { "content-type": "application/json" } });
+      if (url === `${BASE}/models`) return json({ status: 200, corpo: { data: (config.modelos ?? ["whisper-large-v3", "llama-3.3-70b-versatile", "meta-llama/llama-4-scout-17b-16e-instruct"]).map((id) => ({ id })) } });
+      if (url === `${BASE}/chat/completions`) {
+        return json(config.porModelo?.[corpo.model] ?? config.plano ?? { status: 200, corpo: { choices: [{ message: { content: "```json\n" + JSON.stringify(planoMinimo) + "\n```" } }] } });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    return { pedidos, buscar };
+  }
+  // Gemini no limite em tudo; tudo o resto vai à reserva falsa.
+  // Uma chave nova por teste: a lista de modelos fica em memória por chave.
+  async function comAsDuas(reserva: ReturnType<typeof reservaFalsa>, chaveDeReserva = `gsk_chave-de-teste-da-groq-${String(++contador).padStart(4, "0")}`, comGemini = true) {
+    const gemini = geminiFalsa({ modelos: ["gemini-3-flash"], plano: { "gemini-3-flash": erroGoogle(429, "RESOURCE_EXHAUSTED", "Quota exceeded."), "gemini-3-flash:livre": erroGoogle(429, "RESOURCE_EXHAUSTED", "Quota exceeded.") }, pesquisa: { "gemini-3-flash": erroGoogle(429, "RESOURCE_EXHAUSTED", "Quota exceeded.") } });
+    const buscar = ((url: string, init?: RequestInit) => (url.startsWith(BASE) ? reserva.buscar(url, init) : gemini.buscar(url, init))) as typeof fetch;
+    if (comGemini) process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+    process.env.IA_RESERVA_API_KEY = chaveDeReserva;
+    process.env.IA_RESERVA_BASE = BASE;
+    try {
+      return await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, buscar).then((r) => ({ ok: r }), (erro: Error) => ({ erro }));
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.IA_RESERVA_API_KEY;
+      delete process.env.IA_RESERVA_BASE;
+    }
+  }
+
+  it("cada pedido alterna flash e flash-lite (limites separados)", () => {
+    expect(modelosDoPedido(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.8-flash-lite", "gemini-3.7-flash-lite"]))
+      .toEqual(["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.7-flash", "gemini-3.7-flash-lite"]);
+  });
+
+  it("o fornecedor sabe-se pela chave; na OpenRouter só modelos gratuitos", () => {
+    expect(fornecedorDaChave("gsk_abcdefghijklmnopqrstuvwx")?.nome).toBe("Groq");
+    expect(fornecedorDaChave("sk-or-v1-abcdefghijklmnopqrstuvwx")?.nome).toBe("OpenRouter");
+    expect(fornecedorDaChave("AIzaSyQualquerCoisa")).toBeNull();
+    expect(ordenarModelosDeReserva(["whisper-large-v3", "llama-3.3-70b-versatile", "meta-llama/llama-4-maverick-17b-128e-instruct"], false))
+      .toEqual(["meta-llama/llama-4-maverick-17b-128e-instruct", "llama-3.3-70b-versatile"]);
+    expect(ordenarModelosDeReserva(["openai/gpt-4o", "meta-llama/llama-4-scout:free"], true)).toEqual(["meta-llama/llama-4-scout:free"]);
+  });
+
+  it("Gemini no limite (429): a reserva faz o plano, com a chave no cabeçalho, JSON pedido e a imagem só a quem vê imagens", async () => {
+    const reserva = reservaFalsa();
+    const resultado = await comAsDuas(reserva, "gsk_chave-de-teste-da-groq-0000");
+    expect("ok" in resultado && resultado.ok.modelo).toBe("Groq · meta-llama/llama-4-scout-17b-16e-instruct");
+    expect("ok" in resultado && resultado.ok.plano.ordens[0].brawler).toBe("Lou");
+    const pedidoDoPlano = reserva.pedidos.find((p) => p.url.endsWith("/chat/completions"))!;
+    expect(pedidoDoPlano.headers.authorization).toBe("Bearer gsk_chave-de-teste-da-groq-0000");
+    expect(reserva.pedidos.every((p) => !p.url.includes("gsk_"))).toBe(true);
+    expect(pedidoDoPlano.corpo.response_format).toEqual({ type: "json_object" });
+    expect(pedidoDoPlano.corpo.messages[0].content).toContain('"ordens":[{"brawler"');
+  });
+
+  it("sem chave da Gemini, mas com reserva: faz o plano na mesma", async () => {
+    const resultado = await comAsDuas(reservaFalsa(), "gsk_chave-de-teste-sem-gemini-0000", false);
+    expect("ok" in resultado && resultado.ok.modelo).toMatch(/^Groq · /);
+  });
+
+  it("um modelo da reserva no limite passa ao seguinte; um formato recusado (400) repete sem o modo JSON", async () => {
+    const reserva = reservaFalsa({ porModelo: {
+      "meta-llama/llama-4-scout-17b-16e-instruct": { status: 429, corpo: { error: { message: "Rate limit reached" } } },
+    } });
+    const resultado = await comAsDuas(reserva);
+    expect("ok" in resultado && resultado.ok.modelo).toBe("Groq · llama-3.3-70b-versatile");
+    const formato = reservaFalsa({ modelos: ["llama-3.3-70b-versatile"] });
+    let vezes = 0;
+    const buscarComFormato = (async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/chat/completions") && JSON.parse(String(init!.body)).response_format && ++vezes) {
+        return new Response(JSON.stringify({ error: { message: "response_format not supported" } }), { status: 400 });
+      }
+      return formato.buscar(url, init);
+    }) as typeof fetch;
+    const r2 = await comAsDuas({ ...formato, buscar: buscarComFormato });
+    expect(vezes).toBe(1);
+    expect("ok" in r2 && r2.ok.modelo).toBe("Groq · llama-3.3-70b-versatile");
+  });
+
+  it("chave da reserva recusada: diz das duas e onde criar outra", async () => {
+    const reserva = reservaFalsa({ plano: { status: 401, corpo: { error: { message: "Invalid API Key" } } } });
+    const resultado = await comAsDuas(reserva);
+    const mensagem = "erro" in resultado ? resultado.erro.message : "";
+    expect(mensagem).toMatch(/limite gratuito/);
+    expect(mensagem).toMatch(/Groq recusou a chave.*console\.groq\.com\/keys/);
+  });
+});
+
 describe("o que é só do dono", () => {
   const rotas = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
   const general = rotas.slice(rotas.indexOf("general: router({"), rotas.indexOf("draftRoles: router({"));
 
   it("chave, plano e correções exigem o dono; o terreno é público", () => {
-    for (const nome of ["estado", "guardarChave", "pedirPlano", "corrigirTerreno", "corrigirCasas", "rotularTerreno"]) {
+    for (const nome of ["estado", "guardarChave", "guardarChaveDeReserva", "pedirPlano", "corrigirTerreno", "corrigirCasas", "rotularTerreno"]) {
       const bloco = general.slice(general.indexOf(`${nome}:`));
       const corpo = bloco.slice(0, bloco.indexOf("}),") + 3);
       expect(corpo, nome).toContain("protectedProcedure");
