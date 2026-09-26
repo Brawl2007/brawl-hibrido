@@ -1,3 +1,5 @@
+import { BarraDoSite } from "@/components/BarraDoSite";
+import { MobileNav } from "@/components/MobileNav";
 import { LOGO } from "@/lib/imagens";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
@@ -85,48 +87,16 @@ function formatRangeBand(band: AttackRangeBand | null) {
   return `${band.minTiles.toLocaleString("pt-PT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}–${band.maxTiles.toLocaleString("pt-PT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} blocos`;
 }
 
-function CatalogSidebar() {
-  const navItems = [
-    { label: "Dashboard", href: "/", icon: Target },
-    { label: "Mapas Ranked", href: "/#maps", icon: SlidersHorizontal },
-    { label: "Draft Híbrido", href: "/draft", icon: Sparkles },
-    { label: "Brawlers", href: "/brawlers", icon: Crosshair },
-    { label: "Fontes", href: "/#sources", icon: Radio },
-    { label: "Como funciona", href: "/#formula", icon: Trophy },
-  ];
-
-  return (
-    <aside className="app-sidebar draft-sidebar">
-      <div className="sidebar-brand">
-        <div className="brand-mark-shell"><img src={LOGO_URL} alt="" className="brand-mark" /></div>
-        <div><div className="brand-name">Brawl Híbrido</div><div className="brand-kicker">Ranked intelligence</div></div>
-      </div>
-      <div className="sidebar-status"><span className="status-pulse" /><span>CATÁLOGO LIVE</span><strong>Roster de todas as fontes</strong></div>
-      <nav className="sidebar-nav" aria-label="Navegação principal">
-        <div className="nav-label">Workspace</div>
-        {navItems.map(({ label, href, icon: Icon }) => <a key={href} href={href} className={`sidebar-link ${href === "/brawlers" ? "is-active" : ""}`}><Icon size={18} /><span>{label}</span></a>)}
-      </nav>
-      <div className="sidebar-spacer" />
-      <div className="sidebar-note"><div className="note-icon"><Swords size={16} /></div><div><strong>Matchup intelligence</strong><p>Consulta os dois lados de cada confronto.</p></div></div>
-      <div className="sidebar-footer"><span className="footer-dot" /> Perfis por brawler · dados transparentes</div>
-    </aside>
-  );
-}
-
 function CatalogTopbar({ onRefresh, isRefreshing, refreshProgress, liveState }: { onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null; liveState: "connecting" | "live" | "offline" }) {
-  const label = liveState === "live" ? "Live · SSE" : liveState === "connecting" ? "A ligar…" : "Offline · fallback";
+  const label = liveState === "live" ? "Ao vivo" : liveState === "connecting" ? "A ligar…" : "Dados guardados";
   // Mandar o servidor ir ler as fontes é um comando do dono; a quem não pode
   // dar essa ordem, o site respondia com uma recusa depois do clique.
   const ehDono = useEhDono();
   return (
-    <header className="topbar">
-      <div className="topbar-crumbs"><span className="crumb-muted">Ranked</span><span>›</span><span className="crumb-muted">Brawl Híbrido</span><span>›</span><span className="crumb-active">Brawlers & Counters</span></div>
-      <div className="topbar-actions">
-        <span className="live-chip"><span className="live-dot" /> {label}</span>
-        {ehDono ? <button className="refresh-button" onClick={onRefresh} disabled={isRefreshing} title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar catálogo"} aria-label="Atualizar catálogo"><Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} /><span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span></button> : null}
-        <div className="profile-chip"><span className="profile-avatar">BH</span><span className="profile-label">Analista</span></div>
-      </div>
-    </header>
+    <BarraDoSite ativo="brawlers">
+      <span className="live-chip"><span className="live-dot" /> {label}</span>
+      {ehDono ? <button className="refresh-button" onClick={onRefresh} disabled={isRefreshing} title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar catálogo"} aria-label="Atualizar catálogo"><Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} /><span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar"}</span></button> : null}
+    </BarraDoSite>
   );
 }
 
@@ -254,7 +224,6 @@ export default function Brawlers() {
   const [matchup, setMatchup] = useState<MatchupFilter>("Todos");
   const [rangeSort, setRangeSort] = useState<RangeSort>("highest");
   const [selectedName, setSelectedName] = useState("");
-  const [mobileSidebar, setMobileSidebar] = useState(false);
   const { weights: hybridWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { topBrawlWeight } = useSourceBalance();
   const { rules: draftRules } = useDraftRules();
@@ -292,7 +261,7 @@ export default function Brawlers() {
       return comparison || left.item.brawler.localeCompare(right.item.brawler, "pt-PT");
     }), [filteredCatalog, rangeSort]);
   const selected = filteredCatalog.find((item) => item.brawler === selectedName) ?? catalog.find((item) => item.brawler === selectedName) ?? filteredCatalog[0] ?? catalog[0];
-  const sourceLabel = `${rankedSync.source === "sse" && rankedSync.syncState === "success" ? "DADOS ATUALIZADOS · SSE" : rankedSync.syncState === "partial" ? "DADOS PARCIAIS · SSE" : "FALLBACK ATIVO"}${rankedSync.version ? ` · ${rankedSync.version}` : ""}`;
+  const sourceLabel = `${rankedSync.source === "sse" && rankedSync.syncState === "success" ? "atualizados" : rankedSync.syncState === "partial" ? "em parte" : "cópia do site"}${rankedSync.version ? ` · ${rankedSync.version}` : ""}`;
   const capturedAt = rankedSync.capturedAt ?? statusQuery.data?.capturedAt;
 
   useEffect(() => {
@@ -300,14 +269,13 @@ export default function Brawlers() {
   }, [selected, selectedName]);
 
   return (
-    <div className="app-shell draft-shell brawlers-shell" style={{ backgroundColor: "#0b0e14" }}>
-      <CatalogSidebar />
+    <div className="app-shell draft-shell brawlers-shell com-barra-no-topo" style={{ backgroundColor: "#0b0e14" }}>
       <div className="app-main">
         <CatalogTopbar onRefresh={handleRefresh} isRefreshing={isRefreshing} refreshProgress={syncProgress} liveState={rankedSync.connectionState} />
         <main className="brawlers-main">
-          <section className="brawlers-hero"><div><div className="eyebrow"><span className="eyebrow-line" /> Brawler intelligence <span className="eyebrow-dot" /></div><h1>Todos os brawlers.<br /><em>Alcance e matchup.</em></h1><p>Pesquisa o catálogo completo, consulta a faixa de alcance do ataque principal e lê quem cada brawler countera, quem o countera e em que posição jogar o confronto.</p></div><div className="brawlers-hero-stats"><div><strong>{catalog.length || 106}</strong><span>BRAWLERS</span></div><div><strong>6</strong><span>FAIXAS DE ALCANCE</span></div><div><strong>1V1</strong><span>MATCHUP LENS</span></div></div></section>
+          <section className="brawlers-hero"><div><h1>Todos os brawlers.<br /><em>Alcance e matchup.</em></h1><p>Procura um brawler e vê o alcance, quem ele countera e quem o countera.</p></div><div className="brawlers-hero-stats"><div><strong>{catalog.length || 106}</strong><span>brawlers</span></div><div><strong>6</strong><span>faixas de alcance</span></div></div></section>
 
-          <section className="brawlers-status-banner"><div className="section-kicker"><span className="tiny-live" /> CATÁLOGO DE DADOS <span>{sourceLabel}</span></div><p>{capturedAt ? `Snapshot ${rankedSync.version ? `${rankedSync.version} · ` : ""}atualizada às ${new Date(capturedAt).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })} (${rankedSync.syncState}).` : "A usar a base Ranked incluída no projeto."} Counters e counterados gerais agregam todas as fontes. BrawlScope fornece listas por modo; Planet e PL Prodigy fornecem evidência global, também disponível no modo selecionado.</p></section>
+          <p className="brawlers-status-banner" title="Counters e counterados juntam todas as fontes. O BrawlScope dá listas por modo; o Brawl Planet e o PL Prodigy dão a leitura geral."><span className="tiny-live" /> {capturedAt ? `Dados de ${new Date(capturedAt).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "Dados guardados no site"} · {sourceLabel}</p>
 
           <AttackRangeTable rows={rangeRows} sort={rangeSort} onSortChange={setRangeSort} openingBonusRate={draftRules.openingLongRange} />
 
@@ -317,12 +285,8 @@ export default function Brawlers() {
             <div className="brawlers-content-grid"><div className="brawler-catalog-grid">{filteredCatalog.map((item) => <BrawlerCard key={item.brawler} item={item} selected={selected?.brawler === item.brawler} onSelect={() => setSelectedName(item.brawler)} />)}{filteredCatalog.length === 0 && <div className="brawlers-empty"><Crosshair size={24} /><strong>Nenhum brawler encontrado.</strong><span>Experimenta limpar a pesquisa ou trocar os filtros.</span></div>}</div>{selected && <BrawlerDetail key={selected.brawler} item={selected} catalog={catalog} onPick={(name) => setSelectedName(name)} />}</div>
           </section>
         </main>
-        <footer className="app-footer"><span>BRAWL HÍBRIDO / BRAWLERS & COUNTERS</span><span>Dados, matchup e contexto no mesmo lugar.</span></footer>
       </div>
-      <button className="mobile-menu-button" onClick={() => setMobileSidebar(true)} aria-label="Abrir menu"><SlidersHorizontal size={17} /></button>
-      {mobileSidebar && <button className="sidebar-backdrop lg:hidden" aria-label="Fechar menu" onClick={() => setMobileSidebar(false)} />}
-      {mobileSidebar && <div className="brawlers-mobile-sidebar"><CatalogSidebar /></div>}
-      <a className="scroll-top-button draft-back-home" href="/draft" aria-label="Voltar ao Draft"><ArrowLeft size={17} /></a>
+      <MobileNav pathname="/brawlers" />
     </div>
   );
 }

@@ -78,11 +78,11 @@ const COMANDOS: Array<{ id: ComandoDeCamara; simbolo: string; nome: string }> = 
   { id: "afastar", simbolo: "−", nome: "Afastar" },
 ];
 const FERRAMENTAS: Array<{ id: Ferramenta; nome: string; ajuda: string }> = [
-  { id: "mover", nome: "Mover", ajuda: "Arrasta brawlers e símbolos. No chão: botão esquerdo roda, botão direito arrasta o mapa, a roda aproxima onde está o cursor. No telemóvel: um dedo roda, dois dedos aproximam." },
-  { id: "seta", nome: "Seta", ajuda: "Arrasta no chão para desenhar a seta. O botão direito continua a arrastar o mapa; os botões no canto rodam a câmara." },
-  { id: "simbolo", nome: "Símbolo", ajuda: "Clica no chão para pôr o símbolo escolhido." },
-  { id: "apagar", nome: "Apagar", ajuda: "Clica numa seta ou num símbolo para o apagar." },
-  { id: "casa", nome: "Corrigir terreno", ajuda: "Só tu vês isto. Escolhe o tipo e clica nas casas do mapa que estão mal lidas (um jarro que ficou parede, uma parede que faltou). \"Como na imagem\" desfaz a correção." },
+  { id: "mover", nome: "Mover", ajuda: "Arrasta os brawlers. Botão esquerdo roda, o direito arrasta o mapa, a roda aproxima. No telemóvel: um dedo roda, dois aproximam." },
+  { id: "seta", nome: "Seta", ajuda: "Arrasta no chão para desenhar a seta." },
+  { id: "simbolo", nome: "Símbolo", ajuda: "Clica no chão para pôr o símbolo." },
+  { id: "apagar", nome: "Apagar", ajuda: "Clica numa seta ou num símbolo para apagar." },
+  { id: "casa", nome: "Corrigir terreno", ajuda: "Só tu vês isto. Escolhe o tipo e clica nas casas mal lidas. \"Como na imagem\" desfaz." },
 ];
 /** Quanto tempo cada momento fica no ecrã ao "ver a partida". */
 const DURACAO_DO_MOMENTO_MS = 3200;
@@ -449,12 +449,8 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     <section className="quadro-general" aria-label="Quadro do general: plano tático no mapa em 3D">
       <header className="quadro-general-cabecalho">
         <div>
-          <div className="section-kicker">Quadro do general <span>PLANO DE BATALHA 3D</span></div>
-          <h2>Plano de batalha{mapa?.name ? ` · ${mapa.name}` : ""}</h2>
-          <p>
-            Paredes, mato e água lidos do próprio mapa{mapa?.modeId ? ` (${NOME_DO_MODO[mapa.modeId] ?? mapa.modeId})` : ""}. Roda a câmara,
-            move os brawlers, desenha setas e símbolos. Passa o cursor por um brawler para ver as ordens.
-          </p>
+          <h2>{mapa?.name ?? "O mapa"}{mapa?.modeId ? <small> · {NOME_DO_MODO[mapa.modeId] ?? mapa.modeId}</small> : null}</h2>
+          <p>As lanes e os duelos 1v1 no mapa. Passa o cursor por um brawler para ver o que ele faz.</p>
         </div>
         {ehDono && (
           <div className="quadro-general-ia">

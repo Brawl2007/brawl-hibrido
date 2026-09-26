@@ -1,3 +1,5 @@
+import { BarraDoSite } from "@/components/BarraDoSite";
+import { MobileNav } from "@/components/MobileNav";
 import { LOGO } from "@/lib/imagens";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
@@ -86,26 +88,6 @@ function roleClass(role: BrawlerCatalogItem["role"]) {
   return role === "mid" ? "is-mid" : role === "side" ? "is-side" : "is-flex";
 }
 
-function CatalogSidebar() {
-  const navItems = [
-    { label: "Dashboard", href: "/", icon: Target },
-    { label: "Mapas Ranked", href: "/#maps", icon: Trophy },
-    { label: "Draft Híbrido", href: "/draft", icon: Sparkles },
-    { label: "Brawlers", href: "/brawlers", icon: Crosshair },
-    { label: "Fontes", href: "/#sources", icon: Radio },
-  ];
-
-  return (
-    <aside className="app-sidebar draft-sidebar">
-      <div className="sidebar-brand"><div className="brand-mark-shell"><img src={LOGO_URL} alt="" className="brand-mark" /></div><div><div className="brand-name">Brawl Híbrido</div><div className="brand-kicker">Ranked intelligence</div></div></div>
-      <div className="sidebar-status"><span className="status-pulse" /><span>CATÁLOGO LIVE</span><strong>Roster de todas as fontes</strong></div>
-      <nav className="sidebar-nav" aria-label="Navegação principal"><div className="nav-label">Workspace</div>{navItems.map(({ label, href, icon: Icon }) => <a key={href} href={href} className={`sidebar-link ${href === "/brawlers" ? "is-active" : ""}`}><Icon size={18} /><span>{label}</span></a>)}</nav>
-      <div className="sidebar-spacer" />
-      <div className="sidebar-note"><div className="note-icon"><Swords size={16} /></div><div><strong>Counter sources</strong><p>Relações literais, sem corte de lista.</p></div></div>
-      <div className="sidebar-footer"><span className="footer-dot" /> Counter intelligence · fontes explícitas</div>
-    </aside>
-  );
-}
 
 function TeammateCard({ relation, target }: { relation: BrawlPlanetRelation; target: BrawlerCatalogItem | undefined }) {
   const image = imageFor(target);
@@ -339,10 +321,9 @@ export default function BrawlerDetail() {
   const totalTargets = aggregateCounterRelations(counterProfiles, "targets", item.brawler, counterModeId).length;
   const totalCounteredBy = aggregateCounterRelations(counterProfiles, "counteredBy", item.brawler, counterModeId).length;
 
-  return <div className="app-shell draft-shell brawlers-shell brawler-detail-shell" style={{ backgroundColor: "#0b0e14" }}>
-    <CatalogSidebar />
+  return <div className="app-shell draft-shell brawlers-shell brawler-detail-shell com-barra-no-topo" style={{ backgroundColor: "#0b0e14" }}>
     <div className="app-main">
-      <header className="topbar"><div className="topbar-crumbs"><Link href="/brawlers" className="crumb-muted">Brawlers</Link><span>›</span><span className="crumb-active">{item.brawler}</span></div><div className="topbar-actions"><span className="live-chip"><span className="live-dot" /> Fontes auditadas</span><a className="refresh-button" href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ver PL Prodigy</a></div></header>
+      <BarraDoSite ativo="brawlers"><a className="refresh-button" href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ver PL Prodigy</a></BarraDoSite>
       <main className="brawler-detail-main">
         <div className="brawler-detail-nav"><Link href="/brawlers" className="back-link"><ArrowLeft size={15} /> Voltar a Brawlers & Counters</Link><span className="detail-source-tag"><span className="tiny-live" /> {rankedSync.source === "sse" ? `Ranked SSE · ${rankedSync.version ?? "snapshot"}` : "BrawlScope + PL Prodigy + Brawl Planet"}</span></div>
         <DraftRoleEditor names={[item.brawler]} /><section className="brawler-profile-hero"><div className="profile-hero-image">{image ? <img src={image} alt={item.brawler} /> : <span>{item.brawler.slice(0, 2).toUpperCase()}</span>}</div><div className="profile-hero-copy"><span className="section-kicker">BRAWLER GUIDE · COUNTER INTELLIGENCE</span><h1>{item.brawler}</h1><div className="profile-hero-tags">{item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{draftRoleLabels[item.role]}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}<span className="profile-tier">{item.isRankedAvailable ? `Tier ${item.bestRow.tier ?? "—"}` : "Aguardando Ranked"}</span><span className="profile-map">{item.isRankedAvailable ? `Melhor registo: ${item.bestRow.map} · ${item.bestRow.mode}` : "Ainda sem métricas por mapa na rotação"}</span></div><p>{item.isRankedAvailable ? "Strong against, Struggles against, Best Teammates e Worst Teammates mantêm a direção literal publicada por cada fonte, sem inferência nem corte artificial." : "Sem métricas Ranked publicadas. O perfil não substitui dados de Trophy ou Showdown por dados de Ranked."}</p></div><div className="profile-hero-score"><span>HYBRID SCORE</span><strong>{item.isRankedAvailable ? score(item.bestRow.score) : "—"}</strong><small>{item.isRankedAvailable ? `Win Rate ${metric(item.winRate)}` : "Win Rate Ranked —"}</small></div></section>
@@ -356,7 +337,7 @@ export default function BrawlerDetail() {
         <BrawlScopeMatchupMatrix item={item} catalog={catalog} modeId={counterModeId} vistasComFicha={vistasComFicha} />
         <section className="profile-build-panel"><div className="build-panel-icon"><Zap size={18} /></div><div><span className="section-kicker">BUILD DE REFERÊNCIA</span><h2>{item.isRankedAvailable ? `Preparação para ${item.bestRow.mode}` : "Ainda sem build Ranked"}</h2><p>{item.isRankedAvailable ? <>Gadget: <strong>{item.build?.gadget}</strong> · Star Power: <strong>{item.build?.starPower}</strong> · Engrenagens: <strong>{item.build?.gears.join(", ")}</strong></> : "O site não cria build, taxa de vitória, uso ou matchups de Ranked antes das fontes publicarem estes dados."}</p></div>{item.isRankedAvailable ? <button type="button" onClick={() => navigate(`/draft?brawler=${encodeURIComponent(item.brawler)}`)}><Swords size={15} /> Usar no Draft</button> : <span className="profile-map">Aguardando elegibilidade Ranked</span>}</section>
       </main>
-      <footer className="app-footer"><span>BRAWL HÍBRIDO / BRAWLER GUIDE</span><span>Counter intelligence · proveniência explícita</span></footer>
     </div>
+    <MobileNav pathname="/brawlers" />
   </div>;
 }

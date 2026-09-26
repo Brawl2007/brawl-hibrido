@@ -400,7 +400,9 @@ describe("atualização prioritária do Draft", () => {
     expect(draftSource).toMatch(/setChoices\(nextChoices\);\s*setSelectedStepIndex\(null\);\s*scheduleContextualAnalysis\(nextChoices, currentSkipped, null\)/);
     expect(draftSource).toContain('scheduleContextualAnalysis(choices, nextSkipped, null);');
     expect(draftSource).toContain('scheduleContextualAnalysis(nextChoices, nextSkipped, index);');
-    expect(draftSource).toContain('selectionLockedNames={lockedNames}');
+    // A pesquisa rápida passou para a caixa das sugestões: Enter escolhe o
+    // primeiro que ainda está livre.
+    expect(draftSource).toContain('const primeiro = visibleRankedEntries.find((entry) => !lockedNames.has(entry.row.brawler));');
     expect(draftSource).toContain('const DraftCard = memo(function DraftCard');
     expect(draftSource).toContain('completedPickCount={analysisCompletedPickCount}');
     expect(draftSource).toContain('getDraftCounterWindow(currentRows, analysisLockedNames, "", baseRoleContext)');
@@ -410,7 +412,7 @@ describe("atualização prioritária do Draft", () => {
     expect(draftSource).toContain('const pagedRankedEntries = useMemo(() => visibleRankedEntries.slice');
     expect(draftSource).toContain('const activeCounterWindow = useMemo(() => topRecommendationNames.slice');
     expect(draftSource).toContain('activeCounterWindow={activeCounterWindow}');
-    expect(draftSource).toContain('<QuickPickRail activeStep={activeDraftStep} entries={rankedDraftEntries}');
+    expect(draftSource).toContain('if (event.key === "Enter") escolherOPrimeiro();');
     expect(draftSource).not.toContain('rankDraftEntries(rows, lockedNames');
     expect(draftSource).toContain('entry.draftScore');
     expect(draftSource).toContain('entry.rank');

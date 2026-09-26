@@ -24,9 +24,9 @@ export function SeletorDeElo({ mapa }: { mapa?: string }) {
   else nota = `${typeof jogos === "number" ? `${jogos.toLocaleString("pt-PT")} jogos de ${nomeDoElo}${mapa ? ` em ${mapa}` : ""}. ` : ""}Só muda a parte do Brawl Planet; o TopBrawl não separa por elo.`;
 
   return (
-    <div className="seletor-elo">
+    <div className="seletor-elo" title={nota}>
       <div className="seletor-elo-botoes" role="radiogroup" aria-label="Elo dos números do Brawl Planet">
-        <span className="seletor-elo-rotulo">Elo · Brawl Planet</span>
+        <span className="seletor-elo-rotulo">Elo</span>
         {ELOS_BRAWL_PLANET.map((item) => {
           const disponivel = item.id === "all" || elosDisponiveis.includes(item.id);
           return (

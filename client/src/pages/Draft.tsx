@@ -75,6 +75,9 @@ import { leavingEntries, quarantinedEntries, type RosterEntry, type RosterState 
 import type { DraftRuleSettings } from "@shared/draftRules";
 import "./draftRules.css";
 import { MobileNav } from "@/components/MobileNav";
+import { BarraDoSite } from "@/components/BarraDoSite";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const LOGO_URL = LOGO;
 const TEXTURE_URL = TEXTURA;
@@ -330,48 +333,6 @@ function retratoNoQuadro(row: RankedRow) {
   return /^\d{5,9}$/.test(id) ? `/api/imagens/brawler/${id}.png` : null;
 }
 
-
-function DraftSidebar({ active }: { active: string }) {
-  /**
-   * Isto dizia "Score 80/20" enquanto a fórmula corria a 70/30, e passou a ser
-   * configurável por quem usa o site. Uma etiqueta fixa era uma informação
-   * errada num sítio onde ninguém iria verificar.
-   */
-  const { weights } = useHybridWeights();
-  const { balance } = useSourceBalance();
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Gauge, href: "/" },
-    { id: "maps", label: "Mapas Ranked", icon: Layers3, href: "/#maps" },
-    { id: "draft", label: "Draft Híbrido", icon: Sparkles, href: "/draft" },
-    { id: "matchups", label: "Matriz 1v1", icon: Swords, href: "/matchups" },
-    { id: "brawlers", label: "Brawlers", icon: Crosshair, href: "/brawlers" },
-    { id: "sources", label: "Fontes", icon: Radio, href: "/#sources" },
-    { id: "formula", label: "Como funciona", icon: CircleHelp, href: "/#formula" },
-  ];
-
-  return (
-    <aside className="app-sidebar draft-sidebar">
-      <div className="sidebar-brand">
-        <div className="brand-mark-shell"><img src={LOGO_URL} alt="" className="brand-mark" /></div>
-        <div><div className="brand-name">Brawl Híbrido</div><div className="brand-kicker">Ranked intelligence</div></div>
-      </div>
-      <div className="sidebar-status"><span className="status-pulse" /><span>WORKSPACE LIVE</span><strong>Draft competitivo</strong></div>
-      <nav className="sidebar-nav" aria-label="Navegação principal">
-        <div className="nav-label">Workspace</div>
-        {navItems.map(({ id, label, icon: Icon, href }) => (
-          <a key={id} href={href} className={`sidebar-link ${active === id ? "is-active" : ""}`}>
-            <Icon size={18} /><span>{label}</span>{id === "maps" && <span className="nav-count">26</span>}
-          </a>
-        ))}
-      </nav>
-      <div className="sidebar-spacer" />
-      <div className="sidebar-note"><div className="note-icon"><Zap size={16} /></div><div><strong>Draft Híbrido</strong><p>Escolhe por pontos, contexto e posição ideal.</p></div></div>
-      <div className="sidebar-footer" title={`${hybridWeightsSentence(weights)} · TopBrawl ${balance.topBrawl}% / Brawl Planet ${balance.brawlPlanet}%`}>
-        <span className="footer-dot" /> Dados por mapa · Score {hybridWeightsLabel(weights)}
-      </div>
-    </aside>
-  );
-}
 
 /**
  * Estado real dos dados no ecrã.
@@ -1081,26 +1042,21 @@ function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observ
    */
   const ehDono = useEhDono();
   return (
-    <header className="topbar">
-      <div className="topbar-crumbs"><span className="crumb-muted">Ranked</span><span>›</span><span className="crumb-muted">Brawl Híbrido</span><span>›</span><span className="crumb-active">Draft</span></div>
-      <div className="topbar-actions">
-        <SyncStatusChip capturedAt={capturedAt} sourceReadAt={sourceReadAt} syncState={syncState} blockedSources={blockedSources} />
-        <span className="live-chip" title="Partidas Ranked observadas e deduplicadas; não alteram o Score até atingirem evidência suficiente."><span className="live-dot" /> {observedLabel}</span>
-        {/*
-          O rótulo mostra o passo real quando o servidor o reporta. "A atualizar…"
-          durante minutos é indistinguível de um botão avariado; "BrawlScope ·
-          vista 3/7" não é.
-        */}
-        {ehDono ? (
-          <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : "Atualizar dados agora"} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
-            <Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} />
-            <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
-          </button>
-        ) : null}
-        <button className="icon-button" title="Limpar draft" onClick={onReset} aria-label="Limpar draft"><RotateCcw size={16} /></button>
-        <div className="profile-chip"><span className="profile-avatar">BH</span><span className="profile-label">Analista</span></div>
-      </div>
-    </header>
+    <BarraDoSite ativo="draft">
+      <SyncStatusChip capturedAt={capturedAt} sourceReadAt={sourceReadAt} syncState={syncState} blockedSources={blockedSources} />
+      {/*
+        O rótulo mostra o passo real quando o servidor o reporta. "A atualizar…"
+        durante minutos é indistinguível de um botão avariado; "BrawlScope ·
+        vista 3/7" não é.
+      */}
+      {ehDono ? (
+        <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Atualizar dados agora · ${observedLabel}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
+          <Radio size={16} className={isRefreshing ? "animate-pulse" : undefined} />
+          <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar"}</span>
+        </button>
+      ) : null}
+      <button className="icon-button" title="Recomeçar o draft" onClick={onReset} aria-label="Recomeçar o draft"><RotateCcw size={16} /></button>
+    </BarraDoSite>
   );
 }
 
@@ -1192,14 +1148,14 @@ function TeamBoard({ team, myTeam, steps, choices, skipped, rows, mapTeams, acti
   const resolvedTeamSteps = stepsForTeam.filter(({ index }) => choices[index] || skipped[index]).length;
   return (
     <section className={`team-board ${team}`}>
-      <div className="team-heading"><div className="team-identity"><div className="team-color-dot" /><div><span className="team-kicker">TEAM {team === "blue" ? "01" : "02"} · {team === "blue" ? "BLUE SIDE" : "RED SIDE"}</span><h3>{team === "blue" ? "Azul" : "Vermelha"}</h3></div></div><div className="team-heading-meta"><span className={`team-perspective ${team === myTeam ? "is-you" : "is-opponent"}`}>{team === myTeam ? "A TUA EQUIPA" : "ADVERSÁRIO"}</span><span className="team-count"><strong>{resolvedTeamSteps}</strong><em>/{stepsForTeam.length}</em></span></div></div>
+      <div className="team-heading"><div className="team-identity"><div className="team-color-dot" /><div><span className="team-kicker">TEAM {team === "blue" ? "01" : "02"} · {team === "blue" ? "BLUE SIDE" : "RED SIDE"}</span><h3>{team === "blue" ? "Azul" : "Vermelha"}</h3></div></div><div className="team-heading-meta"><span className={`team-perspective ${team === myTeam ? "is-you" : "is-opponent"}`}>{team === myTeam ? "Tu" : "Adversário"}</span><span className="team-count"><strong>{resolvedTeamSteps}</strong><em>/{stepsForTeam.length}</em></span></div></div>
       <div className="team-lane ban-lane"><div className="lane-label"><span><Shield size={13} /> BANS</span><small>{banSteps.length} slots</small></div><div className="slot-grid">{banSteps.map(({ step, index }) => choices[index] ? <FilledSlot key={index} row={findRow(choices[index]) ?? rows[0]} step={step} teammateNames={[]} onClear={() => onClear(index)} /> : skipped[index] ? <SkippedSlot key={index} step={step} onClear={() => onClearSkip(index)} /> : <EmptySlot key={index} step={step} active={activeStep === index} onClick={() => onActivate(index)} />)}</div></div>
       <div className="team-lane pick-lane"><div className="lane-label"><span><Target size={13} /> PICKS</span><small>{pickSteps.length} slots</small></div><div className="slot-grid">{pickSteps.map(({ step, index }) => choices[index] ? <FilledSlot key={index} row={findRow(choices[index]) ?? rows[0]} step={step} teammateNames={teamPickNames.filter((name) => name !== choices[index])} mapTeams={mapTeams} onClear={() => onClear(index)} /> : skipped[index] ? <SkippedSlot key={index} step={step} onClear={() => onClearSkip(index)} /> : <EmptySlot key={index} step={step} active={activeStep === index} onClick={() => onActivate(index)} />)}</div></div>
     </section>
   );
 }
 
-function DraftProbabilityCenter({ blueRows, redRows, activeStepIndex, mapName, modeId }: { blueRows: RankedRow[]; redRows: RankedRow[]; activeStepIndex: number | null; mapName?: string; modeId?: string }) {
+function DraftProbabilityCenter({ blueRows, redRows, activeStepIndex, mapName, modeId, compacto = false }: { blueRows: RankedRow[]; redRows: RankedRow[]; activeStepIndex: number | null; mapName?: string; modeId?: string; compacto?: boolean }) {
   const estimate = estimateDraftWinProbability(blueRows, redRows);
   const totalPicks = blueRows.length + redRows.length;
   const observedMatchup = trpc.observedMatches.matchup.useQuery({
@@ -1211,6 +1167,22 @@ function DraftProbabilityCenter({ blueRows, redRows, activeStepIndex, mapName, m
   const counterText = (team: "blue" | "red") => estimate.counterImpacts.filter((impact) => impact.team === team).map((impact) => `${impact.attacker} → ${impact.defender} (+${impact.impactPoints} pp)`);
   const blueCounters = counterText("blue");
   const redCounters = counterText("red");
+  // Ao centro do draft basta a barra: os pormenores (counters e amostra
+  // observada) ficam no título, para quem passar o cursor.
+  if (compacto) {
+    const detalhe = [
+      totalPicks ? `${totalPicks}/6 picks · ${estimate.advantageLabel}` : "Começa 50/50 e muda a cada pick",
+      blueCounters.length ? `Azul countera: ${blueCounters.join(", ")}` : "",
+      redCounters.length ? `Vermelha countera: ${redCounters.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
+    return (
+      <div className="draft-probability-center is-compacto" aria-live="polite" title={detalhe} aria-label={`Hipótese de vitória: Azul ${estimate.blueWinProbability} por cento, Vermelha ${estimate.redWinProbability} por cento`}>
+        <strong className="blue">{estimate.blueWinProbability}%</strong>
+        <div className="draft-probability-track"><i className="blue-fill" style={{ width: `${estimate.blueWinProbability}%` }} /><i className="red-fill" style={{ width: `${estimate.redWinProbability}%` }} /></div>
+        <strong className="red">{estimate.redWinProbability}%</strong>
+      </div>
+    );
+  }
   return (
     <div className="draft-probability-center" aria-live="polite" aria-label={`Probabilidade média final: Azul ${estimate.blueWinProbability} por cento, Inimigo ${estimate.redWinProbability} por cento`}>
       <div className="draft-probability-kicker"><Trophy size={12} /> PROBABILIDADE MÉDIA FINAL</div>
@@ -1606,7 +1578,7 @@ function MapaDosDuelos({ colunas, imagem, mapName, nos, eles, leitura = "hibrida
   );
 }
 
-const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, redRows: linhasVermelha, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue", mapImage }: { myTeam?: TeamId; mapImage?: string | null; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
+const LaneMatchupDesk = memo(function LaneMatchupDesk({ semMapa = false, blueRows: linhasAzul, redRows: linhasVermelha, mapName, mapModeId, mapTeams, bannedNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber, completedPickCount, topRecommendationNames, counterPenaltyEligibleNames, experimentalWeights, maxHybridScore, ruleSettings, myTeam = "blue", mapImage }: { semMapa?: boolean; myTeam?: TeamId; mapImage?: string | null; blueRows: RankedRow[]; redRows: RankedRow[]; mapName?: string; mapModeId?: string; mapTeams?: readonly BrawlPlanetMapTeam[]; bannedNames: ReadonlySet<string>; baseHybridTop25Names?: readonly string[]; baseHybridTop30Names?: readonly string[]; pickNumber?: number; completedPickCount?: number; topRecommendationNames?: readonly string[]; counterPenaltyEligibleNames?: readonly string[]; experimentalWeights?: ExperimentalWeights; maxHybridScore?: number; ruleSettings?: DraftRuleSettings }) {
   // A tua equipa fica sempre do lado esquerdo, com as cores do teu lado: na
   // perspetiva Vermelha, a Vermelha passa para a esquerda e a Azul é o adversário.
   // Daqui para baixo, "blue"/"ally" quer dizer a tua equipa e "red"/"enemy" a outra.
@@ -1699,36 +1671,36 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
     : 0;
 
   return (
-    <section id="matchup-matrix" className="coach-desk lane-matchup-desk" aria-label="Matriz de Matchups 1v1 de Mid e Lanes">
+    <section id="matchup-matrix" className={`coach-desk lane-matchup-desk ${semMapa ? "is-sem-mapa" : ""}`} aria-label="Matriz de Matchups 1v1 de Mid e Lanes">
       <div className="coach-desk-header">
         <div>
-          <div className="section-kicker"><Swords size={13} /> Matriz 1v1 <span>FLEX & SIDE LANE MATCHUPS</span></div>
-          <h2>Duelo Mid e Lanes{mapName ? ` · ${mapName}` : ""}</h2>
-          <p>A tua equipa ({nos}) fica à esquerda; muda com a Perspetiva. Quem joga contra quem é escolhido pelos counters: a combinação de duelos que dá mais vantagem à tua equipa no total, não necessariamente Mid contra Mid. Sem relação publicada, vale a leitura por Win Rate.</p>
+          {!semMapa && <div className="section-kicker"><Swords size={13} /> Matriz 1v1 <span>FLEX & SIDE LANE MATCHUPS</span></div>}
+          <h2>{semMapa ? "Pontos dos duelos" : `Duelo Mid e Lanes${mapName ? ` · ${mapName}` : ""}`}</h2>
+          {!semMapa && <p>A tua equipa ({nos}) fica à esquerda; muda com a Perspetiva. Quem joga contra quem é escolhido pelos counters: a combinação de duelos que dá mais vantagem à tua equipa no total, não necessariamente Mid contra Mid. Sem relação publicada, vale a leitura por Win Rate.</p>}
         </div>
-        <div className="coach-confidence ready"><span>1V1 ATIVOS</span><strong>{matchups.length}/3</strong><small>{blueRows.length} {nos} · {redRows.length} {eles}</small></div>
+        {!semMapa && <div className="coach-confidence ready"><span>1V1 ATIVOS</span><strong>{matchups.length}/3</strong><small>{blueRows.length} {nos} · {redRows.length} {eles}</small></div>}
       </div>
-      <div className="coach-metric-strip">
+      {!semMapa && <div className="coach-metric-strip">
         <div><span>MID</span><strong>{midMatchup ? "1v1" : "—"}</strong><small>{midMatchup ? `${midMatchup.lane.ally.brawler} vs ${midMatchup.lane.enemy.brawler}` : "Aguardando duelistas"}</small></div>
         <div><span>LANES</span><strong>{laneMatchups.length}/2</strong><small>Esquerda · Direita</small></div>
         <div><span>VANTAGEM {NOS}</span><strong>{matchups.length ? `${(matchups.reduce((total, item) => total + item.matchup.score, 0) / matchups.length).toFixed(0)}%` : "—"}</strong><small>Na média dos duelos ativos</small></div>
         <div><span>COUNTER</span><strong>{matchups.length ? `${matchupCounterRate > 0 ? "+" : ""}${matchupCounterRate.toFixed(1)}%` : "—"}</strong><small>média dos deltas individuais</small></div>
-      </div>
+      </div>}
       <section className="matchup-team-score-summary" aria-label={`Soma e média de Pontos Finais: ${nos} ${teamScoreSummary.blueTotal.toFixed(2)} pontos, ${eles} ${teamScoreSummary.redTotal.toFixed(2)} pontos. ${scoreLeadLabel}.`}>
         <div className={`matchup-team-score matchup-team-score--blue ${blueLeads ? "is-leading" : scoreLeader === "tie" ? "is-tied" : ""}`}><span><Gauge size={12} /> PONTOS FINAIS · {NOS} {blueLeads ? <em className="matchup-team-score-trophy"><Trophy size={11} aria-hidden="true" /> LÍDER</em> : null}</span><strong>{activeDuelCount ? teamScoreSummary.blueTotal.toFixed(2) : "—"} <small>PTS</small></strong><small>{activeDuelCount ? `Média ${blueScoreAverage.toFixed(2)} pts · ${bluePercentage.toFixed(1)}% da soma` : "Aguardando duelo ativo"}</small></div>
         <div className={`matchup-team-score matchup-team-score--difference ${scoreLeader ? `is-${scoreLeader}` : ""}`}><span>{scoreLeader === "tie" ? "REPARTIÇÃO EQUILIBRADA" : "REPARTIÇÃO DA SOMA"}</span><strong>{percentageLabel}</strong><small>{activeDuelCount ? `${scoreLeadStatus} · ${scoreLeadLabel} · Scores de Mid e Lanes 1v1` : "Aguardando duelo ativo"}</small></div>
         <div className={`matchup-team-score matchup-team-score--red ${redLeads ? "is-leading" : scoreLeader === "tie" ? "is-tied" : ""}`}><span><Gauge size={12} /> PONTOS FINAIS · {ELES} {redLeads ? <em className="matchup-team-score-trophy"><Trophy size={11} aria-hidden="true" /> LÍDER</em> : null}</span><strong>{activeDuelCount ? teamScoreSummary.redTotal.toFixed(2) : "—"} <small>PTS</small></strong><small>{activeDuelCount ? `Média ${redScoreAverage.toFixed(2)} pts · ${redPercentage.toFixed(1)}% da soma` : "Aguardando duelo ativo"}</small></div>
       </section>
-      <div className="matchup-perspective-board" aria-label="Resumo de counters por perspetiva">
+      {!semMapa && <div className="matchup-perspective-board" aria-label="Resumo de counters por perspetiva">
         <div className="matchup-board-side matchup-board-side--blue"><span>{NOS} COUNTERA</span><strong>{blueCounters.length ? blueCounters.map((item) => `${item.lane.ally.brawler} → ${item.lane.enemy.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{blueCounters.length ? `Ataques favoráveis publicados para ${nos}.` : `Sem relação publicada a favor de ${nos}.`}</small></div>
         <div className="matchup-board-side matchup-board-side--red"><span>{ELES} COUNTERA</span><strong>{redCounters.length ? redCounters.map((item) => `${item.lane.enemy.brawler} → ${item.lane.ally.brawler}`).join(" · ") : "Nenhum counter literal ativo"}</strong><small>{redCounters.length ? `Ataques favoráveis publicados para ${eles}.` : `Sem relação publicada a favor de ${eles}.`}</small></div>
         <div className="matchup-board-side matchup-board-side--neutral"><span>NEUTROS</span><strong>{neutralMatchups.length ? neutralMatchups.map((item) => `${item.lane.ally.brawler} × ${item.lane.enemy.brawler}`).join(" · ") : "Todos os duelos têm counter literal"}</strong><small>{neutralMatchups.length ? "A decisão usa a melhor leitura por Win Rate." : "Não há duelos estimados nesta matriz."}</small></div>
-      </div>
+      </div>}
       <div className="duel-map-toolbar">
-      <div className="duel-map-tabs" role="tablist" aria-label="De onde vem a leitura dos duelos">
+      {!semMapa && <div className="duel-map-tabs" role="tablist" aria-label="De onde vem a leitura dos duelos">
         <button type="button" role="tab" aria-selected={leitura === "hibrida"} className={leitura === "hibrida" ? "is-active" : ""} onClick={() => setLeitura("hibrida")}>Leitura híbrida <small>%</small></button>
         <button type="button" role="tab" aria-selected={leitura === "prodigy"} className={leitura === "prodigy" ? "is-active" : ""} onClick={() => setLeitura("prodigy")}>PL Prodigy <small>ganha / perde</small></button>
-      </div>
+      </div>}
       <div className="duel-map-pl">
         <a
           className="duel-map-pl-link"
@@ -1736,11 +1708,11 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
           target="_blank"
           rel="noopener noreferrer"
         >Abrir este draft no PL Prodigy ↗</a>
-        <small>Com a extensão Brawl Híbrido v{VERSAO_DA_EXTENSAO}, o mapa, os bans e os picks ficam lá preenchidos, e vês as percentagens e builds deles. Gasta os usos da tua conta. Sem a extensão, abre vazio.</small>
+        {!semMapa && <small>Com a extensão Brawl Híbrido v{VERSAO_DA_EXTENSAO}, o mapa, os bans e os picks ficam lá preenchidos, e vês as percentagens e builds deles. Gasta os usos da tua conta. Sem a extensão, abre vazio.</small>}
       </div>
       </div>
-      {leitura === "prodigy" && <p className="duel-map-tabs-note">Só o que as guias do PL Prodigy publicam: quem ganha a quem, sem percentagem. Os pares são escolhidos com essa leitura.</p>}
-      <div className="duel-map-layout">
+      {!semMapa && leitura === "prodigy" && <p className="duel-map-tabs-note">Só o que as guias do PL Prodigy publicam: quem ganha a quem, sem percentagem. Os pares são escolhidos com essa leitura.</p>}
+      {!semMapa && <div className="duel-map-layout">
         <MapaDosDuelos colunas={colunasDoMapa} imagem={mapImage ?? null} mapName={mapName} nos={nos} eles={eles} leitura={leitura} />
         <aside className="duel-map-side" aria-label="Porque é este o adversário de cada um">
           <span className="duel-map-side-kicker">QUEM APANHA QUEM</span>
@@ -1771,7 +1743,7 @@ const LaneMatchupDesk = memo(function LaneMatchupDesk({ blueRows: linhasAzul, re
             </ol>
           )}
         </aside>
-      </div>
+      </div>}
       {matchups.length > 0 && (
         <details className="duel-map-details">
           <summary>Ver pontos, counters e fontes de cada duelo</summary>
@@ -1797,87 +1769,6 @@ function FinalWinProbability({ blueRows, redRows, myTeam }: { blueRows: RankedRo
   );
 }
 
-function QuickPickRail({ activeStep, entries, selectionLockedNames, onSelect, onSkip }: { activeStep: DraftStep | null; entries: readonly RankedDraftEntry<RankedRow>[]; selectionLockedNames: Set<string>; onSelect: (name: string) => void; onSkip: () => void }) {
-  const [quickQuery, setQuickQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const quickEntries = useMemo(
-    () => {
-      const normalizedQuery = quickQuery.trim().toLowerCase();
-      return entries
-        .filter((entry) => !normalizedQuery || entry.row.brawler.toLowerCase().includes(normalizedQuery))
-        .slice(0, normalizedQuery ? 7 : 5);
-    },
-    [entries, quickQuery],
-  );
-  const firstAvailableRow = quickEntries.find((entry) => !selectionLockedNames.has(entry.row.brawler))?.row;
-  const actionLabel = activeStep?.kind === "ban" ? "Banir" : "Escolher";
-
-  useEffect(() => { setQuickQuery(""); }, [activeStep?.label]);
-
-  const selectQuickBrawler = (name: string) => {
-    if (!activeStep || selectionLockedNames.has(name)) return;
-    setQuickQuery("");
-    onSelect(name);
-    requestAnimationFrame(() => searchInputRef.current?.focus());
-  };
-
-  const submitQuickSearch = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!activeStep || !firstAvailableRow) return;
-    selectQuickBrawler(firstAvailableRow.brawler);
-  };
-
-  return (
-    <aside className="draft-quick-pick" aria-label="Seleção rápida do Draft">
-      <div className="draft-quick-pick-heading">
-        <div>
-          <div className="section-kicker"><Target size={12} /> PICK AGORA <span>COMANDO RÁPIDO</span></div>
-          <strong>{activeStep ? `${activeStep.kind === "ban" ? "Ban" : "Pick"} · ${activeStep.team === "blue" ? "Azul" : "Vermelha"}` : "Draft resolvido"}</strong>
-          <small>{activeStep ? "Pesquisa por nome e confirma diretamente no turno ativo." : "Reabre um slot ou reinicia o draft para continuar."}</small>
-        </div>
-        {activeStep && <button type="button" className="quick-skip-button" onClick={onSkip}><SkipForward size={13} /> {activeStep.kind === "ban" ? "Passar ban" : "Pular"}</button>}
-      </div>
-      <form className="quick-pick-search" onSubmit={submitQuickSearch}>
-        <Search size={15} aria-hidden="true" />
-        <input
-          ref={searchInputRef}
-          value={quickQuery}
-          onChange={(event) => setQuickQuery(event.target.value)}
-          placeholder="Pesquisar brawler…"
-          aria-label="Pesquisar brawler para o turno ativo"
-          disabled={!activeStep}
-        />
-        {quickQuery && <button type="button" className="quick-search-clear" onClick={() => setQuickQuery("")} aria-label="Limpar pesquisa"><X size={13} /></button>}
-        <button type="submit" className="quick-search-submit" disabled={!activeStep || !firstAvailableRow}>
-          {actionLabel}
-        </button>
-      </form>
-      <div className="quick-search-status" aria-live="polite">
-        {quickQuery.trim()
-          ? `${quickEntries.length} resultado${quickEntries.length === 1 ? "" : "s"} para “${quickQuery.trim()}”`
-          : "Top opções para o mapa e o turno atual"}
-      </div>
-      <div className="quick-pick-list">
-        {quickEntries.map((entry) => {
-          const { row } = entry;
-          const { signal } = entry;
-          const locked = selectionLockedNames.has(row.brawler);
-          const image = brawlerImageFor(row);
-          return (
-            <button key={row.brawler} type="button" className={`quick-pick-row ${locked ? "is-locked" : ""}`} disabled={locked} onClick={() => selectQuickBrawler(row.brawler)}>
-              <span className="quick-pick-rank">{quickQuery.trim() ? "→" : String(entry.rank).padStart(2, "0")}</span>
-              <span className="quick-pick-avatar" style={image ? { backgroundImage: `url(${image})` } : undefined}>{!image && row.brawler.slice(0, 2).toUpperCase()}</span>
-              <span className="quick-pick-copy"><strong>{row.brawler}{locked && <em> BLOQUEADO</em>}</strong><small>{signal.decisionType.toUpperCase()} · {signal.position === "mid" ? "MID" : signal.position === "left" ? "SIDE ESQ." : "SIDE DIR."}</small></span>
-              <span className="quick-pick-score">{Math.round(entry.finalPoints)}<small>PTS</small></span>
-            </button>
-          );
-        })}
-        {quickEntries.length === 0 && <div className="quick-pick-empty"><Search size={16} /><span>Nenhum brawler encontrado neste mapa.</span></div>}
-      </div>
-      {!quickQuery && <button type="button" className="quick-pick-more" onClick={() => document.getElementById("ranked-picks")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Ver lista completa de recomendações →</button>}
-    </aside>
-  );
-}
 
 type DraftRuleField = {
   key: keyof DraftRulePreference;
@@ -2029,7 +1920,7 @@ function CampoDePercentagem({ value, onCommit, disabled, ariaLabel, maximo = 100
   );
 }
 
-function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, reading, onReadingChange, liveCoverage, liveCapturedAt }: {
+function DraftRulesPanel({ abertoDeInicio = false, preference, hasCustomRules, onChange, onReset, reading, onReadingChange, liveCoverage, liveCapturedAt }: {
   preference: DraftRulePreference;
   hasCustomRules: boolean;
   onChange: (next: DraftRulePreference) => void;
@@ -2038,6 +1929,8 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
   onReadingChange: (next: BrawlScopeReadingId) => void;
   liveCoverage?: Record<string, { profiles: number; pairs: number }>;
   liveCapturedAt?: string | null;
+  /** No painel de ajustes abre logo aberto: foi para isso que se clicou. */
+  abertoDeInicio?: boolean;
 }) {
   // O peso que o resto do site usa, para o atalho de igualar a escada a ele.
   const { weights: pesosGlobais } = useHybridWeights();
@@ -2100,7 +1993,7 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
    * continuar a ler a tabela geral.
    */
   const totalBrawlers = Object.keys(brawlScopeMatchupDeltas).length;
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(abertoDeInicio);
   const setRate = (key: keyof DraftRulePreference, rawValue: string) => {
     const value = Number(rawValue);
     onChange({ ...preference, [key]: Number.isFinite(value) ? value : 0 });
@@ -2395,8 +2288,31 @@ function DraftRulesPanel({ preference, hasCustomRules, onChange, onReset, readin
   );
 }
 
+/** A mini-lista de ajustes: cada um abre num painel ao lado, sem ocupar a página. */
+const PAINEIS_DO_DRAFT = [
+  { id: "sequencia", label: "Ordem do draft", soDono: false },
+  { id: "regras", label: "Regras %", soDono: false },
+  { id: "funcoes", label: "Funções (Mid, Lane, Flex)", soDono: true },
+  { id: "pontuacao", label: "Referência de pontuação", soDono: false },
+  { id: "fontes", label: "Fontes dos números", soDono: false },
+  { id: "rotacao", label: "Rotação oficial", soDono: false },
+] as const;
+type PainelDoDraft = (typeof PAINEIS_DO_DRAFT)[number]["id"];
+
+const ABAS_DO_CENTRO = [
+  { id: "sugestoes", label: "Sugestões" },
+  { id: "equipas", label: "Equipas do mapa" },
+  { id: "sinais", label: "Sinergia e counters" },
+] as const;
+type AbaDoCentro = (typeof ABAS_DO_CENTRO)[number]["id"];
+
 export default function Draft() {
   const [showPickDetails, setShowPickDetails] = useState(false);
+  const [painelAberto, setPainelAberto] = useState<PainelDoDraft | null>(null);
+  const [abaDoCentro, setAbaDoCentro] = useState<AbaDoCentro>("sugestoes");
+  const ehDono = useEhDono();
+  // "Funções" grava no site para toda a gente: só o dono a vê na lista.
+  const paineisVisiveis = PAINEIS_DO_DRAFT.filter((painel) => !painel.soDono || ehDono);
   const [rankingOrder, setRankingOrder] = useState<"base" | "context">("base");
   const roleVersion = useDraftRolesVersion();
   const { version: counterSnapshotVersion } = useCounterSync();
@@ -2775,6 +2691,26 @@ export default function Draft() {
   };
   const resetDraft = () => { resetChoices(); toast.success("Draft limpo."); };
   const changeMap = (name: string) => { setSelectedMapName(name); resetDraft(); setQuery(""); };
+  // Enter na pesquisa escolhe o primeiro da lista: escrever "sha" + Enter chega.
+  const escolherOPrimeiro = () => {
+    if (activeStepIndex === null) return;
+    const primeiro = visibleRankedEntries.find((entry) => !lockedNames.has(entry.row.brawler));
+    if (primeiro) assignBrawler(primeiro.row.brawler);
+  };
+  // Quando o último slot fecha, a página desce sozinha até ao mapa.
+  const secaoFinalRef = useRef<HTMLElement>(null);
+  const draftFechado = analysisResolvedCount === draftSequence.length;
+  const estavaFechado = useRef(draftFechado);
+  useEffect(() => {
+    if (draftFechado && !estavaFechado.current) {
+      const calmo = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      // Espera um instante: o mapa 3D entra e a lista de cima acerta a altura.
+      const espera = window.setTimeout(() => secaoFinalRef.current?.scrollIntoView({ behavior: calmo ? "auto" : "smooth", block: "start" }), 300);
+      estavaFechado.current = draftFechado;
+      return () => window.clearTimeout(espera);
+    }
+    estavaFechado.current = draftFechado;
+  }, [draftFechado]);
   /**
    * Cada radar ordena pelo sinal que anuncia, e não pelo Score final. Sem isto
    * os dois mostravam a mesma lista — o Score final é dominado pela base
@@ -2805,8 +2741,7 @@ export default function Draft() {
   };
 
   return (
-    <div className="app-shell draft-shell" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.94), rgba(11,14,20,.98))", TEXTURE_URL) }}>
-      <DraftSidebar active="draft" />
+    <div className="app-shell draft-shell com-barra-no-topo" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.94), rgba(11,14,20,.98))", TEXTURE_URL) }}>
       <div className="app-main">
         <DraftTopbar
           onReset={resetDraft}
@@ -2821,152 +2756,99 @@ export default function Draft() {
         />
         <main className="draft-main">
           {/*
-            * Antes havia aqui um hero de 310px com um título de 78px e um
-            * parágrafo a explicar a fórmula. Num sítio de apresentação isso faz
-            * sentido; na página onde se trabalha, é um imposto pago em cada
-            * visita — empurrava o tabuleiro para fora do ecrã, sobretudo no
-            * telemóvel. Ficou uma barra com aquilo que muda a cada turno.
+            * Tudo o que se usa em cada turno cabe num ecrã: o mapa e a ordem em
+            * cima, as duas equipas dos lados e as sugestões ao meio. O que se
+            * configura uma vez (regras, funções, fontes) abre num painel ao
+            * lado, a partir da mini-lista — não ocupa a página.
             */}
-          <section className="draft-contextbar" aria-label="Contexto do draft">
-            <div className="draft-contextbar-main">
-              <span className="draft-contextbar-kicker">Draft</span>
-              <strong className="bh-display">{selectedMap?.name ?? "Sem mapa"}</strong>
-              <span className="draft-contextbar-mode">{selectedMap?.mode ?? "Ranked"}</span>
+          <section className="draft-contextbar" aria-label="Mapa e ordem do draft">
+            <label className="draft-select mesa-mapa">
+              <Layers3 size={15} />
+              <select aria-label="Mapa do draft" value={selectedMap?.name ?? ""} onChange={(event) => changeMap(event.target.value)}>{liveMaps.map((map) => <option key={map.name} value={map.name}>{map.name} · {map.mode}</option>)}</select>
+              <ChevronDown size={14} />
+            </label>
+            <SeletorDeElo mapa={selectedMap?.name} />
+            <div className="mesa-escolha" role="group" aria-label="Quem escolhe primeiro">
+              <span>Começa</span>
+              <button type="button" className={initialTeam === "blue" ? "is-active blue" : "blue"} aria-pressed={initialTeam === "blue"} onClick={() => handleInitialTeamChange("blue")}>Azul</button>
+              <button type="button" className={initialTeam === "red" ? "is-active red" : "red"} aria-pressed={initialTeam === "red"} onClick={() => handleInitialTeamChange("red")}>Vermelha</button>
             </div>
-            <a className="duel-jump-link" href="#matchup-matrix">Comparar pontos % · Mid e Lanes</a>
-            <div className="draft-contextbar-stats">
-              <div className="draft-contextbar-stat">
-                <span>Turno</span>
-                <b className="bh-figure">{activeDraftStep ? activeDraftStep.label : "—"}</b>
-              </div>
-              <div className="draft-contextbar-stat">
-                <span>Referência</span>
-                <b className="bh-figure"><CountUp value={mapHybridReference} /></b>
-              </div>
-              <div className={`draft-contextbar-stat ${hasCustomGlobalWeights ? "is-custom" : ""}`}>
-                <span>Vitória/Uso</span>
-                <b>{experimentalWeights.winRate}/{experimentalWeights.usageRate}</b>
-              </div>
+            <div className="mesa-escolha" role="group" aria-label="A tua equipa">
+              <span>Tu és</span>
+              <button type="button" className={myTeam === "blue" ? "is-active blue" : "blue"} aria-pressed={myTeam === "blue"} onClick={() => setMyTeam("blue")}>Azul</button>
+              <button type="button" className={myTeam === "red" ? "is-active red" : "red"} aria-pressed={myTeam === "red"} onClick={() => setMyTeam("red")}>Vermelha</button>
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="mesa-ajustes-botao"><Settings2 size={15} /> Ajustes <ChevronDown size={14} /></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="mesa-ajustes-lista">
+                {paineisVisiveis.map(({ id, label }) => <DropdownMenuItem key={id} onSelect={() => setPainelAberto(id)}>{label}</DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </section>
           <div className="draft-content">
-            <section className="draft-arena" aria-label="Simulador Azul versus Vermelha" style={{ backgroundImage: fundoCom("linear-gradient(105deg, rgba(5,12,23,.96) 0%, rgba(9,17,31,.88) 47%, rgba(26,9,22,.9) 100%)", DRAFT_ARENA_BG_URL) }}>
-              <header className="draft-arena-header">
-                <div>
-                  <div className="section-kicker"><Swords size={13} /> Ranked Draft <span>AZUL VS VERMELHA</span></div>
-                  <h2><span>Azul</span><em>vs</em><span>Vermelha</span></h2>
-                  <p>O teu próximo movimento começa aqui.</p>
+            <section className="draft-mesa" aria-label="Azul contra Vermelha">
+              <div className={`mesa-vez ${activeDraftStep ? `vez-${activeDraftStep.team}` : "vez-fim"}`} aria-live="polite">
+                <div className="mesa-vez-texto">
+                  <strong className="bh-display">{activeDraftStep ? `${activeDraftStep.kind === "ban" ? "Ban" : "Pick"} da ${activeDraftStep.team === "blue" ? "Azul" : "Vermelha"}${activeDraftStep.team === myTeam ? " · é a tua vez" : ""}` : "Draft fechado"}</strong>
+                  <small>{selectedMap?.name ?? "Sem mapa"} · {activeDraftStep ? activeDraftStep.label : "—"}</small>
                 </div>
-                <div className="draft-arena-map-status"><span>{selectedMap?.mode ?? "RANKED"}</span><strong>{selectedMap?.name ?? "Mapa"}</strong><small>{currentRows.length} brawlers · {liveMaps.length} mapas ativos</small></div>
-              </header>
-              <div className="draft-action-zone">
-              <div className="draft-board-column">
-                <div className="draft-progress">
-                  <div className="progress-copy">
-                    <span className="section-kicker">Draft sequence · {scrimPresetLabels[scrimPreset]}</span>
-                    <strong>{activeDraftStep ? describeDraftStep(activeDraftStep) : "Draft completo"}</strong>
-                    <small>{activeDraftStep ? "Seleciona, ignora, passa o ban ou pesquisa um brawler." : "Todos os slots foram resolvidos."}</small>
+                <div className="progress-steps" aria-label="Progresso do draft">
+                  {draftSequence.map((step, index) => <span key={index} className={`progress-step team-${step.team} ${choices[index] || skipped[index] ? "is-done" : ""} ${skipped[index] ? "is-skipped" : ""} ${activeStepIndex === index ? "is-current" : ""}`} title={skipped[index] ? `${describeDraftStep(step)} · ignorado` : describeDraftStep(step)}><i /></span>)}
+                </div>
+                <span className="progress-count">{resolvedCount}/{draftSequence.length}</span>
+                <button type="button" className={`draft-voice-button ${voiceState === "listening" ? "is-listening" : ""}`} onClick={startVoiceFill} disabled={activeStepIndex === null} aria-label={voiceState === "listening" ? "A ouvir nome do brawler" : "Falar o nome do brawler para o slot ativo"} title="Falar o nome do brawler"><Mic size={15} /><span>{voiceState === "listening" ? "A ouvir…" : voiceState === "processing" ? "A preencher…" : "Falar"}</span></button>
+                <button type="button" className="draft-skip-button" onClick={skipActiveStep} disabled={activeStepIndex === null}><SkipForward size={14} /> {activeDraftStep?.kind === "ban" ? "Passar ban" : "Pular"}</button>
+              </div>
+              <div className="mesa-grelha">
+                <TeamBoard team="blue" myTeam={myTeam} steps={draftSequence} choices={choices} skipped={skipped} rows={currentRows} mapTeams={mapTeams} activeStep={activeStepIndex} onClear={clearSlot} onClearSkip={clearSkippedSlot} onActivate={setSelectedStepIndex} />
+                <div className="mesa-centro">
+                  <DraftProbabilityCenter compacto blueRows={bluePicks} redRows={redPicks} activeStepIndex={analysisActiveStepIndex} mapName={selectedMap?.name} modeId={selectedMap?.modeId} />
+                  <div className="mesa-abas" role="tablist" aria-label="O que ver ao centro">
+                    {ABAS_DO_CENTRO.map(({ id, label }) => <button key={id} type="button" role="tab" aria-selected={abaDoCentro === id} className={abaDoCentro === id ? "is-active" : ""} onClick={() => setAbaDoCentro(id)}>{label}</button>)}
                   </div>
-                  <div className="progress-steps" aria-label="Progresso do draft">
-                    {draftSequence.map((step, index) => <span key={index} className={`progress-step ${choices[index] || skipped[index] ? "is-done" : ""} ${skipped[index] ? "is-skipped" : ""} ${activeStepIndex === index ? "is-current" : ""}`} title={skipped[index] ? `${describeDraftStep(step)} · ignorado` : describeDraftStep(step)}><i /></span>)}
-                  </div>
-                  <div className="draft-progress-actions">
-                    <div className="perspective-toggle-inline">
-                      <button type="button" className={`perspective-btn ${myTeam === "blue" ? "is-active" : ""}`} onClick={() => setMyTeam("blue")}>Perspetiva: Azul</button>
-                      <button type="button" className={`perspective-btn ${myTeam === "red" ? "is-active" : ""}`} onClick={() => setMyTeam("red")}>Perspetiva: Vermelha</button>
+                  {abaDoCentro === "sugestoes" && <section className="recommendations-section" id="ranked-picks" aria-label={`Sugestões para a ${suggestionTeam === "blue" ? "Azul" : "Vermelha"}`}>
+                    <div className="recommendation-toolbar">
+                      <label className="draft-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") escolherOPrimeiro(); }} placeholder="Procurar brawler…" aria-label="Procurar brawler no draft" />{query && <button aria-label="Limpar pesquisa" onClick={() => setQuery("")}><X size={14} /></button>}</label>
+                      <div className="draft-role-filter" role="group" aria-label="Filtrar sugestões por posição">{(["Todas", "side", "mid", "flex"] as DraftRoleFilter[]).map((option) => <button key={option} className={roleFilter === option ? "is-active" : ""} onClick={() => setRoleFilter(option)}>{draftRoleLabels[option]}</button>)}</div>
+                      <label className="mesa-ordem"><span className="sr-only">Ordenar sugestões</span>
+                        <select value={rankingOrder} onChange={event => setRankingOrder(event.target.value as "base" | "context")}>
+                          <option value="base">Melhores no mapa</option>
+                          <option value="context">Melhores agora</option>
+                        </select>
+                      </label>
+                      <button type="button" className="pick-details-toggle" aria-pressed={showPickDetails} onClick={() => setShowPickDetails(value => !value)}>{showPickDetails ? "Menos" : "Detalhes"}</button>
                     </div>
-                    <button type="button" className={`draft-voice-button draft-progress-voice ${voiceState === "listening" ? "is-listening" : ""}`} onClick={startVoiceFill} disabled={activeStepIndex === null} aria-label={voiceState === "listening" ? "A ouvir nome do brawler" : "Falar o nome do brawler para o slot ativo"} title="Falar o nome do brawler para preencher o slot ativo"><Mic size={16} /><span>{voiceState === "listening" ? "A ouvir…" : voiceState === "processing" ? "A preencher…" : "Falar brawler"}</span></button>
-                    <button type="button" className="draft-skip-button" onClick={skipActiveStep} disabled={activeStepIndex === null}><SkipForward size={14} /> {activeDraftStep?.kind === "ban" ? "Passar ban" : "Pular passo"}</button>
-                    <span className="progress-count">{resolvedCount}/{draftSequence.length}</span>
-                  </div>
+                    {sameClassAlerts.length > 0 && <p className="mesa-aviso" role="status"><AlertTriangle size={14} /> Classe repetida na {suggestionTeam === "blue" ? "Azul" : "Vermelha"} ({sameClassAlerts.map((alert) => alert.className).join(", ")}): quem for da mesma classe perde {draftRuleSettings.sameClassPenalty * 100}%.</p>}
+                    <div className={`draft-recommendation-list ${showPickDetails ? "with-details" : "is-compact"}`}>{pagedRankedEntries.map((entry) => <div key={entry.row.brawler}><DraftCard row={entry.row} index={entry.rank - 1} draftScore={entry.draftScore} basePoints={entry.basePoints} finalPoints={entry.finalPoints} signal={entry.signal} onSelect={assignBrawler} locked={lockedNames.has(entry.row.brawler)} banned={banNames.has(entry.row.brawler) && analysisDraftStep?.kind === "pick"} suggestionTeam={suggestionTeam} rosterNames={rosterNames} activeCounterWindow={activeCounterWindow} expanded={showPickDetails} /></div>)}{pagedRankedEntries.length === 0 && <div className="draft-empty"><Search size={22} /><strong>Nada com esse filtro.</strong><span>Limpa a pesquisa ou muda a posição.</span></div>}</div>
+                    <div className="roster-pagination" aria-label="Páginas de brawlers"><button onClick={() => setRosterPage((page) => Math.max(1, page - 1))} disabled={rosterPage === 1} aria-label="Página anterior"><ArrowLeft size={14} /></button>{Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => <button key={page} className={rosterPage === page ? "is-active" : ""} onClick={() => setRosterPage(page)}>{page}</button>)}<button onClick={() => setRosterPage((page) => Math.min(pageCount, page + 1))} disabled={rosterPage === pageCount} aria-label="Página seguinte"><ArrowRight size={14} /></button><span>{topRows.length} de {visibleRows.length}</span></div>
+                  </section>}
+                  {abaDoCentro === "equipas" && <MapTeamBoardPanel mapName={selectedMap?.name} mapTeams={mapTeams} allyNames={myPickNames} />}
+                  {abaDoCentro === "sinais" && <div className="signal-radar-grid">
+                    <SignalCard
+                      title="Aliados recomendados"
+                      eyebrow="Sinergia"
+                      metric="pontos de sinergia"
+                      entries={synergyRadarEntries}
+                      reason={synergyReason}
+                      emptyLabel="Ainda ninguém tem sinergia publicada com os teus picks."
+                      onSelect={assignBrawler}
+                    />
+                    <SignalCard
+                      title="Resposta aos inimigos"
+                      eyebrow="Counter"
+                      metric="pontos de counter"
+                      entries={counterRadarEntries}
+                      reason={counterReason}
+                      emptyLabel="Sem picks inimigos, ainda não há a quem responder."
+                      onSelect={assignBrawler}
+                    />
+                  </div>}
                 </div>
-                  <div className="draft-board-grid">{([myTeam, myTeam === "blue" ? "red" : "blue"] as TeamId[]).map((team, index) => <Fragment key={team}>{index === 1 && <DraftProbabilityCenter blueRows={bluePicks} redRows={redPicks} activeStepIndex={analysisActiveStepIndex} mapName={selectedMap?.name} modeId={selectedMap?.modeId} />}<TeamBoard team={team} myTeam={myTeam} steps={draftSequence} choices={choices} skipped={skipped} rows={currentRows} mapTeams={mapTeams} activeStep={activeStepIndex} onClear={clearSlot} onClearSkip={clearSkippedSlot} onActivate={setSelectedStepIndex} /></Fragment>)}</div>
+                <TeamBoard team="red" myTeam={myTeam} steps={draftSequence} choices={choices} skipped={skipped} rows={currentRows} mapTeams={mapTeams} activeStep={activeStepIndex} onClear={clearSlot} onClearSkip={clearSkippedSlot} onActivate={setSelectedStepIndex} />
               </div>
-              </div>
-              <div className="draft-arena-controls">
-                <section className="draft-arena-map-control">
-                  <div className="section-kicker"><Layers3 size={12} /> Mapa Ranked <span>CONTEXTO</span></div>
-                  <strong>Seleciona o mapa</strong>
-                  <label className="draft-select"><Layers3 size={15} /><select aria-label="Selecionar mapa para o draft" value={selectedMap?.name ?? ""} onChange={(event) => changeMap(event.target.value)}>{liveMaps.map((map) => <option key={map.name} value={map.name}>{map.name} · {map.mode}</option>)}</select><ChevronDown size={14} /></label>
-                  <small>{selectedMap?.mode ?? "Ranked"} · o Score e as sugestões acompanham esta rotação.</small>
-                  <SeletorDeElo mapa={selectedMap?.name} />
-                </section>
-                <details className="arena-more arena-options"><summary>Equipas sugeridas e ordem de pick</summary><div className="arena-options-body">
-                <MapTeamBoardPanel mapName={selectedMap?.name} mapTeams={mapTeams} allyNames={myPickNames} />
-                <section className="draft-arena-suggestions" aria-label="Sugestões rápidas para o turno ativo">
-                  <QuickPickRail activeStep={activeDraftStep} entries={rankedDraftEntries} selectionLockedNames={lockedNames} onSelect={assignBrawler} onSkip={skipActiveStep} />
-                </section>
-                <section className="draft-arena-first-team">
-                  <div className="section-kicker"><Trophy size={12} /> Ordem de Pick <span>ABERTURA</span></div>
-                  <strong>Quem escolhe primeiro?</strong>
-                  <div className="draft-initial-team-actions" role="group" aria-label="Selecionar equipa que abre o Draft">
-                    <button type="button" className={initialTeam === "blue" ? "is-active blue" : "blue"} onClick={() => handleInitialTeamChange("blue")}>Azul <small>abre o Draft</small></button>
-                    <button type="button" className={initialTeam === "red" ? "is-active red" : "red"} onClick={() => handleInitialTeamChange("red")}>Vermelha <small>abre o Draft</small></button>
-                  </div>
-                  <small>A sequência é espelhada: 1 pick, resposta com 2, 2 picks de volta e 1 pick final.</small>
-                </section>
-                </div></details>
-              </div>
-              <details className="arena-more"><summary>Referência de pontuação</summary><div className="draft-arena-reference"><DraftScoreReference entries={draftScoreReference} mapName={selectedMap?.name} pickNumber={analysisGlobalPickNumber} /></div></details>
             </section>
-
-            <section className="recommendations-section">
-
-              <div className="recommendations-heading" id="ranked-picks">
-                <div><div className="section-kicker">ESCOLHE O PRÓXIMO</div><h2>Sugestões <span className={`turn-team ${suggestionTeam}`}>{suggestionTeam === "blue" ? "Azul" : "Vermelha"}</span></h2><p>{activeDraftStep ? "Toca num brawler para preencher o slot ativo." : "Draft completo. Reabre um slot para testar."}</p></div>
-                <button type="button" className="pick-details-toggle" aria-pressed={showPickDetails} onClick={() => setShowPickDetails(value => !value)}>{showPickDetails ? "Menos detalhes" : "Ver detalhes"}</button>
-              </div>
-              {sameClassAlerts.length > 0 && <aside className="draft-composition-alert" aria-label="Alertas de composição por classe">
-                <div className="draft-composition-alert-heading"><AlertTriangle size={16} /><span>ALERTA DE COMPOSIÇÃO · DESBÓNUS ATIVO</span></div>
-                <p>Os Picks da equipa {suggestionTeam === "blue" ? "Azul" : "Vermelha"} abaixo já ocupam estas classes. Qualquer candidato desta mesma equipa recebe <strong>−{draftRuleSettings.sameClassPenalty * 100}%</strong> por cada ativador.</p>
-                <div className="draft-composition-alert-list">
-                  {sameClassAlerts.map((alert) => <div className={`draft-composition-alert-item team-${suggestionTeam}`} key={alert.className}>
-                    <strong>{alert.className}</strong>
-                    <span><b>−{draftRuleSettings.sameClassPenalty * 100}%</b> Picks {suggestionTeam === "blue" ? "Azuis" : "Vermelhos"}: <em>{alert.triggers.join(", ")}</em></span>
-                    <small>{alert.candidateCount} {alert.candidateCount === 1 ? "candidato será afetado" : "candidatos serão afetados"} nesta lista</small>
-                  </div>)}
-                </div>
-              </aside>}
-              <label className="ranking-order-control">Ordenar por
-                <select value={rankingOrder} onChange={event => setRankingOrder(event.target.value as "base" | "context")}>
-                  <option value="base">{hybridWeightsSentence(hybridWeights).replaceAll(" / ", " + ")}</option>
-                  <option value="context">Pontos do Draft · com bónus</option>
-                </select>
-                <small>{rankingOrder === "base" ? "Ranking base do mapa. Os pontos finais incluem os ajustes do Draft." : "Ranking contextual: counters, sinergias e regras podem mudar a ordem."}</small>
-              </label>
-              <div className="recommendation-toolbar"><div className="draft-search-voice"><label className="draft-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Procurar brawler..." aria-label="Procurar brawler no draft" />{query && <button aria-label="Limpar pesquisa" onClick={() => setQuery("")}><X size={14} /></button>}</label><button type="button" className={`draft-voice-button ${voiceState === "listening" ? "is-listening" : ""}`} onClick={startVoiceFill} disabled={activeStepIndex === null} aria-label={voiceState === "listening" ? "A ouvir nome do brawler" : "Falar o nome do brawler"} title="Falar nome do brawler"><Mic size={15} /><span>{voiceState === "listening" ? "A ouvir" : voiceState === "processing" ? "A preencher" : "Falar"}</span></button></div><div className="draft-role-filter" role="group" aria-label="Filtrar recomendações por posição">{(["Todas", "side", "mid", "flex"] as DraftRoleFilter[]).map((option) => <button key={option} className={roleFilter === option ? "is-active" : ""} onClick={() => setRoleFilter(option)}>{draftRoleLabels[option]}</button>)}</div></div>
-              <div className={`draft-recommendation-list ${showPickDetails ? "with-details" : "is-compact"}`}>{pagedRankedEntries.map((entry) => <div key={entry.row.brawler}><DraftCard row={entry.row} index={entry.rank - 1} draftScore={entry.draftScore} basePoints={entry.basePoints} finalPoints={entry.finalPoints} signal={entry.signal} onSelect={assignBrawler} locked={lockedNames.has(entry.row.brawler)} banned={banNames.has(entry.row.brawler) && analysisDraftStep?.kind === "pick"} suggestionTeam={suggestionTeam} rosterNames={rosterNames} activeCounterWindow={activeCounterWindow} expanded={showPickDetails} /></div>)}{pagedRankedEntries.length === 0 && <div className="draft-empty"><Search size={22} /><strong>Sem recomendações nesse filtro.</strong><span>Limpa a pesquisa ou troca a posição para veres mais opções.</span></div>}</div>
-              <div className="roster-pagination" aria-label="Páginas de brawlers"><button onClick={() => setRosterPage((page) => Math.max(1, page - 1))} disabled={rosterPage === 1}><ArrowLeft size={14} /> Anterior</button>{Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => <button key={page} className={rosterPage === page ? "is-active" : ""} onClick={() => setRosterPage(page)}>{page}</button>)}<button onClick={() => setRosterPage((page) => Math.min(pageCount, page + 1))} disabled={rosterPage === pageCount}>Ver mais <ArrowDown size={14} /></button><span>A mostrar {topRows.length} de {visibleRows.length} brawlers</span></div>
-              <div className="signal-radar-grid">
-                <SignalCard
-                  title="Aliados recomendados"
-                  eyebrow="Sinergia"
-                  metric="pontos de sinergia"
-                  entries={synergyRadarEntries}
-                  reason={synergyReason}
-                  emptyLabel="Nenhum candidato tem sinergia publicada com os aliados já escolhidos."
-                  onSelect={assignBrawler}
-                />
-                <SignalCard
-                  title="Resposta aos inimigos"
-                  eyebrow="Counter"
-                  metric="pontos de counter"
-                  entries={counterRadarEntries}
-                  reason={counterReason}
-                  emptyLabel="Sem picks inimigos ainda — não há confronto para responder."
-                  onSelect={assignBrawler}
-                />
-              </div>
-              <div className="recommendation-foot"><span><span className="tiny-live" /> {visibleRows.length} opções disponíveis · meta auxiliar média {formatMetric(hybridAverage, "")}</span><span><Star size={13} /> Score Híbrido é a base. As taxas de Counter, Sinergia, Ban, Fit, composição do mapa e desbónus são as definidas no painel Regras % desta sessão. A posição é comum a Azul e Vermelho.</span></div>
-            </section>
-
-            <LaneMatchupDesk myTeam={myTeam} mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
-
-            <LiveCounterEngine suggestions={liveCounterSuggestions} enemyRows={opponentPicks} canAutoPick={canAutoPick} onSelect={assignBrawler} onSimulate={simulateBestCounter} />
-
-            <FoldPanel title="Configurar sequência" kicker="Estratégia" summary="Formato do draft e equipa que começa.">
-            <ScrimSetup preset={scrimPreset} initialTeam={initialTeam} myTeam={myTeam} steps={draftSequence} onPresetChange={handlePresetChange} onInitialTeamChange={handleInitialTeamChange} onMyTeamChange={setMyTeam} onStepsChange={handleCustomStepsChange} />
-            </FoldPanel>
 
             {analysisResolvedCount === draftSequence.length && (() => {
               const bluePicks = draftSequence
@@ -3005,38 +2887,7 @@ export default function Draft() {
               };
               return (
                 <>
-                <FinalWinProbability blueRows={bluePicks} redRows={redPicks} myTeam={myTeam} />
-                <section className="game-plan-section">
-                  <div className="game-plan-heading"><div><div className="section-kicker">Tactical blueprint <span>POST-DRAFT GAME PLAN</span></div><h2>Plano tático de jogo & Builds</h2><p>Missão, posicionamento e builds recomendadas (Gadget, Star Power e Engrenagens) para cada brawler escolhido no mapa {selectedMap?.name}.</p></div><div className="game-plan-actions"><button onClick={copyCoachPlan}><Copy size={14} /> Copiar plano</button><button onClick={downloadCoachPlan}><Download size={14} /> Descarregar</button></div></div>
-                  <div className="game-plan-cards">
-                    {allPicks.map((pickRow, idx) => {
-                      const role = inferDraftRole(pickRow.brawler);
-                      const plan = getTacticalPlan(pickRow, selectedMap?.modeId ?? "gem-grab");
-                      const build = getBrawlerBuild(pickRow.brawler, selectedMap?.modeId);
-                      const isAlly = allyPickNames.has(pickRow.brawler);
-                      return (
-                        <div key={idx} className={`game-card ${isAlly ? "is-ally" : "is-enemy"}`}>
-                          <div className="game-card-head">
-                            <span className="game-card-avatar" style={brawlerImageFor(pickRow) ? { backgroundImage: `url(${brawlerImageFor(pickRow)})` } : undefined} />
-                            <div>
-                              <h4>{pickRow.brawler}</h4>
-                              <small>{isAlly ? "Aliado (Minha Equipa)" : "Adversário"} · {role === "flex" ? "FLEX (ADAPTAÇÃO)" : role.toUpperCase()} · Plano tático</small>
-                            </div>
-                          </div>
-                          <div className="game-card-body">
-                            <p><strong>Missão:</strong> {plan.mission}</p>
-                            <p><strong>Ataque/Defesa:</strong> {plan.action}</p>
-                            <p><strong>Posicionamento:</strong> {plan.position}</p>
-                            <p><strong>Pressão/Alvos:</strong> {plan.pressure}</p>
-                            <div className="game-card-build">
-                              <small>⚡ <strong>Build Recomendada:</strong> Gadget: {build.gadget} | Star Power: {build.starPower} | Gears: {build.gears.join(", ")}</small>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
+                <section className="draft-final" ref={secaoFinalRef} aria-label="Depois do draft">
                 <QuadroDoGeneral
                   mapa={selectedMap ? { name: selectedMap.name, modeId: selectedMap.modeId } : undefined}
                   mapaId={selectedMap ? idDoMapa(selectedMap) : null}
@@ -3045,34 +2896,46 @@ export default function Draft() {
                   deles={myTeam === "blue" ? redPicks : bluePicks}
                   retratoDe={retratoNoQuadro}
                 />
+                <LaneMatchupDesk myTeam={myTeam} semMapa mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
+                </section>
                 </>
               );
             })()}
-
-            <FoldPanel title="Leitura das fontes" kicker="Intel" summary="De onde vêm os números de cada brawler deste mapa.">
-              <section className="draft-intel-grid"><article className="draft-intel-card"><div className="section-kicker">Source lens <span>TOPBRAWL</span></div><Gauge size={18} /><strong>Vitória e uso</strong><p>Win Rate e Use Rate publicados entram na média de fontes. O Score 0–13 não entra na fórmula.</p></article><article className="draft-intel-card"><div className="section-kicker">Source lens <span>BRAWL PLANET</span></div><Star size={18} /><strong>Vitória e popularidade</strong><p>Win Rate e Pick Rate publicados juntam-se aos dados TopBrawl; vitória e uso são normalizados dentro de cada mapa.</p></article><article className="draft-intel-card accent"><div className="section-kicker">Hybrid rule <span>{experimentalWeights ? `${experimentalWeights.winRate} — ${experimentalWeights.usageRate}` : "70 — 30"}</span></div><Zap size={18} /><strong>Contexto primeiro</strong><p>As recomendações ordenam o contexto do mapa e retiram automaticamente bans e picks já usados.</p></article></section>
-            </FoldPanel>
           </div>
-          {/*
-            * A ordem aqui é deliberada: o TABALHO primeiro, a configuração
-            * depois. Antes, o painel de regras e os avisos ficavam acima do
-            * tabuleiro — o que se usa em cada draft estava debaixo do que se
-            * configura uma vez. Quem abre a página quer draftar, não afinar.
-            */}
 
           <RosterWatchPanel roster={rankedSync.snapshot?.roster} />
 
-          <SourceHealthPanel
-            sourceStates={(counterStatusQuery.data as { sourceStatus?: Record<string, SourceStateView> } | undefined)?.sourceStatus}
-            health={(counterStatusQuery.data as { sourceHealth?: Record<string, { blocked?: boolean; blockedUntil?: number; lastStatus?: number }> } | undefined)?.sourceHealth}
-            processHealth={processHealth}
-          />
-
-          {hasCustomGlobalWeights && <section className="draft-experimental-banner" aria-label="Pesos globais ativos"><Sparkles size={16} /><div><strong>Pesos globais ativos</strong><span>Este navegador usa Vitória {experimentalWeights.winRate}% / Uso {experimentalWeights.usageRate}% em todo o site. As regras do Draft podem ser configuradas logo abaixo.</span></div><a href="/#ranking-laboratory">Ajustar pesos</a></section>}
-          <DraftRoleEditor names={liveRows.map(row => row.brawler)} />
-          <DraftRulesPanel preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />
-
+          <Sheet open={painelAberto !== null} onOpenChange={(aberto) => { if (!aberto) setPainelAberto(null); }}>
+            <SheetContent side="right" className="mesa-painel w-full sm:max-w-xl">
+              <SheetHeader><SheetTitle>{PAINEIS_DO_DRAFT.find((painel) => painel.id === painelAberto)?.label ?? "Ajustes"}</SheetTitle></SheetHeader>
+              <div className="mesa-painel-corpo">
+                {painelAberto === "sequencia" && <ScrimSetup preset={scrimPreset} initialTeam={initialTeam} myTeam={myTeam} steps={draftSequence} onPresetChange={handlePresetChange} onInitialTeamChange={handleInitialTeamChange} onMyTeamChange={setMyTeam} onStepsChange={handleCustomStepsChange} />}
+                {painelAberto === "regras" && <>
+                  {hasCustomGlobalWeights && <p className="mesa-painel-nota">Este navegador usa Vitória {experimentalWeights.winRate}% / Uso {experimentalWeights.usageRate}% em todo o site. <a href="/#ranking-laboratory">Mudar</a></p>}
+                  <DraftRulesPanel abertoDeInicio preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />
+                </>}
+                {painelAberto === "funcoes" && <DraftRoleEditor noPainel names={liveRows.map(row => row.brawler)} />}
+                {painelAberto === "pontuacao" && <div className="draft-arena-reference">
+                  <p className="mesa-painel-nota">Melhor Score Híbrido deste mapa: <b><CountUp value={mapHybridReference} /></b> (vale 100 pontos).</p>
+                  <DraftScoreReference entries={draftScoreReference} mapName={selectedMap?.name} pickNumber={analysisGlobalPickNumber} />
+                </div>}
+                {painelAberto === "fontes" && <>
+                  <FoldPanel defaultOpen title="Leitura das fontes" kicker="Fontes" summary="De onde vêm os números de cada brawler.">
+                    <ul className="mesa-painel-lista draft-intel-grid">
+                      <li><b>TopBrawl</b> vitória e uso publicados.</li>
+                      <li><b>Brawl Planet</b> vitória e popularidade, juntas às do TopBrawl.</li>
+                      <li><b>Regra {experimentalWeights ? `${experimentalWeights.winRate}/${experimentalWeights.usageRate}` : "70/30"}</b> vitória e uso normalizados em cada mapa; bans e picks já feitos saem da lista.</li>
+                    </ul>
+                  </FoldPanel>
+                  <SourceHealthPanel
+                    sourceStates={(counterStatusQuery.data as { sourceStatus?: Record<string, SourceStateView> } | undefined)?.sourceStatus}
+                    health={(counterStatusQuery.data as { sourceHealth?: Record<string, { blocked?: boolean; blockedUntil?: number; lastStatus?: number }> } | undefined)?.sourceHealth}
+                    processHealth={processHealth}
+                  />
+                </>}
+                {painelAberto === "rotacao" && <>
           <FoldPanel
+            defaultOpen
             title="Rotação oficial"
             kicker="API"
             tone={eventsQuery.data?.source === "official_api" ? "live" : "warning"}
@@ -3108,6 +2971,10 @@ export default function Draft() {
             )}
           </section>
           </FoldPanel>
+                </>}
+              </div>
+            </SheetContent>
+          </Sheet>
         </main>
         <footer className="app-footer"><span>BRAWL HÍBRIDO / DRAFT WORKSPACE</span><span>Decisões melhores, um slot de cada vez.</span></footer>
       </div>

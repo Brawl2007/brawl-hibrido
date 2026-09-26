@@ -69,6 +69,7 @@ import { avaliarConfianca, explicarConfianca } from "@shared/amostraPequena";
 import { LIMITE_DE_CONFIANCA_MS, descreverFrescura } from "@shared/idadeDosDados";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
+import { BarraDoSite } from "@/components/BarraDoSite";
 
 const LOGO_URL = LOGO;
 
@@ -179,136 +180,24 @@ function TierBadge({ tier }: { tier: Tier | null }) {
   );
 }
 
-function Sidebar({
-  activeSection,
-  onSectionChange,
-  open,
-  onClose,
-  capturedAt,
-}: {
-  activeSection: string;
-  onSectionChange: (section: string) => void;
-  open: boolean;
-  onClose: () => void;
-  capturedAt: Date | string | null | undefined;
-}) {
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Gauge },
-    { id: "maps", label: "Mapas Ranked", icon: Layers3 },
-    { id: "draft", label: "Draft Híbrido", icon: Sparkles, href: "/draft" },
-    { id: "brawlers", label: "Brawlers", icon: Crosshair, href: "/brawlers" },
-    { id: "sources", label: "Fontes", icon: Radio },
-    { id: "formula", label: "Como funciona", icon: CircleHelp },
-  ];
-
-  return (
-    <>
-      <AnimatePresence>
-        {open && (
-          <motion.button
-            aria-label="Fechar menu"
-            className="sidebar-backdrop lg:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-        )}
-      </AnimatePresence>
-      <aside className={`app-sidebar ${open ? "is-open" : ""}`}>
-        <div className="sidebar-brand">
-          <div className="brand-mark-shell">
-            <img src={LOGO_URL} alt="" className="brand-mark" />
-          </div>
-          <div>
-            <div className="brand-name">Brawl Híbrido</div>
-            <div className="brand-kicker">Ranked intelligence</div>
-          </div>
-          <button className="sidebar-close lg:hidden" onClick={onClose} aria-label="Fechar menu">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="sidebar-status">
-          <span className="status-pulse" />
-          <span>ROTAÇÃO ATUAL</span>
-          <strong>26 mapas catalogados</strong>
-        </div>
-
-        <nav className="sidebar-nav" aria-label="Navegação principal">
-          <div className="nav-label">Workspace</div>
-          {navItems.map(({ id, label, icon: Icon, href }) => (
-            href ? (
-              <a key={id} href={href} className="sidebar-link">
-                <Icon size={18} />
-                <span>{label}</span>
-              </a>
-            ) : (
-              <button
-                key={id}
-                className={`sidebar-link ${activeSection === id ? "is-active" : ""}`}
-                onClick={() => {
-                  onSectionChange(id);
-                  onClose();
-                }}
-              >
-                <Icon size={18} />
-                <span>{label}</span>
-                {id === "maps" && <span className="nav-count">26</span>}
-              </button>
-            )
-          ))}
-        </nav>
-
-        <div className="sidebar-spacer" />
-
-        <div className="sidebar-note">
-          <div className="note-icon"><Zap size={16} /></div>
-          <div>
-            <strong>Score Híbrido</strong>
-            <p>Win Rate + leitura de meta numa só métrica.</p>
-          </div>
-        </div>
-        <div className="sidebar-footer">
-          <span className="footer-dot" />
-          Última sync: {formatSyncDate(capturedAt)}
-        </div>
-      </aside>
-    </>
-  );
-}
-
-function Topbar({ onMenu, capturedAt, lastStatus, liveState, onRefresh, isRefreshing, refreshProgress }: { onMenu: () => void; capturedAt: Date | string | null | undefined; lastStatus: string; liveState: "connecting" | "live" | "offline"; onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null }) {
+function Topbar({ capturedAt, lastStatus, liveState, onRefresh, isRefreshing, refreshProgress, activeSection, onSection }: { capturedAt: Date | string | null | undefined; lastStatus: string; liveState: "connecting" | "live" | "offline"; onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null; activeSection: string; onSection: (section: string) => void }) {
   const isLive = Boolean(capturedAt) && lastStatus === "success";
-  const liveLabel = liveState === "live" ? "Live · SSE" : liveState === "connecting" ? "A ligar…" : "Offline · fallback";
+  const liveLabel = liveState === "live" ? "Ao vivo" : liveState === "connecting" ? "A ligar…" : "Sem ligação";
   // "Atualizar agora" manda o servidor ir ler as fontes, e só o dono o pode
   // fazer. A quem não pode, o site mostrava o botão na mesma e respondia com
   // uma recusa depois do clique. A idade dos dados continua visível abaixo.
   const ehDono = useEhDono();
+  const ativo = activeSection === "maps" ? "mapas" : activeSection === "sources" ? "fontes" : activeSection === "formula" ? "como" : "inicio";
   return (
-    <header className="topbar">
-      <button className="mobile-menu-button lg:hidden" onClick={onMenu} aria-label="Abrir menu">
-        <Menu size={20} />
-      </button>
-      <div className="topbar-crumbs">
-        <span className="crumb-muted">Ranked</span>
-        <ChevronRight size={14} />
-        <span className="crumb-active">Brawl Híbrido</span>
-      </div>
-      <div className="topbar-actions">
-        <span className="live-chip"><span className="live-dot" /> {isLive ? liveLabel : "Snapshot local"}</span>
-        {ehDono ? (
-          <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Última atualização: ${formatSyncDate(capturedAt)}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
-            <Activity size={16} className={isRefreshing ? "animate-spin" : undefined} />
-            <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
-          </button>
-        ) : null}
-        <div className="profile-chip">
-          <span className="profile-avatar">BH</span>
-          <span className="profile-label">Analista</span>
-        </div>
-      </div>
-    </header>
+    <BarraDoSite ativo={ativo} onSecao={onSection}>
+      <span className="live-chip"><span className="live-dot" /> {isLive ? liveLabel : "Dados guardados"}</span>
+      {ehDono ? (
+        <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Última atualização: ${formatSyncDate(capturedAt)}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
+          <Activity size={16} className={isRefreshing ? "animate-spin" : undefined} />
+          <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar"}</span>
+        </button>
+      ) : null}
+    </BarraDoSite>
   );
 }
 
@@ -462,7 +351,6 @@ function MapSelector({
     <section className="map-section" id="maps">
       <div className="section-heading-row">
         <div>
-          <div className="section-kicker">Biblioteca Ranked</div>
           <h2>Escolhe o teu mapa</h2>
         </div>
         <div className="map-tools">
@@ -598,9 +486,8 @@ function RotationAverages({
     <section className="data-section rotation-section" id="rotation-averages">
       <div className="data-heading rotation-heading">
         <div>
-          <div className="section-kicker">Média da rotação</div>
           <h2>Score Híbrido médio</h2>
-          <p>A média de cada brawler nos <strong>{mapCount}/{totalMapCount} mapas de {modeLabel}</strong>. O cálculo é refeito automaticamente assim que a snapshot Ranked muda; cada mapa com Score Híbrido publicado entra uma única vez.</p>
+          <p>A média de cada brawler nos <strong>{mapCount}/{totalMapCount} mapas de {modeLabel}</strong>.</p>
         </div>
         <div className="rotation-kpis" aria-label="Resumo da média da rotação">
           <span><b>{leader?.brawler ?? "—"}</b><small>líder geral</small></span>
@@ -720,9 +607,8 @@ function RankingLaboratory({
     <section className="ranking-laboratory data-section" id="ranking-laboratory">
       <div className="data-heading ranking-lab-heading">
         <div>
-          <div className="section-kicker">Configuração local <span>TODO O SITE</span></div>
           <h2>Ajustar o Score Híbrido</h2>
-          <p>Escolhe a ponderação que queres usar neste navegador. A alteração atualiza de imediato os mapas, ranking, médias, perfis de Brawlers e recomendações do Draft.</p>
+          <p>Quanto pesa a vitória e quanto pesa o uso. Vale para o site todo, só neste navegador.</p>
         </div>
       </div>
 
@@ -843,7 +729,6 @@ function FormulaCard({ weights }: { weights: HybridWeightsPreference }) {
       <div className="formula-card-glow" />
       <div className="card-heading formula-heading">
         <div>
-                      <div className="section-kicker">A nossa leitura</div>
             <h3>O que é o Score Híbrido?</h3>
 
         </div>
@@ -903,9 +788,8 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
     <section className="source-section" id="sources">
       <div className="source-heading">
         <div>
-          <div className="section-kicker">Leitura por fonte</div>
-          <h2>Vê cada sinal no seu lugar.</h2>
-          <p>Escolhe TopBrawl, Brawl Planet ou Score Híbrido. Os seis brawlers em destaque atualizam-se com a fonte selecionada.</p>
+          <h2>Os números de cada fonte</h2>
+          <p>TopBrawl, Brawl Planet ou o Score Híbrido.</p>
         </div>
         <span className="source-live-chip"><Radio size={13} /> fontes auditadas</span>
       </div>
@@ -1005,7 +889,6 @@ export default function Home() {
   );
   const [selectedMap, setSelectedMap] = useState<MapSummary>(() => liveMapSummaries.find((map) => map.name === "Beach Ball") ?? liveMapSummaries[0]);
   const [modeFilter, setModeFilter] = useState("Todos");
-  const [mobileSidebar, setMobileSidebar] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
 
   useEffect(() => {
@@ -1103,12 +986,20 @@ export default function Home() {
     setActiveSection(id);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  // Quem chega de outra página por "Mapas", "Fontes" ou "Como funciona" traz a
+  // secção no endereço (/#maps): desce até ela quando a página já tem conteúdo.
+  useEffect(() => {
+    const secao = window.location.hash.slice(1);
+    if (!["maps", "sources", "formula", "dashboard"].includes(secao)) return;
+    const espera = window.setTimeout(() => scrollTo(secao), 400);
+    return () => window.clearTimeout(espera);
+    // Só à chegada.
+  }, []);
 
   return (
-    <div className="app-shell" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.92), rgba(11,14,20,.96))", TEXTURA) }}>
-      <Sidebar activeSection={activeSection} onSectionChange={scrollTo} open={mobileSidebar} onClose={() => setMobileSidebar(false)} capturedAt={capturedAt} />
+    <div className="app-shell com-barra-no-topo" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.92), rgba(11,14,20,.96))", TEXTURA) }}>
       <div className="app-main">
-        <Topbar onMenu={() => setMobileSidebar(true)} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
+        <Topbar activeSection={activeSection} onSection={scrollTo} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
         <main>
           <Hero selectedMap={selectedMap} leader={lider} onExplore={() => scrollTo("maps")} />
           <div className="main-content">
@@ -1117,9 +1008,7 @@ export default function Home() {
             ) : null}
             <div className="intro-row" id="dashboard">
               <div className="intro-copy">
-                <div className="section-kicker">Painel de controlo <span>Season 06 / 2026</span></div>
                 <h2>O meta, sem ruído.</h2>
-                <p>Seleciona um mapa para cruzar o ranking completo com a métrica que criámos para separar popularidade de performance.</p>
               </div>
               <div className={`intro-badge ${frescura.velho ? "is-velho" : ""}`} title={frescura.velho
                 ? `As fontes não são lidas há mais de ${Math.round(LIMITE_DE_CONFIANCA_MS / 3600000)} horas. Os números não estão errados — são apenas de antes.`
