@@ -23,6 +23,7 @@ import { TIPOS_DE_MARCADOR } from "@shared/quadroDoGeneral";
 import { tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
 import { criarMatoDeLaminas, montarRealismo, type QualidadeDoMapa, type Realismo } from "./realismo3D";
+import { ALTURA_DA_CARA, criarCorpo } from "./bonecos3D";
 
 export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string; /** A classe (Lançador, Tank…): decide como ataca na cena. */ classe?: string };
 /** Um duelo 1v1: a linha entre as duas fichas, com a vantagem da tua equipa. */
@@ -105,8 +106,8 @@ function estiloDaClasse(classe?: string): EstiloDeAtaque {
   }
 }
 
-/** A altura do retrato por cima da base de cada brawler. */
-const ALTURA_DO_RETRATO = 2.05;
+/** A altura do retrato (a cara do boneco) por cima da base de cada brawler. */
+const ALTURA_DO_RETRATO = ALTURA_DA_CARA;
 
 /** Um ponto de luz redondo, para os tiros e os clarões da cena (soma-se à cor: brilha). */
 function texturaDeBrilho() {
@@ -690,6 +691,7 @@ export default function Quadro3D(props: Props) {
         filho.position.x = 0;
         filho.position.z = 0;
         if (i === 2) filho.position.y = ALTURA_DO_RETRATO;
+        if (i === 1) filho.position.y = 0;
       });
     };
     const pararFilme = (voltar = true) => {
@@ -849,7 +851,10 @@ export default function Quadro3D(props: Props) {
       // Os brawlers mexem-se no sítio: estão em combate, não parados.
       grupoDasFichas.children.forEach((g, i) => {
         const retrato = g.children[2];
-        if (retrato) retrato.position.y = ALTURA_DO_RETRATO + Math.abs(Math.sin(filme!.relogio / 160 + i * 1.3)) * 0.18;
+        const salto = Math.abs(Math.sin(filme!.relogio / 160 + i * 1.3)) * 0.18;
+        if (retrato) retrato.position.y = ALTURA_DO_RETRATO + salto;
+        // O corpo também: em combate ninguém está parado.
+        if (g.children[1]) g.children[1].position.y = salto;
       });
       // Os ataques de cada duelo, cada um à maneira do brawler — no relógio da cena, que abranda nas lutas.
       filme.tiros.forEach((tiro, i) => animarTiro(tiro, i, filme!.relogio));
@@ -862,11 +867,15 @@ export default function Quadro3D(props: Props) {
     const vigia = new IntersectionObserver(([entrada]) => { aVista = entrada.isIntersecting; });
     vigia.observe(elemento);
     let ultimoVivo = 0;
+    // Numa máquina lenta (cada imagem a demorar mais de 45 ms), o mapa deixa de
+    // se mexer sozinho quando está parado; a cena de cinema continua.
+    let vivoParado = true;
+    let custo = 0;
     let quadro = 0;
     const ciclo = () => {
       quadro = requestAnimationFrame(ciclo);
       const agora = performance.now();
-      if (realismo && aVista && (filme || agora - ultimoVivo > 33)) {
+      if (realismo && aVista && (filme || (vivoParado && agora - ultimoVivo > 33))) {
         ultimoVivo = agora;
         realismo.animar(agora / 1000);
         sujo = true;
@@ -890,8 +899,11 @@ export default function Quadro3D(props: Props) {
       }
       if (!sujo) return;
       sujo = false;
+      const antes = performance.now();
       if (realismo) realismo.desenhar();
       else renderer.render(scene, camera);
+      custo = custo * 0.9 + (performance.now() - antes) * 0.1;
+      if (custo > 45 && !filme) vivoParado = false;
     };
     ciclo();
 
@@ -1179,13 +1191,15 @@ export default function Quadro3D(props: Props) {
         );
         base.position.y = 0.08;
         base.castShadow = true;
-        const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 8), new THREE.MeshBasicMaterial({ color: COR_DO_LADO[ficha.lado] }));
-        haste.position.y = 0.7;
+        // O corpo do boneco (a forma vem da classe), virado para a base adversária.
+        const haste = criarCorpo(ficha.classe, COR_DO_LADO[ficha.lado]);
+        haste.rotation.y = ficha.lado === "nos" ? 0 : Math.PI;
         const retrato = new THREE.Sprite(new THREE.SpriteMaterial({ map: desenharFicha(ficha.nome, ficha.lado, retratos.current.get(ficha.retrato ?? "") ?? null, ficha.funcao), depthTest: false }));
         // Visto dos olhos dele: o retrato não aparece (tapava tudo); fica a base no chão.
         retrato.visible = ficha.chave !== vistoComo;
         haste.visible = ficha.chave !== vistoComo;
-        retrato.scale.set(1.5, 1.875, 1);
+        // A cara: o retrato redondo por cima do pescoço, com o nome ao peito.
+        retrato.scale.set(1.05, 1.3125, 1);
         retrato.position.y = ALTURA_DO_RETRATO;
         retrato.renderOrder = 20;
         grupo.add(base, haste, retrato);

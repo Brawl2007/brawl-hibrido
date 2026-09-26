@@ -210,3 +210,20 @@ describe("gráficos Cinema", () => {
     expect(q3d).toContain("materialDaAgua.userData.ondula = true;");
   });
 });
+
+describe("os bonecos com corpo", () => {
+  const bonecos = ler("client/src/components/bonecos3D.ts");
+  const q3d = ler("client/src/components/Quadro3D.tsx");
+  it("cada classe tem a sua forma e arma", () => {
+    for (const classe of ["Tank", "Assassino", "Artilheiro", "Lançador", "Destruidor", "Controlador", "Suporte"]) {
+      expect(bonecos, classe).toMatch(new RegExp(`${classe}: \\{ largura`));
+    }
+    expect(bonecos).toContain('case "Artilheiro": {');
+    expect(bonecos).toContain('case "Lançador": {');
+  });
+  it("o corpo substitui o pau, olha para a base adversária e mantém a cara no lugar do retrato", () => {
+    expect(q3d).toContain("const haste = criarCorpo(ficha.classe, COR_DO_LADO[ficha.lado]);");
+    expect(q3d).toContain('haste.rotation.y = ficha.lado === "nos" ? 0 : Math.PI;');
+    expect(q3d).toContain("const ALTURA_DO_RETRATO = ALTURA_DA_CARA;");
+  });
+});
