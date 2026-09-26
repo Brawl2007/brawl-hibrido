@@ -1,3 +1,4 @@
+import { Retrato } from "@/components/Retrato";
 import { getMatchupValue, describeMatchupValue, formatMatchupPercent } from "@shared/counterMatchupValue";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
 import { useEffect, useMemo, useState } from "react";
@@ -109,10 +110,10 @@ export default function MatchupMatrix() {
       </section>
 
       <section className="observed-duel" aria-label={`Duelo observado ${brawler} contra ${opponent}`}>
-        <div className="observed-combatant left"><div className="observed-avatar" style={brawlerImageFor(selectedBrawlerRow) ? { backgroundImage: `url(${brawlerImageFor(selectedBrawlerRow)})` } : undefined}>{!brawlerImageFor(selectedBrawlerRow) && brawler.slice(0, 2)}</div><strong>{brawler}</strong></div>
+        <div className="observed-combatant left"><div className="observed-avatar com-retrato"><Retrato src={brawlerImageFor(selectedBrawlerRow)} nome={brawler} /></div><strong>{brawler}</strong></div>
         <div className="observed-result"><span>PARTIDAS RANKED OBSERVADAS</span><EvidenceLabel samples={selected.samples} sufficient={selected.hasSufficientSample} winRate={selected.winRate} /><p>{selected.samples ? `${selected.wins} vitórias · ${selected.losses} derrotas` : "Nenhuma observação neste filtro"}</p></div>
         <div className="observed-vs">VS</div>
-        <div className="observed-combatant right"><strong>{opponent}</strong><div className="observed-avatar" style={brawlerImageFor(selectedOpponentRow) ? { backgroundImage: `url(${brawlerImageFor(selectedOpponentRow)})` } : undefined}>{!brawlerImageFor(selectedOpponentRow) && opponent.slice(0, 2)}</div></div>
+        <div className="observed-combatant right"><strong>{opponent}</strong><div className="observed-avatar com-retrato"><Retrato src={brawlerImageFor(selectedOpponentRow)} nome={opponent} /></div></div>
       </section>
 
       <section className="observed-counter-intel"><h2>Counter Pick · {brawler} contra {opponent}</h2><strong>{getMatchupValue(brawler, opponent, mode).base === null ? "—" : formatMatchupPercent(getMatchupValue(brawler, opponent, mode).total)}</strong><p>{describeMatchupValue(getMatchupValue(brawler, opponent, mode))}</p></section>
@@ -126,7 +127,7 @@ export default function MatchupMatrix() {
           {row.slice(0, verTodos || query.trim() ? row.length : 24).map((cell) => {
             const foe = rowByName.get(cell.opponent);
             return <button key={cell.opponent} className={`observed-cell ${cell.hasSufficientSample ? "has-sample" : ""} ${cell.opponent === opponent ? "is-selected" : ""}`} onClick={() => setOpponent(cell.opponent)}>
-              <span className="observed-cell-avatar" style={brawlerImageFor(foe) ? { backgroundImage: `url(${brawlerImageFor(foe)})` } : undefined}>{!brawlerImageFor(foe) && cell.opponent.slice(0, 2)}</span>
+              <span className="observed-cell-avatar com-retrato"><Retrato src={brawlerImageFor(foe)} nome={cell.opponent} /></span>
               <span className="observed-cell-copy"><strong>{cell.opponent}</strong><small>{describeMatchupValue(getMatchupValue(brawler, cell.opponent, mode))} · Final: {getMatchupValue(brawler, cell.opponent, mode).base === null ? "—" : formatMatchupPercent(getMatchupValue(brawler, cell.opponent, mode).total)}</small><EvidenceLabel samples={cell.samples} sufficient={cell.hasSufficientSample} winRate={cell.winRate} /></span><ChevronRight size={15} />
             </button>;
           })}

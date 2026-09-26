@@ -25,7 +25,8 @@ export const DESTINOS_DO_SITE = [
 export type DestinoDoSite = (typeof DESTINOS_DO_SITE)[number]["id"];
 
 export function BarraDoSite({ ativo, children, onSecao }: {
-  ativo: DestinoDoSite;
+  /** O destino desta página (nenhum, numa página que não está no menu). */
+  ativo?: DestinoDoSite;
   /** As ações desta página (estado das fontes, atualizar, limpar…). */
   children?: ReactNode;
   /**

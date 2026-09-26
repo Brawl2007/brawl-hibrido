@@ -343,3 +343,67 @@
 @keyframes qg-legenda { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .qg-cinema-parar { position: absolute; top: calc(9% + 8px); right: 10px; pointer-events: auto; padding: 5px 10px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 8px; background: rgba(0, 0, 0, .5); color: #fff; font-size: 12px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .qg-legenda, .qg-cinema::before, .qg-cinema::after { animation: none; } }
+
+/* ------------------------------------------------------------------ *
+ * v150 — revisão no telemóvel
+ * ------------------------------------------------------------------ */
+@media (max-width: 700px) {
+  /* A pesquisa ficava um quadrado de 180 px: numa coluna, o "flex-basis"
+     passa a ser a altura. Em linha, com a pesquisa na primeira. */
+  .mesa-centro .recommendation-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .mesa-centro .recommendation-toolbar .draft-search { flex: 1 1 100%; width: 100%; height: auto; }
+  /* A barra 50/50 fica em cima, onde está no computador, e não no fundo. */
+  .mesa-centro .draft-probability-center.is-compacto { order: 0; width: auto; min-height: 0; padding: 4px 2px; }
+  /* O risco vertical ao meio é do quadro grande antigo; na barra só atrapalha. */
+  .mesa-centro .draft-probability-center.is-compacto::before { display: none; }
+  /* Os separadores cabem sem cortar: "Sinergia e counters" passa a duas linhas se for preciso. */
+  .mesa-abas button { flex: 1 1 0; min-width: 0; white-space: normal; line-height: 1.15; padding: 4px 4px; }
+  /* As setas da paginação não saltam de linha. */
+  .mesa-centro .roster-pagination { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .mesa-centro .roster-pagination button { flex: 0 0 auto; }
+}
+@media (max-width: 640px) {
+  .brawlers-toolbar > .brawler-search { flex: 0 0 auto; }
+}
+@media (max-width: 700px) {
+  /* Os 26 mapas eram quase 5 ecrãs a rolar: duas colunas, cartões baixos.
+     O cartão inteiro abre a análise, por isso o botão "Ver análise" sai. */
+  .map-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .map-strip .map-card { min-height: 0; gap: 4px; padding: 9px 9px 8px; }
+  .map-strip .map-card-mode { font-size: 8px; }
+  .map-strip .map-card-name { font-size: 13px; line-height: 1.15; gap: 6px; }
+  .map-strip .map-card-thumb { display: none; }
+  .map-strip .map-card-best em { display: none; }
+  .map-strip .map-card-best strong { font-size: 11px; }
+  .map-strip .map-card-meta-label { display: none; }
+  .map-strip .map-card-action { display: none; }
+  /* Há a barra de baixo; o botão de voltar ao topo tapava pontuações. */
+  .scroll-top-button { display: none; }
+}
+/* Matriz: o "VS" rodava com o losango (lia-se de lado). Roda só o fundo. */
+.observed-vs { position: relative; transform: none; border: 0; background: transparent; }
+.observed-vs::before { content: ""; position: absolute; inset: 0; border: 1px solid rgba(248, 184, 78, .4); background: rgba(248, 184, 78, .06); transform: rotate(45deg); }
+@media (max-width: 900px) {
+  /* Os dois frente a frente, o VS entre eles, e as partidas por baixo:
+     antes o VS ficava por cima do texto das partidas. */
+  .observed-duel { grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); }
+  .observed-duel .observed-vs { position: relative; left: auto; grid-column: 2; grid-row: 1; justify-self: center; }
+  .observed-duel .observed-combatant.left { grid-column: 1; grid-row: 1; }
+  .observed-duel .observed-combatant.right { grid-column: 3; grid-row: 1; }
+}
+/* A página que não existe, com o tema do site. */
+.pagina-inexistente { min-height: 100vh; background: var(--bh-ground); color: var(--bh-text); }
+.pagina-inexistente main { display: grid; justify-items: center; gap: 10px; max-width: 520px; margin: 0 auto; padding: 14vh 20px 110px; text-align: center; }
+.pagina-inexistente main > strong { color: var(--bh-gold); font-size: 88px; line-height: 1; }
+.pagina-inexistente h1 { margin: 0; font-size: 24px; }
+.pagina-inexistente p { margin: 0; color: var(--bh-text-muted); }
+.pagina-inexistente-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.pagina-inexistente-acoes a { min-height: 42px; display: inline-flex; align-items: center; padding: 0 16px; border: 1px solid var(--bh-line-strong); border-radius: 10px; color: var(--bh-text); font-weight: 700; text-decoration: none; }
+.pagina-inexistente-acoes a.is-principal { border-color: transparent; background: var(--bh-gold); color: var(--bh-on-gold); }
+/* Retratos: a imagem enche o quadrado; se falhar, ficam as iniciais (Retrato.tsx). */
+.com-retrato { position: relative; overflow: hidden; display: grid; place-items: center; }
+.com-retrato > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; border-radius: inherit; }
+.hybrid-usage-avatar.com-retrato > img, .source-avatar.com-retrato > img, .source-full-avatar.com-retrato > img { transform: scale(1.25); }
+.brawler-avatar.com-retrato > img { object-position: center top; }
+.retrato-iniciais { font-weight: 800; letter-spacing: .02em; }
+.draft-probability-center.is-compacto::before { display: none; }

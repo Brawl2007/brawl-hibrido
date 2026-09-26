@@ -19,7 +19,7 @@ const DESTINOS = [
   { href: "/", label: "Início", icon: Gauge, match: (path: string) => path === "/" },
   { href: "/draft", label: "Draft", icon: Sparkles, match: (path: string) => path.startsWith("/draft") },
   { href: "/brawlers", label: "Brawlers", icon: Crosshair, match: (path: string) => path.startsWith("/brawlers") },
-  { href: "/matchups", label: "Matchups", icon: Layers3, match: (path: string) => path.startsWith("/matchups") },
+  { href: "/matchups", label: "Matriz 1v1", icon: Layers3, match: (path: string) => path.startsWith("/matchups") },
 ] as const;
 
 export function MobileNav({ pathname }: { pathname?: string }) {

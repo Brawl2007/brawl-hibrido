@@ -1,3 +1,4 @@
+import { Retrato } from "@/components/Retrato";
 import { BarraDoSite } from "@/components/BarraDoSite";
 import { MobileNav } from "@/components/MobileNav";
 import { LOGO } from "@/lib/imagens";
@@ -94,7 +95,7 @@ function TeammateCard({ relation, target }: { relation: BrawlPlanetRelation; tar
   const name = relation.brawler;
   const href = `/brawlers/${encodeURIComponent(target?.brawler ?? name)}`;
   return <Link href={href} className="brawler-relation-card is-positive">
-    <div className="relation-avatar">{image ? <img src={image} alt={name} loading="lazy" /> : <span>{name.slice(0, 2).toUpperCase()}</span>}</div>
+    <div className="relation-avatar"><Retrato src={image} nome={name} alt={name} loading="lazy" /></div>
     <div className="relation-copy"><strong>{name}</strong><span>{`${relation.delta > 0 ? "+" : ""}${relation.delta.toFixed(1)} sinergia`}</span><small>Brawl Planet · Best Teammates</small></div>
     <ChevronRight size={16} className="relation-arrow" />
   </Link>;
@@ -119,7 +120,7 @@ function WorstTeammates({ item, catalog }: { item: BrawlerCatalogItem; catalog: 
       const image = imageFor(target);
       const name = relation.brawler;
       return <Link href={`/brawlers/${encodeURIComponent(target?.brawler ?? name)}`} className="brawler-relation-card is-negative" key={name}>
-        <div className="relation-avatar">{image ? <img src={image} alt={name} loading="lazy" /> : <span>{name.slice(0, 2).toUpperCase()}</span>}</div>
+        <div className="relation-avatar"><Retrato src={image} nome={name} alt={name} loading="lazy" /></div>
         <div className="relation-copy"><strong>{name}</strong><span>{`${relation.delta > 0 ? "+" : ""}${relation.delta.toFixed(1)} sinergia`}</span><small>Brawl Planet · Worst Teammates</small></div>
         <ChevronRight size={16} className="relation-arrow" />
       </Link>;
@@ -137,7 +138,7 @@ function BrawlScopeSynergy({ item, catalog, modeId }: { item: BrawlerCatalogItem
       const image = imageFor(target);
       const name = relation.brawler;
       return <Link href={`/brawlers/${encodeURIComponent(target?.brawler ?? name)}`} className="sourced-counter-card is-advantage" key={`pair-${name}`}>
-        <div className="relation-avatar">{image ? <img src={image} alt={name} loading="lazy" /> : <span>{name.slice(0, 2).toUpperCase()}</span>}</div>
+        <div className="relation-avatar"><Retrato src={image} nome={name} alt={name} loading="lazy" /></div>
         <div className="sourced-counter-copy"><div><strong>{name}</strong><span className="counter-source-badge">BrawlScope · {viewLabel}</span></div><small>{typeof relation.delta === "number" ? `${relation.delta > 0 ? "+" : ""}${relation.delta.toLocaleString("pt-PT", { maximumFractionDigits: 2 })}% de sinergia` : `#${index + 1} na lista publicada`}</small><small>BrawlScope · Pair with{typeof relation.delta === "number" ? ` · #${index + 1}` : ""}</small></div>
         <ChevronRight size={16} className="relation-arrow" />
       </Link>;
@@ -152,7 +153,7 @@ function SourceCounterCard({ relation, target, direction, owner, modeId }: { own
   const name = relation.brawler;
   const href = `/brawlers/${encodeURIComponent(target?.brawler ?? name)}`;
   return <Link href={href} className={`sourced-counter-card ${direction === "targets" ? "is-advantage" : "is-risk"}`}>
-    <div className="relation-avatar">{image ? <img src={image} alt={name} loading="lazy" /> : <span>{name.slice(0, 2).toUpperCase()}</span>}</div>
+    <div className="relation-avatar"><Retrato src={image} nome={name} alt={name} loading="lazy" /></div>
     <div className="sourced-counter-copy"><div><strong>{name}</strong><span className="counter-source-badge">{relation.sources.map(source => `${source}${relation.globalSources.includes(source) ? " · Global da fonte" : ""}`).join(" + ")}</span></div><small>{value.base === null ? "—" : formatMatchupPercent(value.total)} · {describeMatchupValue(value)}</small>{relation.reason ? <p>{relation.reason}</p> : <small>Relação listada literalmente no guia público da fonte.</small>}</div>
     <ChevronRight size={16} className="relation-arrow" />
   </Link>;
@@ -188,8 +189,8 @@ function CounterSourceGrid({ item, catalog, direction, modeId }: { item: Brawler
   const profiles = getCounterSourceProfiles(item.brawler, modeId);
   const relations = aggregateCounterRelations(profiles, direction, item.brawler, modeId);
   const total = relations.length;
-  const title = direction === "targets" ? "Matchups strong against" : "Struggles against";
-  const kicker = direction === "targets" ? "COUNTERA · STRONG AGAINST" : "COUNTERADO POR · STRUGGLES AGAINST";
+  const title = direction === "targets" ? "Ganha a" : "Perde com";
+  const kicker = direction === "targets" ? "Countera" : "É counterado por";
   const subtitle = direction === "targets" ? "Todos os brawlers que esta escolha countera. Se várias fontes publicam o mesmo par, ele aparece uma vez com as fontes agrupadas." : "Todos os brawlers que counteram esta escolha. Se várias fontes publicam o mesmo par, ele aparece uma vez com as fontes agrupadas.";
   return <section className={`brawler-relation-section sourced-list ${direction === "targets" ? "counters" : "counteredBy"}`}>
     <div className="relation-section-head"><div><span className="section-kicker">{kicker}</span><h2>{title}</h2><p>{subtitle}</p></div><strong>{total}</strong></div>
@@ -238,7 +239,7 @@ function BrawlScopeMatchupMatrix({ item, catalog, modeId, vistasComFicha }: { it
       // O tom segue o significado, não o sinal: negativo publicado é vantagem do titular.
       const tone = delta < 0 ? "is-advantage" : delta > 0 ? "is-risk" : "is-neutral";
       return <Link key={entry.brawler} href={`/brawlers/${encodeURIComponent(entry.brawler)}`} className={`sourced-counter-card ${tone}`}>
-        <div className="relation-avatar">{image ? <img src={image} alt={entry.brawler} loading="lazy" /> : <span>{entry.brawler.slice(0, 2).toUpperCase()}</span>}</div>
+        <div className="relation-avatar"><Retrato src={image} nome={entry.brawler} alt={entry.brawler} loading="lazy" /></div>
         <div className="sourced-counter-copy"><div><strong>{entry.brawler}</strong><span className="counter-delta">{value.base === null ? "—" : formatMatchupPercent(delta)}</span></div><small>{describeMatchupValue(value)}</small></div>
         <ChevronRight size={16} className="relation-arrow" />
       </Link>;
@@ -327,8 +328,8 @@ export default function BrawlerDetail() {
     <div className="app-main">
       <BarraDoSite ativo="brawlers"><a className="refresh-button" href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ver PL Prodigy</a></BarraDoSite>
       <main className="brawler-detail-main">
-        <div className="brawler-detail-nav"><Link href="/brawlers" className="back-link"><ArrowLeft size={15} /> Voltar a Brawlers & Counters</Link><span className="detail-source-tag"><span className="tiny-live" /> {rankedSync.source === "sse" ? `Ranked SSE · ${rankedSync.version ?? "snapshot"}` : "BrawlScope + PL Prodigy + Brawl Planet"}</span></div>
-        <DraftRoleEditor names={[item.brawler]} /><section className="brawler-profile-hero"><div className="profile-hero-image">{image ? <img src={image} alt={item.brawler} /> : <span>{item.brawler.slice(0, 2).toUpperCase()}</span>}</div><div className="profile-hero-copy"><h1>{item.brawler}</h1><div className="profile-hero-tags">{item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{draftRoleLabels[item.role]}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}<span className="profile-tier">{item.isRankedAvailable ? `Tier ${item.bestRow.tier ?? "—"}` : "Aguardando Ranked"}</span><span className="profile-map">{item.isRankedAvailable ? `Melhor registo: ${item.bestRow.map} · ${item.bestRow.mode}` : "Ainda sem métricas por mapa na rotação"}</span></div><p>{item.isRankedAvailable ? "Contra quem ganha, com quem perde e com quem joga bem, como cada fonte publica." : "Sem métricas Ranked publicadas. O perfil não substitui dados de Trophy ou Showdown por dados de Ranked."}</p></div><div className="profile-hero-score"><span>Score Híbrido</span><strong>{item.isRankedAvailable ? score(item.bestRow.score) : "—"}</strong><small>{item.isRankedAvailable ? `Win Rate ${metric(item.winRate)}` : "Win Rate Ranked —"}</small></div></section>
+        <div className="brawler-detail-nav"><Link href="/brawlers" className="back-link"><ArrowLeft size={15} /> Voltar a Brawlers & Counters</Link><span className="detail-source-tag"><span className="tiny-live" /> {rankedSync.source === "sse" ? "Dados do Ranked" : "BrawlScope + PL Prodigy + Brawl Planet"}</span></div>
+        <DraftRoleEditor names={[item.brawler]} /><section className="brawler-profile-hero"><div className="profile-hero-image"><Retrato src={image} nome={item.brawler} alt={item.brawler} /></div><div className="profile-hero-copy"><h1>{item.brawler}</h1><div className="profile-hero-tags">{item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{draftRoleLabels[item.role]}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}<span className="profile-tier">{item.isRankedAvailable ? `Tier ${item.bestRow.tier ?? "—"}` : "Aguardando Ranked"}</span><span className="profile-map">{item.isRankedAvailable ? `Melhor registo: ${item.bestRow.map} · ${item.bestRow.mode}` : "Ainda sem métricas por mapa na rotação"}</span></div><p>{item.isRankedAvailable ? "Contra quem ganha, com quem perde e com quem joga bem, como cada fonte publica." : "Sem métricas Ranked publicadas. O perfil não substitui dados de Trophy ou Showdown por dados de Ranked."}</p></div><div className="profile-hero-score"><span>Score Híbrido</span><strong>{item.isRankedAvailable ? score(item.bestRow.score) : "—"}</strong><small>{item.isRankedAvailable ? `Vitória ${metric(item.winRate)}` : "Vitória no Ranked —"}</small></div></section>
         <section className="profile-metrics"><div><span>Uso</span><strong>{item.isRankedAvailable ? metric(item.usageRate) : "—"}</strong></div><div><span>Vitória</span><strong>{item.isRankedAvailable ? metric(item.winRate) : "—"}</strong></div><div><span>Ganha a</span><strong>{totalTargets}</strong></div><div><span>Perde com</span><strong>{totalCounteredBy}</strong></div></section>
         {/* O modo e as fontes numa linha; antes eram dois cartões de texto. */}
         <section className="ficha-contexto" aria-label="Modo dos counters e sinergias BrawlScope">

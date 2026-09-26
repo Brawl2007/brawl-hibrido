@@ -264,3 +264,38 @@ describe("os modelos originais, os ataques e os supers de cada brawler", () => {
     expect(quadro).toMatch(/duracaoMs: Math\.max\([^\n]*camara,/);
   });
 });
+
+describe("v150: revisão do site (telemóvel, textos, retratos, títulos)", () => {
+  const css = ler("client/src/layout-v143.css");
+  it("a pesquisa do Draft não vira um quadrado no telemóvel, e a barra 50/50 fica em cima", () => {
+    expect(css).toContain(".mesa-centro .recommendation-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }");
+    expect(css).toContain(".mesa-centro .recommendation-toolbar .draft-search { flex: 1 1 100%;");
+    expect(css).toContain(".mesa-centro .draft-probability-center.is-compacto { order: 0; width: auto; min-height: 0;");
+    expect(css).toContain(".brawlers-toolbar > .brawler-search { flex: 0 0 auto; }");
+  });
+  it("no Draft já não há a seta ↑ que levava ao Início", () => {
+    expect(ler("client/src/pages/Draft.tsx")).not.toContain("draft-back-home");
+  });
+  it("a página que não existe está em português, com o menu do site", () => {
+    const pagina = ler("client/src/pages/NotFound.tsx");
+    expect(pagina).toContain("<BarraDoSite />");
+    expect(pagina).toContain("Esta página não existe");
+    expect(pagina).not.toMatch(/Page Not Found|Go Home/);
+  });
+  it("sem inglês nem nomes técnicos à vista", () => {
+    const ficha = ler("client/src/pages/BrawlerDetail.tsx");
+    expect(ficha).not.toMatch(/strong against|Struggles against|Ranked SSE|Win Rate \$\{/i);
+    expect(ler("client/src/pages/Brawlers.tsx")).not.toMatch(/"cópia do site"|rankedSync\.version \?/);
+    expect(ler("client/src/pages/Home.tsx")).not.toContain('"Meta snapshot"');
+    expect(ler("client/src/components/MobileNav.tsx")).toContain('label: "Matriz 1v1"');
+  });
+  it("os retratos mostram as iniciais quando a imagem falha", () => {
+    expect(ler("client/src/components/Retrato.tsx")).toContain("onError={() => setFalhou(src)}");
+    for (const pagina of ["Draft", "Home", "Brawlers", "BrawlerDetail", "MatchupMatrix"]) {
+      const fonte = ler(`client/src/pages/${pagina}.tsx`);
+      expect(fonte, pagina).toContain("<Retrato ");
+      // Retratos como imagem de fundo não sabem que falharam.
+      expect(fonte, pagina).not.toMatch(/avatar"? style=\{[^}]*backgroundImage/);
+    }
+  });
+});
