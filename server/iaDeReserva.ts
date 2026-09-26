@@ -287,7 +287,7 @@ export function lerJsonDaResposta(texto: string): unknown {
  * que o modelo não aceita (400) repete-se sem o modo JSON e sem imagem. Chave
  * recusada pára logo.
  */
-export async function gerarJsonNaReserva(reserva: { fornecedor: Fornecedor; key: string }, texto: string, imagem: { mime_type: string; data: string } | null, buscar: Buscar = fetch, temperatura = 0.4, escolhido?: string | null) {
+export async function gerarJsonNaReserva(reserva: { fornecedor: Fornecedor; key: string }, texto: string, imagem: { mime_type: string; data: string } | null, buscar: Buscar = fetch, temperatura = 0.4, escolhido?: string | null, limiteMs = 90_000) {
   const { fornecedor, key: chave } = reserva;
   const { ordem: todos } = await modelosPara(fornecedor, chave, buscar);
   // O modelo escolhido pelo dono vai à frente — só se estiver na lista da chave.
@@ -307,7 +307,7 @@ export async function gerarJsonNaReserva(reserva: { fornecedor: Fornecedor; key:
         ...(simples ? {} : { response_format: { type: "json_object" } }),
       };
       try {
-        const { status, ok, texto: resposta } = await pedir(fornecedor, chave, fornecedor.caminhoDaConversa, buscar, corpo, 90_000);
+        const { status, ok, texto: resposta } = await pedir(fornecedor, chave, fornecedor.caminhoDaConversa, buscar, corpo, limiteMs);
         if (status === 401 || status === 403) throw erroDaChave(fornecedor, status, resposta);
         if (!ok) {
           console.warn(`[General] reserva ${fornecedor.nome} ${modelo}${simples ? " (simples)" : ""} respondeu ${status}: ${mensagemDoFornecedor(resposta)}`);

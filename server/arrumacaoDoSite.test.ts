@@ -117,3 +117,34 @@ describe("um só mapa no fim do draft", () => {
     expect(draft).toContain('<section className="draft-final" ref={secaoFinalRef}');
   });
 });
+
+describe("as outras páginas também sem rolar tanto (v144)", () => {
+  it("o Início mostra uma secção de cada vez, em abas, e o menu de cima escolhe a aba", () => {
+    const home = ler("client/src/pages/Home.tsx");
+    for (const id of ["maps", "rotation-averages", "sources", "ranking-laboratory", "formula"]) expect(home).toContain(`{aba === "${id}" && (`);
+    expect(home).toContain("if (eAba) setAba(id as AbaDoInicio);");
+  });
+
+  it("Brawlers e a ficha de cada brawler também em abas, e as listas longas mostram 24", () => {
+    const brawlers = ler("client/src/pages/Brawlers.tsx");
+    expect(brawlers).toContain('{aba === "alcance" && <AttackRangeTable');
+    expect(brawlers).toContain("filteredCatalog.slice(0, verTodos || query.trim() ? filteredCatalog.length : 24)");
+    const ficha = ler("client/src/pages/BrawlerDetail.tsx");
+    expect(ficha).toContain('{aba === "counters" &&');
+    expect(ficha).toContain('{aba === "todos" && <BrawlScopeMatchupMatrix');
+    expect(ler("client/src/pages/MatchupMatrix.tsx")).toContain("row.slice(0, verTodos || query.trim() ? row.length : 24)");
+  });
+});
+
+describe("o plano da IA chega antes da partida", () => {
+  const quadro = ler("client/src/components/QuadroDoGeneral.tsx");
+  it("pede-se sozinho quando o draft fecha, uma vez por draft", () => {
+    expect(quadro).toContain("if (temPlanoDaIA || pedirPlano.isPending || jaPediuSozinho.current === chave) return;");
+    expect(quadro).toContain("jaPediuSozinho.current = chave;");
+  });
+  it("rápido e automático vêm ligados de origem, e o servidor recebe o rápido", () => {
+    expect(quadro).toContain('return { principal: "gemini", soEssa: false, modelos: {}, rapido: true, automatico: true };');
+    expect(quadro).toContain("rapido: escolhaDaIA.rapido,");
+    expect(ler("server/routers.ts")).toContain("rapido: z.boolean().optional(),");
+  });
+});

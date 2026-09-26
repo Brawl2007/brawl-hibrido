@@ -858,6 +858,15 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
   );
 }
 
+const ABAS_DO_INICIO = [
+  { id: "maps", label: "Mapas" },
+  { id: "rotation-averages", label: "Média da rotação" },
+  { id: "sources", label: "Fontes" },
+  { id: "ranking-laboratory", label: "Pesos" },
+  { id: "formula", label: "Como funciona" },
+] as const;
+type AbaDoInicio = (typeof ABAS_DO_INICIO)[number]["id"];
+
 export default function Home() {
   const trpcUtils = trpc.useUtils();
   const rankedSync = useRankedSync();
@@ -982,15 +991,21 @@ export default function Home() {
     setActiveSection("maps");
   };
 
+  // As secções de baixo são abas: só uma de cada vez, em vez de cinco
+  // empilhadas (a página tinha 5000 px). O menu de cima escolhe a aba certa.
+  const [aba, setAba] = useState<AbaDoInicio>("maps");
   const scrollTo = (id: string) => {
     setActiveSection(id);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const eAba = ABAS_DO_INICIO.some((item) => item.id === id);
+    if (eAba) setAba(id as AbaDoInicio);
+    // A aba tem de estar no ecrã antes de se descer até ela.
+    window.setTimeout(() => document.getElementById(eAba ? "inicio-abas" : id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   };
   // Quem chega de outra página por "Mapas", "Fontes" ou "Como funciona" traz a
   // secção no endereço (/#maps): desce até ela quando a página já tem conteúdo.
   useEffect(() => {
     const secao = window.location.hash.slice(1);
-    if (!["maps", "sources", "formula", "dashboard"].includes(secao)) return;
+    if (!["maps", "sources", "formula", "dashboard", "rotation-averages", "ranking-laboratory"].includes(secao)) return;
     const espera = window.setTimeout(() => scrollTo(secao), 400);
     return () => window.clearTimeout(espera);
     // Só à chegada.
@@ -1025,39 +1040,53 @@ export default function Home() {
               <StatCard icon={ShieldCheck} label="Tier S + A" value={`${stats.s + stats.a}`} detail={`${stats.s} S · ${stats.a} A recomendados`} accent="accent-cyan" />
               <StatCard icon={Database} label="Amostra" value={`${currentRows.length}`} detail="brawlers catalogados" accent="accent-blue" />
             </div>
-            <MapSelector
-              maps={liveMapSummaries}
-              selectedMap={selectedMap}
-              onSelect={selectMap}
-              modeFilter={modeFilter}
-              onModeFilter={setModeFilter}
-              modeOptions={liveModeOptions}
-              rows={mapDisplayRows}
-              onCopyMaps={copyMapsTsv}
-              onDownloadMaps={downloadMapsTsv}
-            />
-            <RotationAverages
-              sourceRows={liveRows}
-              activeMaps={liveMapSummaries}
-              expectedMapCount={allRankedMaps.length}
-              capturedAt={capturedAt}
-              isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching}
-              winRateWeight={winRateWeight}
-              topBrawlWeight={topBrawlWeight}
-              starPlayerWeight={starPlayerWeight}
-            />
-            <RankingLaboratory
-              weights={hybridWeights}
-              onWeightsChange={updateWeights}
-              sourceBalance={sourceBalance}
-              hasCustomBalance={hasCustomBalance}
-              onSourceBalanceChange={updateBalance}
-            />
-            <SourceComparison rows={currentRows} mapName={selectedMap.name} />
-            <FormulaCard weights={hybridWeights} />
+            <div className="inicio-abas" id="inicio-abas" role="tablist" aria-label="O que ver">
+              {ABAS_DO_INICIO.map((item) => (
+                <button key={item.id} type="button" role="tab" aria-selected={aba === item.id} className={aba === item.id ? "is-active" : ""} onClick={() => { setAba(item.id); setActiveSection(item.id); }}>{item.label}</button>
+              ))}
+            </div>
+            {aba === "maps" && (
+              <MapSelector
+                maps={liveMapSummaries}
+                selectedMap={selectedMap}
+                onSelect={selectMap}
+                modeFilter={modeFilter}
+                onModeFilter={setModeFilter}
+                modeOptions={liveModeOptions}
+                rows={mapDisplayRows}
+                onCopyMaps={copyMapsTsv}
+                onDownloadMaps={downloadMapsTsv}
+              />
+            )}
+            {aba === "rotation-averages" && (
+              <RotationAverages
+                sourceRows={liveRows}
+                activeMaps={liveMapSummaries}
+                expectedMapCount={allRankedMaps.length}
+                capturedAt={capturedAt}
+                isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching}
+                winRateWeight={winRateWeight}
+                topBrawlWeight={topBrawlWeight}
+                starPlayerWeight={starPlayerWeight}
+              />
+            )}
+            {aba === "sources" && (
+              <SourceComparison rows={currentRows} mapName={selectedMap.name} />
+            )}
+            {aba === "ranking-laboratory" && (
+              <RankingLaboratory
+                weights={hybridWeights}
+                onWeightsChange={updateWeights}
+                sourceBalance={sourceBalance}
+                hasCustomBalance={hasCustomBalance}
+                onSourceBalanceChange={updateBalance}
+              />
+            )}
+            {aba === "formula" && (
+              <FormulaCard weights={hybridWeights} />
+            )}
           </div>
         </main>
-        <footer className="app-footer"><span>BRAWL HÍBRIDO / 26-map intelligence workspace</span><span>Feito para decisões melhores, não para picks cegos.</span></footer>
       </div>
       <button className="scroll-top-button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Voltar ao topo"><ChevronLeft size={17} /></button>
       <MobileNav pathname="/" />

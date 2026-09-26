@@ -218,6 +218,10 @@ export default function Brawlers() {
   // Mesmo hook das outras páginas: arranca o trabalho e não fica à espera dele.
   const { isRefreshing, progress: syncProgress, start: handleRefresh } = useSyncRefresh();
   const [query, setQuery] = useState("");
+  // O catálogo e a tabela de alcance (106 linhas) eram duas páginas empilhadas: agora são abas.
+  const [aba, setAba] = useState<"catalogo" | "alcance">("catalogo");
+  // 106 cartões de uma vez eram 13 000 px no telemóvel: mostram-se 24 e o resto a pedido.
+  const [verTodos, setVerTodos] = useState(false);
   const [tier, setTier] = useState<TierFilter>("Todos");
   const [role, setRole] = useState<DraftRoleFilter>("Todas");
   const [classFilter, setClassFilter] = useState<BrawlerClassFilter>("Todas");
@@ -277,13 +281,19 @@ export default function Brawlers() {
 
           <p className="brawlers-status-banner" title="Counters e counterados juntam todas as fontes. O BrawlScope dá listas por modo; o Brawl Planet e o PL Prodigy dão a leitura geral."><span className="tiny-live" /> {capturedAt ? `Dados de ${new Date(capturedAt).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}` : "Dados guardados no site"} · {sourceLabel}</p>
 
-          <AttackRangeTable rows={rangeRows} sort={rangeSort} onSortChange={setRangeSort} openingBonusRate={draftRules.openingLongRange} />
+          <div className="inicio-abas" role="tablist" aria-label="O que ver">
+            <button type="button" role="tab" aria-selected={aba === "catalogo"} className={aba === "catalogo" ? "is-active" : ""} onClick={() => setAba("catalogo")}>Brawlers e counters</button>
+            <button type="button" role="tab" aria-selected={aba === "alcance"} className={aba === "alcance" ? "is-active" : ""} onClick={() => setAba("alcance")}>Alcance</button>
+          </div>
+          {aba === "alcance" && <AttackRangeTable rows={rangeRows} sort={rangeSort} onSortChange={setRangeSort} openingBonusRate={draftRules.openingLongRange} />}
 
+          {aba === "catalogo" && (
           <section className="brawlers-workspace">
             <DraftRoleEditor names={catalog.map(item => item.brawler)} /><div className="brawlers-toolbar"><label className="brawler-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Procurar brawler…" aria-label="Procurar brawler" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Limpar pesquisa"><X size={14} /></button>}</label><div className="brawler-filter-group"><span>Tier</span>{(["Todos", "S", "A", "B"] as TierFilter[]).map((option) => <button type="button" key={option} onClick={() => setTier(option)} className={tier === option ? "is-active" : ""}>{option === "Todos" ? "Todos" : `Tier ${option}`}</button>)}</div><div className="brawler-filter-group"><span>Função</span>{(["Todas", "mid", "side", "flex"] as DraftRoleFilter[]).map((option) => <button type="button" key={option} onClick={() => setRole(option)} className={role === option ? "is-active" : ""}>{draftRoleLabels[option]}</button>)}</div><label className="brawler-select-filter"><SlidersHorizontal size={14} /><select value={classFilter} onChange={(event) => setClassFilter(event.target.value as BrawlerClassFilter)} aria-label="Filtrar por classe"><option value="Todas">Todas as classes</option>{classFilterOptions.filter((option) => option !== "Todas").map((option) => <option key={option} value={option}>{option}</option>)}</select><ChevronDown size={13} /></label><label className="brawler-select-filter"><SlidersHorizontal size={14} /><select value={matchup} onChange={(event) => setMatchup(event.target.value as MatchupFilter)}><option value="Todos">Todos os matchups</option><option value="has-counters">Tem counters</option><option value="countered-by">Tem respostas</option></select><ChevronDown size={13} /></label></div>
             <div className="brawlers-catalog-meta"><span><span className="tiny-live" /> {filteredCatalog.length} de {catalog.length} brawlers visíveis</span><span>Seleciona um cartão para abrir o perfil completo.</span></div>
-            <div className="brawlers-content-grid"><div className="brawler-catalog-grid">{filteredCatalog.map((item) => <BrawlerCard key={item.brawler} item={item} selected={selected?.brawler === item.brawler} onSelect={() => setSelectedName(item.brawler)} />)}{filteredCatalog.length === 0 && <div className="brawlers-empty"><Crosshair size={24} /><strong>Nenhum brawler encontrado.</strong><span>Experimenta limpar a pesquisa ou trocar os filtros.</span></div>}</div>{selected && <BrawlerDetail key={selected.brawler} item={selected} catalog={catalog} onPick={(name) => setSelectedName(name)} />}</div>
+            <div className="brawlers-content-grid"><div className="brawler-catalog-grid">{filteredCatalog.slice(0, verTodos || query.trim() ? filteredCatalog.length : 24).map((item) => <BrawlerCard key={item.brawler} item={item} selected={selected?.brawler === item.brawler} onSelect={() => setSelectedName(item.brawler)} />)}{filteredCatalog.length === 0 && <div className="brawlers-empty"><Crosshair size={24} /><strong>Nenhum brawler encontrado.</strong><span>Experimenta limpar a pesquisa ou trocar os filtros.</span></div>}{!verTodos && !query.trim() && filteredCatalog.length > 24 && <button type="button" className="ver-todos" onClick={() => setVerTodos(true)}>Ver todos ({filteredCatalog.length})</button>}</div>{selected && <BrawlerDetail key={selected.brawler} item={selected} catalog={catalog} onPick={(name) => setSelectedName(name)} />}</div>
           </section>
+          )}
         </main>
       </div>
       <MobileNav pathname="/brawlers" />

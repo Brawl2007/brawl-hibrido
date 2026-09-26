@@ -192,6 +192,7 @@ export const appRouter = router({
         elo: z.string().max(20).nullish(),
         // Qual IA faz o plano. Os modelos só valem se estiverem na lista da chave (o servidor confere).
         ia: z.object({
+          rapido: z.boolean().optional(),
           principal: z.enum(["gemini", "reserva", ...IDS_DAS_RESERVAS]).nullish(),
           soEssa: z.boolean().optional(),
           modelos: z.record(z.string().max(20), z.string().trim().max(160).nullable()).optional(),

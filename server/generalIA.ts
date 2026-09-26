@@ -140,6 +140,12 @@ export function modelosDoPedido(ordem: readonly string[], escolhido?: string | n
  * continua a valer, para um separador aberto antes da mudança.
  */
 export type EscolhaDaIA = {
+  /**
+   * Rápido: sem a pesquisa na web (é um pedido inteiro a mais, 5 a 20 s) e com
+   * menos paciência para cada modelo antes de passar ao seguinte. A partida
+   * começa ~15 s depois do draft; um plano que chega depois disso não serve.
+   */
+  rapido?: boolean;
   principal?: string | null;
   soEssa?: boolean;
   modelos?: Partial<Record<string, string | null>>;
@@ -158,7 +164,7 @@ export function normalizarEscolha(escolha: EscolhaDaIA = {}) {
     principal = escolha.ordem.includes("gemini") ? "gemini" : "reserva";
     soEssa = escolha.ordem.startsWith("so-");
   }
-  return { principal, soEssa, modelos, modeloReserva: escolha.modeloReserva ?? null };
+  return { principal, soEssa, modelos, modeloReserva: escolha.modeloReserva ?? null, rapido: escolha.rapido === true };
 }
 
 /** Os modelos que a chave da Gemini tem, pela ordem em que se tentam (para o dono escolher). */
@@ -249,6 +255,7 @@ async function gerarJson(
   tarefa: string,
   pausaMs = 1200,
   escolhido?: string | null,
+  limiteMs = 90_000,
 ): Promise<{ json: unknown; modelo: string }> {
   const modelos = modelosDoPedido(await modelosPara(chave, buscar), escolhido);
   const falhas: string[] = [];
@@ -260,7 +267,7 @@ async function gerarJson(
         : { responseMimeType: "application/json", temperature: temperatura };
       const conteudo = estrito ? partes : [...partes, { text: formatoEmTexto }];
       try {
-        const dados = await gerar(chave, modelo, { contents: [{ role: "user", parts: conteudo }], generationConfig: config }, buscar, 90_000);
+        const dados = await gerar(chave, modelo, { contents: [{ role: "user", parts: conteudo }], generationConfig: config }, buscar, limiteMs);
         const texto = textoDaResposta(dados);
         if (!texto) {
           falhas.push(`${modelo}: sem resposta (${dados.candidates?.[0]?.finishReason ?? "sem motivo"})`);
@@ -434,6 +441,17 @@ export function conferirBuilds(plano: PlanoDoGeneral, catalogo: CatalogoDeBuilds
   return plano;
 }
 
+/** A promessa, ou `seDemorar` se ela não chegar a tempo (ou falhar). */
+export function ateAo<T, D>(promessa: Promise<T>, ms: number, seDemorar: D): Promise<T | D> {
+  return new Promise((resolver) => {
+    const relogio = setTimeout(() => resolver(seDemorar), ms);
+    promessa.then(
+      (valor) => { clearTimeout(relogio); resolver(valor); },
+      () => { clearTimeout(relogio); resolver(seDemorar); },
+    );
+  });
+}
+
 let pedidoEmCurso = false;
 
 /**
@@ -444,7 +462,7 @@ export async function pedirPlanoAoGeneral(
   pedido: PedidoDePlano,
   buscar: Buscar = fetch,
   escolhaRecebida: EscolhaDaIA = {},
-): Promise<{ plano: PlanoDoGeneral; modelo: string; comImagem: boolean; comPesquisa: boolean; terreno: TerrenoDoMapa | null }> {
+): Promise<{ plano: PlanoDoGeneral; modelo: string; comImagem: boolean; comPesquisa: boolean; terreno: TerrenoDoMapa | null; segundos: number }> {
   const escolha = normalizarEscolha(escolhaRecebida);
   const todasAsReservas = await lerChavesDeReserva();
   const principal = escolha.principal === "reserva" ? todasAsReservas[0]?.fornecedor.id ?? "reserva" : escolha.principal;
@@ -461,25 +479,35 @@ export async function pedirPlanoAoGeneral(
   }
   if (pedidoEmCurso) throw new ErroDoGeneral("Já há um plano a ser pensado. Espera que termine.");
   pedidoEmCurso = true;
+  const comecou = Date.now();
   try {
     // O terreno já não é rotulado pela IA a cada plano: a leitura pela imagem
-    // chega (e o botão "Pedir à IA para ler o terreno" continua lá). Eram três
-    // pedidos do limite gratuito gastos antes de o plano começar.
-    const terreno = pedido.mapaId ? await obterTerreno(pedido.mapaId, buscar) : null;
-    const modelos = gemini ? await modelosPara(gemini, buscar).then((ordem) => modelosDoPedido(ordem, escolha.modelos.gemini)).catch(() => [] as string[]) : [];
-    const atualidade = gemini && modelos.length ? await pesquisarAtualidade(gemini, modelos, pedido, buscar) : null;
-    const imagem = await imagemParaAIA(pedido.mapaId, buscar);
-    const catalogo = await obterCatalogo(buscar).catch(() => null);
+    // chega (e o botão "Pedir à IA para ler o terreno" continua lá).
+    //
+    // Terreno, imagem, catálogo e pesquisa não dependem uns dos outros: vão
+    // todos ao mesmo tempo. Eram quatro esperas seguidas antes de a IA começar.
+    // No modo rápido cada um tem um prazo curto; se não chegar a tempo, o plano
+    // segue sem ele (o terreno e a imagem costumam já estar em memória).
+    const prazo = escolha.rapido ? 5_000 : 30_000;
+    const [terreno, imagem, catalogo, atualidade] = await Promise.all([
+      pedido.mapaId ? ateAo(obterTerreno(pedido.mapaId, buscar), prazo, null) : Promise.resolve(null),
+      ateAo(imagemParaAIA(pedido.mapaId, buscar), prazo, null),
+      ateAo(obterCatalogo(buscar).catch(() => null), prazo, null),
+      gemini && !escolha.rapido
+        ? modelosPara(gemini, buscar).then((ordem) => modelosDoPedido(ordem, escolha.modelos.gemini)).catch(() => [] as string[])
+          .then((modelos) => (modelos.length ? pesquisarAtualidade(gemini, modelos, pedido, buscar) : null))
+        : Promise.resolve(null),
+    ]);
     const texto = textoDoPedido(pedido, Boolean(imagem), terreno, atualidade, new Date(), opcoesDeBuild(catalogo, pedido.nossos.map((n) => n.brawler)));
     const partes: ParteDoPedido[] = [{ text: texto }];
     if (imagem) partes.push({ inline_data: imagem });
 
     const pelaGemini = async () => {
-      const { json, modelo } = await gerarJson(gemini, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano", 1200, escolha.modelos.gemini);
+      const { json, modelo } = await gerarJson(gemini, partes, ESQUEMA_DO_PLANO, buscar, 0.4, FORMATO_DO_PLANO_EM_TEXTO, "fazer o plano", 1200, escolha.modelos.gemini, escolha.rapido ? 30_000 : 90_000);
       return { json, modelo, comImagem: Boolean(imagem) };
     };
     const pelaReserva = (reserva: ChaveDeReserva) => () =>
-      gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar, 0.4, escolha.modelos[reserva.fornecedor.id] ?? escolha.modeloReserva);
+      gerarJsonNaReserva(reserva, `${texto}\n\n${FORMATO_DO_PLANO_EM_TEXTO}`, imagem, buscar, 0.4, escolha.modelos[reserva.fornecedor.id] ?? escolha.modeloReserva, escolha.rapido ? 30_000 : 90_000);
     // A principal primeiro; se falhar (limite, em baixo), as outras pela ordem de sempre:
     // a Gemini e depois as reservas.
     const todas = [
@@ -502,7 +530,7 @@ export async function pedirPlanoAoGeneral(
     if (!resposta) throw new ErroDoGeneral(falhas.join(" "));
     const plano = conferirBuilds(lerPlanoDaIA(resposta.json, pedido.nossos.map((item) => item.brawler), pedido.deles.map((item) => item.brawler), new Date(), terreno), catalogo);
     if (atualidade?.fontes.length) plano.fontes = atualidade.fontes;
-    return { plano, modelo: resposta.modelo, comImagem: resposta.comImagem, comPesquisa: Boolean(atualidade), terreno };
+    return { plano, modelo: resposta.modelo, comImagem: resposta.comImagem, comPesquisa: Boolean(atualidade), terreno, segundos: Math.round((Date.now() - comecou) / 100) / 10 };
   } finally {
     pedidoEmCurso = false;
   }

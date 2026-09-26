@@ -62,6 +62,8 @@ export default function MatchupMatrix() {
       .sort((a, b) => Number(b.hasSufficientSample) - Number(a.hasSufficientSample) || b.samples - a.samples || a.opponent.localeCompare(b.opponent, "pt-PT")),
     [brawler, brawlerNames, filter, query]
   );
+  // 106 adversários de uma vez eram 12 000 px no telemóvel: mostram-se 24 e o resto a pedido.
+  const [verTodos, setVerTodos] = useState(false);
   const observedPairs = row.filter((cell) => cell.samples > 0).length;
   const adequatePairs = row.filter((cell) => cell.hasSufficientSample).length;
   const selectedBrawlerRow = rowByName.get(brawler);
@@ -121,7 +123,7 @@ export default function MatchupMatrix() {
           <label className="observed-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtrar adversário" aria-label="Filtrar adversário" /></label>
         </div>
         <div className="observed-row-grid">
-          {row.map((cell) => {
+          {row.slice(0, verTodos || query.trim() ? row.length : 24).map((cell) => {
             const foe = rowByName.get(cell.opponent);
             return <button key={cell.opponent} className={`observed-cell ${cell.hasSufficientSample ? "has-sample" : ""} ${cell.opponent === opponent ? "is-selected" : ""}`} onClick={() => setOpponent(cell.opponent)}>
               <span className="observed-cell-avatar" style={brawlerImageFor(foe) ? { backgroundImage: `url(${brawlerImageFor(foe)})` } : undefined}>{!brawlerImageFor(foe) && cell.opponent.slice(0, 2)}</span>
@@ -129,6 +131,7 @@ export default function MatchupMatrix() {
             </button>;
           })}
         </div>
+        {!verTodos && !query.trim() && row.length > 24 && <button type="button" className="ver-todos" onClick={() => setVerTodos(true)}>Ver todos ({row.length})</button>}
       </section>
 
       <footer className="observed-method"><Swords size={16} /><p><strong>Leitura correta:</strong> a percentagem é uma matriz de coocorrência em equipas adversárias de partidas Ranked 3v3, e não uma medição isolada de lane. O Counter Pick usa o delta do BrawlScope mais confirmações de PL Prodigy e Brawl Planet.</p></footer>

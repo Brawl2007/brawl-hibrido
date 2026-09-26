@@ -303,3 +303,24 @@
 .com-barra-no-topo p.brawlers-status-banner { justify-content: flex-start; gap: 8px; margin: 0 0 1rem; padding: 8px 12px; color: var(--bh-text-dim); font-size: 13px; }
 .com-barra-no-topo .brawlers-hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mesa-vez-texto strong.bh-display { font-size: 21px; font-weight: 400; letter-spacing: .01em; }
+.quadro-general-marcar { display: flex; align-items: center; gap: 8px; color: var(--bh-text-muted); font-size: 12px; cursor: pointer; }
+.quadro-general-marcar input { width: 16px; height: 16px; accent-color: var(--bh-gold); }
+
+/* Abas das páginas (Início, Brawlers, ficha): uma secção de cada vez. */
+.inicio-abas { display: flex; flex-wrap: wrap; gap: 4px; margin: 20px 0 16px; padding: 4px; border: 1px solid var(--mesa-borda); border-radius: 12px; background: rgba(0, 0, 0, .25); scroll-margin-top: 70px; }
+.inicio-abas button { flex: 1 1 auto; min-height: 38px; padding: 0 14px; border-radius: 9px; background: transparent; color: var(--bh-text-muted); font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.inicio-abas button:hover { color: var(--bh-text); }
+.inicio-abas button.is-active { color: var(--bh-on-gold); background: var(--bh-gold); }
+.com-barra-no-topo .inicio-abas + section,
+.com-barra-no-topo .inicio-abas + .data-section { margin-top: 0; }
+@media (max-width: 700px) { .inicio-abas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .inicio-abas button { flex: 0 0 auto; font-size: 13px; } }
+.ficha-contexto { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 16px 0 0; padding: 10px 12px; border: 1px solid var(--mesa-borda); border-radius: 12px; background: rgba(0, 0, 0, .2); }
+.ficha-contexto .source-link-stack { display: flex; flex-wrap: wrap; gap: 6px; }
+.ficha-contexto .source-link-stack a { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--mesa-borda); border-radius: 999px; color: var(--bh-text-muted); font-size: 12px; text-decoration: none; }
+.com-barra-no-topo .profile-metrics span { text-transform: none; letter-spacing: 0; }
+
+/* Matriz: a entrada mais baixa. */
+.observed-matrix-page .observed-hero { padding-top: 28px; padding-bottom: 20px; }
+.observed-matrix-page .observed-hero h1 { margin: 0 0 10px; font-size: clamp(34px, 4vw, 54px); line-height: 1; }
+.ver-todos { grid-column: 1 / -1; justify-self: center; min-height: 38px; margin: 12px auto 0; padding: 0 18px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(0, 0, 0, .25); color: var(--bh-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.observed-row-section .ver-todos { display: block; }

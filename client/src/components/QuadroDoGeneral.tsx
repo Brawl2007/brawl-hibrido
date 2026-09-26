@@ -12,7 +12,7 @@
  *
  * O plano fica guardado neste navegador, por mapa e por equipas.
  */
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useEhDono } from "@/lib/ehDono";
@@ -118,7 +118,15 @@ const numeroOuNulo = (valor: unknown) => (typeof valor === "number" && Number.is
  * outras entram quando ela falha, e o modelo de cada uma. "reserva" quer dizer
  * "a primeira reserva que houver" (vem da escolha antiga).
  */
-type EscolhaDaIA = { principal: string; soEssa: boolean; modelos: Record<string, string | null> };
+type EscolhaDaIA = {
+  principal: string;
+  soEssa: boolean;
+  modelos: Record<string, string | null>;
+  /** Sem pesquisa na web e com menos espera por modelo: o plano chega antes da partida começar. */
+  rapido: boolean;
+  /** Pedir o plano sozinho quando o draft fecha, sem esperar pelo clique. */
+  automatico: boolean;
+};
 const CHAVE_DA_ESCOLHA = "brawl-hibrido:ia-do-general:v2";
 const CHAVE_DA_ESCOLHA_ANTIGA = "brawl-hibrido:ia-do-general:v1";
 const ID_DE_IA = /^[a-z]{3,20}$/;
@@ -130,7 +138,7 @@ function lerEscolhaDaIA(): EscolhaDaIA {
       for (const [id, modelo] of Object.entries(guardada.modelos ?? {})) {
         if (ID_DE_IA.test(id) && typeof modelo === "string" && modelo) modelos[id] = modelo.slice(0, 160);
       }
-      return { principal: guardada.principal, soEssa: guardada.soEssa === true, modelos };
+      return { principal: guardada.principal, soEssa: guardada.soEssa === true, modelos, rapido: guardada.rapido !== false, automatico: guardada.automatico !== false };
     }
     // A escolha de antes (Gemini ou "a reserva", com ou sem a outra).
     const antiga = JSON.parse(window.localStorage.getItem(CHAVE_DA_ESCOLHA_ANTIGA) ?? "null") as { ordem?: string; modeloGemini?: unknown } | null;
@@ -139,12 +147,14 @@ function lerEscolhaDaIA(): EscolhaDaIA {
         principal: antiga.ordem.includes("gemini") ? "gemini" : "reserva",
         soEssa: antiga.ordem.startsWith("so-"),
         modelos: typeof antiga.modeloGemini === "string" && antiga.modeloGemini ? { gemini: antiga.modeloGemini.slice(0, 80) } : {},
+        rapido: true,
+        automatico: true,
       };
     }
   } catch {
     // Estragada ou sem armazenamento: fica a de origem.
   }
-  return { principal: "gemini", soEssa: false, modelos: {} };
+  return { principal: "gemini", soEssa: false, modelos: {}, rapido: true, automatico: true };
 }
 
 type Fornecedor = { id: string; nome: string; ondeCriar: string; exemplo: string; reconheceSozinha: boolean };
@@ -246,8 +256,8 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       setMomento("inicio");
       setAReproduzir(false);
       if (resultado.terreno && mapaId) utils.general.terreno.setData({ mapaId }, resultado.terreno as never);
-      toast.success("O general deu as ordens.", {
-        description: `${resultado.modelo}${resultado.comImagem ? " · viu o mapa" : ""}${resultado.comPesquisa ? " · pesquisou a informação atual" : " · sem pesquisa atual"}. Passa o cursor pelos brawlers.`,
+      toast.success(`O general deu as ordens em ${resultado.segundos} s.`, {
+        description: `${resultado.modelo}${resultado.comImagem ? " · viu o mapa" : ""}${resultado.comPesquisa ? " · pesquisou a informação atual" : ""}. Passa o cursor pelos brawlers.`,
       });
     },
     onError: (e) => toast.error("A IA não conseguiu fazer o plano.", { description: e.message }),
@@ -395,6 +405,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       ia: {
         principal: (iasComChave.some((ia) => ia.id === principalAgora) ? principalAgora : iasComChave[0]?.id ?? "gemini") as never,
         soEssa: escolhaDaIA.soEssa,
+        rapido: escolhaDaIA.rapido,
         modelos: Object.fromEntries(Object.entries(escolhaDaIA.modelos).filter(([id, m]) => m && iasComChave.some((ia) => ia.id === id))),
       },
     });
@@ -445,6 +456,28 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   const ajuda = FERRAMENTAS.find((item) => item.id === ferramenta)?.ajuda;
   const temPlanoDaIA = plano.origem === "ia" && plano.ordens.length > 0;
 
+  // Quando o draft fecha, o plano pede-se sozinho — uma vez por draft, e só se
+  // ainda não houver plano da IA para estas equipas. Cada segundo conta: a
+  // partida começa ~15 s depois.
+  const jaPediuSozinho = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ehDono || !escolhaDaIA.automatico || !estado || !temAlgumaIA || !mapa?.name) return;
+    if (temPlanoDaIA || pedirPlano.isPending || jaPediuSozinho.current === chave) return;
+    jaPediuSozinho.current = chave;
+    pedir();
+    // `pedir` muda a cada render; o que decide são as condições acima.
+  }, [ehDono, escolhaDaIA.automatico, estado, temAlgumaIA, mapa?.name, temPlanoDaIA, pedirPlano.isPending, chave]);
+
+  // Os segundos a contar enquanto a IA pensa: esperar sem saber quanto falta é pior.
+  const [segundos, setSegundos] = useState(0);
+  useEffect(() => {
+    if (!pedirPlano.isPending) return;
+    const inicio = Date.now();
+    setSegundos(0);
+    const relogio = window.setInterval(() => setSegundos(Math.floor((Date.now() - inicio) / 1000)), 250);
+    return () => window.clearInterval(relogio);
+  }, [pedirPlano.isPending]);
+
   return (
     <section className="quadro-general" aria-label="Quadro do general: plano tático no mapa em 3D">
       <header className="quadro-general-cabecalho">
@@ -457,12 +490,12 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
             {temAlgumaIA && (
               <>
                 <button type="button" className="quadro-general-pedir" onClick={pedir} disabled={pedirPlano.isPending}>
-                  {pedirPlano.isPending ? "O general está a analisar o mapa…" : temPlanoDaIA ? "Pedir novo plano à IA" : "Pedir o plano ao general (IA)"}
+                  {pedirPlano.isPending ? `O general está a pensar… ${segundos} s` : temPlanoDaIA ? "Pedir novo plano à IA" : "Pedir o plano ao general (IA)"}
                 </button>
                 <small>
                   {estado?.configured ? `Gemini · chave ${estado.hint}` : "Sem Gemini"}
                   {reservas.length ? ` · reservas: ${reservas.map((r) => `${r.nome} ${r.hint}`).join(", ")}` : ""}
-                  {pedirPlano.isPending ? " · pode demorar até um minuto" : ""}
+                  {pedirPlano.isPending && !escolhaDaIA.rapido ? " · com pesquisa na web demora mais" : ""}
                 </small>
               </>
             )}
@@ -499,7 +532,15 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                       </label>
                     );
                   })}
-                  <small>{modelosQuery.isLoading ? "A ler os modelos das tuas chaves…" : "Se o modelo escolhido estiver no limite, tenta o seguinte da lista."}</small>
+                  <label className="quadro-general-marcar">
+                    <input type="checkbox" checked={escolhaDaIA.rapido} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, rapido: e.target.checked }))} />
+                    <span>Rápido: sem pesquisa na web (chega antes da partida começar)</span>
+                  </label>
+                  <label className="quadro-general-marcar">
+                    <input type="checkbox" checked={escolhaDaIA.automatico} onChange={(e) => setEscolhaDaIA((atual) => ({ ...atual, automatico: e.target.checked }))} />
+                    <span>Pedir o plano sozinho quando o draft fecha</span>
+                  </label>
+                  <small>{modelosQuery.isLoading ? "A ler os modelos das tuas chaves…" : "Se o modelo escolhido estiver no limite, tenta o seguinte da lista. A Groq é a mais rápida."}</small>
                 </div>
               </details>
             )}

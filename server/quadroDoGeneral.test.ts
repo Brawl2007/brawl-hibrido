@@ -25,7 +25,7 @@ import {
 import { aplicarRotulos, caminhoLivre, corrigirCasas, grelhaEmTexto, linhaLivre, pontoLivre, terrenoValido, tipoDaCasa, type TerrenoDoMapa } from "@shared/terrenoDoMapa";
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
-import { conferirBuilds, escolherModelo, modelosDoPedido, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
+import { ateAo, conferirBuilds, escolherModelo, modelosDoPedido, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
 import { fornecedorDaChave, guardarChaveDeReserva, lerChavesDeReserva, lerJsonDaResposta, modelosDasReservas, ordenarModelosDeReserva } from "./iaDeReserva";
 import { imagemSegura, lerCatalogo } from "./catalogoDeBuilds";
 
@@ -1021,6 +1021,35 @@ describe("várias IAs de reserva e a escolha da principal", () => {
     } finally {
       definicoes.clear();
     }
+  });
+});
+
+describe("o plano chega antes da partida começar", () => {
+  it("modo rápido: sem pesquisa na web (um pedido a menos) e diz quanto demorou", async () => {
+    const gemini = geminiFalsa({ modelos: ["gemini-3-flash"] });
+    process.env.GEMINI_API_KEY = `chave-de-teste-${++contador}`;
+    try {
+      const rapido = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, gemini.buscar, { rapido: true });
+      expect(rapido.comPesquisa).toBe(false);
+      expect(gemini.pedidos.some((p) => p.corpo?.tools)).toBe(false);
+      expect(typeof rapido.segundos).toBe("number");
+      // Sem o modo rápido, a pesquisa continua a ir.
+      const antes = gemini.pedidos.length;
+      const completo = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, gemini.buscar, {});
+      expect(completo.comPesquisa).toBe(true);
+      expect(gemini.pedidos.slice(antes).some((p) => p.corpo?.tools)).toBe(true);
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+    }
+  });
+
+  it("um passo que não chega a tempo não segura o plano", async () => {
+    const nunca = new Promise<string>(() => {});
+    const inicio = Date.now();
+    expect(await ateAo(nunca, 50, null)).toBeNull();
+    expect(Date.now() - inicio).toBeLessThan(1000);
+    expect(await ateAo(Promise.resolve("ok"), 50, null)).toBe("ok");
+    expect(await ateAo(Promise.reject(new Error("x")), 50, "reserva")).toBe("reserva");
   });
 });
 
