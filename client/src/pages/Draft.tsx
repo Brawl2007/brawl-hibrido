@@ -10,7 +10,7 @@ import { orderDraftEntries } from "@shared/draft";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
 import FilaDeColagem from "@/components/FilaDeColagem";
-import { Fragment, memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, lazy, memo, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -47,7 +47,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useEhDono } from "@/lib/ehDono";
-import { QuadroDoGeneral } from "@/components/QuadroDoGeneral";
+/*
+ * O quadro do general (com o plano da IA e o esquema dos dados) só aparece
+ * no fim do draft, mas vinha no primeiro carregamento da página: ~100 KB a
+ * mais antes de se poder escolher o primeiro ban no telemóvel. Carrega à
+ * parte, e é pedido uns segundos depois de a página abrir, para já estar
+ * pronto quando o draft fechar.
+ */
+const carregarQuadroDoGeneral = () => import("@/components/QuadroDoGeneral").then((m) => ({ default: m.QuadroDoGeneral }));
+const QuadroDoGeneral = lazy(carregarQuadroDoGeneral);
 import { trpc } from "@/lib/trpc";
 import { useSyncRefresh, type ProcessHealth } from "@/lib/useSyncRefresh";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
@@ -2308,6 +2316,11 @@ const ABAS_DO_CENTRO = [
 type AbaDoCentro = (typeof ABAS_DO_CENTRO)[number]["id"];
 
 export default function Draft() {
+  // O general pede-se em segundo plano, depois de a página estar de pé.
+  useEffect(() => {
+    const espera = window.setTimeout(() => { void carregarQuadroDoGeneral(); }, 4000);
+    return () => window.clearTimeout(espera);
+  }, []);
   const [showPickDetails, setShowPickDetails] = useState(false);
   const [painelAberto, setPainelAberto] = useState<PainelDoDraft | null>(null);
   const [abaDoCentro, setAbaDoCentro] = useState<AbaDoCentro>("sugestoes");
@@ -2896,6 +2909,7 @@ export default function Draft() {
               return (
                 <>
                 <section className="draft-final" ref={secaoFinalRef} aria-label="Depois do draft">
+                <Suspense fallback={<p className="quadro-general-a-carregar">A preparar o general…</p>}>
                 <QuadroDoGeneral
                   mapa={selectedMap ? { name: selectedMap.name, modeId: selectedMap.modeId } : undefined}
                   mapaId={selectedMap ? idDoMapa(selectedMap) : null}
@@ -2904,6 +2918,7 @@ export default function Draft() {
                   deles={myTeam === "blue" ? redPicks : bluePicks}
                   retratoDe={retratoNoQuadro}
                 />
+                </Suspense>
                 <LaneMatchupDesk myTeam={myTeam} semMapa mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
                 </section>
                 </>

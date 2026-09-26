@@ -614,10 +614,29 @@ export default function Quadro3D(props: Props) {
     controls.zoomToCursor = true;
     controls.screenSpacePanning = false;
     // Esquerdo roda, direito arrasta o mapa; com uma ferramenta de desenho, o
-    // esquerdo desenha e o direito continua a arrastar. No telemóvel: um dedo
-    // roda, dois dedos aproximam e arrastam.
+    // esquerdo desenha e o direito continua a arrastar.
     controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    /*
+     * No telemóvel, um dedo rodava o mapa — e o mapa ocupa quase o ecrã todo:
+     * quem o tentava passar para ler os duelos ficava preso nele. Agora é
+     * como nos mapas do telemóvel: um dedo desce a página (ou arrasta o
+     * brawler em que tocar, ou desenha com a ferramenta escolhida) e dois
+     * dedos rodam e aproximam.
+     */
+    controls.touches = { TWO: THREE.TOUCH.DOLLY_ROTATE };
+    renderer.domElement.style.touchAction = "pan-y";
+    const aoTocar = (evento: TouchEvent) => {
+      if (evento.touches.length !== 1) return;
+      const toque = evento.touches[0];
+      const r = renderer.domElement.getBoundingClientRect();
+      rato.set(((toque.clientX - r.left) / r.width) * 2 - 1, -((toque.clientY - r.top) / r.height) * 2 + 1);
+      raycaster.setFromCamera(rato, camera);
+      const ferramenta = atual.current.ferramenta;
+      const emAlgo = idDe(tocado(grupoDasFichas)) ?? idDe(tocado(grupoDosMarcadores));
+      // Desenhar ou agarrar um brawler: o dedo é do mapa, a página não desce.
+      if (ferramenta !== "mover" || emAlgo) evento.preventDefault();
+    };
+    renderer.domElement.addEventListener("touchstart", aoTocar, { passive: false });
     controls.addEventListener("change", () => {
       // O ponto para onde a câmara olha não sai do mapa.
       controls.target.x = Math.max(-LARGURA / 2, Math.min(LARGURA / 2, controls.target.x));
@@ -1058,6 +1077,7 @@ export default function Quadro3D(props: Props) {
       realismo?.dispose();
       controls.dispose();
       renderer.domElement.removeEventListener("pointerdown", aoCarregar);
+      renderer.domElement.removeEventListener("touchstart", aoTocar);
       renderer.domElement.removeEventListener("pointermove", aoMover);
       renderer.domElement.removeEventListener("pointerup", aoLargar);
       renderer.domElement.removeEventListener("pointerleave", aoSair);

@@ -1,3 +1,4 @@
+import { Retrato as RetratoOuIniciais } from "@/components/Retrato";
 /**
  * O quadro do general: o fim do draft como um plano de batalha.
  *
@@ -79,7 +80,7 @@ const COMANDOS: Array<{ id: ComandoDeCamara; simbolo: string; nome: string }> = 
   { id: "afastar", simbolo: "−", nome: "Afastar" },
 ];
 const FERRAMENTAS: Array<{ id: Ferramenta; nome: string; ajuda: string }> = [
-  { id: "mover", nome: "Mover", ajuda: "Arrasta os brawlers. Botão esquerdo roda, o direito arrasta o mapa, a roda aproxima. No telemóvel: um dedo roda, dois aproximam." },
+  { id: "mover", nome: "Mover", ajuda: "Arrasta os brawlers. Botão esquerdo roda, o direito arrasta o mapa, a roda aproxima. No telemóvel: um dedo desce a página ou arrasta um brawler; dois dedos rodam e aproximam." },
   { id: "seta", nome: "Seta", ajuda: "Arrasta no chão para desenhar a seta." },
   { id: "simbolo", nome: "Símbolo", ajuda: "Clica no chão para pôr o símbolo." },
   { id: "apagar", nome: "Apagar", ajuda: "Clica numa seta ou num símbolo para apagar." },
@@ -92,9 +93,10 @@ const CHAVE_DA_CAMARA = "brawl-hibrido:camara-da-cena:v1";
 
 /** Um retrato pequeno, com a cor da equipa. */
 function Retrato({ url, nome, lado }: { url: string | null; nome: string; lado: "nos" | "eles" }) {
+  // Se a imagem falhar, as iniciais (antes via-se o nome do `alt` cortado por cima do círculo).
   return (
     <span className={`qg-retrato qg-retrato--${lado}`} title={nome}>
-      {url ? <img src={url} alt={nome} loading="lazy" decoding="async" /> : nome.slice(0, 2).toUpperCase()}
+      <RetratoOuIniciais src={url} nome={nome} alt={nome} loading="lazy" />
     </span>
   );
 }
@@ -235,6 +237,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     try { window.localStorage.setItem(CHAVE_DA_CAMARA, nova); } catch { /* só nesta visita */ }
   };
   const [verAmeacas, setVerAmeacas] = useState(true);
+  const [opcoesAbertas, setOpcoesAbertas] = useState(false);
   const semTrilhos = useMemo(() => [], []);
   const semAmeacas = useMemo<AmeacaNo3D[]>(() => [], []);
   const [momento, setMomento] = useState<MomentoDoPlano>("inicio");
@@ -657,7 +660,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         )}
       </header>
 
-      <div className="quadro-general-barra" role="toolbar" aria-label="Ferramentas do quadro">
+      <div className={`quadro-general-barra${opcoesAbertas ? " com-opcoes" : ""}`} role="toolbar" aria-label="Ferramentas do quadro">
         <div className="quadro-general-grupo" role="radiogroup" aria-label="Ferramenta">
           {FERRAMENTAS.filter((item) => item.id !== "casa" || (ehDono && terreno)).map((item) => (
             <button key={item.id} type="button" role="radio" aria-checked={ferramenta === item.id} className={ferramenta === item.id ? "is-active" : ""} onClick={() => setFerramenta(item.id)}>{item.nome}</button>
@@ -697,6 +700,10 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
             ))}
           </div>
         )}
+        {/* No telemóvel, as opções menos usadas ficam atrás deste botão: antes eram ~600 px antes do mapa. */}
+        <button type="button" className="quadro-general-mais" aria-expanded={opcoesAbertas} onClick={() => setOpcoesAbertas((aberto) => !aberto)}>
+          {opcoesAbertas ? "Fechar opções" : "⚙ Opções do mapa"}
+        </button>
         <div className="quadro-general-grupo quadro-general-vistas" aria-label="Vista">
           {VISTAS.map((item) => (
             <button key={item.id} type="button" onClick={() => { setPerspetiva(null); setVista((atual) => ({ id: item.id, pedido: atual.pedido + 1 })); }}>{item.nome}</button>
@@ -743,7 +750,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         )}
         <button type="button" className="quadro-general-repor" onClick={() => { setPlano(planoVazio(nomesNossos, nomesDeles)); setMomento("inicio"); }}>Repor tudo</button>
       </div>
-      {ajuda && <p className="quadro-general-ajuda">{ajuda}</p>}
+      {ajuda && <p className={`quadro-general-ajuda${opcoesAbertas ? " com-opcoes" : ""}`}>{ajuda}</p>}
 
       <div className="qg-momentos" role="tablist" aria-label="Momento da partida">
         {MOMENTOS.map((item) => {

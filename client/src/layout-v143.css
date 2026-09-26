@@ -407,3 +407,14 @@
 .brawler-avatar.com-retrato > img { object-position: center top; }
 .retrato-iniciais { font-weight: 800; letter-spacing: .02em; }
 .draft-probability-center.is-compacto::before { display: none; }
+.quadro-general-a-carregar { padding: 18px; color: var(--bh-text-muted); text-align: center; }
+/* Opções do mapa 3D: à vista no computador; no telemóvel, atrás de um botão. */
+.quadro-general-mais { display: none; }
+@media (max-width: 700px) {
+  .quadro-general-mais { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--bh-line-strong); border-radius: 9px; background: transparent; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; }
+  .quadro-general-barra:not(.com-opcoes) > .quadro-general-vistas,
+  .quadro-general-barra:not(.com-opcoes) > .quadro-general-interruptor,
+  .quadro-general-barra:not(.com-opcoes) > .quadro-general-opcao,
+  .quadro-general-barra:not(.com-opcoes) > .quadro-general-repor,
+  .quadro-general-ajuda:not(.com-opcoes) { display: none; }
+}

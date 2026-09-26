@@ -391,7 +391,8 @@ describe("atualização prioritária do Draft", () => {
   it("confirma o Pick antes de recalcular o painel contextual", () => {
     const draftSource = readFileSync(resolve(process.cwd(), "client/src/pages/Draft.tsx"), "utf8");
 
-    expect(draftSource).toContain('import { Fragment, memo, startTransition');
+    // O startTransition vem do React (a lista de imports cresceu com o lazy do general).
+    expect(draftSource).toMatch(/import \{ Fragment,[^}]*\bstartTransition\b[^}]*\} from "react";/);
     expect(draftSource).toMatch(/const \[analysisChoices, setAnalysisChoices\] = useState/);
     expect(draftSource).toContain('const analysisRefreshFrameRef = useRef<number | null>(null);');
     expect(draftSource).toContain('const scheduleContextualAnalysis = useCallback');

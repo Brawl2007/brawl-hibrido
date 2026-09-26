@@ -18,13 +18,14 @@
  * A ordem não é alfabética: é pela pontuação na rotação ativa. Quem decide
  * drafts primeiro entra primeiro, e parar a meio deixa sempre o melhor feito.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { brawlScopeModes } from "@shared/brawlScopeModes";
 import { brawlScopeSlugFromName } from "@shared/brawlScopeSlugs";
-import ImportarLote from "./ImportarLote";
+// Só o dono importa lotes, e a validação traz o zod (~50 KB): carrega à parte.
+const ImportarLote = lazy(() => import("./ImportarLote"));
 
 const VISTAS = [{ id: "overall", label: "Geral" }, ...brawlScopeModes.map((modo) => ({ id: modo.id as string, label: modo.label }))];
 
@@ -243,10 +244,12 @@ export default function FilaDeColagem() {
         {percurso === "tudo" ? " (todas as vistas)" : ` em ${VISTAS.find((v) => v.id === vista)?.label ?? vista}`}
       </summary>
 
-      <ImportarLote
-        pendingUrls={tarefas.map(tarefa => enderecoDaFicha(tarefa.brawler, tarefa.vista))}
-        refreshUrls={tarefasParaAtualizar.map(tarefa => enderecoDaFicha(tarefa.brawler, tarefa.vista))}
-      />
+      <Suspense fallback={null}>
+        <ImportarLote
+          pendingUrls={tarefas.map(tarefa => enderecoDaFicha(tarefa.brawler, tarefa.vista))}
+          refreshUrls={tarefasParaAtualizar.map(tarefa => enderecoDaFicha(tarefa.brawler, tarefa.vista))}
+        />
+      </Suspense>
       <div className="paste-queue-controls">
         <label>
           <span>Percurso</span>
