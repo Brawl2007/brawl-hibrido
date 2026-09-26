@@ -18,7 +18,7 @@ import { trpc } from "@/lib/trpc";
 import { useEhDono } from "@/lib/ehDono";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { ELOS_BRAWL_PLANET } from "@shared/elosBrawlPlanet";
-import { atribuirDuelosPorCounter, calculateLaneMatchup, inferDraftRole, posicionarNoMapa } from "@shared/draft";
+import { atribuirDuelosPorCounter, calculateLaneMatchup, getBrawlerClass, inferDraftRole, posicionarNoMapa } from "@shared/draft";
 import type { RankedRow } from "@/data/rankedData";
 import {
   CAPACIDADES,
@@ -85,7 +85,9 @@ const FERRAMENTAS: Array<{ id: Ferramenta; nome: string; ajuda: string }> = [
   { id: "casa", nome: "Corrigir terreno", ajuda: "Só tu vês isto. Escolhe o tipo e clica nas casas mal lidas. \"Como na imagem\" desfaz." },
 ];
 /** Quanto tempo cada momento fica no ecrã ao "ver a partida". */
-const DURACAO_DO_MOMENTO_MS = 3200;
+const DURACAO_DA_CENA_MS = 15_000;
+/** Seis legendas de 2 s: por momento, o que se passa e uma instrução. */
+const LEGENDAS_POR_CENA = 6;
 
 /** Um retrato pequeno, com a cor da equipa. */
 function Retrato({ url, nome, lado }: { url: string | null; nome: string; lado: "nos" | "eles" }) {
@@ -205,27 +207,37 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   const [cursor, setCursor] = useState<AlvoDoCursor>(null);
   const [erro3D, setErro3D] = useState<string | null>(null);
   const [novaChave, setNovaChave] = useState("");
-  const [notasNoMapa, setNotasNoMapa] = useState(true);
+  // As notas escritas no mapa tapavam-se umas às outras: vêm desligadas. As
+  // instruções leem-se na lista, no cursor e na legenda da cena.
+  const [notasNoMapa, setNotasNoMapa] = useState(false);
   const [passosFantasma, setPassosFantasma] = useState(true);
   const [verAmeacas, setVerAmeacas] = useState(true);
   const semTrilhos = useMemo(() => [], []);
   const semAmeacas = useMemo<AmeacaNo3D[]>(() => [], []);
   const [momento, setMomento] = useState<MomentoDoPlano>("inicio");
-  const [aReproduzir, setAReproduzir] = useState(false);
   const [perspetiva, setPerspetiva] = useState<{ chave: string; n: number } | null>(null);
   const [tipoDaCorrecao, setTipoDaCorrecao] = useState<TipoDeCasa | "imagem">("destrutivel");
-  // "Ver a partida": início → meio → fim, sozinho.
+  /*
+   * "Ver a partida": uma cena de ~12 s. A câmara faz os planos sozinha (no
+   * Quadro3D); aqui os brawlers passam do início ao meio e ao fim, e a legenda
+   * mostra uma instrução de cada vez — nunca duas por cima uma da outra.
+   */
+  const [cinema, setCinema] = useState<{ n: number; duracaoMs: number } | null>(null);
+  const aReproduzir = cinema !== null;
+  const [legendaAtual, setLegendaAtual] = useState(0);
+  const comecarCena = () => setCinema({ n: Date.now(), duracaoMs: DURACAO_DA_CENA_MS });
   useEffect(() => {
-    if (!aReproduzir) return;
-    const temporizador = window.setInterval(() => {
-      setMomento((atual) => {
-        const seguinte = MOMENTOS[MOMENTOS.findIndex((m) => m.id === atual) + 1]?.id;
-        if (!seguinte) setAReproduzir(false);
-        return seguinte ?? atual;
-      });
-    }, DURACAO_DO_MOMENTO_MS);
-    return () => window.clearInterval(temporizador);
-  }, [aReproduzir]);
+    if (!cinema) return;
+    const inicio = Date.now();
+    setMomento("inicio");
+    setLegendaAtual(0);
+    const relogio = window.setInterval(() => {
+      const passado = Date.now() - inicio;
+      setMomento(MOMENTOS[Math.min(MOMENTOS.length - 1, Math.floor(passado / (cinema.duracaoMs / MOMENTOS.length)))].id);
+      setLegendaAtual(Math.min(LEGENDAS_POR_CENA - 1, Math.floor(passado / (cinema.duracaoMs / LEGENDAS_POR_CENA))));
+    }, 150);
+    return () => window.clearInterval(relogio);
+  }, [cinema?.n]);
 
   const utils = trpc.useUtils();
   const terrenoQuery = trpc.general.terreno.useQuery({ mapaId: mapaId ?? "" }, { enabled: Boolean(mapaId), staleTime: 10 * 60_000, retry: 1 });
@@ -254,7 +266,8 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         })),
       }));
       setMomento("inicio");
-      setAReproduzir(false);
+      // Assim que o plano chega, a cena mostra-o: é o que se vê enquanto a partida começa.
+      setCinema({ n: Date.now(), duracaoMs: DURACAO_DA_CENA_MS });
       if (resultado.terreno && mapaId) utils.general.terreno.setData({ mapaId }, resultado.terreno as never);
       toast.success(`O general deu as ordens em ${resultado.segundos} s.`, {
         description: `${resultado.modelo}${resultado.comImagem ? " · viu o mapa" : ""}${resultado.comPesquisa ? " · pesquisou a informação atual" : ""}. Passa o cursor pelos brawlers.`,
@@ -334,8 +347,9 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       retrato: retratoDe(linha),
       ponto: camadas.posicoes[chaveDaFicha("nos", linha.brawler)] ?? { x: 0.5, y: 0.84 },
       funcao: plano.ordens.find((ordem) => ordem.brawler === linha.brawler)?.funcao || undefined,
+      classe: getBrawlerClass(linha.brawler),
     })),
-    ...deles.map((linha) => ({ chave: chaveDaFicha("eles", linha.brawler), nome: linha.brawler, lado: "eles" as const, retrato: retratoDe(linha), ponto: camadas.posicoes[chaveDaFicha("eles", linha.brawler)] ?? { x: 0.5, y: 0.16 } })),
+    ...deles.map((linha) => ({ chave: chaveDaFicha("eles", linha.brawler), nome: linha.brawler, lado: "eles" as const, retrato: retratoDe(linha), ponto: camadas.posicoes[chaveDaFicha("eles", linha.brawler)] ?? { x: 0.5, y: 0.16 }, classe: getBrawlerClass(linha.brawler) })),
   ], [nossos, deles, camadas.posicoes, plano.ordens, retratoDe]);
   const ameacas3D = useMemo<AmeacaNo3D[]>(() => (plano.ameacas ?? []).map((a) => ({
     id: a.id,
@@ -451,6 +465,22 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         ].filter(Boolean)
         : [ehDono ? "Ainda sem ordens. Pede o plano ao general." : "Ainda sem ordens para este brawler."],
     };
+  })();
+
+  // As legendas da cena: por cada momento, o que se passa e uma instrução.
+  // Sem plano da IA, contam os duelos de cada lane.
+  const legendas = (() => {
+    const lanes = duelos.map((d) => `${d.posicao === "mid" ? "Mid" : d.posicao === "left" ? "Lane esquerda" : "Lane direita"}: ${d.nosso} contra ${d.deles} · ${Math.round(d.vantagem)}%`);
+    const ordens = plano.ordens.filter((o) => o.objetivo).map((o) => `${o.brawler}: ${o.objetivo}`);
+    const avisos = (plano.ameacas ?? []).map((a) => `⚠ ${a.perigoso} → ${a.alvo}: ${a.texto}`);
+    const extra = [...ordens, ...avisos, ...lanes];
+    const lista: string[] = [];
+    MOMENTOS.forEach((m, i) => {
+      const texto = plano.momentos?.find((t) => t.momento === m.id);
+      lista.push(`${m.nome}${texto?.quando ? ` · ${texto.quando}` : ""}${texto?.resumo ? ` — ${texto.resumo}` : ""}`);
+      lista.push(i === MOMENTOS.length - 1 && plano.condicaoDeVitoria ? `🏆 ${plano.condicaoDeVitoria}` : extra[i] ?? lanes[i] ?? "");
+    });
+    return lista;
   })();
 
   const ajuda = FERRAMENTAS.find((item) => item.id === ferramenta)?.ajuda;
@@ -680,7 +710,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
               role="tab"
               aria-selected={momento === item.id}
               className={`qg-momento${momento === item.id ? " is-active" : ""}`}
-              onClick={() => { setAReproduzir(false); setMomento(item.id); }}
+              onClick={() => { setCinema(null); setMomento(item.id); }}
             >
               <b>{item.nome}</b>
               {texto?.quando && <small>{texto.quando}</small>}
@@ -691,7 +721,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         <button
           type="button"
           className="qg-reproduzir"
-          onClick={() => { if (aReproduzir) setAReproduzir(false); else { setMomento("inicio"); setAReproduzir(true); } }}
+          onClick={() => { if (aReproduzir) setCinema(null); else comecarCena(); }}
         >
           {aReproduzir ? "❚❚ Parar" : "▶ Ver a partida"}
         </button>
@@ -729,6 +759,8 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 vista={vista.id}
                 pedidoDeVista={vista.pedido}
                 comando={comando}
+                cinema={cinema}
+                onFimDoCinema={() => setCinema(null)}
                 onMoverFicha={moverFicha}
                 onMoverMarcador={(id, ponto) => mudarCamadas((atuais) => ({ ...atuais, marcadores: atuais.marcadores.map((m) => (m.id === id ? { ...m, ponto } : m)) }))}
                 onNovaSeta={acrescentarSeta}
@@ -739,7 +771,13 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
               />
             </Suspense>
           )}
-          {!erro3D && (
+          {aReproduzir && (
+            <div className="qg-cinema" aria-live="polite">
+              <p key={legendaAtual} className="qg-legenda">{legendas[legendaAtual] || legendas[legendaAtual - 1] || ""}</p>
+              <button type="button" className="qg-cinema-parar" onClick={() => setCinema(null)}>Saltar ▸▸</button>
+            </div>
+          )}
+          {!erro3D && !aReproduzir && (
             <div className="quadro-general-camara" role="group" aria-label="Câmara">
               {COMANDOS.map((item) => (
                 <button key={item.id} type="button" title={item.nome} aria-label={item.nome} onClick={() => setComando((atual) => ({ acao: item.id, n: (atual?.n ?? 0) + 1 }))}>{item.simbolo}</button>

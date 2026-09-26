@@ -156,3 +156,34 @@ describe("a pesquisa das sugestões", () => {
     expect(escolher).toContain('setQuery("");');
   });
 });
+
+describe("o mapa 3D: menos texto e a cena da partida", () => {
+  const q3d = ler("client/src/components/Quadro3D.tsx");
+  const quadro = ler("client/src/components/QuadroDoGeneral.tsx");
+
+  it("nada de balões de texto por cima uns dos outros", () => {
+    // Os avisos de ameaça eram balões de 7 casas; ficou um ⚠ pequeno.
+    expect(q3d).not.toContain("desenharAmeaca(");
+    // As notas escritas no mapa vêm desligadas.
+    expect(quadro).toContain("const [notasNoMapa, setNotasNoMapa] = useState(false);");
+  });
+
+  it("cada brawler ataca à maneira da classe", () => {
+    expect(q3d).toContain('case "Lançador": return "arco";');
+    expect(q3d).toContain('case "Artilheiro": return "reto";');
+    expect(q3d).toMatch(/case "Tank":\s*case "Assassino": return "investida";/);
+    expect(quadro).toContain("classe: getBrawlerClass(linha.brawler)");
+  });
+
+  it("um só plano de drone, luta a luta, com câmara lenta em cada uma", () => {
+    expect(q3d).toContain('new THREE.CatmullRomCurve3(poses.map((p) => p.pos), false, "centripetal")');
+    expect(q3d).toContain("filme.relogio += (agora - filme.ultimo) * lento;");
+    expect(q3d).toContain("animarTiro(tiro, i, filme!.relogio)");
+  });
+
+  it("a cena arranca sozinha quando o plano chega, com legendas uma de cada vez", () => {
+    const sucesso = quadro.slice(quadro.indexOf("const pedirPlano = trpc.general.pedirPlano.useMutation"), quadro.indexOf("const rotularTerreno"));
+    expect(sucesso).toContain("setCinema({ n: Date.now(), duracaoMs: DURACAO_DA_CENA_MS });");
+    expect(quadro).toContain('<p key={legendaAtual} className="qg-legenda">');
+  });
+});
