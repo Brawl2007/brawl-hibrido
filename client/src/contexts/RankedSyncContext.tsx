@@ -2,6 +2,8 @@ import { vigiarStream } from "@/lib/vigiarStream";
 import { applyRankedSnapshotPush, type RankedSnapshotEvent, type RankedSnapshotPayload } from "@shared/rankedSyncSnapshot";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useEloBrawlPlanet } from "@/lib/eloBrawlPlanet";
+import { aplicarElo, type EloBrawlPlanet } from "@shared/elosBrawlPlanet";
 
 type RankedSyncClientState = {
   snapshot?: RankedSnapshotPayload;
@@ -16,6 +18,13 @@ type RankedSyncClientState = {
   source: "sse" | "query" | "bundled" | "none";
   isLoading: boolean;
   connectionState: "connecting" | "live" | "offline";
+  /** Elo do Brawl Planet aplicado a `snapshot.rows`. "all" deixa as linhas como vieram. */
+  elo: EloBrawlPlanet;
+  setElo: (elo: EloBrawlPlanet) => void;
+  /** Que elos a última recolha trouxe. Vazio numa snapshot anterior aos elos. */
+  elosDisponiveis: EloBrawlPlanet[];
+  /** Mapas em que o elo escolhido não tem jogos publicados: ficaram em All ranks. */
+  mapasSemElo: string[];
 };
 
 const RankedSyncContext = createContext<RankedSyncClientState>({
@@ -23,6 +32,10 @@ const RankedSyncContext = createContext<RankedSyncClientState>({
   source: "none",
   isLoading: true,
   connectionState: "connecting",
+  elo: "all",
+  setElo: () => {},
+  elosDisponiveis: [],
+  mapasSemElo: [],
 });
 
 export function RankedSyncProvider({ children }: { children: ReactNode }) {
@@ -36,9 +49,11 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
   const [connectionState, setConnectionState] = useState<RankedSyncClientState["connectionState"]>("connecting");
 
   useEffect(() => {
-    if (!snapshotQuery.data || hasPushRef.current) return;
+    if (!snapshotQuery.data) return;
     const data = snapshotQuery.data;
-    setEvent({
+    // Também depois da stream: é por aqui que "Atualizar agora" chega ao ecrã.
+    // Fica a mais recente das duas (ver `applyRankedSnapshotPush`).
+    setEvent((current) => applyRankedSnapshotPush(current, {
       version: data.version,
       capturedAt: data.capturedAt ? new Date(data.capturedAt).toISOString() : null,
       syncState: data.version === "bundled-static" ? "bundled" : "success",
@@ -48,7 +63,7 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
       sourceReadAt: data.sourceReadAt,
       rowCount: data.rowCount,
       payload: data.payload,
-    });
+    }));
   }, [snapshotQuery.data]);
 
   useEffect(() => {
@@ -74,8 +89,21 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const { elo, setElo } = useEloBrawlPlanet();
+  /*
+   * O elo aplica-se aqui, uma vez, e toda a gente lê as linhas já trocadas:
+   * mapas, ranking e Draft. Em "all" o objeto é o mesmo que chegou — nada é
+   * recalculado e nada muda em relação ao que o site sempre mostrou.
+   */
+  const comElo = useMemo(() => {
+    const payload = event?.payload;
+    if (!payload || elo === "all") return { payload, semDados: [] as string[] };
+    const { linhas, semDados } = aplicarElo(payload.rows, elo, payload.elosBrawlPlanet);
+    return { payload: { ...payload, rows: linhas as typeof payload.rows }, semDados };
+  }, [event?.payload, elo]);
+
   const value = useMemo<RankedSyncClientState>(() => ({
-    snapshot: event?.payload,
+    snapshot: comElo.payload,
     event,
     version: event?.version,
     capturedAt: event?.capturedAt,
@@ -85,7 +113,11 @@ export function RankedSyncProvider({ children }: { children: ReactNode }) {
     source: event ? (hasPushRef.current ? "sse" : event.version === "bundled-static" ? "bundled" : "query") : "none",
     isLoading: snapshotQuery.isLoading && !event,
     connectionState,
-  }), [connectionState, event, snapshotQuery.isLoading]);
+    elo,
+    setElo,
+    elosDisponiveis: event?.payload?.elosBrawlPlanet?.lidos ?? [],
+    mapasSemElo: comElo.semDados,
+  }), [connectionState, event, snapshotQuery.isLoading, comElo, elo, setElo]);
 
   return <RankedSyncContext.Provider value={value}>{children}</RankedSyncContext.Provider>;
 }

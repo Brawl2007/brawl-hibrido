@@ -4,7 +4,7 @@
  * cyan telemetry, amber S-tier emphasis, asymmetric data-first composition.
  */
 import { LOGO, IMAGEM_PRINCIPAL, FUNDO_DE_MAPA, TEXTURA, fundoCom } from "@/lib/imagens";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
@@ -57,8 +57,11 @@ import {
   type Tier,
 } from "@/data/rankedData";
 import { Slider } from "@/components/ui/slider";
-import { additionalBrawlerAssetIds, additionalMapAssetIds } from "@/data/additionalRankedData";
-import { useHybridWeights } from "@/lib/hybridWeights";
+import { Switch } from "@/components/ui/switch";
+import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
+import { mapImageFor } from "@/lib/imagemDoMapa";
+import { SeletorDeElo } from "@/components/SeletorDeElo";
+import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights, type HybridWeightsPreference } from "@/lib/hybridWeights";
 import { officialSourceBalance, useSourceBalance, type SourceBalancePreference } from "@/lib/sourceBalance";
 import { buildMapsTsv } from "@shared/mapTsv";
 import { avisoDaRecolha } from "@shared/recolhaAutomatica";
@@ -66,6 +69,7 @@ import { avaliarConfianca, explicarConfianca } from "@shared/amostraPequena";
 import { LIMITE_DE_CONFIANCA_MS, descreverFrescura } from "@shared/idadeDosDados";
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
+import { BarraDoSite } from "@/components/BarraDoSite";
 
 const LOGO_URL = LOGO;
 
@@ -84,7 +88,16 @@ const tierMeta: Record<Tier, { label: string; className: string; dot: string }> 
   B: { label: "Tier B", className: "tier-b", dot: "bg-[#94A3B8]" },
 };
 
-type RankingPreset = { id: string; name: string; winRateWeight: number };
+/**
+ * Uma divisão guardada com nome.
+ *
+ * `starPlayerWeight` é opcional de propósito: as predefinições já guardadas
+ * não o têm, e são lidas como o que eram quando foram guardadas — uma divisão
+ * Vitória/Uso, sem Star Player. Aplicar uma predefinição antiga desliga o Star
+ * Player, e isso está à vista na etiqueta do botão ("70/30" contra
+ * "50/30/20"), por isso ninguém aplica uma coisa e recebe outra.
+ */
+type RankingPreset = { id: string; name: string; winRateWeight: number; starPlayerWeight?: number };
 
 const RANKING_PRESETS_STORAGE_KEY = "brawl-hibrido:ranking-laboratory-presets:v2";
 
@@ -97,15 +110,29 @@ function readRankingPresets(): RankingPreset[] {
       if (!preset || typeof preset.name !== "string" || typeof preset.winRateWeight !== "number") return [];
       const weight = Math.round(preset.winRateWeight);
       if (weight < 0 || weight > 100) return [];
+      const star = typeof preset.starPlayerWeight === "number" ? Math.round(preset.starPlayerWeight) : 0;
+      // Uma soma impossível é uma predefinição corrompida, não uma a corrigir
+      // em silêncio: metade dos pesos certos daria um Score que não é o que o
+      // nome promete.
+      if (star < 0 || weight + star > 100) return [];
       return [{
-        id: typeof preset.id === "string" && preset.id ? preset.id : `${preset.name}-${weight}`,
+        id: typeof preset.id === "string" && preset.id ? preset.id : `${preset.name}-${weight}-${star}`,
         name: preset.name.trim().slice(0, 28),
         winRateWeight: weight,
+        starPlayerWeight: star,
       }];
     }).filter((preset) => preset.name.length > 0);
   } catch {
     return [];
   }
+}
+
+/** A etiqueta de uma predefinição: "70/30", ou "50/30/20" se guardar Star Player. */
+function presetLabel(preset: RankingPreset) {
+  const star = preset.starPlayerWeight ?? 0;
+  return star > 0
+    ? `${preset.winRateWeight}/${star}/${100 - preset.winRateWeight - star}`
+    : `${preset.winRateWeight}/${100 - preset.winRateWeight}`;
 }
 
 function formatScore(value: number | null | undefined) {
@@ -119,43 +146,8 @@ function formatSyncDate(value: Date | string | null | undefined) {
   return date.toLocaleString("pt-PT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-const mapAssetIds: Record<string, string> = {
-  "Beach Ball": "15000143",
-  "Belle's Rock": "15000368",
-  "Bridge Too Far": "15000072",
-  "Center Stage": "15000132",
-  "Double Swoosh": "15000115",
-  "Dry Season": "15000083",
-  "Dueling Beetles": "15000306",
-  "Flaring Phoenix": "15000440",
-  "Gem Fort": "15000010",
-  "Hard Rock Mine": "15000007",
-  "Hideout": "15000022",
-  "Hot Potato": "15000053",
-  "Layer Cake": "15000082",
-  "Open Business": "15000292",
-  "Out in the Open": "15000548",
-  "Parallel Plays": "15000293",
-  "Pinball Dreams": "15000118",
-  "Spiraling Out": "15001021",
-  ...additionalMapAssetIds,
-};
 
-/**
- * A imagem do mapa, pelo id oficial.
- *
- * O id vem da rotação lida — é o mesmo que o TopBrawl usa em `/rankeds/<id>` e
- * o mesmo que a Brawlify usa para publicar a imagem. A tabela escrita à mão
- * fica como recurso para snapshots antigas, que não trazem o id.
- *
- * Enquanto a tabela era o único caminho, um mapa que entrava na rotação
- * aparecia sem imagem nenhuma até alguém se lembrar de a editar — e "sem
- * imagem" era indistinguível de "a fonte não publica imagem deste mapa".
- */
-function mapImageFor(map: { name: string; id?: string }) {
-  const mapId = map.id ?? mapAssetIds[map.name];
-  return mapId ? `https://cdn.brawlify.com/maps/regular/${mapId}.png` : FUNDO_DE_MAPA;
-}
+
 
 /** Sem imagem publicada, o cartão fica só com o fundo do tema. */
 function fundoDeMapa(imagem: string | null) {
@@ -176,14 +168,6 @@ function ModeIcon({ modeId, size = 16 }: { modeId: string; size?: number }) {
   return <Icon size={size} strokeWidth={2.2} />;
 }
 
-function BrandMotif({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className={`brand-motif ${compact ? "is-compact" : ""}`} aria-hidden="true">
-      <img src={LOGO_URL} alt="" />
-      <span>{compact ? "BH" : "BRAWL HÍBRIDO"}</span>
-    </span>
-  );
-}
 
 function TierBadge({ tier }: { tier: Tier | null }) {
   if (!tier) return <span className="tier-badge tier-pending"><span className="tier-dot bg-[#64748B]" />—</span>;
@@ -196,163 +180,114 @@ function TierBadge({ tier }: { tier: Tier | null }) {
   );
 }
 
-function Sidebar({
-  activeSection,
-  onSectionChange,
-  open,
-  onClose,
-  capturedAt,
-}: {
-  activeSection: string;
-  onSectionChange: (section: string) => void;
-  open: boolean;
-  onClose: () => void;
-  capturedAt: Date | string | null | undefined;
-}) {
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Gauge },
-    { id: "maps", label: "Mapas Ranked", icon: Layers3 },
-    { id: "draft", label: "Draft Híbrido", icon: Sparkles, href: "/draft" },
-    { id: "brawlers", label: "Brawlers", icon: Crosshair, href: "/brawlers" },
-    { id: "sources", label: "Fontes", icon: Radio },
-    { id: "formula", label: "Como funciona", icon: CircleHelp },
-  ];
-
-  return (
-    <>
-      <AnimatePresence>
-        {open && (
-          <motion.button
-            aria-label="Fechar menu"
-            className="sidebar-backdrop lg:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-        )}
-      </AnimatePresence>
-      <aside className={`app-sidebar ${open ? "is-open" : ""}`}>
-        <div className="sidebar-brand">
-          <div className="brand-mark-shell">
-            <img src={LOGO_URL} alt="" className="brand-mark" />
-          </div>
-          <div>
-            <div className="brand-name">Brawl Híbrido</div>
-            <div className="brand-kicker">Ranked intelligence</div>
-          </div>
-          <button className="sidebar-close lg:hidden" onClick={onClose} aria-label="Fechar menu">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="sidebar-status">
-          <span className="status-pulse" />
-          <span>ROTAÇÃO ATUAL</span>
-          <strong>26 mapas catalogados</strong>
-        </div>
-
-        <nav className="sidebar-nav" aria-label="Navegação principal">
-          <div className="nav-label">Workspace</div>
-          {navItems.map(({ id, label, icon: Icon, href }) => (
-            href ? (
-              <a key={id} href={href} className="sidebar-link">
-                <Icon size={18} />
-                <span>{label}</span>
-              </a>
-            ) : (
-              <button
-                key={id}
-                className={`sidebar-link ${activeSection === id ? "is-active" : ""}`}
-                onClick={() => {
-                  onSectionChange(id);
-                  onClose();
-                }}
-              >
-                <Icon size={18} />
-                <span>{label}</span>
-                {id === "maps" && <span className="nav-count">26</span>}
-              </button>
-            )
-          ))}
-        </nav>
-
-        <div className="sidebar-spacer" />
-
-        <div className="sidebar-note">
-          <div className="note-icon"><Zap size={16} /></div>
-          <div>
-            <strong>Score Híbrido</strong>
-            <p>Win Rate + leitura de meta numa só métrica.</p>
-          </div>
-        </div>
-        <div className="sidebar-footer">
-          <span className="footer-dot" />
-          Última sync: {formatSyncDate(capturedAt)}
-        </div>
-      </aside>
-    </>
-  );
-}
-
-function Topbar({ onMenu, capturedAt, lastStatus, liveState, onRefresh, isRefreshing, refreshProgress }: { onMenu: () => void; capturedAt: Date | string | null | undefined; lastStatus: string; liveState: "connecting" | "live" | "offline"; onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null }) {
+function Topbar({ capturedAt, lastStatus, liveState, onRefresh, isRefreshing, refreshProgress, activeSection, onSection }: { capturedAt: Date | string | null | undefined; lastStatus: string; liveState: "connecting" | "live" | "offline"; onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null; activeSection: string; onSection: (section: string) => void }) {
   const isLive = Boolean(capturedAt) && lastStatus === "success";
-  const liveLabel = liveState === "live" ? "Live · SSE" : liveState === "connecting" ? "A ligar…" : "Offline · fallback";
+  const liveLabel = liveState === "live" ? "Ao vivo" : liveState === "connecting" ? "A ligar…" : "Sem ligação";
   // "Atualizar agora" manda o servidor ir ler as fontes, e só o dono o pode
   // fazer. A quem não pode, o site mostrava o botão na mesma e respondia com
   // uma recusa depois do clique. A idade dos dados continua visível abaixo.
   const ehDono = useEhDono();
+  const ativo = activeSection === "maps" ? "mapas" : activeSection === "sources" ? "fontes" : activeSection === "formula" ? "como" : "inicio";
   return (
-    <header className="topbar">
-      <button className="mobile-menu-button lg:hidden" onClick={onMenu} aria-label="Abrir menu">
-        <Menu size={20} />
-      </button>
-      <div className="topbar-crumbs">
-        <span className="crumb-muted">Ranked</span>
-        <ChevronRight size={14} />
-        <span className="crumb-active">Brawl Híbrido</span>
-      </div>
-      <div className="topbar-actions">
-        <span className="live-chip"><span className="live-dot" /> {isLive ? liveLabel : "Snapshot local"}</span>
-        {ehDono ? (
-          <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Última atualização: ${formatSyncDate(capturedAt)}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
-            <Activity size={16} className={isRefreshing ? "animate-spin" : undefined} />
-            <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar agora"}</span>
-          </button>
-        ) : null}
-        <div className="profile-chip">
-          <span className="profile-avatar">BH</span>
-          <span className="profile-label">Analista</span>
-        </div>
-      </div>
-    </header>
+    <BarraDoSite ativo={ativo} onSecao={onSection}>
+      <span className="live-chip"><span className="live-dot" /> {isLive ? liveLabel : "Dados guardados"}</span>
+      {ehDono ? (
+        <button className="refresh-button" title={isRefreshing ? refreshProgress ?? "A sincronização está a decorrer em segundo plano" : `Última atualização: ${formatSyncDate(capturedAt)}`} onClick={onRefresh} disabled={isRefreshing} aria-label={isRefreshing ? `A atualizar dados${refreshProgress ? `: ${refreshProgress}` : ""}` : "Atualizar dados agora"}>
+          <Activity size={16} className={isRefreshing ? "animate-spin" : undefined} />
+          <span>{isRefreshing ? refreshProgress ?? "A atualizar…" : "Atualizar"}</span>
+        </button>
+      ) : null}
+    </BarraDoSite>
   );
 }
 
-function Hero({ selectedMap, onExplore }: { selectedMap: MapSummary; onExplore: () => void }) {
+/**
+ * A entrada.
+ *
+ * O lado direito era meio ecrã vazio, depois um brilho, depois um selo "BH
+ * INTEL" rodado — decoração, nas três versões. A regra que se aplica aqui é
+ * simples: texto e um gradiente não fazem uma entrada, fazem o lugar onde ela
+ * devia estar.
+ *
+ * O que lá entra agora é a resposta ao título. "Joga com dados" e, ao lado, o
+ * dado: quem é o nº1 do mapa escolhido, com o retrato e o Score. Muda sozinho
+ * quando se escolhe outro mapa, e o foco de luz que já lá estava passa a ter
+ * alguém para iluminar.
+ *
+ * O retrato vem do mesmo CDN da Brawlify que os cartões já usam. Se não houver
+ * id ou a imagem falhar, o cartão fica só com o nome e o número — nunca com um
+ * quadrado partido.
+ */
+function Hero({ selectedMap, leader, onExplore }: { selectedMap: MapSummary; leader?: RankedRow; onExplore: () => void }) {
+  const retrato = leader ? brawlerImageFor(leader.brawler, leader.brawlerId) : null;
+  // Guarda o endereço que falhou, não um sim/não: ao mudar de mapa o retrato
+  // novo tenta outra vez sem precisar de efeito nenhum a repor o estado.
+  const [retratoFalhado, setRetratoFalhado] = useState<string | null>(null);
+  const mostrarRetrato = Boolean(retrato) && retratoFalhado !== retrato;
+  /*
+   * Duas animações diferentes para o mesmo cartão, e não é capricho.
+   *
+   * Ao abrir a página, o nº1 entra depois do título, como a última peça da
+   * cascata. Ao escolher outro mapa, é resposta a um clique — e resposta a um
+   * clique tem de começar já. Medido antes: o retrato ficava 240ms invisível
+   * (o atraso da entrada a ser reaproveitado) e só assentava aos ~800ms,
+   * enquanto o nome e o número trocavam de uma vez, sem movimento nenhum.
+   *
+   */
+  //
+  // PRIMEIRA VERSÃO ERRADA, APANHADA A MEDIR: "primeira vez" era o primeiro
+  // render do componente. Mas a entrada renderiza primeiro SEM dados, e o nº1
+  // só aparece depois — quando já não era "a primeira vez". Resultado: ao
+  // abrir a página, o cartão usava sempre a animação de troca.
+  //
+  // Agora "primeira vez" é o primeiro nº1 MOSTRADO, e a entrada acaba no
+  // momento em que se mostra outro. Uma atualização dos dados com o mesmo nº1
+  // não muda a classe — senão a animação repetia a cada sincronização.
+  const primeiroMostrado = useRef<string | null>(null);
+  const jaTrocou = useRef(false);
+  const chaveDoLider = leader ? `${selectedMap.name}::${leader.brawler}` : null;
+  if (chaveDoLider && primeiroMostrado.current === null) primeiroMostrado.current = chaveDoLider;
+  if (chaveDoLider && chaveDoLider !== primeiroMostrado.current) jaTrocou.current = true;
+
   return (
     <section className="hero-panel" style={IMAGEM_PRINCIPAL ? { backgroundImage: `url(${IMAGEM_PRINCIPAL})` } : undefined}>
       <div className="hero-overlay" />
       <div className="hero-content">
-        <div className="eyebrow"><span className="eyebrow-line" /> Competitive intelligence <span className="eyebrow-dot" /></div>
         <h1>Joga com dados.<br /><em>Ganha com contexto.</em></h1>
         <p className="hero-copy">
-          A leitura híbrida da rotação Ranked: força competitiva, consistência de mapa e sinais de meta reunidos numa tabela que vai direto ao ponto.
+          A leitura híbrida da rotação Ranked: força competitiva, consistência de mapa e sinais de meta numa só tabela.
         </p>
         <div className="hero-actions">
           <button className="primary-button" onClick={onExplore}>
             Explorar {selectedMap.name} <ChevronRight size={17} />
           </button>
-          <span className="hero-footnote"><Sparkles size={14} /> 106 brawlers por mapa</span>
         </div>
       </div>
+      {leader ? (
+        <aside
+          // A chave inclui o mapa: se o mesmo brawler lidera dois mapas, o
+          // "Nº1 em …" mudou e a troca tem de se ver na mesma.
+          key={chaveDoLider!}
+          className={`hero-champion ${jaTrocou.current ? "is-troca" : "is-entrada"}`}
+          aria-label={`Nº1 em ${selectedMap.name}: ${leader.brawler}`}
+        >
+          {mostrarRetrato ? (
+            <img
+              className="hero-champion-portrait"
+              src={retrato!}
+              alt=""
+              onError={() => setRetratoFalhado(retrato)}
+            />
+          ) : null}
+          <div className="hero-champion-card">
+            <span className="hero-champion-rank">Nº1 em {selectedMap.name}</span>
+            <strong className="hero-champion-name">{leader.brawler}</strong>
+            <span className="hero-champion-score"><b>{formatScore(leader.score)}</b> Score Híbrido</span>
+          </div>
+        </aside>
+      ) : null}
       <div className="hero-orbit orbit-one" />
       <div className="hero-orbit orbit-two" />
-      <div className="hero-stamp">
-        <img src={LOGO_URL} alt="" />
-        <span>BH</span>
-        <small>INTEL</small>
-      </div>
     </section>
   );
 }
@@ -416,8 +351,6 @@ function MapSelector({
     <section className="map-section" id="maps">
       <div className="section-heading-row">
         <div>
-          <div className="section-kicker">Biblioteca Ranked <span>01 — 26</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">LIVE ROTATION / 26 MAPS</span></div>
           <h2>Escolhe o teu mapa</h2>
         </div>
         <div className="map-tools">
@@ -436,6 +369,7 @@ function MapSelector({
           </div>
         </div>
       </div>
+      <SeletorDeElo mapa={selectedMap.name} />
       <div className="map-strip">
         {visibleMaps.map((map, index) => {
           const selected = map.name === selectedMap.name;
@@ -447,9 +381,20 @@ function MapSelector({
               className={`map-card ${selected ? "is-selected" : ""}`}
               onClick={() => onSelect(map)}
               style={{ backgroundImage: fundoCom("linear-gradient(135deg, rgba(13,16,26,.78), rgba(22,15,43,.42))", selected ? mapImageFor(map) : FUNDO_DE_MAPA) }}
+              /*
+               * Entram quando aparecem, não quando a página abre. Estão abaixo
+               * da dobra: medido aos 500ms, 26 destes cartões estavam a animar
+               * FORA do ecrã, ao mesmo tempo que o título — 41 animações em
+               * paralelo, e a cascata que ninguém chegava a ver.
+               *
+               * O atraso segue a coluna (`index % 6`), não a posição na lista:
+               * com `index * 0.025` o 26.º cartão esperava 650ms, acima do
+               * orçamento de 500ms para uma cascata inteira.
+               */
               initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.24, delay: index * 0.025 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25 }}
+              transition={{ duration: 0.24, delay: (index % 6) * 0.035 }}
             >
               <span className="map-card-top">
                 <span className={`map-card-mode mode-${map.modeId}`}><ModeIcon modeId={map.modeId} size={14} /> {map.mode}</span>
@@ -495,6 +440,7 @@ function RotationAverages({
   isRefreshing,
   winRateWeight,
   topBrawlWeight,
+  starPlayerWeight,
 }: {
   sourceRows: readonly RankedRow[];
   activeMaps: readonly MapSummary[];
@@ -503,6 +449,7 @@ function RotationAverages({
   isRefreshing: boolean;
   winRateWeight: number;
   topBrawlWeight: number;
+  starPlayerWeight: number;
 }) {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -516,8 +463,8 @@ function RotationAverages({
     [activeMaps, selectedMode],
   );
   const rows = useMemo(
-    () => buildRankedRotationAverages(sourceRows, mapsInScope, winRateWeight, topBrawlWeight),
-    [winRateWeight, topBrawlWeight, mapsInScope, sourceRows],
+    () => buildRankedRotationAverages(sourceRows, mapsInScope, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [winRateWeight, starPlayerWeight, topBrawlWeight, mapsInScope, sourceRows],
   );
   const mapCount = mapsInScope.length;
   const totalMapCount = selectedMode === "Todos" ? expectedMapCount : mapCount;
@@ -539,10 +486,8 @@ function RotationAverages({
     <section className="data-section rotation-section" id="rotation-averages">
       <div className="data-heading rotation-heading">
         <div>
-          <div className="section-kicker">Média da rotação <span>01 — {String(totalMapCount).padStart(2, "0")}</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">ROTATION CONSISTENCY / {mapCount}/{totalMapCount} MAPS</span></div>
           <h2>Score Híbrido médio</h2>
-          <p>A média de cada brawler nos <strong>{mapCount}/{totalMapCount} mapas de {modeLabel}</strong>. O cálculo é refeito automaticamente assim que a snapshot Ranked muda; cada mapa com Score Híbrido publicado entra uma única vez.</p>
+          <p>A média de cada brawler nos <strong>{mapCount}/{totalMapCount} mapas de {modeLabel}</strong>.</p>
         </div>
         <div className="rotation-kpis" aria-label="Resumo da média da rotação">
           <span><b>{leader?.brawler ?? "—"}</b><small>líder geral</small></span>
@@ -609,22 +554,32 @@ function RankChange({ delta, label }: { delta: number; label: string }) {
 }
 
 function RankingLaboratory({
-  winRateWeight,
-  onWinRateWeightChange,
+  weights,
+  onWeightsChange,
   sourceBalance,
   hasCustomBalance,
   onSourceBalanceChange,
 }: {
-  winRateWeight: number;
-  onWinRateWeightChange: (weight: number) => void;
+  weights: HybridWeightsPreference;
+  onWeightsChange: (preference: Partial<Pick<HybridWeightsPreference, "winRate" | "starPlayer" | "starPlayerEnabled">>) => void;
   sourceBalance: SourceBalancePreference;
   hasCustomBalance: boolean;
   onSourceBalanceChange: (topBrawl: number) => void;
 }) {
   const [presetName, setPresetName] = useState("");
   const [presets, setPresets] = useState<RankingPreset[]>(readRankingPresets);
-  const usageRateWeight = 100 - winRateWeight;
-  const isOfficialWeight = winRateWeight === 70;
+  const winRateWeight = weights.winRate;
+  const usageRateWeight = weights.usageRate;
+  const starPlayerWeight = weights.starPlayer;
+  const starLigado = weights.starPlayerEnabled;
+  const isOfficialWeight = winRateWeight === 70 && !starLigado;
+  /**
+   * O máximo do cursor do Star Player é o que sobra depois da vitória. Sem
+   * este limite dava para pedir 80% de vitória e 40% de Star Player, e a
+   * função que equilibra teria de cortar um valor que a pessoa tinha acabado
+   * de escolher — um cursor que se mexe e volta para trás sozinho.
+   */
+  const maximoDoStar = Math.max(0, 100 - winRateWeight);
 
   useEffect(() => {
     window.localStorage.setItem(RANKING_PRESETS_STORAGE_KEY, JSON.stringify(presets));
@@ -638,9 +593,10 @@ function RankingLaboratory({
     }
     setPresets((current) => {
       const matching = current.find((preset) => preset.name.toLocaleLowerCase("pt-PT") === name.toLocaleLowerCase("pt-PT"));
+      const guardado = { winRateWeight, starPlayerWeight: starLigado ? starPlayerWeight : 0 };
       const next = matching
-        ? current.map((preset) => preset.id === matching.id ? { ...preset, winRateWeight } : preset)
-        : [...current, { id: `${Date.now()}-${name}`, name, winRateWeight }];
+        ? current.map((preset) => preset.id === matching.id ? { ...preset, ...guardado } : preset)
+        : [...current, { id: `${Date.now()}-${name}`, name, ...guardado }];
       return next.slice(-8);
     });
     setPresetName("");
@@ -651,22 +607,60 @@ function RankingLaboratory({
     <section className="ranking-laboratory data-section" id="ranking-laboratory">
       <div className="data-heading ranking-lab-heading">
         <div>
-          <div className="section-kicker">Configuração local <span>TODO O SITE</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">PESOS HÍBRIDOS</span></div>
           <h2>Ajustar o Score Híbrido</h2>
-          <p>Escolhe a ponderação que queres usar neste navegador. A alteração atualiza de imediato os mapas, ranking, médias, perfis de Brawlers e recomendações do Draft.</p>
+          <p>Quanto pesa a vitória e quanto pesa o uso. Vale para o site todo, só neste navegador.</p>
         </div>
       </div>
 
       <div className="weight-sandbox" aria-label="Configuração global local de pesos">
-        <div className="sandbox-title"><SlidersHorizontal size={17} /><div><strong>Pesos para este navegador</strong><span>{isOfficialWeight ? "Fórmula padrão 70% Vitória / 30% Uso" : `Ativo em mapas, ranking, média, Brawlers e Draft: ${winRateWeight}% Vitória / ${usageRateWeight}% Uso`}</span></div></div>
+        <div className="sandbox-title"><SlidersHorizontal size={17} /><div><strong>Pesos para este navegador</strong><span>{isOfficialWeight ? "Fórmula padrão 70% Vitória / 30% Uso" : `Ativo em mapas, ranking, média, Brawlers e Draft: ${hybridWeightsSentence(weights)}`}</span></div></div>
         <div className="weight-controls">
           {/* Mesma regra: o cursor mede a taxa de vitória, logo é ela que fica à direita. */}
           <div className="weight-readout"><span>Taxa de uso</span><b>{usageRateWeight}%</b></div>
-          <Slider value={[winRateWeight]} min={0} max={100} step={1} onValueChange={([value]) => onWinRateWeightChange(value ?? 70)} aria-label="Pesos do Score: arrastar para a direita dá mais peso à taxa de vitória" />
+          <Slider value={[winRateWeight]} min={0} max={100} step={1} onValueChange={([value]) => onWeightsChange({ winRate: value ?? 70 })} aria-label="Pesos do Score: arrastar para a direita dá mais peso à taxa de vitória" />
           <div className="weight-readout"><span>Taxa de vitória</span><b>{winRateWeight}%</b></div>
-          <button className="sandbox-reset" onClick={() => onWinRateWeightChange(70)} disabled={isOfficialWeight}><RotateCcw size={14} /> Restaurar 70/30</button>
+          <button className="sandbox-reset" onClick={() => onWeightsChange({ winRate: 70, starPlayerEnabled: false })} disabled={isOfficialWeight}><RotateCcw size={14} /> Restaurar 70/30</button>
         </div>
+      </div>
+
+      <div className="weight-sandbox" id="star-player-sandbox" aria-label="Star Player no Score Híbrido">
+        <div className="sandbox-title">
+          <Star size={17} />
+          <div>
+            <strong>Star Player <span className="sandbox-optional">opcional</span></strong>
+            <span>{starLigado
+              ? `Ativo: ${hybridWeightsSentence(weights)}`
+              : "Desligado. O Score é exatamente o de sempre, sem esta métrica."}</span>
+          </div>
+        </div>
+        <label className="sandbox-switch">
+          <Switch checked={starLigado} onCheckedChange={(ligado) => onWeightsChange({ starPlayerEnabled: ligado })} aria-label="Ligar ou desligar o Star Player no Score Híbrido" />
+          <span>{starLigado ? "A contar no Score" : "Fora do Score"}</span>
+        </label>
+        {starLigado ? <div className="weight-controls">
+          <div className="weight-readout"><span>Taxa de vitória</span><b>{winRateWeight}%</b></div>
+          <Slider
+            value={[Math.min(starPlayerWeight, maximoDoStar)]}
+            min={0}
+            max={maximoDoStar}
+            step={1}
+            onValueChange={([value]) => onWeightsChange({ starPlayer: value ?? 0 })}
+            aria-label="Fatia do Star Player no Score: o que não for vitória nem Star Player fica para o uso"
+          />
+          <div className="weight-readout"><span>Star Player</span><b>{starPlayerWeight}%</b></div>
+          <button className="sandbox-reset" onClick={() => onWeightsChange({ winRate: 50, starPlayer: 30 })} disabled={winRateWeight === 50 && starPlayerWeight === 30}>
+            <RotateCcw size={14} /> Usar 50/30/20
+          </button>
+        </div> : null}
+        <p className="sandbox-note">
+          O Brawl Planet publica, por mapa, a percentagem de partidas em que cada brawler foi eleito
+          <strong> Star Player</strong>. A taxa de vitória diz se a equipa ganhou; esta diz se foi
+          <strong> este brawler</strong> a puxar — e as duas não coincidem: na snapshot de produção
+          correlacionam 0,62, e afastam-se mais de 38 pontos em 10% dos casos.{" "}
+          <strong>Quem ainda não tiver Star Player publicado não é penalizado</strong>: a fatia dele
+          volta para a vitória e o uso, e o brawler é pontuado como se isto estivesse desligado. São
+          55 das 2808 linhas, quase todas de brawlers acabados de sair.
+        </p>
       </div>
 
       <div className="weight-sandbox" aria-label="Equilíbrio entre as fontes de estatísticas">
@@ -711,11 +705,11 @@ function RankingLaboratory({
         <div className="preset-save-controls">
           <label className="sr-only" htmlFor="ranking-preset-name">Nome da predefinição</label>
           <input id="ranking-preset-name" value={presetName} maxLength={28} onChange={(event) => setPresetName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") savePreset(); }} placeholder="Ex.: Vitória 75/25" />
-          <button onClick={savePreset}><BookmarkPlus size={14} /> Guardar {winRateWeight}/{usageRateWeight}</button>
+          <button onClick={savePreset}><BookmarkPlus size={14} /> Guardar {hybridWeightsLabel(weights)}</button>
         </div>
         {presets.length > 0 ? <div className="preset-list" aria-label="Predefinições guardadas">
           {presets.map((preset) => <div className="preset-chip" key={preset.id}>
-            <button className="preset-apply" onClick={() => onWinRateWeightChange(preset.winRateWeight)} aria-label={`Aplicar ${preset.name}, ${preset.winRateWeight}/${100 - preset.winRateWeight} globalmente`}><strong>{preset.name}</strong><span>{preset.winRateWeight}/{100 - preset.winRateWeight}</span></button>
+            <button className="preset-apply" onClick={() => onWeightsChange({ winRate: preset.winRateWeight, starPlayer: preset.starPlayerWeight ?? 0, starPlayerEnabled: (preset.starPlayerWeight ?? 0) > 0 })} aria-label={`Aplicar ${preset.name}, ${presetLabel(preset)} globalmente`}><strong>{preset.name}</strong><span>{presetLabel(preset)}</span></button>
             <button className="preset-remove" onClick={() => { setPresets((current) => current.filter((item) => item.id !== preset.id)); toast.success(`Predefinição “${preset.name}” removida.`); }} aria-label={`Remover a predefinição ${preset.name}`}><Trash2 size={13} /></button>
           </div>)}
         </div> : <p className="preset-empty">Guarda uma divisão para a aplicar rapidamente noutra visita.</p>}
@@ -726,15 +720,15 @@ function RankingLaboratory({
   );
 }
 
-function FormulaCard({ winRateWeight }: { winRateWeight: number }) {
-  const usageRateWeight = 100 - winRateWeight;
+function FormulaCard({ weights }: { weights: HybridWeightsPreference }) {
+  const winRateWeight = weights.winRate;
+  const usageRateWeight = weights.usageRate;
+  const starPlayerWeight = weights.starPlayerEnabled ? weights.starPlayer : 0;
   return (
     <section className="formula-card" id="formula">
       <div className="formula-card-glow" />
       <div className="card-heading formula-heading">
         <div>
-                      <div className="section-kicker">A nossa leitura <span>Methodology</span></div>
-            <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">BH FORMULA</span></div>
             <h3>O que é o Score Híbrido?</h3>
 
         </div>
@@ -742,9 +736,11 @@ function FormulaCard({ winRateWeight }: { winRateWeight: number }) {
       </div>
       <p>Uma métrica de 0 a 100 que junta resultado observado e utilização real, agregados entre as fontes.</p>
       <div className="formula-equation">
-        <span>Taxa de vitória normalizada</span><b>× {(winRateWeight / 100).toFixed(2)}</b><i>+</i><span>Taxa de uso normalizada</span><b>× {(usageRateWeight / 100).toFixed(2)}</b>
+        <span>Taxa de vitória normalizada</span><b>× {(winRateWeight / 100).toFixed(2)}</b>
+        {starPlayerWeight > 0 ? <><i>+</i><span>Star Player normalizado</span><b>× {(starPlayerWeight / 100).toFixed(2)}</b></> : null}
+        <i>+</i><span>Taxa de uso normalizada</span><b>× {(usageRateWeight / 100).toFixed(2)}</b>
       </div>
-      <div className="formula-foot"><span className="formula-dot" /> Score Híbrido ativo = (Vitória média das fontes, normalizada no mapa × {winRateWeight}%) + (Uso médio das fontes, normalizado no mapa × {usageRateWeight}%). O Score 0–13 TopBrawl não entra no cálculo.</div>
+      <div className="formula-foot"><span className="formula-dot" /> Score Híbrido ativo = (Vitória média das fontes, normalizada no mapa × {winRateWeight}%){starPlayerWeight > 0 ? ` + (Star Player do Brawl Planet, normalizado no mapa × ${starPlayerWeight}%)` : ""} + (Uso médio das fontes, normalizado no mapa × {usageRateWeight}%). O Score 0–13 TopBrawl não entra no cálculo.</div>
     </section>
   );
 }
@@ -792,10 +788,8 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
     <section className="source-section" id="sources">
       <div className="source-heading">
         <div>
-          <div className="section-kicker">Leitura por fonte <span>FULL SOURCE READOUT</span></div>
-          <div className="section-motif"><BrandMotif compact /><span className="hud-line" /><span className="hud-label">FONTES / {mapName.toUpperCase()}</span></div>
-          <h2>Vê cada sinal no seu lugar.</h2>
-          <p>Escolhe TopBrawl, Brawl Planet ou Score Híbrido. Os seis brawlers em destaque atualizam-se com a fonte selecionada.</p>
+          <h2>Os números de cada fonte</h2>
+          <p>TopBrawl, Brawl Planet ou o Score Híbrido.</p>
         </div>
         <span className="source-live-chip"><Radio size={13} /> fontes auditadas</span>
       </div>
@@ -818,7 +812,7 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
         {current.metrics.map((metric) => <span key={metric.label}><b>{coverageFor(metric.key)}/{rows.length}</b> {metric.label}</span>)}
       </div>
       <div className="source-card-grid" aria-label={`Seis brawlers em destaque no ${current.label}`}>
-        {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
+        {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
           <div className="source-card-top"><span className="source-rank">{String(index + 1).padStart(2, "0")}</span><span className="source-tier"><TierBadge tier={row.tier} /></span></div>
           <div className="source-brawler"><span className="source-avatar" style={brawlerImageFor(row.brawler, row.brawlerId) ? { backgroundImage: `url(${brawlerImageFor(row.brawler, row.brawlerId)})` } : undefined}>{!brawlerImageFor(row.brawler, row.brawlerId) && row.brawler.slice(0, 2).toUpperCase()}</span><strong>{row.brawler}</strong></div>
           <div className="source-metric-grid">{current.metrics.map((metric) => <div className="source-metric" key={metric.label}><span>{metric.label}</span><strong>{readMetric(row, metric.key)}</strong></div>)}</div>
@@ -864,6 +858,15 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
   );
 }
 
+const ABAS_DO_INICIO = [
+  { id: "maps", label: "Mapas" },
+  { id: "rotation-averages", label: "Média da rotação" },
+  { id: "sources", label: "Fontes" },
+  { id: "ranking-laboratory", label: "Pesos" },
+  { id: "formula", label: "Como funciona" },
+] as const;
+type AbaDoInicio = (typeof ABAS_DO_INICIO)[number]["id"];
+
 export default function Home() {
   const trpcUtils = trpc.useUtils();
   const rankedSync = useRankedSync();
@@ -878,25 +881,23 @@ export default function Home() {
    * copiada em cada página era garantir que uma delas ficava para trás.
    */
   const { isRefreshing, progress: syncProgress, start: startRefresh } = useSyncRefresh();
-  const { weights: hybridWeights, updateWeights } = useHybridWeights();
+  const { weights: hybridWeights, updateWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { balance: sourceBalance, topBrawlWeight, hasCustomBalance, updateBalance } = useSourceBalance();
-  const winRateWeight = hybridWeights.winRate / 100;
   const liveRows = useMemo(
-    () => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight),
-    [rankedSync.snapshot?.rows, winRateWeight, topBrawlWeight],
+    () => normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [rankedSync.snapshot?.rows, winRateWeight, starPlayerWeight, topBrawlWeight],
   );
   const liveMapSummaries = useMemo(
-    () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight),
-    [liveRows, rankedSync.snapshot?.maps, winRateWeight, topBrawlWeight],
+    () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [liveRows, rankedSync.snapshot?.maps, winRateWeight, starPlayerWeight, topBrawlWeight],
   );
   const liveModeOptions = useMemo(() => ["Todos", ...Array.from(new Set(liveMapSummaries.map((map) => map.mode)))], [liveMapSummaries]);
   const mapDisplayRows = useMemo(
-    () => buildMapDisplayRows(liveRows, liveMapSummaries, winRateWeight, topBrawlWeight),
-    [winRateWeight, topBrawlWeight, liveRows, liveMapSummaries],
+    () => buildMapDisplayRows(liveRows, liveMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
+    [winRateWeight, starPlayerWeight, topBrawlWeight, liveRows, liveMapSummaries],
   );
   const [selectedMap, setSelectedMap] = useState<MapSummary>(() => liveMapSummaries.find((map) => map.name === "Beach Ball") ?? liveMapSummaries[0]);
   const [modeFilter, setModeFilter] = useState("Todos");
-  const [mobileSidebar, setMobileSidebar] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
 
   useEffect(() => {
@@ -928,6 +929,24 @@ export default function Home() {
   const handleRefresh = startRefresh;
 
   const currentRows = useMemo(() => mapDisplayRows.filter((row) => row.map === selectedMap.name), [mapDisplayRows, selectedMap.name]);
+  /**
+   * Quem lidera o mapa escolhido: a linha medida com o Score mais alto.
+   *
+   * Calculado aqui, uma vez, porque dois sítios dizem este facto — a entrada e
+   * o cartão "Melhor score" — e têm de dizer o mesmo. O cartão tirava o NÚMERO
+   * de `measuredRows[0]` (sem as linhas indisponíveis) e o NOME de
+   * `currentRows[0]` (com elas): se a primeira linha fosse de um brawler
+   * indisponível, o score de um aparecia com o nome de outro.
+   *
+   * E não confia na ordem da lista: procura o máximo, que é o que "nº1" quer
+   * dizer.
+   */
+  const lider = useMemo(
+    () => currentRows
+      .filter((row) => row.rankedStatus !== "unavailable" && row.score !== null)
+      .reduce<RankedRow | undefined>((melhor, row) => (!melhor || (row.score ?? -Infinity) > (melhor.score ?? -Infinity) ? row : melhor), undefined),
+    [currentRows],
+  );
   const mapExportTsv = useMemo(() => {
     const uniqueMaps = Array.from(new Map(allRankedMaps.map((map) => [map.name, map])).values());
     return buildMapsTsv(uniqueMaps);
@@ -972,28 +991,39 @@ export default function Home() {
     setActiveSection("maps");
   };
 
+  // As secções de baixo são abas: só uma de cada vez, em vez de cinco
+  // empilhadas (a página tinha 5000 px). O menu de cima escolhe a aba certa.
+  const [aba, setAba] = useState<AbaDoInicio>("maps");
   const scrollTo = (id: string) => {
     setActiveSection(id);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const eAba = ABAS_DO_INICIO.some((item) => item.id === id);
+    if (eAba) setAba(id as AbaDoInicio);
+    // A aba tem de estar no ecrã antes de se descer até ela.
+    window.setTimeout(() => document.getElementById(eAba ? "inicio-abas" : id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   };
+  // Quem chega de outra página por "Mapas", "Fontes" ou "Como funciona" traz a
+  // secção no endereço (/#maps): desce até ela quando a página já tem conteúdo.
+  useEffect(() => {
+    const secao = window.location.hash.slice(1);
+    if (!["maps", "sources", "formula", "dashboard", "rotation-averages", "ranking-laboratory"].includes(secao)) return;
+    const espera = window.setTimeout(() => scrollTo(secao), 400);
+    return () => window.clearTimeout(espera);
+    // Só à chegada.
+  }, []);
 
   return (
-    <div className="app-shell" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.92), rgba(11,14,20,.96))", TEXTURA) }}>
-      <Sidebar activeSection={activeSection} onSectionChange={scrollTo} open={mobileSidebar} onClose={() => setMobileSidebar(false)} capturedAt={capturedAt} />
+    <div className="app-shell com-barra-no-topo" style={{ backgroundImage: fundoCom("linear-gradient(rgba(11,14,20,.92), rgba(11,14,20,.96))", TEXTURA) }}>
       <div className="app-main">
-        <Topbar onMenu={() => setMobileSidebar(true)} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
+        <Topbar activeSection={activeSection} onSection={scrollTo} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
         <main>
-          <Hero selectedMap={selectedMap} onExplore={() => scrollTo("maps")} />
+          <Hero selectedMap={selectedMap} leader={lider} onExplore={() => scrollTo("maps")} />
           <div className="main-content">
             {avisoDaAutomatica ? (
               <p className="aviso-recolha" role="status">{avisoDaAutomatica}</p>
             ) : null}
             <div className="intro-row" id="dashboard">
               <div className="intro-copy">
-                <div className="section-kicker">Painel de controlo <span>Season 06 / 2026</span></div>
-                <div className="section-motif"><BrandMotif compact /><span className="hud-line" /></div>
                 <h2>O meta, sem ruído.</h2>
-                <p>Seleciona um mapa para cruzar o ranking completo com a métrica que criámos para separar popularidade de performance.</p>
               </div>
               <div className={`intro-badge ${frescura.velho ? "is-velho" : ""}`} title={frescura.velho
                 ? `As fontes não são lidas há mais de ${Math.round(LIMITE_DE_CONFIANCA_MS / 3600000)} horas. Os números não estão errados — são apenas de antes.`
@@ -1005,43 +1035,58 @@ export default function Home() {
               </div>
             </div>
             <div className="stats-grid">
-              <StatCard icon={Trophy} label="Melhor score" value={formatScore(stats.top)} detail={`${currentRows[0]?.brawler ?? "—"} lidera o mapa`} accent="accent-amber" />
+              <StatCard icon={Trophy} label="Melhor score" value={formatScore(lider?.score ?? null)} detail={`${lider?.brawler ?? "—"} lidera o mapa`} accent="accent-amber" />
               <StatCard icon={BarChart3} label="Média do mapa" value={formatScore(stats.average)} detail="Score Híbrido médio" accent="accent-violet" />
               <StatCard icon={ShieldCheck} label="Tier S + A" value={`${stats.s + stats.a}`} detail={`${stats.s} S · ${stats.a} A recomendados`} accent="accent-cyan" />
               <StatCard icon={Database} label="Amostra" value={`${currentRows.length}`} detail="brawlers catalogados" accent="accent-blue" />
             </div>
-            <MapSelector
-              maps={liveMapSummaries}
-              selectedMap={selectedMap}
-              onSelect={selectMap}
-              modeFilter={modeFilter}
-              onModeFilter={setModeFilter}
-              modeOptions={liveModeOptions}
-              rows={mapDisplayRows}
-              onCopyMaps={copyMapsTsv}
-              onDownloadMaps={downloadMapsTsv}
-            />
-            <RotationAverages
-              sourceRows={liveRows}
-              activeMaps={liveMapSummaries}
-              expectedMapCount={allRankedMaps.length}
-              capturedAt={capturedAt}
-              isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching}
-              winRateWeight={winRateWeight}
-              topBrawlWeight={topBrawlWeight}
-            />
-            <RankingLaboratory
-              winRateWeight={hybridWeights.winRate}
-              onWinRateWeightChange={updateWeights}
-              sourceBalance={sourceBalance}
-              hasCustomBalance={hasCustomBalance}
-              onSourceBalanceChange={updateBalance}
-            />
-            <SourceComparison rows={currentRows} mapName={selectedMap.name} />
-            <FormulaCard winRateWeight={hybridWeights.winRate} />
+            <div className="inicio-abas" id="inicio-abas" role="tablist" aria-label="O que ver">
+              {ABAS_DO_INICIO.map((item) => (
+                <button key={item.id} type="button" role="tab" aria-selected={aba === item.id} className={aba === item.id ? "is-active" : ""} onClick={() => { setAba(item.id); setActiveSection(item.id); }}>{item.label}</button>
+              ))}
+            </div>
+            {aba === "maps" && (
+              <MapSelector
+                maps={liveMapSummaries}
+                selectedMap={selectedMap}
+                onSelect={selectMap}
+                modeFilter={modeFilter}
+                onModeFilter={setModeFilter}
+                modeOptions={liveModeOptions}
+                rows={mapDisplayRows}
+                onCopyMaps={copyMapsTsv}
+                onDownloadMaps={downloadMapsTsv}
+              />
+            )}
+            {aba === "rotation-averages" && (
+              <RotationAverages
+                sourceRows={liveRows}
+                activeMaps={liveMapSummaries}
+                expectedMapCount={allRankedMaps.length}
+                capturedAt={capturedAt}
+                isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching}
+                winRateWeight={winRateWeight}
+                topBrawlWeight={topBrawlWeight}
+                starPlayerWeight={starPlayerWeight}
+              />
+            )}
+            {aba === "sources" && (
+              <SourceComparison rows={currentRows} mapName={selectedMap.name} />
+            )}
+            {aba === "ranking-laboratory" && (
+              <RankingLaboratory
+                weights={hybridWeights}
+                onWeightsChange={updateWeights}
+                sourceBalance={sourceBalance}
+                hasCustomBalance={hasCustomBalance}
+                onSourceBalanceChange={updateBalance}
+              />
+            )}
+            {aba === "formula" && (
+              <FormulaCard weights={hybridWeights} />
+            )}
           </div>
         </main>
-        <footer className="app-footer"><span>BRAWL HÍBRIDO / 26-map intelligence workspace</span><span>Feito para decisões melhores, não para picks cegos.</span></footer>
       </div>
       <button className="scroll-top-button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Voltar ao topo"><ChevronLeft size={17} /></button>
       <MobileNav pathname="/" />

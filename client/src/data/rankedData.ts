@@ -7,7 +7,9 @@
 import { additionalMapSummaries, additionalRankedMaps, additionalRankedRows } from './additionalRankedData';
 import { beachBallRankedRows } from './beachBallRankedData';
 import { spiralingOutMapSummary, spiralingOutRankedRows } from './spiralingOutRankedData';
+import type { PorElo } from "@shared/elosBrawlPlanet";
 import {
+  STAR_PLAYER_HYBRID_WEIGHT,
   TOPBRAWL_SOURCE_WEIGHT,
   WIN_RATE_HYBRID_WEIGHT,
   calculateHybridScoresByMap,
@@ -35,6 +37,8 @@ export type RankedRow = {
   brawlPlanetPickRate?: number | null;
   /** Mantém null até a fonte publicar um valor identificável de Star Player. */
   brawlPlanetStarPlayer?: number | null;
+  /** Brawl Planet por elo (Diamond, Mythic, Legendary). Ver `shared/elosBrawlPlanet.ts`. */
+  brawlPlanetPorElo?: PorElo;
   /** Ban Rate é opcional: só é usado quando a fonte o publicar. */
   banRate?: number | null;
   /** Counter Rate pode ser fornecido por uma fonte futura; não é inventado no fallback. */
@@ -106,9 +110,10 @@ export function normalizeRankedRows<T extends RankedRow>(
   rows: readonly T[],
   winRateWeight = WIN_RATE_HYBRID_WEIGHT,
   topBrawlWeight = TOPBRAWL_SOURCE_WEIGHT,
+  starPlayerWeight = STAR_PLAYER_HYBRID_WEIGHT,
 ): T[] {
   const normalized = rows.map((row) => normalizeRankedRow(row));
-  return calculateHybridScoresByMap(normalized, winRateWeight, topBrawlWeight).map((row) => {
+  return calculateHybridScoresByMap(normalized, winRateWeight, topBrawlWeight, starPlayerWeight).map((row) => {
     const hasPublishedMetrics = typeof row.winRate === 'number' && typeof row.usage === 'number';
     return hasPublishedMetrics ? { ...row, dataStatus: 'complete' } : row;
   }) as T[];
@@ -125,6 +130,7 @@ export function buildActiveRankedMapCatalog(
   fallbackMaps: readonly MapSummary[],
   winRateWeight = WIN_RATE_HYBRID_WEIGHT,
   topBrawlWeight = TOPBRAWL_SOURCE_WEIGHT,
+  starPlayerWeight = STAR_PLAYER_HYBRID_WEIGHT,
 ): MapSummary[] {
   const sourceMaps = snapshotMaps?.length ? snapshotMaps : fallbackMaps;
   const mapsByName = new Map<string, MapSummary>();
@@ -134,7 +140,7 @@ export function buildActiveRankedMapCatalog(
   }
 
   const rowsByMap = new Map<string, RankedRow[]>();
-  for (const row of normalizeRankedRows(rows, winRateWeight, topBrawlWeight)) {
+  for (const row of normalizeRankedRows(rows, winRateWeight, topBrawlWeight, starPlayerWeight)) {
     if (snapshotMaps ? !mapsByName.has(row.map) : !currentRankedMapNameSet.has(row.map)) continue;
     const mapRows = rowsByMap.get(row.map) ?? [];
     mapRows.push(row);
@@ -219,6 +225,7 @@ export function buildRankedRotationAverages(
   activeMaps: readonly MapSummary[],
   winRateWeight = WIN_RATE_HYBRID_WEIGHT,
   topBrawlWeight = TOPBRAWL_SOURCE_WEIGHT,
+  starPlayerWeight = STAR_PLAYER_HYBRID_WEIGHT,
 ): RankedRotationAverage[] {
   const activeMapNames = new Set(activeMaps.map((map) => normalizeRankedMap(map).name));
   const scoresByBrawler = new Map<string, { brawlerId: number | null; scoresByMap: Map<string, number> }>();
@@ -226,7 +233,7 @@ export function buildRankedRotationAverages(
   // O equilíbrio entre fontes tem de chegar aqui: esta função RECALCULA o Score
   // a partir das linhas de origem, por isso ignorá-lo desfazia silenciosamente a
   // escolha feita a montante — a tabela voltava sempre ao 50/50.
-  for (const row of normalizeRankedRows(rows, winRateWeight, topBrawlWeight)) {
+  for (const row of normalizeRankedRows(rows, winRateWeight, topBrawlWeight, starPlayerWeight)) {
     if (!activeMapNames.has(row.map) || typeof row.score !== "number") continue;
 
     const current = scoresByBrawler.get(row.brawler) ?? {
@@ -15957,9 +15964,10 @@ export function buildMapDisplayRows(
   maps: readonly MapSummary[],
   winRateWeight = WIN_RATE_HYBRID_WEIGHT,
   topBrawlWeight = TOPBRAWL_SOURCE_WEIGHT,
+  starPlayerWeight = STAR_PLAYER_HYBRID_WEIGHT,
 ): RankedRow[] {
   const rowsByMap = new Map<string, RankedRow[]>();
-  for (const row of normalizeRankedRows(sourceRows, winRateWeight, topBrawlWeight)) {
+  for (const row of normalizeRankedRows(sourceRows, winRateWeight, topBrawlWeight, starPlayerWeight)) {
     const rows = rowsByMap.get(row.map) ?? [];
     rows.push(row);
     rowsByMap.set(row.map, rows);

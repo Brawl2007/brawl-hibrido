@@ -94,6 +94,20 @@
   flex: 0 0 3.6rem; color: var(--bh-text-muted); font-size: .66rem; font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase;
 }
+/*
+ * Os campos das escadas pareciam texto solto.
+ *
+ * Eram um `<input>` sem estilo nenhum sobre fundo escuro: sem contorno visível,
+ * sem sublinhado, o número encostado à esquerda e a unidade longe. Ninguém
+ * adivinha que aquilo se escreve — e quem tenta, escreve por cima e fica sem
+ * saber se pegou. Passam a ter o mesmo desenho dos campos da lista de regras,
+ * que já se percebiam: caixa estreita, sublinhado aceso, número à direita
+ * colado à unidade.
+ */
+.counter-pick-field { display: flex; align-items: center; flex: 0 0 auto; width: 52px; border-bottom: 1px solid rgba(112,226,255,.30); }
+.counter-pick-field:focus-within { border-bottom-color: var(--bh-info); box-shadow: 0 1px 0 var(--bh-info); }
+.counter-pick-field input { width: 100%; appearance: textfield; border: 0; outline: 0; background: transparent; color: var(--bh-text); font: inherit; font-size: .72rem; font-weight: 800; text-align: right; padding: .12rem .16rem .12rem .08rem; }
+.counter-pick-row .rule-unit { color: var(--bh-info); font-size: .63rem; font-weight: 800; white-space: nowrap; }
 .counter-pick-effect { color: var(--bh-info); font-size: .63rem; font-weight: 700; white-space: nowrap; }
 .counter-pick-presets { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; }
 .counter-pick-presets > span { color: var(--bh-info); font-size: .63rem; }

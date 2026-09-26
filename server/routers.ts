@@ -18,6 +18,11 @@ import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { probeAllSources } from "./sourceProbe";
 import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
 import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
+import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
+import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
+import { obterCatalogo } from "./catalogoDeBuilds";
+import { IDS_DAS_RESERVAS, fornecedorDaChave, fornecedorPorId, guardarChaveDeReserva, lerChavesDeReserva, listaDeFornecedores, modelosDasReservas, testarChaveDeReserva } from "./iaDeReserva";
+import { TIPOS_DE_CASA, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import {
   addProdigyLink,
   deleteProdigyLink,
@@ -70,6 +75,144 @@ function exigirDono(ctx: { user: { role: string; openId: string; email: string |
 }
 
 export const appRouter = router({
+  /**
+   * O general por IA (Gemini). Tudo do dono: a chave é dele, e cada plano
+   * gasta do limite gratuito dele. Ver `server/generalIA.ts`.
+   */
+  general: router({
+    /**
+     * O terreno de um mapa (paredes, mato, água, objetivos), lido da imagem.
+     * Público: é informação do mapa, igual para toda a gente, e fica guardado
+     * depois da primeira leitura. Só aceita o id numérico.
+     */
+    terreno: publicProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
+      .query(({ input }) => obterTerreno(input.mapaId)),
+    /** De onde veio a lista de builds e quantos itens tem (sem a lista): para confirmar que chega. */
+    catalogo: publicProcedure.query(async () => {
+      const catalogo = await obterCatalogo();
+      return catalogo
+        ? { origem: catalogo.origem, brawlers: Object.keys(catalogo.brawlers).length, engrenagens: catalogo.engrenagens.length, lidoEm: catalogo.lidoEm }
+        : null;
+    }),
+    /** O dono corrige o tipo de um grupo de cor à mão. */
+    corrigirTerreno: protectedProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/), rotulos: z.array(z.object({ id: z.string().max(2), tipo: z.enum(TIPOS_DE_CASA as unknown as [string, ...string[]]) })).max(40) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "corrigir o terreno");
+        const terreno = await obterTerreno(input.mapaId);
+        if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
+        return guardarRotulosDaIA(terreno, input.rotulos);
+      }),
+    /** O dono corrige casas soltas à mão (um jarro lido como parede, uma parede que faltou). `null` volta ao que a imagem diz. */
+    corrigirCasas: protectedProcedure
+      .input(z.object({
+        mapaId: z.string().regex(/^\d{5,9}$/),
+        casas: z.array(z.object({
+          coluna: z.number().int().min(0).max(20),
+          linha: z.number().int().min(0).max(32),
+          tipo: z.enum(TIPOS_DE_CASA as unknown as [string, ...string[]]).nullable(),
+        })).min(1).max(60),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "corrigir o terreno");
+        const terreno = await obterTerreno(input.mapaId);
+        if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
+        return guardarCorrecoesDeCasas(terreno, input.casas as Array<{ coluna: number; linha: number; tipo: TipoDeCasa | null }>);
+      }),
+    /** A IA volta a olhar para a imagem e diz o que é cada grupo de cor. */
+    rotularTerreno: protectedProcedure
+      .input(z.object({ mapaId: z.string().regex(/^\d{5,9}$/) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "pedir à IA para ler o terreno");
+        const terreno = await obterTerreno(input.mapaId);
+        if (!terreno) throw new TRPCError({ code: "NOT_FOUND", message: "Não consegui ler o terreno deste mapa." });
+        try {
+          return await rotularTerrenoComIA(terreno);
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "A IA falhou." });
+        }
+      }),
+    estado: protectedProcedure.query(async ({ ctx }) => {
+      exigirDono(ctx, "ver a chave da IA");
+      const { key, origin } = await lerChaveDaGemini();
+      const reservas = await lerChavesDeReserva();
+      return {
+        configured: Boolean(key),
+        origin,
+        hint: key ? `····${key.slice(-4)}` : null,
+        // As IAs de reserva: de quem é cada chave e os últimos quatro caracteres. A chave nunca sai daqui.
+        reservas: reservas.map((r) => ({ id: r.fornecedor.id, nome: r.fornecedor.nome, origin: r.origin, hint: `····${r.key.slice(-4)}` })),
+        fornecedores: listaDeFornecedores(),
+      };
+    }),
+    /** Os modelos que cada chave tem, para o dono escolher qual faz o plano. Não gasta pedidos de geração. */
+    modelos: protectedProcedure.query(async ({ ctx }) => {
+      exigirDono(ctx, "ver os modelos da IA");
+      const gemini = await modelosDaGemini().catch(() => null);
+      const reservas = await modelosDasReservas().catch(() => ({}));
+      return { gemini, reservas };
+    }),
+    guardarChaveDeReserva: protectedProcedure
+      .input(z.object({ fornecedor: z.enum(["auto", ...IDS_DAS_RESERVAS]).default("auto"), key: z.string().trim().max(256) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "guardar a chave da IA de reserva");
+        const pelaForma = input.key ? fornecedorDaChave(input.key) : null;
+        if (input.fornecedor === "auto" && !input.key) return { saved: false, test: { ok: false, reason: "Diz de que IA é a chave a apagar." } };
+        if (input.fornecedor === "auto" && !pelaForma) {
+          return { saved: false, test: { ok: false, reason: "Não reconheço esta chave pela forma. Escolhe de que IA é (Mistral e Requesty não têm forma própria)." } };
+        }
+        // Uma chave com a forma de outra IA foi colada no sítio errado.
+        if (input.fornecedor !== "auto" && pelaForma && pelaForma.id !== input.fornecedor) {
+          return { saved: false, test: { ok: false, reason: `Esta chave parece da ${pelaForma.nome}, não da ${fornecedorPorId(input.fornecedor).nome}.` } };
+        }
+        if (input.key && (input.key.length < 20 || /\s/.test(input.key))) return { saved: false, test: { ok: false, reason: "Esta chave não parece completa." } };
+        const id = input.fornecedor === "auto" ? pelaForma!.id : input.fornecedor;
+        await guardarChaveDeReserva(id, input.key || null);
+        return { saved: Boolean(input.key), fornecedor: id, test: input.key ? await testarChaveDeReserva(id) : { ok: false, reason: "Chave apagada." } };
+      }),
+    guardarChave: protectedProcedure
+      .input(z.object({ key: z.string().trim().max(256) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "guardar a chave da IA");
+        await guardarChaveDaGemini(input.key || null);
+        return { saved: Boolean(input.key), test: input.key ? await testarChaveDaGemini() : { ok: false, reason: "Chave apagada." } };
+      }),
+    pedirPlano: protectedProcedure
+      .input(z.object({
+        mapa: z.string().trim().min(1).max(80),
+        modoId: z.string().trim().max(40),
+        mapaId: z.string().regex(/^\d{5,9}$/).nullish(),
+        nossos: z.array(z.object({ brawler: z.string().trim().min(1).max(40), funcao: z.string().trim().max(20) })).min(1).max(5),
+        deles: z.array(z.object({ brawler: z.string().trim().min(1).max(40), funcao: z.string().trim().max(20) })).max(5),
+        duelos: z.array(z.object({ nosso: z.string().trim().max(40), deles: z.string().trim().max(40), vantagem: z.number().min(0).max(100) })).max(5),
+        nosNome: z.string().trim().max(20),
+        numeros: z.array(z.object({ brawler: z.string().trim().max(40), lado: z.enum(["nos", "eles"]), vitoria: z.number().min(0).max(100).nullable(), uso: z.number().min(0).max(100).nullable() })).max(10).optional(),
+        dadosDe: z.string().max(40).nullish(),
+        elo: z.string().max(20).nullish(),
+        // Qual IA faz o plano. Os modelos só valem se estiverem na lista da chave (o servidor confere).
+        ia: z.object({
+          rapido: z.boolean().optional(),
+          principal: z.enum(["gemini", "reserva", ...IDS_DAS_RESERVAS]).nullish(),
+          soEssa: z.boolean().optional(),
+          modelos: z.record(z.string().max(20), z.string().trim().max(160).nullable()).optional(),
+          // A forma antiga, de um separador aberto antes da mudança.
+          ordem: z.enum(["gemini-primeiro", "reserva-primeiro", "so-gemini", "so-reserva"]).optional(),
+          modeloGemini: z.string().trim().max(80).nullish(),
+          modeloReserva: z.string().trim().max(160).nullish(),
+        }).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "pedir um plano à IA");
+        const { ia, ...pedido } = input;
+        try {
+          return await pedirPlanoAoGeneral(pedido, fetch, ia ?? {});
+        } catch (erro) {
+          const mensagem = erro instanceof ErroDoGeneral || erro instanceof Error ? erro.message : "A IA falhou.";
+          throw new TRPCError({ code: erro instanceof ErroDoGeneral ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR", message: mensagem });
+        }
+      }),
+  }),
   draftRoles: router({
     list: publicProcedure.query(() => readDraftRoles()),
     set: protectedProcedure.input(z.object({ brawler: z.string().trim().min(1).max(80), role: z.enum(["mid", "side", "flex"]).nullable() })).mutation(({ ctx, input }) => {

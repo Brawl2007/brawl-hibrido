@@ -6,6 +6,68 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * ---------------------------------------------------------------------------
+ * Tipos de letra, servidos daqui
+ * ---------------------------------------------------------------------------
+ *
+ * Estavam a ser pedidos ao Google por um <link> no index.html. Isso custava
+ * dois domínios externos antes da primeira letra aparecer, e enquanto não
+ * chegavam o título de entrada — 88 px — era desenhado num sans qualquer e
+ * saltava para o tipo certo a meio.
+ *
+ * O salto não era um pormenor: o Lilita One é o que faz a interface parecer o
+ * jogo. A identidade chegava depois da página, e a saltar.
+ *
+ * `swap` mantém-se de propósito: com `block` o título ficaria invisível até o
+ * ficheiro chegar, e texto que não se lê é pior do que texto que muda de
+ * forma. Como agora vêm do mesmo servidor, a janela do salto é curta.
+ *
+ * Subconjunto `latin` apenas — cobre U+0000–00FF, ou seja todo o português
+ * acentuado. Ficheiros e licenças em client/public/tipos/LEIA-ME.txt.
+ */
+@font-face {
+  font-family: "Lilita One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/tipos/lilita-one-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/tipos/barlow-condensed-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/tipos/barlow-condensed-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/tipos/barlow-condensed-800.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Um ficheiro variável cobre 400 a 700: por isso é só este. */
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/tipos/space-grotesk-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -156,12 +218,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .brand-mark { width: 31px; height: 31px; object-fit: contain; }
 .brand-name { font-family: "Barlow Condensed", sans-serif; font-size: 20px; font-weight: 800; letter-spacing: .04em; line-height: 1; }
 .brand-kicker { color: var(--bh-text-dim); font-size: 9px; letter-spacing: .17em; text-transform: uppercase; margin-top: 6px; }
-.brand-motif { display: inline-flex; align-items: center; gap: 5px; color: var(--bh-violet); font-size: 8px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
-.brand-motif img { width: 15px; height: 15px; object-fit: contain; filter: drop-shadow(0 0 6px rgba(167,139,250,.65)); }
-.brand-motif.is-compact { font-size: 8px; letter-spacing: .12em; }
-.section-motif { display: flex; align-items: center; gap: 9px; margin: 13px 0 8px; }
-.hud-line { width: 40px; height: 1px; background: linear-gradient(90deg, var(--bh-violet-deep), transparent); }
-.hud-label { color: var(--bh-text-dim); font-size: 8px; letter-spacing: .14em; }
 .sidebar-close { margin-left: auto; background: transparent; color: var(--bh-text-muted); padding: 4px; }
 .sidebar-status { margin: 0 4px 26px; padding: 10px 11px; color: var(--bh-text-dim); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; border-left: 2px solid var(--bh-info); background: linear-gradient(90deg, rgba(34,211,238,.1), transparent); }
 .sidebar-status strong { display: block; color: var(--bh-text); font-size: 11px; letter-spacing: .02em; text-transform: none; margin-top: 6px; }
@@ -218,12 +274,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .primary-button, .copy-button { display: inline-flex; align-items: center; gap: 9px; color: #fff; background: var(--bh-violet-deep); padding: 12px 17px; font-size: 11px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 24px rgba(124,58,237,.22); transition: transform .16s ease, background .18s ease; }
 .primary-button:hover, .copy-button:hover { background: var(--bh-violet-deep); transform: translateY(-2px); }
 .primary-button:active, .copy-button:active { transform: scale(.97); }
-.hero-footnote { display: inline-flex; align-items: center; gap: 6px; color: var(--bh-text-dim); font-size: 10px; }
-.hero-footnote svg { color: var(--bh-warning); }
-.hero-stamp { position: absolute; z-index: 2; right: 7.2%; bottom: 53px; width: 92px; height: 92px; display: grid; place-items: center; color: var(--bh-violet); border: 1px solid rgba(167,139,250,.43); transform: rotate(12deg); background: rgba(6,9,16,.2); box-shadow: inset 0 0 25px rgba(124,58,237,.12), 0 0 30px rgba(124,58,237,.15); }
-.hero-stamp img { position: absolute; top: 8px; width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 0 11px rgba(167,139,250,.9)); transform: rotate(-12deg); }
-.hero-stamp span { font-family: "Barlow Condensed", sans-serif; font-size: 38px; line-height: .8; font-weight: 800; transform: rotate(-12deg); margin-top: 22px; }
-.hero-stamp small { position: absolute; bottom: 12px; font-size: 7px; letter-spacing: .2em; transform: rotate(-12deg); }
 .hero-orbit { position: absolute; z-index: 1; border: 1px solid rgba(167,139,250,.27); border-radius: 50%; transform: rotate(-19deg); }
 .orbit-one { width: 450px; height: 160px; right: 2%; top: 31px; }
 .orbit-two { width: 560px; height: 200px; right: -8%; top: 3px; border-color: rgba(34,211,238,.14); }
@@ -231,10 +281,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .main-content { padding: 40px 7.2% 70px; }
 .intro-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; scroll-margin-top: 98px; }
 .section-kicker span { color: var(--bh-text-dim); margin-left: 8px; letter-spacing: .08em; }
-.section-motif { display: flex; align-items: center; gap: 8px; margin: 7px 0 10px; }
-.section-motif .brand-motif { opacity: .8; }
-.hud-line { width: 42px; height: 1px; background: linear-gradient(90deg, var(--bh-violet), transparent); box-shadow: 0 0 9px rgba(167,139,250,.4); }
-.hud-label { color: var(--bh-text-dim); font-size: 8px; letter-spacing: .16em; }
 .intro-copy h2, .section-heading-row h2, .data-heading h2 { font-family: "Barlow Condensed", sans-serif; font-size: 36px; line-height: 1; letter-spacing: -.01em; text-transform: uppercase; margin: 10px 0 8px; }
 .intro-copy p, .data-heading p { color: var(--bh-text-dim); font-size: 12px; line-height: 1.6; max-width: 560px; margin: 0; }
 .intro-copy p strong, .data-heading p strong { color: var(--bh-text-muted); font-weight: 600; }
@@ -287,7 +333,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .empty-map-state { color: var(--bh-text-dim); padding: 30px; text-align: center; border: 1px dashed rgba(255,255,255,.11); }
 
 .rotation-section { margin-top: 22px; border-left: 2px solid rgba(167,139,250,.52); }
-.rotation-section::before { content: "BH // ROTATION AVG"; }
 .rotation-heading p { max-width: 650px; margin: 9px 0 0; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
 .rotation-kpis { display: flex; align-items: stretch; gap: 7px; flex-wrap: wrap; }
 .rotation-kpis span { display: flex; flex-direction: column; min-width: 110px; padding: 8px 10px; border: 1px solid rgba(167,139,250,.19); background: rgba(124,58,237,.08); }
@@ -304,7 +349,6 @@ main { max-width: 1600px; margin: 0 auto; }
 
 .feature-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 12px; margin-top: 44px; }
 .performers-card, .formula-card, .data-section { position: relative; background: rgba(18,22,32,.83); border: 1px solid rgba(255,255,255,.075); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
-.performers-card::before, .formula-card::before, .data-section::before { content: "BH // LIVE"; position: absolute; top: 9px; right: 14px; color: rgba(167,139,250,.3); font-family: "Barlow Condensed", sans-serif; font-size: 8px; letter-spacing: .16em; }
 .performers-card, .formula-card { min-height: 308px; padding: 22px 23px; }
 .card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
 .card-heading h3 { font-family: "Barlow Condensed", sans-serif; font-size: 26px; line-height: 1; margin: 9px 0 0; text-transform: uppercase; }
@@ -369,7 +413,6 @@ main { max-width: 1600px; margin: 0 auto; }
 .table-footnote { display: flex; justify-content: space-between; gap: 15px; color: var(--bh-text-dim); font-size: 9px; padding: 15px 3px 0; }
 .tiny-live { width: 5px; height: 5px; background: var(--bh-positive); box-shadow: none; margin-right: 5px; }
 .ranking-laboratory { margin-top: 18px; border-left: 2px solid var(--bh-info); background: linear-gradient(135deg, rgba(10,29,38,.82), rgba(18,22,32,.9) 48%, rgba(29,20,47,.78)); }
-.ranking-laboratory::before { content: "BH // RANKING LAB"; color: rgba(34,211,238,.38); }
 .ranking-lab-heading { margin-bottom: 18px; }
 .ranking-lab-heading p { max-width: 735px; margin: 9px 0 0; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
 .ranking-lab-kpis { display: grid; grid-template-columns: repeat(3, minmax(76px, 1fr)); gap: 6px; }
@@ -393,6 +436,15 @@ main { max-width: 1600px; margin: 0 auto; }
 .experiment-score { display: block; color: var(--bh-text-muted); font-family: "Barlow Condensed", sans-serif; font-size: 16px; font-weight: 700; line-height: 1; }.experiment-score small { display: block; margin-top: 4px; color: var(--bh-text-dim); font-family: inherit; font-size: 7px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }.experiment-score-change { color: var(--bh-text-muted); font-family: "Barlow Condensed", sans-serif; font-size: 16px; font-weight: 700; }.experiment-score-change.is-positive { color: var(--bh-positive); }.experiment-score-change.is-negative { color: var(--bh-text-muted); }.experiment-delta-col .rank-change { margin-top: 4px; }.source-metrics-col, .hybrid-usage-col { color: var(--bh-text-muted); font-size: 11px; font-weight: 700; }
 /* Nota explicativa por baixo de um controlo de pesos; ocupa a linha toda. */
 .weight-sandbox .sandbox-note { grid-column: 1 / -1; margin: 0; color: var(--bh-text-muted); font-size: 11px; line-height: 1.55; }
+/* A escada do Star Player quando o interruptor global está desligado: legível, mas visivelmente sem efeito. */
+.star-pick-desligado { margin: 0 0 10px; padding: 9px 11px; color: var(--bh-text-muted); border: 1px solid rgba(251,191,36,.28); background: rgba(251,191,36,.06); font-size: 11px; line-height: 1.5; }
+.star-pick-desligado strong { color: var(--bh-text); }
+.star-pick-desligado a { color: var(--bh-info); }
+.counter-pick-grid.is-inativa { opacity: .62; }
+.legend-optional { display: inline-block; margin-left: 7px; padding: 2px 5px; color: var(--bh-info); border: 1px solid rgba(34,211,238,.3); background: rgba(34,211,238,.07); font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; vertical-align: middle; }
+/* Interruptor de uma métrica opcional: fica na coluna dos controlos, alinhado com os cursores. */
+.sandbox-switch { display: inline-flex; align-items: center; gap: 9px; color: var(--bh-text-dim); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.sandbox-optional { display: inline-block; margin-left: 6px; padding: 2px 5px; color: var(--bh-info); border: 1px solid rgba(34,211,238,.3); background: rgba(34,211,238,.07); font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; vertical-align: middle; }
 @media (max-width: 900px) { .weight-sandbox { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .ranking-lab-heading { align-items: flex-start; flex-direction: column; } .ranking-lab-kpis { width: 100%; } .weight-controls { grid-template-columns: 1fr minmax(80px, .55fr); } .weight-controls [role="slider"] { grid-column: 1 / -1; grid-row: 2; } .sandbox-reset { grid-column: 1 / -1; } .draft-weight-apply { align-items: flex-start; flex-direction: column; } .draft-weight-toggle { width: 100%; } }
 .app-footer { display: flex; justify-content: space-between; gap: 18px; color: var(--bh-text-dim); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; padding: 0 7.2% 26px; }
@@ -427,9 +479,6 @@ main { max-width: 1600px; margin: 0 auto; }
   .hero-content h1 { font-size: 59px; }
   .hero-copy { font-size: 12px; }
   .hero-actions { align-items: flex-start; flex-direction: column; gap: 14px; }
-  .hero-stamp { right: 23px; bottom: 28px; width: 70px; height: 70px; }
-  .hero-stamp span { font-size: 29px; }
-  .hero-stamp small { font-size: 6px; bottom: 9px; }
   .main-content { padding: 31px 16px 54px; }
   .intro-row, .section-heading-row, .data-heading { align-items: flex-start; flex-direction: column; }
   .intro-badge { align-self: flex-start; }
@@ -472,7 +521,6 @@ main { max-width: 1600px; margin: 0 auto; }
 
 /* Source intelligence panel: keep each publisher visibly separate from the BH synthesis. */
 .source-section { position: relative; margin-top: 44px; padding: 25px 23px 21px; background: rgba(18,22,32,.83); border: 1px solid rgba(255,255,255,.075); border-left: 2px solid rgba(34,211,238,.48); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); scroll-margin-top: 98px; overflow: hidden; }
-.source-section::before { content: "BH // SOURCE CONTROL"; position: absolute; top: 10px; right: 15px; color: rgba(34,211,238,.34); font-family: "Barlow Condensed", sans-serif; font-size: 8px; letter-spacing: .16em; }
 .source-section::after { content: ""; position: absolute; left: 0; top: 0; width: 48%; height: 1px; background: linear-gradient(90deg, var(--bh-info), transparent); opacity: .7; }
 .source-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
 .source-heading p { max-width: 600px; margin: 9px 0 0; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
@@ -627,8 +675,21 @@ main { max-width: 1600px; margin: 0 auto; }
 .draft-voice-button:hover:not(:disabled) { border-color: rgba(94,234,212,.82); background: rgba(45,212,191,.16); }
 .draft-voice-button:active:not(:disabled) { transform: scale(.97); }
 .draft-voice-button:disabled { cursor: not-allowed; opacity: .45; }
-.draft-voice-button.is-listening { color: #fff; border-color: rgba(251,113,133,.86); background: rgba(244,63,94,.22); animation: voice-pulse 1s ease-in-out infinite alternate; }
-@keyframes voice-pulse { from { box-shadow: 0 0 0 0 rgba(251,113,133,.08); } to { box-shadow: 0 0 0 6px rgba(251,113,133,.20); } }
+.draft-voice-button.is-listening { position: relative; color: #fff; border-color: rgba(251,113,133,.86); background: rgba(244,63,94,.22); }
+/* Enquanto o microfone ouve. Era `box-shadow` a crescer 0 → 6px, que repinta
+   a cada frame; o anel passa a ser desenhado uma vez e o que pulsa é a
+   opacidade e a escala, que o compositor anima sozinho. (v122) */
+.draft-voice-button.is-listening::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 6px rgba(251,113,133,.2);
+  pointer-events: none;
+  animation: voice-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes voice-pulse { from { opacity: .15; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .draft-voice-button.is-listening::after { animation: none; opacity: .6; } }
 .draft-tier-filter { display: flex; gap: 4px; }
 .draft-tier-filter button { padding: 8px 10px; color: var(--bh-text-dim); border: 1px solid transparent; background: transparent; font-size: 9px; cursor: pointer; }
 .draft-tier-filter button:hover, .draft-tier-filter button.is-active { color: #fff; border-color: rgba(167,139,250,.28); background: rgba(124,58,237,.15); }
@@ -826,6 +887,8 @@ main { max-width: 1600px; margin: 0 auto; }
   .matchup-duel-footer { margin-top: 9px; color: var(--bh-text-dim); font-size: 8px; }
   .matchup-duel-footer span:first-child { display: inline-flex; align-items: center; gap: 4px; color: var(--bh-text-muted); }
 .matchup-duel-footer span:last-child { color: var(--bh-info); text-align: right; }
+/* Porque este é o adversário: sai de `atribuirDuelosPorCounter`. */
+.matchup-duel .matchup-duel-reason { min-height: 0; margin: 9px 0 0; color: var(--bh-text-muted); font-size: 11px; line-height: 1.4; }
 .matchup-duel p { min-height: 30px; margin: 8px 0 0; color: var(--bh-text-dim); font-size: 8px; line-height: 1.42; }
 .matchup-counter-tips { margin-top: 10px; padding: 9px; border: 1px solid rgba(167,139,250,.22); border-left: 2px solid var(--bh-violet); background: linear-gradient(135deg, rgba(20,15,36,.72), rgba(8,16,27,.74)); }
 .matchup-counter-tips-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 7px; }
@@ -1043,7 +1106,15 @@ main { max-width: 1600px; margin: 0 auto; }
 .hybrid-usage-copy small { display: block; overflow: hidden; margin-top: 3px; color: var(--bh-text-dim); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .hybrid-usage-value { display: grid; justify-items: end; color: var(--bh-info); font-family: "Barlow Condensed", sans-serif; line-height: .9; text-align: right; }
 .hybrid-usage-value b { font-size: 17px; font-weight: 800; }
-.hybrid-usage-value small { margin-top: 3px; color: var(--bh-info); font-family: "Inter", sans-serif; font-size: 6px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }
+/*
+ * Dizia `font-family: "Inter"` — um tipo de letra que este site nunca carrega,
+ * nem agora nem quando os tipos vinham do Google. Caía no sans genérico do
+ * browser, diferente de tudo à volta.
+ *
+ * E 6px não se lê. Enquanto o painel esteve escondido isso não incomodava
+ * ninguém; agora que abre, incomoda.
+ */
+.hybrid-usage-value small { margin-top: 3px; color: var(--bh-info); font-family: "Space Grotesk", sans-serif; font-size: 9px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }
 .hybrid-usage-reference > p { margin: 9px 0 0; color: var(--bh-text-dim); font-size: 8px; line-height: 1.4; }
 @media (max-width: 980px) {
   .draft-action-zone { grid-template-columns: 1fr; }
@@ -1576,14 +1647,39 @@ main { max-width: 1600px; margin: 0 auto; }
 @media (max-width: 700px) { .brawler-detail-main { padding: 20px 14px 45px; } .brawler-detail-nav { align-items: flex-start; flex-direction: column; } .brawler-profile-hero { grid-template-columns: 88px minmax(0, 1fr); gap: 14px; padding: 16px 13px; } .profile-hero-image { width: 88px; height: 88px; } .profile-hero-copy h1 { font-size: 40px; } .profile-hero-copy p { grid-column: 1 / -1; margin-top: 8px; font-size: 9px; } .profile-hero-score { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); } .profile-hero-score strong { font-size: 36px; } .profile-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .guide-callout { grid-template-columns: minmax(0, 1fr); padding: 13px; } .guide-callout-icon { display: none; } .guide-callout > div:not(.guide-callout-icon) { min-width: 0; } .guide-callout p { max-width: none; overflow-wrap: anywhere; } .guide-callout .source-link-stack { grid-column: 1 / -1; width: 100%; } .brawler-relation-columns { grid-template-columns: 1fr; } .brawler-relation-section { padding: 14px 11px; } .brawler-relation-grid { grid-template-columns: 1fr; } .relation-section-head h2 { font-size: 27px; } .profile-build-panel { grid-template-columns: 34px minmax(0, 1fr); padding: 14px 12px; } .profile-build-panel button { grid-column: 2; justify-self: start; } }
 
 /* Simple draft workspace: only the active decision surfaces remain visible. */
+/*
+ * Blocos que a arena nova substituiu.
+ *
+ * DOIS TINHAM DE SAIR DAQUI, E A RAZÃO INTERESSA
+ *
+ * Esta lista nasceu de um trabalho de esquema: secções antigas desligadas de
+ * uma vez só. Seis delas não tinham controlo nenhum a apontar-lhes — ficaram
+ * simplesmente fora do ecrã, que era a intenção.
+ *
+ * As outras duas tinham. E isso transformava-as noutra coisa:
+ *
+ *   <details><summary>Referência de pontuação</summary>  ...  </details>
+ *   <FoldPanel title="Leitura das fontes" summary="De onde vêm os números…">
+ *
+ * Quem carrega nesses controlos vê a seta virar e não aparece nada. O painel
+ * abre com zero de altura. O conteúdo até existe — o React desenha-o a cada
+ * mudança do draft, com os dados certos lá dentro ("#1 Wendy · Base 100.00 ·
+ * 102.88") — e uma linha de CSS escondia-o depois de pronto.
+ *
+ * Um controlo que responde ao toque e não entrega nada é pior do que um
+ * controlo que não existe: a primeira vez que alguém carrega, conclui que o
+ * site está avariado. E ninguém reparou porque estão os dois no fundo da
+ * página, atrás de um clique que quase nunca se dá.
+ *
+ * Ficam de fora desta lista. Se um deles voltar a ser de mais para o ecrã, o
+ * que sai é o controlo, não o conteúdo.
+ */
 .draft-shell .draft-hero,
 .draft-shell .official-events-banner,
 .draft-shell .scrim-setup-panel,
 .draft-shell .live-counter-engine,
 .draft-shell .final-win-probability,
-.draft-shell .game-plan-section,
-.draft-shell .draft-intel-grid,
-.draft-shell .draft-arena-reference { display: none; }
+.draft-shell .game-plan-section { display: none; }
 .draft-shell .draft-main { max-width: 1520px; margin: 0 auto; padding: 24px 28px 48px; }
 .draft-shell .draft-arena { width: 100%; margin: 0; padding: 0; border: 1px solid var(--bh-surface-3); border-top: 3px solid var(--bh-violet); background: linear-gradient(100deg, rgba(7, 14, 24, .94), rgba(10, 19, 31, .8), rgba(7, 14, 24, .94)) !important; box-shadow: none; }
 .draft-shell .draft-arena-header { align-items: center; gap: 16px; padding: 16px 18px; border-bottom-color: var(--bh-surface-3); background: var(--bh-surface); }
@@ -1963,8 +2059,9 @@ main { max-width: 1600px; margin: 0 auto; }
 .draft-recommendation:hover { transform: translateY(-2px); border-color: var(--bh-line-strong); }
 .draft-recommendation:active { transform: translateY(2px); border-bottom-width: 1px; }
 /* O primeiro da lista é a recomendação: é o único que ganha a cor de energia. */
-.draft-recommendation-list > *:first-child .draft-recommendation,
-.draft-recommendation:first-child { border-bottom-color: var(--bh-gold); }
+/* Só o do primeiro invólucro. O seletor sem invólucro apanhava TODAS as
+   sugestões: cada uma vive no seu próprio <div>, e é sempre a primeira dele. */
+.draft-recommendation-list > *:first-child .draft-recommendation { border-bottom-color: var(--bh-gold); }
 
 /* --- Ação principal ------------------------------------------------------- */
 .refresh-button {
@@ -2917,3 +3014,1232 @@ main { max-width: 1600px; margin: 0 auto; }
   color: var(--bh-text-muted);
   font-size: .74rem;
 }
+
+
+/*
+ * ===========================================================================
+ * ARENA — a camada que faz isto parecer Brawl Stars
+ * ===========================================================================
+ *
+ * O que estava cá antes já tinha as ideias certas escritas: tipografia pesada
+ * nos números, peças com aresta inferior, âmbar usado com avareza. O problema
+ * não era o sistema — era o alcance. O Lilita One, que é o tipo que faz a
+ * interface parecer o jogo, aparecia em quatro seletores de uma folha com
+ * quase três mil linhas. Fora do Draft, o site voltava a ser um painel de
+ * análise azul-escuro como qualquer outro.
+ *
+ * Esta secção leva o tratamento ao resto: títulos, números grandes, cartões
+ * de mapa e a entrada. Vem no fim do ficheiro de propósito — assim ganha os
+ * empates de especificidade sem precisar de `!important` em lado nenhum.
+ *
+ * REGRA QUE NÃO SE QUEBRA AQUI
+ *
+ * A folha antiga avisa, e tem razão: "quando tudo brilha, nada se destaca".
+ * Portanto nada disto aumenta a área colorida do ecrã. O que faz é o
+ * contrário — escurece e dessatura o terreno para que o âmbar que já existia
+ * passe a bater com mais força pelo contraste, em vez de ser mais uma cor
+ * saturada entre várias.
+ */
+
+:root {
+  /*
+   * Contorno de texto. O `--bh-edge` (45% de preto) chega para a aresta de um
+   * cartão, mas num número de 40px por cima de um fundo claro desaparece.
+   * A tipografia de jogo tem contorno OPACO — é isso que a faz ler-se sempre.
+   */
+  --bh-edge-hard: rgba(0, 0, 0, .78);
+
+  /*
+   * Curva de entrada. Mais forte do que a `--ease-out` que já cá estava: as
+   * curvas nativas do CSS são fracas de mais para se notar a intenção.
+   */
+  --ease-arena: cubic-bezier(.23, 1, .32, 1);
+}
+
+/* ---------------------------------------------------------------------------
+ * 1. A voz de display chega ao resto do site
+ * ---------------------------------------------------------------------------
+ *
+ * O Barlow Condensed continua a ser a ferramenta certa nas etiquetas pequenas
+ * em maiúsculas — é estreito e aguenta 8px. O que ele não faz é soar a jogo.
+ * Nos sítios onde o tamanho já é grande, quem manda passa a ser o Lilita One.
+ */
+.intro-copy h2,
+.section-heading-row h2,
+.data-heading h2,
+.card-heading h3,
+.map-card-name,
+/* Os do Draft. O arena-v55.css dá-lhes o tamanho (27 e 28px) mas nunca lhes
+   deu um tipo, por isso a escolha ainda é desta folha. */
+.draft-shell .draft-arena-header h2,
+.draft-shell .recommendations-heading h2,
+.draft-shell .team-heading h3,
+.draft-shell .draft-contextbar-main strong {
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-weight: 400;
+  letter-spacing: .015em;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+}
+
+/*
+ * Os números. Num sítio cuja razão de existir é um Score, o número tem de ser
+ * a coisa mais presente do ecrã — e até aqui o do painel principal era
+ * desenhado no mesmo tipo das etiquetas à volta dele.
+ */
+.stat-value,
+.rank-kpi b,
+.rotation-kpis b,
+.weight-readout b,
+.map-card-meta strong,
+/* O Score de cada sugestão: o número maior e mais decisivo do Draft. Estava
+   a ser desenhado no mesmo tipo das etiquetas de 8px ao lado dele. */
+.recommendation-metrics b,
+.draft-probability-center strong {
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+}
+/* O valor do painel cresce: é o que se lê de pé, a um metro do ecrã. */
+.stat-value { font-size: 38px; letter-spacing: .01em; }
+
+/* O contorno dos títulos de entrada também endurece, pela mesma razão. */
+.bh-display,
+.draft-hero h1,
+.hero-content h1 {
+  text-shadow: 0 3px 0 var(--bh-edge-hard), 0 6px 14px rgba(0, 0, 0, .5);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. A entrada deixa de ser meio ecrã vazio
+ * ---------------------------------------------------------------------------
+ *
+ * O título ocupava a metade esquerda e a direita tinha duas elipses de 1px.
+ * Quase metade da vista mais importante do site não estava a fazer nada.
+ *
+ * O que entra lá não é decoração a mais: é um foco de luz. Uma arena é um
+ * sítio iluminado ao centro e escuro nas bordas, e é isso que estas duas
+ * camadas desenham. Custam zero elementos novos no JSX — são pseudo-elementos
+ * do painel que já existe.
+ */
+.hero-panel::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(52% 78% at 76% 42%, rgba(167, 139, 250, .22), transparent 68%),
+    radial-gradient(38% 62% at 88% 64%, rgba(34, 211, 238, .13), transparent 70%);
+}
+
+/*
+ * A respiração. Um foco de arena nunca está completamente parado, e é esse
+ * movimento mínimo que separa "imagem" de "sítio vivo".
+ *
+ * 9 segundos e só opacidade e escala: é lento de mais para distrair quem está
+ * a ler uma tabela, e não toca no esquema nem na pintura do resto da página.
+ */
+.hero-panel::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  right: 4%;
+  top: 50%;
+  width: 620px;
+  height: 620px;
+  margin-top: -310px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 192, 46, .085), transparent 62%);
+  animation: bh-arena-breath 9s var(--ease-arena) infinite alternate;
+}
+@keyframes bh-arena-breath {
+  from { opacity: .55; transform: scale(.94); }
+  to   { opacity: 1;   transform: scale(1.06); }
+}
+
+/* As órbitas que já lá estavam ganham corpo e passam a rodar devagar. */
+.hero-orbit {
+  border-width: 1px;
+  box-shadow: 0 0 24px rgba(167, 139, 250, .1);
+}
+.orbit-one { animation: bh-orbit-slow 34s linear infinite; }
+.orbit-two { animation: bh-orbit-slow 52s linear infinite reverse; }
+@keyframes bh-orbit-slow {
+  from { transform: rotate(-19deg); }
+  to   { transform: rotate(341deg); }
+}
+
+/*
+ * Entrada escalonada.
+ *
+ * Tudo aparecia ao mesmo tempo, o que é a definição de estático. Quatro peças
+ * com 70ms entre elas leem-se como uma sequência — o olho segue de cima para
+ * baixo e chega ao botão a saber o caminho.
+ *
+ * `backwards` é o que mantém a peça invisível durante o atraso; sem isso
+ * piscava visível antes de começar.
+ */
+.hero-content > * {
+  animation: bh-hero-in .62s var(--ease-arena) backwards;
+}
+.hero-content > *:nth-child(1) { animation-delay: .04s; }
+.hero-content > *:nth-child(2) { animation-delay: .11s; }
+.hero-content > *:nth-child(3) { animation-delay: .18s; }
+@keyframes bh-hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+/*
+ * O TÍTULO NÃO DESVANECE — SÓ SOBE. (v122)
+ *
+ * O título é o maior texto do primeiro ecrã, e por isso é ele que o browser
+ * usa para medir quando a página "apareceu" (LCP). E o Chrome não conta um
+ * elemento a opacidade 0 como pintado. Medido em telemóvel com CPU 4× e 4G:
+ * a página estava desenhada aos 2416ms e o LCP só chegava aos 3088ms — os
+ * 672ms do fade de entrada, ao milissegundo.
+ *
+ * Visível desde o primeiro frame, a subir os mesmos 14px: o movimento fica e
+ * o atraso desaparece. As outras peças da cascata continuam a desvanecer —
+ * não são elas que o LCP mede.
+ */
+.hero-content > h1 { animation-name: bh-hero-rise; }
+@keyframes bh-hero-rise {
+  from { transform: translateY(14px); }
+  to   { transform: none; }
+}
+
+
+/* ---------------------------------------------------------------------------
+ * 3. As peças físicas chegam ao painel principal
+ * ---------------------------------------------------------------------------
+ *
+ * A aresta inferior sólida — o detalhe que separa "retângulo desenhado" de
+ * "peça que se carrega" — só existia no Draft. Aqui passa a valer para os
+ * cartões do painel e da biblioteca de mapas.
+ *
+ * CUIDADO QUE CUSTOU UMA VERIFICAÇÃO NO BROWSER
+ *
+ * `.stat-card` e `.map-card` são elementos do Framer Motion com `whileHover`
+ * e `initial`, e o Framer Motion escreve `transform` DIRETO no atributo
+ * style. Um `transform` meu em CSS aqui nunca ganharia — seria código morto,
+ * do tipo que parece estar a funcionar até alguém ir medir.
+ *
+ * Por isso estas duas peças reagem por aresta, cor e brilho, e o movimento
+ * fica por conta do Framer Motion, que já o faz. O `.primary-button` é um
+ * botão normal, e esse leva o gesto completo.
+ */
+.stat-card {
+  border-bottom: 3px solid var(--bh-edge);
+  border-radius: var(--bh-radius-sm);
+  transition: border-color .16s var(--ease-out), box-shadow .16s var(--ease-out), background .16s var(--ease-out);
+}
+/* A aresta herda o acento do cartão: é o que os liga ao número que mostram. */
+.stat-card.accent-amber { border-bottom-color: var(--bh-gold-deep); }
+.stat-card.accent-violet, .stat-card.accent-blue { border-bottom-color: var(--bh-violet-deep); }
+.stat-card.accent-cyan { border-bottom-color: #0e7490; }
+
+.map-card {
+  border-bottom: 3px solid var(--bh-edge);
+  border-radius: var(--bh-radius-sm);
+  transition: border-color .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.map-card.is-selected {
+  border-bottom-color: var(--bh-gold);
+  box-shadow: 0 0 0 1px rgba(255, 192, 46, .3), 0 10px 26px rgba(0, 0, 0, .45);
+}
+
+/*
+ * `hover` atrás de uma consulta de media: no telemóvel um toque dispara
+ * `:hover` e o estado fica preso depois do dedo sair.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .stat-card:hover { box-shadow: 0 10px 26px rgba(0, 0, 0, .4); }
+  .map-card:hover {
+    border-color: rgba(255, 255, 255, .17);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .42);
+  }
+}
+
+/* A ação principal passa a peça inteira: sobe ao passar, afunda ao carregar. */
+.primary-button, .copy-button {
+  border-radius: var(--bh-radius-sm);
+  border-bottom: 3px solid rgba(0, 0, 0, .42);
+  transition: transform .14s var(--ease-pop), background .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.primary-button:active, .copy-button:active {
+  transform: translateY(2px);
+  border-bottom-width: 1px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:hover, .copy-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(124, 58, 237, .32);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. A etiqueta de modo passa a ficha de jogo
+ * ---------------------------------------------------------------------------
+ *
+ * Já era a coisa mais parecida com Brawl Stars na página — modo por cor, uma
+ * por cada um. Só lhe faltava peso: 13% de fundo sobre azul-escuro lê-se como
+ * um rótulo, não como uma ficha.
+ */
+.map-card-mode {
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  border: 1px solid currentColor;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .45), inset 0 0 12px rgba(255, 255, 255, .06);
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. O primeiro lugar tem de se ver que é o primeiro
+ * ---------------------------------------------------------------------------
+ *
+ * Num sítio de competitivo, "a escolha" é a informação mais valiosa do ecrã.
+ * A recomendação do topo já tinha a aresta dourada; ganha agora um brilho que
+ * atravessa o cartão de sete em sete segundos.
+ *
+ * Sete segundos é deliberado. Uma animação que se veja muitas vezes por dia
+ * tem de ser rara o suficiente para nunca chatear — isto é um sinal, não um
+ * enfeite, e passa despercebido até o olho o apanhar de raspão.
+ */
+.draft-recommendation-list > *:first-child .draft-recommendation,
+.stat-card.accent-amber {
+  position: relative;
+  overflow: hidden;
+}
+.draft-recommendation-list > *:first-child .draft-recommendation::after,
+.stat-card.accent-amber::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 192, 46, .13), transparent);
+  animation: bh-champion-sweep 7s var(--ease-out) infinite;
+}
+/*
+ * CUSTO MEDIDO, E CORRIGIDO NA v122
+ *
+ * Animava `left`, que obriga o browser a refazer o esquema em cada frame, no
+ * fio principal, para sempre. Medido em repouso, sem ninguém a tocar em
+ * nada: 107 cálculos de esquema e ~200ms de trabalho a cada 4 segundos na
+ * entrada. Com `transform` o mesmo brilho corre no compositor.
+ *
+ * E o seletor antigo apanhava as DOZE sugestões do Draft em vez de uma: o
+ * "só o primeiro brilha" nunca foi verdade, e o custo era doze vezes o de um.
+ *
+ * Percentagens do PRÓPRIO elemento (42% do cartão): -107% põe-no 45% fora à
+ * esquerda, 250% põe-no 105% à direita — o mesmo percurso de antes.
+ */
+@keyframes bh-champion-sweep {
+  0%        { transform: translateX(-107%); opacity: 0; }
+  12%       { opacity: 1; }
+  38%, 100% { transform: translateX(250%); opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. O fundo do pavilhão NÃO se escreve aqui
+ * ---------------------------------------------------------------------------
+ *
+ * Escrevi primeiro um `.app-shell { background-image: ... }` nesta secção e
+ * fui ao browser ver o resultado: nenhum. Vale a pena deixar escrito porquê,
+ * porque não é óbvio e volta a acontecer a quem tentar.
+ *
+ * O `background-image` do `.app-shell` está disputado por três sítios:
+ *
+ *   1. o JSX, que o escreve INLINE (Home.tsx e Draft.tsx, com a textura);
+ *   2. este ficheiro;
+ *   3. o `arena-v55.css`, que é importado DEPOIS do index.css no main.tsx e
+ *      o declara com `!important`.
+ *
+ * Uma declaração `!important` numa folha de estilos ganha até a um estilo
+ * inline sem `!important`. Ou seja: o arena-v55 ganha sempre, e qualquer
+ * regra escrita aqui para essa propriedade é decoração que nunca pinta.
+ *
+ * Por isso as luzes de canto — as que dão ao fundo profundidade de pavilhão
+ * em vez de chapa lisa — foram escritas no `arena-v55.css`, ao lado da
+ * declaração que manda. Está lá com a explicação.
+ */
+
+/* ---------------------------------------------------------------------------
+ * 7. Quem prefere o ecrã quieto continua a ter direito a isso
+ * ---------------------------------------------------------------------------
+ *
+ * Reduzir movimento não é desligar tudo: o que desaparece é a DESLOCAÇÃO, que
+ * é o que provoca enjoo. As transições de cor e de opacidade ficam, porque
+ * essas ajudam a perceber o que mudou.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .hero-panel::after,
+  .orbit-one,
+  .orbit-two,
+  .hero-content > *,
+  .hero-champion-portrait,
+  .hero-champion-card,
+  .hero-champion,
+  .draft-recommendation-list > *:first-child .draft-recommendation::after,
+  .stat-card.accent-amber::before {
+    animation: none;
+  }
+  .primary-button, .copy-button { transition: background .16s var(--ease-out); }
+  .primary-button:hover, .copy-button:hover,
+  .primary-button:active, .copy-button:active { transform: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 8. A medida do título de entrada, refeita para o tipo que lá está
+ * ---------------------------------------------------------------------------
+ *
+ * Isto é uma correção, não um enfeite, e a causa é instrutiva.
+ *
+ * O `.hero-content` tinha `max-width: 660px`, uma medida escolhida quando o
+ * título era desenhado em Barlow Condensed — que é, como o nome diz, estreito.
+ * Como o Lilita One nunca chegava a carregar (vinha do Google e bloqueava),
+ * ninguém viu o resultado real: o Lilita é MUITO mais largo, e nos 660px a
+ * frase partia-se em cinco linhas com um rasgo irregular à direita.
+ *
+ *     JOGA COM
+ *     DADOS.
+ *     GANHA
+ *     COM
+ *     CONTEXTO.
+ *
+ * Com os tipos a chegar de vez, a medida tem de ser a do tipo verdadeiro. A
+ * 980px a frase assenta nas duas linhas para que foi escrita — uma afirmação
+ * por linha — e passa a ler-se como um cartaz em vez de uma lista.
+ *
+ * O `min-height` desce junto: cinco linhas precisavam de 375px, duas não, e
+ * o que se ganha é a tabela começar mais perto do topo.
+ */
+.hero-content { max-width: 1100px; }
+.hero-content h1 {
+  font-size: clamp(38px, 5.4vw, 82px);
+  line-height: .92;
+  letter-spacing: -.005em;
+  /* Sem isto, uma palavra longa num ecrã estreito sai para fora do cartão. */
+  overflow-wrap: break-word;
+}
+.hero-panel { min-height: 330px; }
+
+/*
+ * Em ecrã estreito a entrada volta a ser uma coluna só, e aí a medida larga
+ * não serve de nada: o que conta é o título caber sem cortar nem empurrar a
+ * página para o lado.
+ */
+@media (max-width: 900px) {
+  .hero-content { max-width: 100%; padding-right: 7.2%; }
+  .hero-panel { min-height: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 9. O crachá da versão estava sentado em cima do avatar
+ * ---------------------------------------------------------------------------
+ *
+ * Encontrado a medir a página a 390px, não a olhar para ela: o crachá da
+ * versão é `position: fixed` no canto superior direito com `z-index: 60`, e
+ * nessa largura o `.profile-chip` fica exatamente por baixo (x 338–372 contra
+ * 332–380 do crachá). Via-se meio disco dourado a sair de trás do amarelo, o
+ * tipo de coisa que se lê como defeito sem se perceber o que é.
+ *
+ * O avatar não faz nada — não é botão nem menu, é um "BH / Analista" fixo.
+ * Num ecrã onde o espaço da barra é disputado, a peça decorativa é a que sai.
+ * O crachá fica, porque esse serve para responder à pergunta "é a versão nova
+ * ou a antiga?" sem ir ver registos de build.
+ */
+@media (max-width: 700px) {
+  .profile-chip { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 10. A entrada com alguém lá dentro
+ * ---------------------------------------------------------------------------
+ *
+ * Duas colunas: o texto à esquerda, o nº1 do mapa à direita. O foco de luz
+ * da secção 2 (`::before` e `::after` do painel) já estava centrado nessa
+ * zona — passa a iluminar alguém em vez de um vazio.
+ *
+ * O título estava em três linhas a 1440px ("JOGA COM DADOS. / GANHA COM /
+ * CONTEXTO."). A frase tem duas afirmações e o `<br>` já as separa; cada uma
+ * cabe numa linha se o tamanho for escolhido a partir da coluna que lhe sobra,
+ * e não da largura do ecrã inteiro. "GANHA COM CONTEXTO." mede ~10,4em em
+ * Lilita One — é esse número que manda no `clamp`.
+ */
+.hero-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+  /*
+   * O recuo lateral vive no PAINEL e não nas colunas.
+   *
+   * Primeira versão: `margin-right: 7.2%` no cartão e o `padding: 7.2%` que o
+   * texto já tinha. Medido a 1440px, o cartão saía 22px pela direita e o
+   * título começava 24px à esquerda de "O meta, sem ruído" logo abaixo.
+   *
+   * Uma percentagem num item de grelha resolve contra a ÁREA DA CÉLULA, não
+   * contra o painel: o 7,2% do texto passou de 86px para 62px, e o do cartão
+   * para 22px — que, numa coluna `auto`, nem entra no tamanho da coluna e
+   * transborda. No painel, o 7,2% resolve contra a mesma largura que o
+   * `.main-content` usa, e os dois voltam a alinhar ao píxel.
+   */
+  padding: 0 7.2%;
+}
+.hero-content { padding-left: 0; padding-right: 0; }
+/*
+ * Os mesmos degraus do `.main-content` (7,2% → 6% abaixo de 1180px → 16px
+ * abaixo de 680px). Se o recuo da entrada e o da página tiverem regras
+ * diferentes, o título e a secção de baixo desalinham num tamanho qualquer
+ * que ninguém testou — foi o que a medição apanhou a 1024 e a 390.
+ */
+@media (max-width: 1180px) { .hero-panel { padding-left: 6%; padding-right: 6%; } }
+@media (max-width: 680px)  { .hero-panel { padding-left: 16px; padding-right: 16px; } }
+.hero-content h1 { font-size: clamp(32px, 4.1vw, 64px); }
+.hero-copy { max-width: 46ch; }
+
+.hero-champion {
+  position: relative;
+  z-index: 2;
+  width: clamp(230px, 21vw, 310px);
+  margin: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hero-champion-portrait {
+  position: relative;
+  z-index: 1;
+  width: 86%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  /* O retrato pousa em cima do cartão: a sombra é o chão onde está de pé. */
+  margin-bottom: -34px;
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .55));
+}
+@keyframes bh-champion-in {
+  from { opacity: 0; transform: translateY(18px) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+.hero-champion-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 16px 16px 13px;
+  text-align: center;
+  border-radius: var(--bh-radius);
+  border: 1px solid rgba(255, 192, 46, .34);
+  border-bottom: 4px solid var(--bh-gold-deep);
+  background: linear-gradient(180deg, var(--bh-surface-2), var(--bh-surface));
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .45);
+}
+.hero-champion-rank {
+  display: block;
+  color: var(--bh-gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.hero-champion-name {
+  display: block;
+  margin-top: 6px;
+  color: var(--bh-text);
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+  overflow-wrap: anywhere;
+}
+.hero-champion-score {
+  display: block;
+  margin-top: 7px;
+  color: var(--bh-text-muted);
+  font-size: 11px;
+}
+.hero-champion-score b {
+  margin-right: 5px;
+  color: var(--bh-gold);
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 var(--bh-edge-hard);
+}
+
+/*
+ * Abaixo de 1100px: uma coluna, e o nº1 passa a faixa horizontal por BAIXO
+ * do botão. O botão tem de continuar à vista sem deslizar.
+ *
+ * Era 900px. A 1024 o cartão ao lado deixava ao título uma coluna de ~430px e
+ * "GANHA COM CONTEXTO." partia em três linhas — o corte passou para onde o
+ * título deixa de caber, não para um número redondo.
+ */
+@media (max-width: 1100px) {
+  .hero-panel { grid-template-columns: minmax(0, 1fr); }
+  .hero-champion {
+    width: auto;
+    margin: 0 0 32px;
+    flex-direction: row;
+    align-items: center;
+  }
+  .hero-champion-portrait {
+    width: 76px;
+    margin: 0 -14px 0 0;
+    flex: 0 0 auto;
+  }
+  .hero-champion-card {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 11px 14px 10px 24px;
+    text-align: left;
+  }
+  .hero-champion-name { font-size: 26px; margin-top: 3px; }
+  .hero-champion-score { margin-top: 4px; }
+  .hero-champion-score b { font-size: 18px; }
+}
+
+
+/* ---------------------------------------------------------------------------
+ * 11. Identidade de movimento
+ * ---------------------------------------------------------------------------
+ *
+ * Personalidade: ENERGÉTICA, com uma ponta de lúdica. O jogo é rápido e as
+ * peças têm peso — as entradas decidem depressa e as confirmações encaixam
+ * com um ligeiro excesso no fim.
+ *
+ * Três durações e duas curvas cobrem tudo o que esta camada anima. O resto da
+ * folha ainda tem valores soltos (.14s, .16s, .18s, .22s…) de antes disto;
+ * não foram reescritos à cega, e o que for tocado daqui em diante usa estes.
+ *
+ *   --dur-rapida   160ms  carregar, passar o rato: tem de parecer instantâneo
+ *   --dur-padrao   240ms  mudança de estado: um cartão que troca de conteúdo
+ *   --dur-lenta    520ms  entrada: algo que aparece pela primeira vez
+ *
+ *   --ease-arena   desacelera com decisão — entradas e mudanças de estado
+ *   --ease-pop     excesso de ~10% no fim — só para o que "encaixa"
+ */
+:root {
+  --dur-rapida: 160ms;
+  --dur-padrao: 240ms;
+  --dur-lenta: 520ms;
+}
+
+/*
+ * A cascata da entrada, de uma ponta à outra:
+ *
+ *     0ms  título        (secção 2)
+ *    70ms  subtítulo
+ *   140ms  botão
+ *   260ms  cartão do nº1 — o palco
+ *   320ms  retrato — aterra no palco, 60ms depois: é o seguimento
+ *
+ * Antes, o cartão não tinha animação nenhuma: aparecia inteiro no primeiro
+ * frame, ANTES do título, e o elemento mais importante do ecrã entrava fora
+ * de ordem.
+ */
+.hero-champion.is-entrada .hero-champion-card {
+  animation: bh-champion-card-in var(--dur-lenta) var(--ease-arena) .26s backwards;
+}
+.hero-champion.is-entrada .hero-champion-portrait {
+  animation: bh-champion-in var(--dur-lenta) var(--ease-arena) .32s backwards;
+}
+@keyframes bh-champion-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/*
+ * A troca, quando se escolhe outro mapa. Sem atraso — começa no frame do
+ * clique. O conjunto encaixa com `--ease-pop`, e o retrato chega 40ms depois
+ * com um pouco mais de subida: é essa diferença que faz parecer uma pessoa a
+ * saltar para o palco, e não um bloco a trocar de imagem.
+ */
+.hero-champion.is-troca .hero-champion-card {
+  animation: bh-champion-swap var(--dur-padrao) var(--ease-pop) both;
+}
+.hero-champion.is-troca .hero-champion-portrait {
+  animation: bh-champion-portrait-swap calc(var(--dur-padrao) + 80ms) var(--ease-pop) 40ms both;
+}
+@keyframes bh-champion-swap {
+  from { opacity: 0; transform: translateY(6px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes bh-champion-portrait-swap {
+  from { opacity: 0; transform: translateY(14px) scale(.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+/*
+ * Movimento reduzido: a troca continua a ver-se, mas só em opacidade — sem
+ * isso, o nome mudava de um frame para o outro e não se percebia que mudou.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .hero-champion.is-entrada .hero-champion-card,
+  .hero-champion.is-entrada .hero-champion-portrait,
+  .hero-champion.is-troca .hero-champion-portrait { animation: none; }
+  .hero-champion.is-troca .hero-champion-card { animation: bh-fade-only var(--dur-rapida) ease-out both; }
+}
+@keyframes bh-fade-only { from { opacity: 0; } to { opacity: 1; } }
+
+/* =============================================================================
+ * 12. MAPA DOS DUELOS (Matriz 1v1)
+ *
+ * O duelo desenhado sobre o mapa: adversário em cima, a tua equipa em baixo,
+ * uma coluna por lane. A imagem é o layout da Brawlify (21×33 casas, por isso
+ * a proporção); sem ela fica o relvado em CSS por baixo, que já se aguenta
+ * sozinho. As cores seguem o resto do Draft: ciano é o teu lado, rosa o outro.
+ * ========================================================================== */
+.duel-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  padding: 18px;
+}
+.duel-map {
+  --duel-map-image: none; /* o React põe aqui o url() do mapa */
+  position: relative;
+  margin: 0;
+  width: 100%;
+  aspect-ratio: 21 / 33;
+  max-height: 88vh;
+  overflow: hidden;
+  border: 1px solid var(--bh-line-strong);
+  border-radius: 14px;
+  background: #16301f;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .04);
+  isolation: isolate;
+}
+.duel-map-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(120, 16, 40, .5) 0%, rgba(8, 12, 20, .18) 22%, rgba(8, 12, 20, .32) 50%, rgba(8, 12, 20, .18) 78%, rgba(8, 60, 90, .55) 100%),
+    var(--duel-map-image, none) center / cover no-repeat,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 32px),
+    radial-gradient(120% 60% at 50% 50%, #2f6b3c 0%, #1d4a2a 55%, #12301c 100%);
+}
+/* O rio: a linha do meio do mapa, onde os duelos se decidem. */
+.duel-map-field::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .35) 0 10px, transparent 10px 20px);
+  transform: translateY(-50%);
+}
+.duel-map-base {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(6, 9, 16, .72);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+.duel-map-base span { color: var(--bh-text-muted); }
+.duel-map-base strong { font-family: "Lilita One", "Barlow Condensed", sans-serif; font-size: 13px; font-weight: 400; letter-spacing: .04em; }
+.duel-map-base--enemy { top: 8px; }
+.duel-map-base--enemy strong { color: var(--bh-negative); }
+.duel-map-base--ally { bottom: 8px; }
+.duel-map-base--ally strong { color: var(--bh-info); }
+
+.duel-map-lanes {
+  position: absolute;
+  inset: 42px 0 42px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0 6px;
+  list-style: none;
+}
+.duel-map-lane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.duel-map-token {
+  display: flex;
+  max-width: 100%;
+  /* Altura fixa: ficha vazia e ficha cheia ocupam o mesmo, e as caixas do meio alinham. */
+  min-height: calc(clamp(46px, 9vw, 72px) + 44px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  text-align: center;
+}
+.duel-map-portrait {
+  display: grid;
+  width: clamp(46px, 9vw, 72px);
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  background: rgba(6, 9, 16, .85);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .5), 0 0 0 3px rgba(6, 9, 16, .55);
+  font-family: "Lilita One", sans-serif;
+  font-size: 18px;
+}
+.duel-map-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.duel-map-token strong {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(6, 9, 16, .82);
+  color: var(--bh-text);
+  font-family: "Lilita One", "Barlow Condensed", sans-serif;
+  font-size: clamp(12px, 1.6vw, 15px);
+  font-weight: 400;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.duel-map-token small { color: var(--bh-text-muted); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-shadow: 0 1px 2px #000; }
+.duel-map-token--enemy { color: var(--bh-negative); }
+.duel-map-token--ally { flex-direction: column-reverse; color: var(--bh-info); }
+.duel-map-token.is-empty .duel-map-portrait { border-style: dashed; color: rgba(255, 255, 255, .35); background: rgba(6, 9, 16, .45); box-shadow: none; }
+
+/* A linha do duelo e a vantagem da tua equipa a meio. */
+.duel-map-link {
+  position: relative;
+  display: grid;
+  width: 100%;
+  flex: 1;
+  place-items: center;
+  margin: 6px 0;
+}
+.duel-map-link i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--bh-negative), rgba(255, 255, 255, .2) 50%, var(--bh-info));
+  transform: translateX(-50%);
+  transform-origin: 50% 50%;
+}
+.duel-map-lane.is-open .duel-map-link i { background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); }
+.duel-map-badge {
+  position: relative;
+  display: grid;
+  min-width: 70px;
+  justify-items: center;
+  gap: 1px;
+  padding: 6px 10px 7px;
+  border: 2px solid var(--bh-line-strong);
+  border-bottom-width: 4px;
+  border-radius: 12px;
+  background: rgba(6, 9, 16, .9);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .45);
+}
+.duel-map-badge small { color: var(--bh-text-muted); font-size: 8px; font-weight: 800; letter-spacing: .14em; }
+.duel-map-badge strong { color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: clamp(20px, 3vw, 28px); font-weight: 400; line-height: 1; }
+.duel-map-badge strong em { font-size: .55em; font-style: normal; }
+.duel-map-badge span { font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+.duel-map-lane.is-favorable .duel-map-badge { border-color: var(--bh-positive); }
+.duel-map-lane.is-favorable .duel-map-badge span { color: var(--bh-positive); }
+.duel-map-lane.is-favorable .duel-map-link i { background: linear-gradient(180deg, rgba(255, 255, 255, .25), var(--bh-positive) 55%, var(--bh-info)); }
+.duel-map-lane.is-risky .duel-map-badge { border-color: var(--bh-negative); }
+.duel-map-lane.is-risky .duel-map-badge span { color: var(--bh-negative); }
+.duel-map-lane.is-risky .duel-map-link i { background: linear-gradient(180deg, var(--bh-negative), var(--bh-negative) 45%, rgba(255, 255, 255, .25)); }
+.duel-map-lane.is-even .duel-map-badge { border-color: var(--bh-gold); }
+.duel-map-lane.is-even .duel-map-badge span { color: var(--bh-gold); }
+.duel-map-lane.is-open .duel-map-badge span { color: var(--bh-text-dim); }
+
+/* A legenda fica por baixo do mapa: em cima dele tapava as fichas da tua equipa. */
+.duel-map-caption { margin-top: 8px; color: var(--bh-text-muted); font-size: 11px; text-align: center; }
+
+/* Entrada: as fichas chegam das bases e a linha estica. Só transform/opacity. */
+.duel-map-token--enemy:not(.is-empty) { animation: bh-duel-from-top var(--dur-lenta) var(--ease-arena) both; }
+.duel-map-token--ally:not(.is-empty) { animation: bh-duel-from-bottom var(--dur-lenta) var(--ease-arena) both; }
+.duel-map-link i { animation: bh-duel-link var(--dur-lenta) var(--ease-arena) 120ms both; }
+.duel-map-lane--mid .duel-map-token, .duel-map-lane--mid .duel-map-link i { animation-delay: 60ms; }
+.duel-map-lane--right .duel-map-token, .duel-map-lane--right .duel-map-link i { animation-delay: 120ms; }
+@keyframes bh-duel-from-top { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes bh-duel-from-bottom { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes bh-duel-link { from { transform: translateX(-50%) scaleY(0); } to { transform: translateX(-50%) scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .duel-map-token--enemy:not(.is-empty),
+  .duel-map-token--ally:not(.is-empty),
+  .duel-map-link i { animation: none; }
+}
+
+/* Ao lado do mapa: porque é este o adversário de cada um. */
+.duel-map-side { display: grid; gap: 10px; }
+.duel-map-side-kicker { color: var(--bh-gold); font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+.duel-map-side-empty { margin: 0; color: var(--bh-text-muted); font-size: 13px; line-height: 1.5; }
+.duel-map-legend { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.duel-map-legend li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--bh-line);
+  border-left: 4px solid var(--bh-gold);
+  border-radius: 10px;
+  background: rgba(6, 9, 16, .55);
+}
+.duel-map-legend li.is-favorable { border-left-color: var(--bh-positive); }
+.duel-map-legend li.is-risky { border-left-color: var(--bh-negative); }
+.duel-map-legend li > span { color: var(--bh-text-muted); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.duel-map-legend li > strong { overflow: hidden; color: var(--bh-text); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.duel-map-legend li > strong em { color: var(--bh-text-dim); font-style: normal; }
+.duel-map-legend li > b { color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: 20px; font-weight: 400; }
+.duel-map-legend li > p { grid-column: 1 / -1; margin: 0; color: var(--bh-text-muted); font-size: 12px; line-height: 1.45; }
+
+.duel-map-details { margin: 0 18px 18px; border: 1px solid var(--bh-line); border-radius: 10px; }
+.duel-map-details > summary { padding: 12px 14px; color: var(--bh-gold); font-size: 13px; font-weight: 700; cursor: pointer; }
+.duel-map-details[open] > summary { border-bottom: 1px solid var(--bh-line); }
+.duel-map-details > .matchup-matrix { padding: 14px; }
+
+@media (max-width: 900px) {
+  .duel-map-layout { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .duel-map { max-width: 520px; margin: 0 auto; }
+}
+@media (max-width: 480px) {
+  /* Cinco caixas encaixadas comiam 50px de cada lado: o mapa vai até às bordas do painel. */
+  .duel-map-layout { margin: 0 -12px; padding: 10px 0; }
+  .duel-map { border-radius: 10px; }
+  .duel-map-lanes { inset: 42px 0 42px; padding: 0 2px; }
+  .duel-map-base { padding: 3px 8px; font-size: 8px; }
+  .duel-map-base strong { font-size: 11px; }
+  .duel-map-side { padding: 0 12px; }
+  .duel-map-badge { min-width: 58px; padding: 5px 6px 6px; }
+  .duel-map-details { margin: 0 10px 10px; }
+}
+
+/*
+ * "X COUNTERA / Y COUNTERA / NEUTROS" por cima do mapa. Nunca teve regra
+ * nenhuma: os três blocos saíam como texto corrido ("AZUL COUNTERANori →").
+ */
+.matchup-perspective-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 18px 0; }
+.matchup-board-side { display: grid; align-content: start; gap: 3px; min-width: 0; padding: 10px 12px; border: 1px solid var(--bh-line); border-top: 3px solid var(--bh-line-strong); border-radius: 10px; background: rgba(6, 9, 16, .5); }
+.matchup-board-side > span { color: var(--bh-text-muted); font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+.matchup-board-side > strong { color: var(--bh-text); font-size: 13px; line-height: 1.35; }
+.matchup-board-side > small { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
+.matchup-board-side--blue { border-top-color: var(--bh-info); }
+.matchup-board-side--red { border-top-color: var(--bh-negative); }
+@media (max-width: 700px) {
+  .matchup-perspective-board { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 10px 0; }
+  .matchup-board-side > small { display: none; }
+}
+
+/* Abas da leitura do mapa: híbrida (%) ou só PL Prodigy (ganha / perde). */
+.duel-map-tabs { display: inline-flex; gap: 4px; margin: 16px 18px 0; padding: 4px; border: 1px solid var(--bh-line); border-radius: 999px; background: rgba(6, 9, 16, .6); }
+.duel-map-tabs button { padding: 8px 14px; border: 0; border-radius: 999px; background: transparent; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; cursor: pointer; }
+.duel-map-tabs button small { margin-left: 4px; color: var(--bh-text-dim); font-size: 10px; font-weight: 600; }
+.duel-map-tabs button.is-active { background: var(--bh-gold); color: var(--bh-on-gold); }
+.duel-map-tabs button.is-active small { color: var(--bh-on-gold); opacity: .75; }
+.duel-map-tabs-note { margin: 8px 18px 0; color: var(--bh-text-muted); font-size: 12px; line-height: 1.45; }
+.duel-map-badge strong.duel-map-badge-sign { font-size: clamp(18px, 2.6vw, 24px); }
+.duel-map-lane.is-favorable .duel-map-badge-sign { color: var(--bh-positive); }
+.duel-map-lane.is-risky .duel-map-badge-sign { color: var(--bh-negative); }
+@media (max-width: 480px) {
+  .duel-map-tabs { margin: 12px 10px 0; }
+  .duel-map-tabs button { padding: 7px 10px; font-size: 12px; }
+  .duel-map-tabs-note { margin: 8px 10px 0; }
+}
+
+/* "Abrir este draft no PL Prodigy": ao lado das abas do mapa. */
+.duel-map-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding-right: 18px; }
+.duel-map-toolbar .duel-map-tabs { flex: none; }
+.duel-map-pl { display: grid; max-width: 440px; gap: 4px; margin-top: 16px; }
+.duel-map-pl-link { justify-self: start; padding: 9px 14px; border: 1px solid var(--bh-gold); border-bottom-width: 3px; border-radius: 10px; background: rgba(6, 9, 16, .6); color: var(--bh-gold); font-size: 13px; font-weight: 800; text-decoration: none; }
+.duel-map-pl-link:active { transform: translateY(1px); border-bottom-width: 2px; }
+.duel-map-pl small { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
+@media (hover: hover) and (pointer: fine) { .duel-map-pl-link:hover { background: rgba(245, 197, 66, .12); } }
+@media (max-width: 480px) { .duel-map-toolbar { padding: 0 10px; } .duel-map-pl { margin-top: 10px; } }
+
+/* Elo do Brawl Planet: nos mapas e no Draft. */
+.seletor-elo { display: grid; gap: 6px; margin: 12px 0; }
+.seletor-elo-botoes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.seletor-elo-rotulo { margin-right: 4px; color: var(--bh-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.seletor-elo-botoes button { padding: 6px 12px; border: 1px solid var(--bh-line); border-radius: 999px; background: rgba(6, 9, 16, .55); color: var(--bh-text-muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.seletor-elo-botoes button.is-active { border-color: var(--bh-gold); background: var(--bh-gold); color: var(--bh-on-gold); }
+.seletor-elo-botoes button:disabled { opacity: .4; cursor: not-allowed; }
+.seletor-elo-nota { color: var(--bh-text-dim); font-size: 11px; line-height: 1.4; }
+@media (hover: hover) and (pointer: fine) { .seletor-elo-botoes button:not(:disabled):not(.is-active):hover { border-color: var(--bh-line-strong); color: var(--bh-text); } }
+
+/* ==========================================================================
+ * 13. QUADRO DO GENERAL (plano de batalha em 3D)
+ *
+ * O mapa em 3D à esquerda, as ordens à direita — como um general com o mapa
+ * aberto e o caderno ao lado. Em ecrãs estreitos, as ordens passam para baixo.
+ * ========================================================================== */
+.quadro-general {
+  /* Posicionado como a matriz 1v1: sem isto, o painel do draft (fixo ao
+     deslizar) desenhava-se por cima do quadro. */
+  position: relative;
+  margin: 18px 0;
+  padding: 20px;
+  border: 1px solid var(--bh-line-strong);
+  border-left: 2px solid var(--bh-info);
+  border-radius: var(--bh-radius);
+  background: linear-gradient(135deg, #0a1422, #0e101a);
+}
+.quadro-general-cabecalho { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.quadro-general-cabecalho h2 { margin: 8px 0 5px; color: var(--bh-text); font-family: "Barlow Condensed", sans-serif; font-size: 30px; line-height: .95; text-transform: uppercase; }
+.quadro-general-cabecalho p { max-width: 640px; margin: 0; color: var(--bh-text-dim); font-size: 12px; line-height: 1.55; }
+.quadro-general-ia { display: grid; gap: 6px; max-width: 340px; justify-items: end; }
+.quadro-general-ia small { color: var(--bh-text-muted); font-size: 11px; }
+.quadro-general-pedir {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid rgba(248, 184, 78, .6);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--bh-gold), var(--bh-gold-deep));
+  color: var(--bh-on-gold);
+  font-weight: 800;
+  cursor: pointer;
+}
+.quadro-general-pedir:disabled { opacity: .7; cursor: progress; }
+.quadro-general-chave { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.quadro-general-chave label { color: var(--bh-text); font-size: 12px; font-weight: 700; }
+.quadro-general-chave div { display: flex; gap: 6px; }
+.quadro-general-chave input { min-width: 0; flex: 1; min-height: 34px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .35); color: var(--bh-text); }
+.quadro-general-chave button { min-height: 34px; padding: 0 12px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(255, 255, 255, .06); color: var(--bh-text); cursor: pointer; }
+.quadro-general-chave a { color: var(--bh-info); }
+
+.quadro-general-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.quadro-general-grupo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--bh-line); border-radius: 10px; background: rgba(0, 0, 0, .25); }
+.quadro-general-grupo button,
+.quadro-general-repor {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--bh-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.quadro-general-grupo button:hover { color: var(--bh-text); background: rgba(255, 255, 255, .06); }
+.quadro-general-grupo button.is-active { color: var(--bh-text); background: rgba(55, 200, 255, .18); box-shadow: inset 0 0 0 1px rgba(55, 200, 255, .5); }
+.quadro-general-grupo button i { width: 14px; height: 4px; border-radius: 2px; }
+.quadro-general-grupo button b { font-size: 14px; }
+.quadro-general-dono { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; color: var(--bh-text-muted); font-size: 11px; }
+.quadro-general-dono select { min-height: 28px; border: 1px solid var(--bh-line-strong); border-radius: 6px; background: #0b1320; color: var(--bh-text); }
+.quadro-general-repor { margin-left: auto; border: 1px solid var(--bh-line); }
+.quadro-general-ajuda { margin: 8px 0 0; color: var(--bh-text-muted); font-size: 11px; }
+
+.quadro-general-corpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 16px; margin-top: 12px; align-items: start; }
+.quadro-general-palco-wrap { position: relative; min-width: 0; }
+.quadro3d-palco {
+  position: relative;
+  width: 100%;
+  height: clamp(420px, 72vh, 760px);
+  overflow: hidden;
+  border: 1px solid var(--bh-line-strong);
+  border-radius: 14px;
+  background: #0b1320;
+}
+.quadro3d-palco canvas { display: block; }
+.quadro3d-a-carregar { display: grid; place-items: center; color: var(--bh-text-muted); font-size: 13px; }
+.quadro-general-sem3d,
+.quadro-general-aviso { margin: 8px 0 0; color: var(--bh-warning); font-size: 12px; }
+.quadro-general-dica {
+  position: fixed;
+  z-index: 60;
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: 10px;
+  background: rgba(6, 9, 16, .96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+  color: var(--bh-text);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  transform: translate(16px, 16px);
+}
+.quadro-general-dica strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.quadro-general-dica p { margin: 3px 0 0; color: var(--bh-text-dim); }
+
+.quadro-general-ordens { display: grid; gap: 12px; max-height: clamp(420px, 72vh, 760px); overflow-y: auto; padding-right: 4px; }
+.quadro-general-vazio { margin: 0; padding: 14px; border: 1px dashed var(--bh-line-strong); border-radius: 10px; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
+.quadro-general-resumo { padding: 12px 14px; border-radius: 10px; background: rgba(248, 184, 78, .08); box-shadow: inset 2px 0 0 var(--bh-gold); }
+.quadro-general-resumo p { margin: 0; color: var(--bh-text); font-size: 13px; line-height: 1.5; }
+.quadro-general-resumo p + p { margin-top: 6px; }
+.quadro-general-resumo b { color: var(--bh-gold-soft); }
+.quadro-general-previsao,
+.quadro-general-simbolos { padding: 10px 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: rgba(0, 0, 0, .2); }
+.quadro-general-previsao > span,
+.quadro-general-simbolos > span { color: var(--bh-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.quadro-general-previsao ul { margin: 6px 0 0; padding-left: 16px; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
+.quadro-general-lista { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.quadro-general-lista > li { padding: 12px 14px; border: 1px solid rgba(55, 200, 255, .22); border-radius: 12px; background: linear-gradient(160deg, rgba(55, 200, 255, .07), rgba(0, 0, 0, .15)); }
+.quadro-general-lista header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.quadro-general-lista header strong { color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: 17px; font-weight: 400; }
+.quadro-general-lista header em { padding: 2px 8px; border-radius: 999px; background: rgba(55, 200, 255, .15); color: var(--bh-info); font-size: 11px; font-style: normal; font-weight: 700; }
+.quadro-general-lista p { margin: 6px 0 0; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
+.quadro-general-avancar b { color: var(--bh-positive); }
+.quadro-general-cuidados { margin: 6px 0 0; padding-left: 16px; color: #ffb3c0; font-size: 12px; line-height: 1.45; }
+.quadro-general-simbolos-do-brawler { display: grid; gap: 3px; margin: 8px 0 0; padding: 0; list-style: none; color: var(--bh-text-dim); font-size: 12px; }
+.quadro-general-simbolos-do-brawler b { display: inline-block; width: 18px; }
+.quadro-general-lista footer { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.quadro-general-build,
+.quadro-general-capacidade { padding: 3px 8px; border-radius: 6px; font-size: 11px; }
+.quadro-general-build { background: rgba(248, 184, 78, .1); color: var(--bh-gold-soft); }
+.quadro-general-capacidade { background: rgba(61, 220, 132, .12); color: var(--bh-positive); }
+.quadro-general-fases { display: grid; gap: 6px; padding: 10px 12px; border-radius: 10px; background: rgba(0, 0, 0, .2); }
+.quadro-general-fases p { margin: 0; color: var(--bh-text-dim); font-size: 12px; line-height: 1.5; }
+.quadro-general-fases b { color: var(--bh-text); }
+.quadro-general-simbolos ul { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.quadro-general-simbolos li { display: grid; grid-template-columns: 18px minmax(0, 1fr) 26px; align-items: center; gap: 6px; }
+.quadro-general-simbolos input { min-width: 0; min-height: 28px; padding: 0 8px; border: 1px solid var(--bh-line); border-radius: 6px; background: rgba(0, 0, 0, .3); color: var(--bh-text); font-size: 12px; }
+.quadro-general-simbolos button { min-height: 26px; border: 1px solid var(--bh-line); border-radius: 6px; background: transparent; color: var(--bh-text-dim); cursor: pointer; }
+.quadro-general-terreno { padding: 10px 12px; border: 1px solid var(--bh-line); border-radius: 10px; color: var(--bh-text-dim); font-size: 12px; }
+.quadro-general-terreno summary { color: var(--bh-text); cursor: pointer; }
+.quadro-general-terreno ul { display: grid; gap: 4px; margin: 8px 0; padding: 0; list-style: none; }
+.quadro-general-terreno li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.quadro-general-terreno i { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2); }
+.quadro-general-terreno select { min-height: 26px; border: 1px solid var(--bh-line-strong); border-radius: 6px; background: #0b1320; color: var(--bh-text); }
+.quadro-general-terreno button { min-height: 30px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(255, 255, 255, .05); color: var(--bh-text); cursor: pointer; }
+
+@media (max-width: 1100px) {
+  .quadro-general-corpo { grid-template-columns: 1fr; }
+  .quadro-general-ordens { max-height: none; overflow: visible; }
+}
+@media (max-width: 700px) {
+  .quadro-general { padding: 16px 12px; }
+  .quadro-general-ia { justify-items: stretch; max-width: none; width: 100%; }
+  .quadro3d-palco { height: 460px; }
+  .quadro-general-repor { margin-left: 0; }
+}
+.quadro-general-fontes { padding: 10px 12px; border: 1px solid var(--bh-line); border-radius: 10px; color: var(--bh-text-dim); font-size: 12px; }
+.quadro-general-fontes summary { color: var(--bh-text); cursor: pointer; }
+.quadro-general-fontes ul { margin: 8px 0 0; padding-left: 16px; line-height: 1.5; }
+.quadro-general-fontes a { color: var(--bh-info); overflow-wrap: anywhere; }
+.quadro-general-camara {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, 36px);
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--bh-line-strong);
+  border-radius: 10px;
+  background: rgba(6, 9, 16, .82);
+}
+.quadro-general-camara button { width: 36px; height: 32px; border: 1px solid var(--bh-line); border-radius: 7px; background: rgba(255, 255, 255, .05); color: var(--bh-text); font-size: 16px; cursor: pointer; }
+.quadro-general-camara button:hover { background: rgba(55, 200, 255, .2); }
+
+/* Painel do general, compacto: lê-se em 20 segundos. Cores com significado:
+   ouro = como ganhar, verde = avançar/ganhas, vermelho = perigo/perdes,
+   azul = capacidades, amarelo = equilibrado. */
+.quadro-general-interruptor { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--bh-text-dim); font-size: 12px; cursor: pointer; }
+.quadro-general-interruptor + .quadro-general-repor { margin-left: 0; }
+.qg-titulo { display: block; margin-bottom: 6px; color: var(--bh-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.qg-resumo { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: linear-gradient(135deg, rgba(248, 184, 78, .14), rgba(248, 184, 78, .04)); box-shadow: inset 3px 0 0 var(--bh-gold); }
+.qg-resumo strong { color: var(--bh-text); font-size: 15px; line-height: 1.35; }
+.qg-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.qg-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.3; }
+.qg-chip--ouro { justify-self: start; background: rgba(248, 184, 78, .18); color: var(--bh-gold-soft); }
+.qg-chip--verde { background: rgba(61, 220, 132, .15); color: #7ef0ae; }
+.qg-chip--vermelho { background: rgba(255, 77, 109, .15); color: #ff9fb0; }
+.qg-chip--azul { background: rgba(55, 200, 255, .15); color: #8fdcff; }
+
+.qg-retrato { display: inline-grid; flex: none; width: 34px; height: 34px; place-items: center; overflow: hidden; border: 2px solid; border-radius: 50%; background: #0b1320; color: var(--bh-text); font-size: 11px; font-weight: 800; }
+.qg-retrato img { width: 100%; height: 100%; object-fit: cover; }
+.qg-retrato--nos { border-color: #37c8ff; }
+.qg-retrato--eles { border-color: #ff4d6d; }
+
+.qg-duelos { padding: 10px 12px; border: 1px solid var(--bh-line); border-radius: 12px; background: rgba(0, 0, 0, .22); }
+.qg-duelo { display: grid; grid-template-columns: 62px 34px minmax(0, 1fr) 34px; align-items: center; gap: 8px; padding: 4px 0; }
+.qg-duelo + .qg-duelo { border-top: 1px solid var(--bh-line); }
+.qg-duelo small { color: var(--bh-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.qg-duelo b { justify-self: center; padding: 2px 10px; border-radius: 999px; font-size: 14px; }
+.qg-duelo--ganha b { background: rgba(61, 220, 132, .16); color: #7ef0ae; }
+.qg-duelo--perde b { background: rgba(255, 77, 109, .16); color: #ff9fb0; }
+.qg-duelo--igual b { background: rgba(255, 210, 63, .14); color: #ffe07a; }
+
+.qg-ordens { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.qg-ordens > li { padding: 10px 12px; border: 1px solid rgba(55, 200, 255, .25); border-radius: 12px; background: linear-gradient(160deg, rgba(55, 200, 255, .08), rgba(0, 0, 0, .15)); }
+.qg-ordens header { display: flex; align-items: center; gap: 10px; }
+.qg-ordens header div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-width: 0; }
+.qg-ordens header strong { color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: 17px; font-weight: 400; }
+.qg-ordens header em { padding: 2px 9px; border-radius: 999px; background: #37c8ff; color: #06101c; font-size: 11px; font-style: normal; font-weight: 800; }
+.qg-objetivo { margin: 7px 0 0; color: var(--bh-text); font-size: 13px; line-height: 1.4; }
+.qg-build { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.qg-item { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 8px 3px 3px; border-radius: 999px; background: rgba(255, 255, 255, .06); }
+.qg-item img, .qg-item i { display: grid; width: 26px; height: 26px; place-items: center; object-fit: contain; font-style: normal; }
+.qg-item small { overflow: hidden; color: var(--bh-text-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.qg-item--gadget { box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .35); }
+.qg-item--poder { box-shadow: inset 0 0 0 1px rgba(255, 210, 63, .4); }
+.qg-item--engrenagem { box-shadow: inset 0 0 0 1px rgba(143, 220, 255, .35); }
+
+.qg-previsao { padding: 10px 12px; border-radius: 12px; background: rgba(255, 77, 109, .08); box-shadow: inset 3px 0 0 #ff4d6d; }
+.qg-previsao ul { margin: 0; padding-left: 16px; color: #ffc2cd; font-size: 12px; line-height: 1.45; }
+.qg-fases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.qg-fases li { display: grid; gap: 3px; padding: 8px; border-radius: 10px; background: rgba(0, 0, 0, .25); }
+.qg-fases b { color: var(--bh-gold-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.qg-fases span { color: var(--bh-text-dim); font-size: 12px; line-height: 1.35; }
+.quadro-general-simbolos summary { color: var(--bh-text); cursor: pointer; font-size: 12px; }
+@media (max-width: 700px) {
+  .qg-fases { grid-template-columns: 1fr; }
+  .quadro-general-interruptor { margin-left: 0; }
+}
+.quadro-general-interruptor--seguinte { margin-left: 0; }
+.qg-chip--gadget { background: rgba(61, 220, 132, .1); color: #b6f5cf; box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .35); }
+/* Os três momentos da partida (início, meio, fim) e as ameaças. */
+.qg-momentos { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-top: 12px; }
+.qg-momento { display: grid; gap: 2px; min-width: 96px; padding: 8px 14px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(255, 255, 255, .04); color: var(--bh-text-dim); text-align: left; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.qg-momento b { color: var(--bh-text); font-size: 13px; }
+.qg-momento small { font-size: 11px; }
+.qg-momento.is-active { border-color: var(--bh-gold); background: rgba(248, 184, 78, .14); }
+.qg-momento.is-active b { color: var(--bh-gold-soft); }
+.qg-momento-partidas { color: #ffb38a; }
+.qg-reproduzir { padding: 8px 14px; border: 1px solid rgba(55, 200, 255, .4); border-radius: 12px; background: rgba(55, 200, 255, .12); color: #8fdcff; font-weight: 800; cursor: pointer; }
+.qg-momento-texto { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, .25); }
+.qg-momento-texto strong { margin-right: 4px; color: var(--bh-text); font-size: 13px; }
+.qg-chip--ameaca { background: rgba(255, 77, 109, .1); color: #ffc2cd; box-shadow: inset 0 0 0 1px rgba(255, 77, 109, .45); }
+.qg-previsao--nossa { background: rgba(55, 200, 255, .08); box-shadow: inset 3px 0 0 #37c8ff; }
+.qg-previsao--nossa ul { color: #bfeaff; }
+@media (max-width: 700px) {
+  .qg-momento { flex: 1 1 28%; min-width: 0; }
+  .qg-reproduzir { flex: 1 1 100%; }
+}
+/* A IA de reserva (Groq ou OpenRouter): discreta, fechada por defeito. */
+.quadro-general-reserva { justify-self: stretch; min-width: 0; margin-top: 6px; }
+.quadro-general-reserva summary { color: var(--bh-text-dim); font-size: 12px; cursor: pointer; }
+.quadro-general-reserva[open] summary { margin-bottom: 6px; }
+.quadro-general-escolha { display: grid; gap: 8px; }
+.quadro-general-escolha label { display: grid; gap: 3px; font-size: 12px; color: var(--bh-text-dim); }
+.quadro-general-chave select { flex: 0 1 150px; min-width: 0; min-height: 34px; padding: 0 8px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .35); color: var(--bh-text); }
+@media (max-width: 520px) { .quadro-general-chave div { flex-wrap: wrap; } .quadro-general-chave select { flex-basis: 100%; } }
+.quadro-general-reservas { display: grid; gap: 4px; margin: 0 0 8px; padding: 0; list-style: none; }
+.quadro-general-reservas li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; border: 1px solid var(--bh-line); border-radius: 8px; font-size: 12px; color: var(--bh-text); }
+.quadro-general-reservas code { color: var(--bh-text-dim); }
+.quadro-general-reservas button { min-height: 28px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(255, 255, 255, .06); color: var(--bh-text); cursor: pointer; }
+.quadro-general-escolha select { width: 100%; max-width: 100%; padding: 6px 8px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .3); color: var(--bh-text); }

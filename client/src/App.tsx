@@ -1,3 +1,4 @@
+import { MotionConfig } from "framer-motion";
 import { DraftRolesProvider } from "./contexts/DraftRolesContext";
 /*
  * Brawl Híbrido — app shell.
@@ -49,7 +50,16 @@ export default function App() {
             <TooltipProvider>
             <VersaoDoSite />
             <Toaster theme="dark" position="bottom-right" />
-            <DraftRolesProvider><Router /></DraftRolesProvider>
+            {/*
+              Sem isto, nenhuma animação do Framer Motion no site respeitava
+              quem pediu ao sistema menos movimento: as do CSS tinham o seu
+              bloco `prefers-reduced-motion`, estas não tinham nada. "user"
+              segue a preferência do sistema — corta as deslocações e deixa
+              as mudanças de opacidade, que ajudam a perceber o que mudou.
+            */}
+            <MotionConfig reducedMotion="user">
+              <DraftRolesProvider><Router /></DraftRolesProvider>
+            </MotionConfig>
             </TooltipProvider>
           </RankedSyncProvider>
         </CounterSyncProvider>

@@ -850,9 +850,12 @@ describe("draft engine", () => {
     expect(redundantSingle.bonusSources.counterBonusTargets).toEqual(["Bea"]);
     expect(redundantSingle.scoreBreakdown.counterPoints)
       .toBeCloseTo(expectedCounterPoints(redundantSingle.scoreBreakdown.hybridPoints, "Brock", ["Bea"]), 6);
-    // A frase de auditoria continua a existir, agora como informação e não como corte.
+    // A frase de auditoria continua a existir, agora como informação e não como
+    // corte — e passou a dizer qual dos dois casos está à frente, porque com a
+    // regra opcional "resposta já coberta" ligada o bónus é mesmo retirado.
     expect(redundantSingle.scoreBreakdown.activeBonuses)
-      .toContain("Resposta já coberta (Bea também counterado por Angelo)");
+      .toContain("Resposta já coberta · bónus mantido (Bea também counterado por Angelo)");
+    expect(redundantSingle.bonusSources.suppressedCounterTargets).toEqual([]);
   });
 
   it("keeps every literal Counter Top relation as a pre-pick risk without changing the score", () => {

@@ -1,0 +1,345 @@
+/*
+ * v143 — a arrumação nova: menu em cima e o Draft num só ecrã.
+ *
+ * Esta folha vem por último (main.tsx) e só mexe no que tem as classes novas
+ * (`.barra-do-site`, `.com-barra-no-topo`, `.draft-mesa`…). O resto do site
+ * continua com as regras de sempre.
+ *
+ * O tom: superfícies lisas, cantos redondos, cor só onde diz alguma coisa
+ * (azul e vermelho das equipas, âmbar na ação). Sem brilhos, sem etiquetas em
+ * maiúsculas a anunciar a secção — o conteúdo diz o que é.
+ */
+:root {
+  --time-azul: #4aa3ff;
+  --time-azul-fundo: rgba(74, 163, 255, .12);
+  --time-vermelha: #ff5a5f;
+  --time-vermelha-fundo: rgba(255, 90, 95, .12);
+  --mesa-fundo: rgba(15, 21, 40, .92);
+  --mesa-borda: rgba(255, 255, 255, .08);
+}
+
+/* ------------------------------------------------------------------ *
+ * A barra de cima
+ * ------------------------------------------------------------------ */
+.barra-do-site {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 58px;
+  /* À direita fica o carimbo da versão, fixo por cima de tudo. */
+  padding: 0 72px 0 20px;
+  background: rgba(8, 12, 26, .94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--mesa-borda);
+}
+.barra-do-site-marca { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; color: var(--bh-text); text-decoration: none; font-family: "Lilita One", sans-serif; font-size: 19px; letter-spacing: .01em; }
+.barra-do-site-marca img { width: 32px; height: 32px; border-radius: 8px; }
+.barra-do-site-destinos { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.barra-do-site-destinos::-webkit-scrollbar { display: none; }
+.barra-do-site-destinos a { padding: 8px 12px; border-radius: 8px; color: var(--bh-text-muted); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: color .15s ease, background .15s ease; }
+.barra-do-site-destinos a:hover { color: var(--bh-text); background: rgba(255, 255, 255, .05); }
+.barra-do-site-destinos a.is-active { color: var(--bh-text); background: rgba(255, 255, 255, .07); box-shadow: inset 0 -2px 0 var(--bh-gold); }
+.barra-do-site-acoes { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.barra-do-site-acoes .live-chip { border-radius: 999px; }
+.barra-do-site-acoes .refresh-button { min-height: 34px; border-radius: 9px; font-size: 12px; }
+.barra-do-site-acoes .icon-button { border-radius: 9px; }
+
+.com-barra-no-topo .app-main { width: 100%; margin-left: 0; }
+
+@media (max-width: 900px) {
+  /* No telemóvel os destinos estão na barra de baixo, à mão do polegar. */
+  .barra-do-site { height: 52px; gap: 10px; padding: 0 64px 0 12px; }
+  .barra-do-site-destinos { display: none; }
+  .barra-do-site-marca span { font-size: 17px; }
+  .barra-do-site-acoes .live-chip { display: none; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Draft: a folha inteira
+ * ------------------------------------------------------------------ */
+.draft-shell.com-barra-no-topo .draft-main { max-width: 1480px; margin: 0 auto; padding: 14px 20px 40px; gap: 12px; }
+.draft-shell.com-barra-no-topo .draft-content { display: flex; flex-direction: column; gap: 16px; padding: 0; }
+.draft-shell.com-barra-no-topo .draft-content > * { order: 0; margin: 0; min-width: 0; }
+
+/* A linha de controlo: mapa, elo, quem começa, a tua equipa, ajustes. */
+.draft-shell.com-barra-no-topo .draft-contextbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--mesa-borda);
+  border-radius: 14px;
+  background: var(--mesa-fundo);
+  box-shadow: none;
+}
+.draft-contextbar .mesa-mapa { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(0, 0, 0, .25); color: var(--bh-text); }
+.draft-contextbar .mesa-mapa select { min-width: 190px; appearance: none; border: 0; outline: 0; background: transparent; color: var(--bh-text); font-size: 15px; font-weight: 700; cursor: pointer; }
+.draft-contextbar .mesa-mapa select option { background: var(--bh-surface); }
+.mesa-escolha { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--mesa-borda); border-radius: 10px; background: rgba(0, 0, 0, .2); }
+.mesa-escolha > span { padding: 0 6px 0 8px; color: var(--bh-text-dim); font-size: 12px; }
+.mesa-escolha button { min-height: 30px; padding: 0 12px; border-radius: 7px; background: transparent; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; cursor: pointer; }
+.mesa-escolha button:hover { color: var(--bh-text); }
+.mesa-escolha button.is-active.blue { color: #fff; background: var(--time-azul); }
+.mesa-escolha button.is-active.red { color: #fff; background: var(--time-vermelha); }
+.mesa-ajustes { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.mesa-ajustes button { min-height: 28px; padding: 0 10px; border: 1px solid var(--mesa-borda); border-radius: 999px; background: transparent; color: var(--bh-text-muted); font-size: 12px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.mesa-ajustes button:hover { color: var(--bh-text); border-color: var(--bh-line-strong); }
+
+/* ------------------------------------------------------------------ *
+ * A mesa: Azul | centro | Vermelha
+ * ------------------------------------------------------------------ */
+.draft-shell.com-barra-no-topo .draft-mesa { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--mesa-borda); border-radius: 16px; background: var(--mesa-fundo) !important; box-shadow: none; overflow: visible; }
+
+/* De quem é a vez, em grande, com a cor da equipa. */
+.mesa-vez { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, .04); border-left: 4px solid var(--bh-text-dim); }
+.mesa-vez.vez-blue { border-left-color: var(--time-azul); background: var(--time-azul-fundo); }
+.mesa-vez.vez-red { border-left-color: var(--time-vermelha); background: var(--time-vermelha-fundo); }
+.mesa-vez.vez-fim { border-left-color: var(--bh-positive); }
+.mesa-vez-texto { display: grid; gap: 1px; min-width: 180px; }
+.mesa-vez-texto strong { color: var(--bh-text); font-size: 18px; font-weight: 800; }
+.mesa-vez-texto small { color: var(--bh-text-dim); font-size: 12px; }
+.mesa-vez .progress-steps { flex: 1 1 220px; display: grid; grid-template-columns: repeat(auto-fit, minmax(8px, 1fr)); gap: 4px; }
+.mesa-vez .progress-step { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .1); box-shadow: none; }
+.mesa-vez .progress-step.is-done.team-blue { background: var(--time-azul); }
+.mesa-vez .progress-step.is-done.team-red { background: var(--time-vermelha); }
+.mesa-vez .progress-step.is-skipped { background: rgba(255, 255, 255, .25); }
+.mesa-vez .progress-step.is-current { background: var(--bh-gold); box-shadow: 0 0 0 2px rgba(255, 192, 46, .25); }
+.mesa-vez .progress-count { color: var(--bh-text-muted); font-size: 13px; font-weight: 700; }
+.mesa-vez .draft-voice-button,
+.mesa-vez .draft-skip-button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid var(--bh-line-strong); border-radius: 9px; background: rgba(0, 0, 0, .25); color: var(--bh-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.mesa-vez .draft-voice-button:disabled,
+.mesa-vez .draft-skip-button:disabled { opacity: .45; cursor: default; }
+
+.mesa-grelha { display: grid; grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(210px, 250px); gap: 12px; align-items: start; }
+
+/* As equipas, dos lados. */
+.draft-mesa .team-board { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--mesa-borda); border-radius: 14px; background: rgba(0, 0, 0, .18); box-shadow: none; }
+.draft-mesa .team-board.blue { border-top: 3px solid var(--time-azul); }
+.draft-mesa .team-board.red { border-top: 3px solid var(--time-vermelha); }
+.draft-mesa .team-heading { padding: 0; border: 0; gap: 8px; }
+.draft-mesa .team-kicker { display: none; }
+.draft-mesa .team-color-dot { display: none; }
+.draft-mesa .team-heading h3 { margin: 0; font-family: "Lilita One", sans-serif; font-size: 22px; letter-spacing: .01em; text-transform: none; }
+.draft-mesa .team-board.blue .team-heading h3 { color: var(--time-azul); }
+.draft-mesa .team-board.red .team-heading h3 { color: var(--time-vermelha); }
+.draft-mesa .team-perspective { padding: 2px 8px; border-radius: 999px; font-size: 10px; letter-spacing: .02em; }
+.draft-mesa .team-count { font-size: 12px; }
+.draft-mesa .team-lane { display: grid; gap: 6px; padding: 0; border: 0; background: transparent; }
+.draft-mesa .lane-label { display: flex; justify-content: space-between; color: var(--bh-text-dim); font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.draft-mesa .lane-label small { display: none; }
+.draft-mesa .ban-lane .slot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.draft-mesa .pick-lane .slot-grid { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.draft-mesa .draft-slot { min-height: 44px; border-radius: 10px; }
+.draft-mesa .pick-lane .draft-slot { min-height: 54px; }
+.draft-mesa .ban-lane .draft-slot { justify-content: center; padding: 4px; }
+.draft-mesa .ban-lane .draft-slot .slot-copy small,
+.draft-mesa .ban-lane .draft-slot .slot-remove { display: none; }
+.draft-mesa .ban-lane .draft-slot .slot-copy strong { font-size: 11px; }
+.draft-mesa .ban-lane .filled-slot { flex-direction: column; gap: 2px; }
+.draft-mesa .ban-lane .filled-slot .slot-image { width: 30px; height: 30px; filter: grayscale(.7); }
+.draft-mesa .draft-slot.empty-slot.is-active { border-style: solid; border-color: var(--bh-gold); box-shadow: 0 0 0 2px rgba(255, 192, 46, .18); }
+
+/* O centro: hipótese de vitória, abas, sugestões. */
+.mesa-centro { display: grid; gap: 10px; min-width: 0; }
+.draft-probability-center.is-compacto { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 4px; border: 0; background: transparent; box-shadow: none; text-align: left; }
+.draft-probability-center.is-compacto strong { font-size: 16px; font-weight: 800; }
+.draft-probability-center.is-compacto strong.blue { color: var(--time-azul); }
+.draft-probability-center.is-compacto strong.red { color: var(--time-vermelha); }
+.draft-probability-center.is-compacto .draft-probability-track { display: flex; height: 8px; overflow: hidden; border-radius: 4px; background: rgba(255, 255, 255, .08); }
+.draft-probability-center.is-compacto .blue-fill { display: block; height: 100%; background: var(--time-azul); }
+.draft-probability-center.is-compacto .red-fill { display: block; height: 100%; background: var(--time-vermelha); }
+
+.mesa-abas { display: flex; gap: 4px; padding: 3px; border-radius: 11px; background: rgba(0, 0, 0, .25); }
+.mesa-abas button { flex: 1 1 0; min-height: 32px; padding: 0 10px; border-radius: 8px; background: transparent; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.mesa-abas button.is-active { color: var(--bh-text); background: rgba(255, 255, 255, .09); }
+
+.draft-shell.com-barra-no-topo .mesa-centro .recommendations-section { display: grid; gap: 8px; padding: 0; border: 0; background: transparent !important; box-shadow: none; overflow: visible; }
+.mesa-centro .recommendation-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; }
+.mesa-centro .draft-search { flex: 1 1 180px; display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(0, 0, 0, .25); }
+.mesa-centro .draft-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--bh-text); font-size: 14px; }
+.mesa-centro .draft-role-filter { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(0, 0, 0, .25); }
+.mesa-centro .draft-role-filter button { min-height: 30px; padding: 0 10px; border-radius: 7px; background: transparent; color: var(--bh-text-muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.mesa-centro .draft-role-filter button.is-active { color: var(--bh-on-gold); background: var(--bh-gold); }
+.mesa-ordem select { min-height: 34px; padding: 0 8px; border: 1px solid var(--bh-line-strong); border-radius: 9px; background: rgba(0, 0, 0, .25); color: var(--bh-text); font-size: 12px; cursor: pointer; }
+.mesa-centro .pick-details-toggle { min-height: 34px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 9px; background: transparent; color: var(--bh-text-muted); font-size: 12px; cursor: pointer; }
+.mesa-aviso { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-radius: 9px; background: rgba(255, 179, 64, .1); color: var(--bh-warning); font-size: 12px; }
+
+/* As sugestões: duas colunas de cartões baixos. */
+.mesa-centro .draft-recommendation-list.is-compact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.mesa-centro .draft-recommendation-list.is-compact .draft-recommendation { min-height: 58px; grid-template-columns: 22px 40px minmax(0, 1fr) auto; gap: 8px; padding: 7px 10px; border-radius: 11px; }
+.mesa-centro .is-compact .recommendation-avatar { width: 40px; height: 40px; border-radius: 9px; }
+.mesa-centro .is-compact .recommendation-main > strong { font-size: 15px; }
+.mesa-centro .is-compact .recommendation-main > small { font-size: 11px; }
+.mesa-centro .is-compact .pick-brief { display: none; }
+.mesa-centro .is-compact .recommendation-metrics { text-align: right; }
+.mesa-centro .is-compact .recommendation-metrics b { font-size: 20px; }
+.mesa-centro .is-compact .recommendation-metrics small { font-size: 9px; }
+.mesa-centro .roster-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; }
+.mesa-centro .roster-pagination button { min-width: 30px; min-height: 30px; padding: 0 8px; border-radius: 8px; }
+.mesa-centro .roster-pagination span { margin-left: auto; color: var(--bh-text-dim); font-size: 12px; }
+.mesa-centro .draft-arena-map-teams { padding: 4px 2px; border: 0; background: transparent; }
+.mesa-centro .signal-radar-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+/* ------------------------------------------------------------------ *
+ * Depois do draft: um só mapa (o 3D) e os pontos dos duelos
+ * ------------------------------------------------------------------ */
+.draft-final { display: grid; gap: 16px; scroll-margin-top: 70px; }
+.lane-matchup-desk.is-sem-mapa { padding: 14px 16px; border-radius: 16px; }
+.lane-matchup-desk.is-sem-mapa .coach-desk-header { padding: 0 0 8px; border: 0; }
+.lane-matchup-desk.is-sem-mapa .coach-desk-header h2 { margin: 0; font-size: 20px; }
+.lane-matchup-desk.is-sem-mapa .duel-map-toolbar { justify-content: flex-start; }
+
+/* ------------------------------------------------------------------ *
+ * O painel dos ajustes (abre ao lado)
+ * ------------------------------------------------------------------ */
+.mesa-painel { overflow-y: auto; background: var(--bh-ground); color: var(--bh-text); border-left: 1px solid var(--mesa-borda); }
+.mesa-painel-corpo { display: grid; gap: 12px; padding: 0 16px 24px; }
+.mesa-painel-corpo .draft-rules-panel,
+.mesa-painel-corpo .fold-panel,
+.mesa-painel-corpo .scrim-setup-panel { display: block; margin: 0; }
+.mesa-painel-nota { margin: 0; color: var(--bh-text-muted); font-size: 13px; }
+.mesa-painel-nota a { color: var(--bh-info); }
+.mesa-painel-lista { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--bh-text-muted); font-size: 13px; }
+
+/* ------------------------------------------------------------------ *
+ * Ecrãs mais pequenos
+ * ------------------------------------------------------------------ */
+@media (max-width: 1100px) {
+  .mesa-grelha { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mesa-grelha > .mesa-centro { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 700px) {
+  .draft-shell.com-barra-no-topo .draft-main { padding: 10px 10px 90px; }
+  .draft-contextbar .mesa-mapa { flex: 1 1 100%; }
+  .draft-contextbar .mesa-mapa select { flex: 1; min-width: 0; }
+  .mesa-ajustes { margin-left: 0; }
+  .draft-shell.com-barra-no-topo .draft-mesa { padding: 8px; }
+  .mesa-grelha { gap: 8px; }
+  .draft-mesa .team-board { padding: 8px; }
+  .draft-mesa .team-heading-meta .team-count { display: none; }
+  .draft-mesa .pick-lane .draft-slot { min-height: 46px; }
+  .mesa-centro .draft-recommendation-list.is-compact { grid-template-columns: minmax(0, 1fr); }
+  .mesa-centro .signal-radar-grid { grid-template-columns: minmax(0, 1fr); }
+  .mesa-abas button { font-size: 12px; padding: 0 6px; }
+  .mesa-vez .progress-steps { flex-basis: 100%; order: 3; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Acertos depois de ver no ecrã
+ * ------------------------------------------------------------------ */
+.draft-shell.com-barra-no-topo .draft-contextbar .mesa-mapa { flex: 0 1 300px; width: auto; max-width: 100%; }
+.draft-shell.com-barra-no-topo .draft-contextbar .mesa-mapa select { flex: 1; min-width: 0; }
+.draft-contextbar .seletor-elo { display: inline-flex; margin: 0; padding: 0; border: 0; background: transparent; }
+.draft-contextbar .seletor-elo-nota { display: none; }
+.draft-contextbar .seletor-elo-botoes { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--mesa-borda); border-radius: 10px; background: rgba(0, 0, 0, .2); }
+.draft-contextbar .seletor-elo-rotulo { padding: 0 6px 0 8px; color: var(--bh-text-dim); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.draft-contextbar .seletor-elo-botoes button { min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--bh-text-muted); font-size: 12px; font-weight: 700; }
+.draft-contextbar .seletor-elo-botoes button.is-active { color: var(--bh-on-gold); background: var(--bh-gold); }
+.draft-contextbar .seletor-elo-botoes button:disabled { opacity: .4; }
+.draft-shell.com-barra-no-topo .draft-content,
+.draft-shell.com-barra-no-topo .draft-mesa,
+.draft-shell.com-barra-no-topo .draft-final { width: 100%; max-width: none; margin-inline: 0; }
+.draft-mesa .ban-lane .skipped-slot .slot-copy { display: none; }
+.draft-mesa .team-perspective { text-transform: none; font-weight: 700; }
+
+/* O painel das regras: só os controlos, sem os parágrafos de explicação. */
+.mesa-painel .draft-rules-panel { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.mesa-painel .draft-rules-panel-head { padding: 0 0 8px; border: 0; background: transparent; }
+.mesa-painel .draft-rules-panel-head .section-kicker,
+.mesa-painel .draft-rules-panel-head p,
+.mesa-painel .draft-rules-body > p,
+.mesa-painel .draft-rules-section > p { display: none; }
+.mesa-painel .draft-rules-body { padding: 0; font-size: 13px; }
+.mesa-painel .draft-rules-section { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--mesa-borda); border-radius: 12px; }
+.mesa-painel .draft-rules-section legend { padding: 0 4px; font-size: 13px; }
+.mesa-painel small { font-size: 11px; line-height: 1.4; }
+
+/* O rodapé do Draft era um slogan. */
+.draft-shell.com-barra-no-topo .app-footer { display: none; }
+.draft-shell.com-barra-no-topo .draft-contextbar { justify-content: flex-start; }
+.mesa-ajustes-botao { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-left: auto; padding: 0 12px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(0, 0, 0, .2); color: var(--bh-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.mesa-ajustes-botao:hover { border-color: var(--bh-text-dim); }
+.mesa-ajustes-lista { min-width: 220px; }
+
+/* ------------------------------------------------------------------ *
+ * Início: a entrada mais baixa, para o mapa aparecer sem rolar tanto
+ * ------------------------------------------------------------------ */
+.com-barra-no-topo .hero-panel { min-height: 0; }
+.com-barra-no-topo .hero-content { padding-top: 30px; padding-bottom: 30px; }
+.com-barra-no-topo .hero-content h1 { margin: 12px 0 14px; font-size: clamp(38px, 4.4vw, 64px); }
+.com-barra-no-topo .intro-row { margin-bottom: 14px; }
+.com-barra-no-topo .main-content { padding-top: 24px; }
+
+/* Os destinos em cima: a barra lateral já não existe. */
+.com-barra-no-topo .app-sidebar,
+.com-barra-no-topo .mobile-menu-button { display: none; }
+
+/* Painel de funções (Ajustes do Draft): uma linha por brawler. */
+.funcoes-painel { display: grid; gap: 8px; }
+.funcoes-procurar { min-height: 36px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 9px; background: rgba(0, 0, 0, .25); color: var(--bh-text); }
+.funcoes-lista { display: grid; gap: 2px; }
+.funcoes-linha { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; font-size: 13px; }
+.funcoes-linha:nth-child(odd) { background: rgba(255, 255, 255, .03); }
+.funcoes-linha label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.funcoes-linha select { min-height: 28px; padding: 0 6px; border: 1px solid var(--bh-line-strong); border-radius: 7px; background: var(--bh-surface); color: var(--bh-text); font-size: 12px; }
+.funcoes-linha button { width: 28px; height: 28px; border: 1px solid var(--mesa-borda); border-radius: 7px; background: transparent; color: var(--bh-text-muted); cursor: pointer; }
+
+/* O painel por cima do carimbo da versão, para o X de fechar ficar à vista. */
+.mesa-painel { z-index: 70; }
+/* "Ordem do draft" foi desenhado para a largura da página: no painel, numa coluna. */
+.mesa-painel .scrim-setup-panel { width: 100%; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.mesa-painel .scrim-setup-heading { display: none; }
+.mesa-painel .scrim-setup-controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.mesa-painel .scrim-setup-controls select { width: 100%; }
+.mesa-painel .scrim-sequence-preview { display: flex; flex-wrap: wrap; gap: 4px; }
+.mesa-painel .scrim-sequence-list { max-width: 100%; }
+
+/* Brawlers: uma linha de estado em vez de um cartão com um parágrafo. */
+.com-barra-no-topo p.brawlers-status-banner { justify-content: flex-start; gap: 8px; margin: 0 0 1rem; padding: 8px 12px; color: var(--bh-text-dim); font-size: 13px; }
+.com-barra-no-topo .brawlers-hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mesa-vez-texto strong.bh-display { font-size: 21px; font-weight: 400; letter-spacing: .01em; }
+.quadro-general-marcar { display: flex; align-items: center; gap: 8px; color: var(--bh-text-muted); font-size: 12px; cursor: pointer; }
+.quadro-general-marcar input { width: 16px; height: 16px; accent-color: var(--bh-gold); }
+
+/* Abas das páginas (Início, Brawlers, ficha): uma secção de cada vez. */
+.inicio-abas { display: flex; flex-wrap: wrap; gap: 4px; margin: 20px 0 16px; padding: 4px; border: 1px solid var(--mesa-borda); border-radius: 12px; background: rgba(0, 0, 0, .25); scroll-margin-top: 70px; }
+.inicio-abas button { flex: 1 1 auto; min-height: 38px; padding: 0 14px; border-radius: 9px; background: transparent; color: var(--bh-text-muted); font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.inicio-abas button:hover { color: var(--bh-text); }
+.inicio-abas button.is-active { color: var(--bh-on-gold); background: var(--bh-gold); }
+.com-barra-no-topo .inicio-abas + section,
+.com-barra-no-topo .inicio-abas + .data-section { margin-top: 0; }
+@media (max-width: 700px) { .inicio-abas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .inicio-abas button { flex: 0 0 auto; font-size: 13px; } }
+.ficha-contexto { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 16px 0 0; padding: 10px 12px; border: 1px solid var(--mesa-borda); border-radius: 12px; background: rgba(0, 0, 0, .2); }
+.ficha-contexto .source-link-stack { display: flex; flex-wrap: wrap; gap: 6px; }
+.ficha-contexto .source-link-stack a { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--mesa-borda); border-radius: 999px; color: var(--bh-text-muted); font-size: 12px; text-decoration: none; }
+.com-barra-no-topo .profile-metrics span { text-transform: none; letter-spacing: 0; }
+
+/* Matriz: a entrada mais baixa. */
+.observed-matrix-page .observed-hero { padding-top: 28px; padding-bottom: 20px; }
+.observed-matrix-page .observed-hero h1 { margin: 0 0 10px; font-size: clamp(34px, 4vw, 54px); line-height: 1; }
+.ver-todos { grid-column: 1 / -1; justify-self: center; min-height: 38px; margin: 12px auto 0; padding: 0 18px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(0, 0, 0, .25); color: var(--bh-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.observed-row-section .ver-todos { display: block; }
+
+/* ------------------------------------------------------------------ *
+ * A cena de cinema do mapa 3D: faixas pretas, vinheta e uma legenda
+ * de cada vez, a entrar devagar.
+ * ------------------------------------------------------------------ */
+.qg-cinema { position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; overflow: hidden;
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, .75); }
+.qg-cinema::before,
+.qg-cinema::after { content: ""; position: absolute; left: 0; right: 0; height: 9%; background: #000; animation: qg-faixa .6s ease-out both; }
+.qg-cinema::before { top: 0; }
+.qg-cinema::after { bottom: 0; }
+@keyframes qg-faixa { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.qg-legenda { position: absolute; left: 50%; bottom: 12%; max-width: min(760px, 88%); margin: 0; padding: 10px 18px; transform: translateX(-50%);
+  border-radius: 10px; background: rgba(4, 8, 18, .72); color: #fff; font-family: "Lilita One", sans-serif; font-size: clamp(15px, 2vw, 22px);
+  line-height: 1.25; text-align: center; text-shadow: 0 2px 0 rgba(0, 0, 0, .6); animation: qg-legenda .6s ease-out both; }
+/* Entra e fica: cada legenda dura o tempo da luta em que o drone está. */
+@keyframes qg-legenda { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.qg-cinema-parar { position: absolute; top: calc(9% + 8px); right: 10px; pointer-events: auto; padding: 5px 10px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 8px; background: rgba(0, 0, 0, .5); color: #fff; font-size: 12px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .qg-legenda, .qg-cinema::before, .qg-cinema::after { animation: none; } }

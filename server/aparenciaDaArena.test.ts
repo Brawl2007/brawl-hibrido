@@ -1,0 +1,454 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync, statSync } from "node:fs";
+
+/**
+ * A aparência que só se via medindo.
+ *
+ * Este ficheiro guarda duas correções que tinham a mesma forma: pareciam estar
+ * a funcionar e não estavam, e nenhuma das duas dava erro nenhum.
+ *
+ * 1. OS TIPOS DE LETRA NÃO CHEGAVAM A TEMPO
+ *
+ *    O `index.html` pedia Lilita One, Barlow Condensed e Space Grotesk ao
+ *    Google. Isso são dois domínios externos — um para a folha de estilos,
+ *    outro para os ficheiros — antes da primeira letra ser desenhada. Até
+ *    chegarem, o título de entrada de 82px era pintado num sans qualquer e
+ *    saltava para o tipo certo a meio.
+ *
+ *    O salto não era cosmético. O Lilita One é o que faz a interface parecer o
+ *    jogo, e o Barlow Condensed é MUITO mais estreito: o `max-width` do título
+ *    tinha sido escolhido a olhar para o tipo errado, e com o tipo certo a
+ *    frase partia-se em cinco linhas. Ninguém viu, porque o tipo certo nunca
+ *    ficava tempo suficiente no ecrã para alguém reparar.
+ *
+ * 2. A ETIQUETA "DRAFT" ERA DOURADA SOBRE DOURADO
+ *
+ *    #ffcf4b de texto sobre #ffc02e de fundo: rácio de contraste 1,07:1,
+ *    quando o mínimo legível é 4,5:1. A palavra desaparecia e ficava só a
+ *    mancha amarela — que sozinha parece decoração intencional, e foi por isso
+ *    que aguentou tanto tempo.
+ *
+ * As duas são invisíveis a ler o código e óbvias a medir a página. Como não há
+ * aqui um browser, o que este teste mede são as condições que as causaram.
+ */
+
+const HTML = readFileSync("client/index.html", "utf8");
+const CSS = readFileSync("client/src/index.css", "utf8");
+const ARENA = readFileSync("client/src/arena-v55.css", "utf8");
+
+/**
+ * Sem comentários, linha a linha.
+ *
+ * Os comentários acima citam de propósito o que foi corrigido, para o próximo
+ * leitor perceber o que mudou. Uma busca sobre o ficheiro inteiro encontrava
+ * essas citações e dava o teste por falhado — foi o que aconteceu duas vezes
+ * noutros ficheiros. O mesmo removedor está em `frasesDoPainel.test.ts` e em
+ * `draftParaVisitantes.test.ts`, pela mesma razão.
+ */
+function semComentarios(fonte: string) {
+  const saida: string[] = [];
+  let dentroDeBloco = false;
+  for (const linha of fonte.split("\n")) {
+    const limpa = linha.trim();
+    if (dentroDeBloco) {
+      if (limpa.includes("*/")) dentroDeBloco = false;
+      continue;
+    }
+    if (limpa.startsWith("/*")) {
+      if (!limpa.includes("*/")) dentroDeBloco = true;
+      continue;
+    }
+    if (limpa.startsWith("*") || limpa.startsWith("//")) continue;
+    if (limpa.startsWith("<!--")) {
+      if (!limpa.includes("-->")) dentroDeBloco = true;
+      continue;
+    }
+    saida.push(linha);
+  }
+  return saida.join("\n");
+}
+
+const CSS_LIMPO = semComentarios(CSS);
+const ARENA_LIMPO = semComentarios(ARENA);
+
+describe("os tipos de letra são servidos pelo próprio site", () => {
+  const FICHEIROS = [
+    "client/public/tipos/lilita-one-400.woff2",
+    "client/public/tipos/barlow-condensed-600.woff2",
+    "client/public/tipos/barlow-condensed-700.woff2",
+    "client/public/tipos/barlow-condensed-800.woff2",
+    "client/public/tipos/space-grotesk-var.woff2",
+  ];
+
+  it.each(FICHEIROS)("%s existe e não está vazio", (caminho) => {
+    expect(statSync(caminho).size).toBeGreaterThan(4000);
+  });
+
+  it("os cinco juntos continuam a caber num pedido pequeno", () => {
+    const total = FICHEIROS.reduce((soma, f) => soma + statSync(f).size, 0);
+    // 100 KB hoje. O limite existe para alguém reparar antes de acrescentar o
+    // `latin-ext` inteiro "só para garantir" — que o site não usa.
+    expect(total).toBeLessThan(160 * 1024);
+  });
+
+  it("o index.html deixou de pedir os tipos ao Google", () => {
+    const html = semComentarios(HTML);
+    expect(html).not.toContain("fonts.googleapis.com");
+    expect(html).not.toContain("fonts.gstatic.com");
+  });
+
+  it("o Lilita One vai pré-carregado, porque é o primeiro que se vê", () => {
+    expect(HTML).toContain('rel="preload" href="/tipos/lilita-one-400.woff2"');
+  });
+
+  it("cada tipo tem a sua declaração @font-face na folha de estilos", () => {
+    for (const nome of ["Lilita One", "Barlow Condensed", "Space Grotesk"]) {
+      expect(CSS_LIMPO).toContain(`font-family: "${nome}";`);
+    }
+    // Um por peso do Barlow, mais o Lilita, mais o variável do Grotesk.
+    expect(CSS_LIMPO.match(/@font-face/g)?.length).toBe(5);
+  });
+
+  it("usa swap: texto que muda de forma é melhor do que texto que não se lê", () => {
+    // Com `block`, o título de 82px ficava invisível até o ficheiro chegar.
+    expect(CSS_LIMPO).not.toContain("font-display: block");
+    expect(CSS_LIMPO.match(/font-display: swap/g)?.length).toBe(5);
+  });
+});
+
+describe("a etiqueta do Draft continua legível", () => {
+  it("o texto do kicker não volta a ser dourado sobre dourado", () => {
+    const regra = ARENA_LIMPO.match(/\.draft-contextbar-kicker\s*\{[^}]*\}/)?.[0];
+    expect(regra).toBeDefined();
+    // #ffc02e é o fundo que o index.css lhe dá. Qualquer amarelo no texto põe
+    // as duas cores a um ponto de distância uma da outra.
+    expect(regra).not.toMatch(/color:\s*#f{0,1}f[cd]/i);
+    expect(regra).toContain("#1a1206");
+  });
+});
+
+/**
+ * O corpo de um bloco `@media`, e só o corpo.
+ *
+ * A primeira versão deste ficheiro cortava o CSS no texto do `@media` e
+ * guardava tudo o que vinha a seguir. Parecia funcionar — e não funcionava:
+ * apagando `.hero-content > *` de dentro do bloco de movimento reduzido, o
+ * teste continuava a passar, porque o mesmo seletor aparece mais abaixo no
+ * ficheiro a DECLARAR a animação, e esse pedaço também estava no que fora
+ * guardado.
+ *
+ * Um teste que passa com o defeito posto é pior do que não existir: convence
+ * quem vem a seguir de que aquilo está protegido. Este contador de chavetas
+ * fecha o bloco onde ele acaba de verdade.
+ */
+function corposDe(fonte: string, abertura: string) {
+  const corpos: string[] = [];
+  let procura = fonte.indexOf(abertura);
+  while (procura !== -1) {
+    const inicio = fonte.indexOf("{", procura + abertura.length);
+    if (inicio === -1) break;
+    let profundidade = 0;
+    let i = inicio;
+    for (; i < fonte.length; i += 1) {
+      if (fonte[i] === "{") profundidade += 1;
+      else if (fonte[i] === "}") {
+        profundidade -= 1;
+        if (profundidade === 0) break;
+      }
+    }
+    corpos.push(fonte.slice(inicio + 1, i));
+    procura = fonte.indexOf(abertura, i);
+  }
+  return corpos.join("\n");
+}
+
+describe("o movimento tem sempre saída para quem o não quer", () => {
+  /**
+   * Reduzir movimento não é desligar tudo — o que provoca enjoo é a
+   * DESLOCAÇÃO, não a mudança de cor. Mas uma animação nova que se esqueça
+   * desta regra passa de detalhe a problema de acessibilidade sem avisar.
+   */
+  const animacoesNovas = [
+    "bh-arena-breath",
+    "bh-orbit-slow",
+    "bh-hero-in",
+    "bh-champion-in",
+    "bh-champion-sweep",
+  ];
+
+  it("todas as animações da entrada são desligáveis", () => {
+    const corpos = corposDe(CSS, "@media (prefers-reduced-motion: reduce)");
+    for (const seletor of [
+      ".hero-panel::after",
+      ".orbit-one",
+      ".orbit-two",
+      ".hero-content > *",
+      ".hero-champion-portrait",
+      ".stat-card.accent-amber::before",
+    ]) {
+      expect(corpos).toContain(seletor);
+    }
+    for (const nome of animacoesNovas) expect(CSS_LIMPO).toContain(`@keyframes ${nome}`);
+  });
+
+  it("o slot à espera de escolha para de pulsar", () => {
+    const corpos = corposDe(ARENA, "@media (prefers-reduced-motion: reduce)");
+    expect(corpos).toContain(".draft-slot.is-active");
+  });
+});
+
+describe("o hover não fica preso no telemóvel", () => {
+  /**
+   * Num ecrã de toque, tocar dispara `:hover` e o estado fica lá depois de o
+   * dedo sair. Qualquer regra de hover que mexa na peça tem de estar atrás da
+   * consulta de media que distingue rato de dedo.
+   */
+  it("as peças novas põem o hover atrás de (hover: hover)", () => {
+    const corpos = [CSS, ARENA]
+      .map((f) => corposDe(f, "@media (hover: hover) and (pointer: fine)"))
+      .join("\n");
+    for (const seletor of [
+      ".stat-card:hover",
+      ".map-card:hover",
+      ".primary-button:hover",
+      ".draft-shell .draft-slot:hover:not(:disabled)",
+    ]) {
+      expect(corpos).toContain(seletor);
+    }
+  });
+});
+
+describe("o cabeçalho de cada secção não volta a ser um carimbo", () => {
+  /**
+   * A Home tinha 7 secções e 23 micro-etiquetas em maiúsculas espalhadas por
+   * elas. Não era o número que incomodava — era serem sempre as MESMAS duas
+   * linhas, pela mesma ordem, sete vezes seguidas:
+   *
+   *     BIBLIOTECA RANKED · 01 — 26
+   *     BH ———— LIVE ROTATION / 26 MAPS
+   *     ESCOLHE O TEU MAPA
+   *
+   * A do meio não dizia nada que já não estivesse no ecrã: o "26" estava na
+   * linha de cima E na barra lateral. Repetido sete vezes, o que aquilo
+   * comunicava era "isto foi gerado por um molde", que é exatamente o
+   * contrário de vivo.
+   *
+   * Ao puxar o fio saiu código morto: o componente que desenhava a marquinha
+   * estava definido DUAS vezes — `BrandMotif` no Home.tsx, `Brand` no
+   * Draft.tsx — e o Draft nunca chegou a renderizar o dele. Havia também
+   * quatro carimbos "BH // ALGO" fixados em CSS nos cantos das secções.
+   */
+  const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
+  const DRAFT = readFileSync("client/src/pages/Draft.tsx", "utf8");
+
+  it("a linha de motivo não volta a duplicar o cabeçalho", () => {
+    expect(HOME).not.toContain('className="section-motif"');
+    expect(DRAFT).not.toContain('className="section-motif"');
+  });
+
+  it("os carimbos BH // ALGO não voltam aos cantos", () => {
+    expect(CSS_LIMPO).not.toContain('content: "BH //');
+  });
+
+  it("o componente da marquinha não volta a existir sem ser usado", () => {
+    // Estava definido em dois sítios e renderizado em nenhum.
+    for (const fonte of [HOME, DRAFT]) {
+      const definido = /function (BrandMotif|Brand)\(/.test(fonte);
+      const usado = /<(BrandMotif|Brand)[\s/>]/.test(fonte);
+      expect(definido && !usado).toBe(false);
+    }
+  });
+
+  it("as etiquetas de intervalo saíram dos cabeçalhos", () => {
+    // "01 — 26" é numeração decorativa: quem lê consegue contar os cartões.
+    expect(HOME).not.toContain("<span>01 — 26</span>");
+    expect(HOME).not.toContain('<span>FULL SOURCE READOUT</span>');
+  });
+});
+
+describe("nenhum controlo abre para o vazio", () => {
+  /**
+   * O Draft tinha DOIS controlos que respondiam ao toque e não entregavam nada.
+   *
+   *   <details><summary>Referência de pontuação</summary> … </details>
+   *   <FoldPanel title="Leitura das fontes" summary="De onde vêm os números…">
+   *
+   * Carregava-se, a seta virava, e abria com zero de altura. O conteúdo até
+   * existia — o React desenhava-o a cada mudança do draft, com os dados certos
+   * lá dentro — e uma linha de CSS escondia-o depois de pronto.
+   *
+   * A causa foi um trabalho de esquema: oito secções antigas desligadas de uma
+   * vez com `display: none`. Seis não tinham controlo nenhum a apontar-lhes e
+   * era essa a intenção. Duas tinham, e essas passaram a ser outra coisa — um
+   * botão avariado.
+   *
+   * Ninguém reparou porque estão as duas no fundo da página, atrás de um
+   * clique que quase nunca se dá. Foi preciso abrir cada uma no browser e
+   * medir a altura do que aparecia.
+   *
+   * Um controlo que não entrega é pior do que um controlo que não existe: à
+   * primeira tentativa, quem lá chega conclui que o site está avariado.
+   */
+  const DRAFT = readFileSync("client/src/pages/Draft.tsx", "utf8");
+
+  /** As regras de CSS que escondem alguma coisa, com o seu seletor. */
+  function seletoresEscondidos(folha: string) {
+    const escondidos: string[] = [];
+    const regra = /([^{}]+)\{([^{}]*)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = regra.exec(folha)) !== null) {
+      if (!/display:\s*none/.test(m[2])) continue;
+      for (const sel of m[1].split(",")) escondidos.push(sel.trim());
+    }
+    return escondidos;
+  }
+
+  const ESCONDIDOS = seletoresEscondidos(CSS_LIMPO);
+
+  it.each([
+    ["draft-arena-reference", "Referência de pontuação"],
+    ["draft-intel-grid", "Leitura das fontes"],
+  ])("o conteúdo de \"%s\" não volta a ser escondido", (classe, rotulo) => {
+    // O controlo tem de continuar a existir: se alguém o remover, o teste
+    // deixa de fazer sentido e é melhor falhar do que passar por engano.
+    expect(DRAFT).toContain(classe);
+    expect(DRAFT).toContain(rotulo);
+
+    const culpados = ESCONDIDOS.filter((sel) => sel.includes(classe));
+    expect(culpados).toEqual([]);
+  });
+
+  it("o rótulo dentro da referência é legível e do tipo certo", () => {
+    const regra = CSS_LIMPO.match(/\.hybrid-usage-value small \{[^}]*\}/)?.[0];
+    expect(regra).toBeDefined();
+    // "Inter" nunca foi carregado por este site: caía no sans do browser.
+    expect(regra).not.toContain("Inter");
+    // 6px não se lê.
+    expect(regra).not.toMatch(/font-size:\s*[0-7]px/);
+  });
+});
+
+describe("a entrada responde ao próprio título", () => {
+  /**
+   * "Joga com dados" e, ao lado, o dado: o nº1 do mapa escolhido.
+   *
+   * Antes disto o lado direito passou por três versões de decoração — vazio,
+   * depois um brilho, depois um selo "BH INTEL" rodado. E a entrada falhava a
+   * grelha em quatro pontos: título em 3 linhas a 1440px, subtítulo com 23
+   * palavras, etiqueta por cima E frase solta ao lado do botão, e nenhum
+   * visual que não fosse um gradiente.
+   */
+  const HOME = semComentarios(readFileSync("client/src/pages/Home.tsx", "utf8"));
+  const heroi = HOME.slice(HOME.indexOf("function Hero("), HOME.indexOf("function StatCard("));
+
+  it("a entrada e o cartão Melhor score dizem o mesmo nº1", () => {
+    // O cartão tirava o NÚMERO de measuredRows[0] e o NOME de currentRows[0].
+    // Se a primeira linha fosse de um brawler indisponível, o score de um
+    // aparecia com o nome de outro. Agora os dois lêem o mesmo `lider`.
+    expect(HOME).toContain("<Hero selectedMap={selectedMap} leader={lider}");
+    expect(HOME).toContain("value={formatScore(lider?.score ?? null)} detail={`${lider?.brawler");
+    expect(HOME).not.toContain("currentRows[0]?.brawler");
+  });
+
+  it("o nº1 é o máximo, não o primeiro da lista", () => {
+    expect(HOME).toMatch(/const lider = useMemo\([\s\S]*?rankedStatus !== "unavailable"[\s\S]*?\.reduce/);
+  });
+
+  it("a entrada fica com título, subtítulo e um botão — sem etiqueta nem frase solta", () => {
+    expect(heroi).not.toContain('className="eyebrow"');
+    expect(heroi).not.toContain("hero-footnote");
+    expect(heroi).not.toContain("hero-stamp");
+    const sub = heroi.match(/<p className="hero-copy">\s*([^<]+?)\s*<\/p>/)?.[1] ?? "";
+    expect(sub.split(/\s+/).length).toBeLessThanOrEqual(20);
+  });
+
+  it("um retrato que falha não deixa um quadrado partido", () => {
+    expect(heroi).toContain("onError={() => setRetratoFalhado(retrato)}");
+  });
+
+  it("o recuo lateral não volta a ser uma percentagem dentro da grelha", () => {
+    // Uma percentagem num item de grelha resolve contra a CÉLULA: o cartão
+    // saía 22px pela direita e o título desalinhava 24px da secção de baixo.
+    const regra = CSS_LIMPO.match(/\.hero-champion \{[^}]*\}/)?.[0] ?? "";
+    expect(regra).not.toMatch(/margin:[^;]*%/);
+    expect(CSS_LIMPO).toMatch(/\.hero-panel \{[^}]*padding: 0 7\.2%/);
+  });
+});
+
+describe("o movimento não custa o site", () => {
+  /**
+   * Medido em repouso, sem ninguém a tocar em nada (v121 → v122):
+   *
+   *   entrada   262ms de trabalho em 6s  →  11ms
+   *   Draft     676ms de trabalho em 6s  →  25ms   (11% do processador, parado)
+   *
+   * Os dois culpados eram animações infinitas minhas, da v118: o brilho do nº1
+   * animava `left` (refaz o esquema a cada frame) e o pulso do slot animava
+   * `box-shadow` (repinta a cada frame). O compositor só anima sozinho
+   * `transform` e `opacity`; tudo o resto acorda o fio principal, para sempre.
+   */
+  function corpoDoKeyframes(folha: string, nome: string) {
+    const i = folha.indexOf(`@keyframes ${nome} {`);
+    if (i === -1) return null;
+    let profundidade = 0;
+    for (let j = folha.indexOf("{", i); j < folha.length; j += 1) {
+      if (folha[j] === "{") profundidade += 1;
+      else if (folha[j] === "}" && --profundidade === 0) return folha.slice(i, j + 1);
+    }
+    return null;
+  }
+
+  it("toda a animação infinita só mexe em transform e opacity", () => {
+    const folhas = [CSS_LIMPO, ARENA_LIMPO];
+    const infinitas = new Set<string>();
+    for (const f of folhas) {
+      for (const m of f.matchAll(/animation:\s*([a-z0-9-]+)[^;]*\binfinite\b/g)) infinitas.add(m[1]);
+    }
+    expect(infinitas.size).toBeGreaterThanOrEqual(4);
+    const culpadas: string[] = [];
+    for (const nome of infinitas) {
+      const corpo = folhas.map((f) => corpoDoKeyframes(f, nome)).find(Boolean);
+      if (!corpo) continue;
+      const props = [...corpo.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+      const proibidas = props.filter((x) => x !== "transform" && x !== "opacity");
+      if (proibidas.length) culpadas.push(`${nome}: ${[...new Set(proibidas)].join(", ")}`);
+    }
+    expect(culpadas).toEqual([]);
+  });
+
+  it("o brilho do nº1 não volta a apanhar as doze sugestões", () => {
+    // Cada sugestão vive no seu próprio <div> e é sempre a primeira dele.
+    expect(CSS_LIMPO).not.toMatch(/(^|[,\s])\.draft-recommendation:first-child/m);
+  });
+
+  it("o título, que é o LCP, não começa invisível", () => {
+    // O fade de 620ms atrasava o LCP 672ms: o Chrome não conta um elemento a
+    // opacidade 0 como pintado. Sobe, mas está visível desde o primeiro frame.
+    expect(CSS_LIMPO).toContain(".hero-content > h1 { animation-name: bh-hero-rise; }");
+    expect(corpoDoKeyframes(CSS_LIMPO, "bh-hero-rise")).not.toContain("opacity");
+  });
+
+  it("os cartões abaixo da dobra entram quando aparecem, não à entrada", () => {
+    // Aos 500ms estavam 41 animações em paralelo, 32 delas fora do ecrã.
+    const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
+    expect(HOME).not.toContain("delay: index * 0.025");
+    expect(HOME).toContain("delay: (index % 6) * 0.035");
+    expect(HOME.match(/whileInView=\{\{ opacity: 1, y: 0 \}\}/g)?.length).toBe(2);
+    expect(HOME.match(/viewport=\{\{ once: true/g)?.length).toBe(2);
+  });
+
+  it("a troca de mapa responde já, e a entrada é só a primeira", () => {
+    const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
+    // "Primeira vez" é o primeiro nº1 MOSTRADO, não o primeiro render: a
+    // entrada renderiza sem dados antes de o nº1 existir.
+    expect(HOME).toContain("primeiroMostrado.current === null");
+    expect(HOME).toContain('jaTrocou.current ? "is-troca" : "is-entrada"');
+    // A troca não tem atraso: resposta a um clique começa no frame do clique.
+    expect(CSS_LIMPO).toContain(".hero-champion.is-troca .hero-champion-card {\n  animation: bh-champion-swap var(--dur-padrao) var(--ease-pop) both;");
+  });
+
+  it("o Framer Motion respeita quem pediu menos movimento", () => {
+    const APP = readFileSync("client/src/App.tsx", "utf8");
+    expect(APP).toContain('<MotionConfig reducedMotion="user">');
+  });
+});

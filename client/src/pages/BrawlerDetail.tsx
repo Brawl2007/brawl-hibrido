@@ -1,3 +1,5 @@
+import { BarraDoSite } from "@/components/BarraDoSite";
+import { MobileNav } from "@/components/MobileNav";
 import { LOGO } from "@/lib/imagens";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
@@ -86,26 +88,6 @@ function roleClass(role: BrawlerCatalogItem["role"]) {
   return role === "mid" ? "is-mid" : role === "side" ? "is-side" : "is-flex";
 }
 
-function CatalogSidebar() {
-  const navItems = [
-    { label: "Dashboard", href: "/", icon: Target },
-    { label: "Mapas Ranked", href: "/#maps", icon: Trophy },
-    { label: "Draft Híbrido", href: "/draft", icon: Sparkles },
-    { label: "Brawlers", href: "/brawlers", icon: Crosshair },
-    { label: "Fontes", href: "/#sources", icon: Radio },
-  ];
-
-  return (
-    <aside className="app-sidebar draft-sidebar">
-      <div className="sidebar-brand"><div className="brand-mark-shell"><img src={LOGO_URL} alt="" className="brand-mark" /></div><div><div className="brand-name">Brawl Híbrido</div><div className="brand-kicker">Ranked intelligence</div></div></div>
-      <div className="sidebar-status"><span className="status-pulse" /><span>CATÁLOGO LIVE</span><strong>Roster de todas as fontes</strong></div>
-      <nav className="sidebar-nav" aria-label="Navegação principal"><div className="nav-label">Workspace</div>{navItems.map(({ label, href, icon: Icon }) => <a key={href} href={href} className={`sidebar-link ${href === "/brawlers" ? "is-active" : ""}`}><Icon size={18} /><span>{label}</span></a>)}</nav>
-      <div className="sidebar-spacer" />
-      <div className="sidebar-note"><div className="note-icon"><Swords size={16} /></div><div><strong>Counter sources</strong><p>Relações literais, sem corte de lista.</p></div></div>
-      <div className="sidebar-footer"><span className="footer-dot" /> Counter intelligence · fontes explícitas</div>
-    </aside>
-  );
-}
 
 function TeammateCard({ relation, target }: { relation: BrawlPlanetRelation; target: BrawlerCatalogItem | undefined }) {
   const image = imageFor(target);
@@ -270,9 +252,11 @@ export default function BrawlerDetail() {
   const [, params] = useRoute("/brawlers/:name");
   const [, navigate] = useLocation();
   const rankedSync = useRankedSync();
-  const { weights: hybridWeights } = useHybridWeights();
+  const { weights: hybridWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { topBrawlWeight } = useSourceBalance();
   const [selectedModeId, setSelectedModeId] = useState("global");
+  // Counters, sinergias e a lista contra todos eram três páginas empilhadas: agora são abas.
+  const [aba, setAba] = useState<"counters" | "sinergias" | "todos">("counters");
   /**
    * As matrizes completas de confrontos — as mesmas que o Draft usa.
    *
@@ -297,7 +281,7 @@ export default function BrawlerDetail() {
     counterSnapshotVersion,
   );
   const catalogRows = useMemo(() => [
-    ...normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, hybridWeights.winRate / 100, topBrawlWeight),
+    ...normalizeRankedRows(rankedSync.snapshot?.rows ?? allRankedRows, winRateWeight, topBrawlWeight, starPlayerWeight),
     ...(rankedSync.snapshot?.officialBrawlers ?? []).map((brawler) => ({
       map: "Ainda não disponível",
       mode: "Ranked",
@@ -310,7 +294,7 @@ export default function BrawlerDetail() {
       rankedStatus: "unavailable" as const,
     })),
     ...preRankedBrawlerCatalogRows,
-  ], [hybridWeights.winRate, rankedSync.snapshot?.officialBrawlers, rankedSync.snapshot?.rows]);
+  ], [winRateWeight, starPlayerWeight, topBrawlWeight, rankedSync.snapshot?.officialBrawlers, rankedSync.snapshot?.rows]);
   const catalog = useMemo(
     () => buildBrawlerCatalog(catalogRows, counterSnapshot),
     // `matrizesVivas.version` entra aqui para o perfil se refazer no momento em
@@ -339,24 +323,32 @@ export default function BrawlerDetail() {
   const totalTargets = aggregateCounterRelations(counterProfiles, "targets", item.brawler, counterModeId).length;
   const totalCounteredBy = aggregateCounterRelations(counterProfiles, "counteredBy", item.brawler, counterModeId).length;
 
-  return <div className="app-shell draft-shell brawlers-shell brawler-detail-shell" style={{ backgroundColor: "#0b0e14" }}>
-    <CatalogSidebar />
+  return <div className="app-shell draft-shell brawlers-shell brawler-detail-shell com-barra-no-topo" style={{ backgroundColor: "#0b0e14" }}>
     <div className="app-main">
-      <header className="topbar"><div className="topbar-crumbs"><Link href="/brawlers" className="crumb-muted">Brawlers</Link><span>›</span><span className="crumb-active">{item.brawler}</span></div><div className="topbar-actions"><span className="live-chip"><span className="live-dot" /> Fontes auditadas</span><a className="refresh-button" href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ver PL Prodigy</a></div></header>
+      <BarraDoSite ativo="brawlers"><a className="refresh-button" href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ver PL Prodigy</a></BarraDoSite>
       <main className="brawler-detail-main">
         <div className="brawler-detail-nav"><Link href="/brawlers" className="back-link"><ArrowLeft size={15} /> Voltar a Brawlers & Counters</Link><span className="detail-source-tag"><span className="tiny-live" /> {rankedSync.source === "sse" ? `Ranked SSE · ${rankedSync.version ?? "snapshot"}` : "BrawlScope + PL Prodigy + Brawl Planet"}</span></div>
-        <DraftRoleEditor names={[item.brawler]} /><section className="brawler-profile-hero"><div className="profile-hero-image">{image ? <img src={image} alt={item.brawler} /> : <span>{item.brawler.slice(0, 2).toUpperCase()}</span>}</div><div className="profile-hero-copy"><span className="section-kicker">BRAWLER GUIDE · COUNTER INTELLIGENCE</span><h1>{item.brawler}</h1><div className="profile-hero-tags">{item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{draftRoleLabels[item.role]}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}<span className="profile-tier">{item.isRankedAvailable ? `Tier ${item.bestRow.tier ?? "—"}` : "Aguardando Ranked"}</span><span className="profile-map">{item.isRankedAvailable ? `Melhor registo: ${item.bestRow.map} · ${item.bestRow.mode}` : "Ainda sem métricas por mapa na rotação"}</span></div><p>{item.isRankedAvailable ? "Strong against, Struggles against, Best Teammates e Worst Teammates mantêm a direção literal publicada por cada fonte, sem inferência nem corte artificial." : "Sem métricas Ranked publicadas. O perfil não substitui dados de Trophy ou Showdown por dados de Ranked."}</p></div><div className="profile-hero-score"><span>HYBRID SCORE</span><strong>{item.isRankedAvailable ? score(item.bestRow.score) : "—"}</strong><small>{item.isRankedAvailable ? `Win Rate ${metric(item.winRate)}` : "Win Rate Ranked —"}</small></div></section>
-        <section className="profile-metrics"><div><span>USE RATE</span><strong>{item.isRankedAvailable ? metric(item.usageRate) : "—"}</strong></div><div><span>WIN RATE</span><strong>{item.isRankedAvailable ? metric(item.winRate) : "—"}</strong></div><div><span>STRONG AGAINST</span><strong>{totalTargets}</strong></div><div><span>STRUGGLES AGAINST</span><strong>{totalCounteredBy}</strong></div></section>
-        <a className="duel-jump-link" href="#perfil-sinergias">Ver sinergias de {item.brawler}</a>
-        <section className="guide-callout"><div className="guide-callout-icon"><Shield size={18} /></div><div><span className="section-kicker">SOURCE LENS</span><strong>Como ler este perfil</strong><p>Sinergias mostra os aliados do BrawlScope em Geral ou no modo escolhido. Best e Worst Teammates são listas globais do Brawl Planet. Countera e Counterado por agrupam listas literais do BrawlScope, PL Prodigy e Brawl Planet. O TopBrawl permanece apenas como contexto de estatísticas, modos, mapas e builds: a auditoria não encontrou uma lista pública direta de counters nas suas fichas.</p></div><div className="source-link-stack"><a href={BRAWLSCOPE_URL} target="_blank" rel="noreferrer">BrawlScope: counters <ExternalLink size={14} /></a><a href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer">PL Prodigy <ExternalLink size={14} /></a><a href={planetProfile?.sourceUrl ?? BRAWL_PLANET_URL} target="_blank" rel="noreferrer">Brawl Planet <ExternalLink size={14} /></a><a href={TOP_BRAWL_URL} target="_blank" rel="noreferrer">TopBrawl: stats <ExternalLink size={14} /></a></div></section>
-        <section className="guide-callout" aria-label="Modo dos counters e sinergias BrawlScope"><div className="guide-callout-icon"><Target size={18} /></div><div><span className="section-kicker">BRAWLSCOPE · CONTEXTO</span><strong>Counters e sinergias por modo</strong><p>O geral agrega todas as fontes, sem limitar as relações ao roster do BrawlScope. Em cada modo, o BrawlScope fornece apenas a lista desse modo. Planet e PL Prodigy mantêm as suas listas globais como evidência global aplicável ao modo selecionado. PL Prodigy é um catálogo estático auditado.</p></div><label className="brawler-opponent-select"><span>Modo</span><select value={selectedModeId} onChange={(event) => setSelectedModeId(event.target.value)}><option value="global">Geral</option>{brawlScopeModes.map((mode) => <option key={mode.modeId} value={mode.modeId}>{mode.label}</option>)}</select><ChevronRight size={14} /></label></section>
-        <BrawlScopeSynergy item={item} catalog={catalog} modeId={counterModeId} />
-        <div className="brawler-relation-columns"><CounterSourceGrid item={item} catalog={catalog} direction="targets" modeId={counterModeId} /><CounterSourceGrid item={item} catalog={catalog} direction="counteredBy" modeId={counterModeId} /></div>
-        <div className="brawler-relation-columns synergies-full"><BestTeammates item={item} catalog={catalog} /><WorstTeammates item={item} catalog={catalog} /></div>
-        <BrawlScopeMatchupMatrix item={item} catalog={catalog} modeId={counterModeId} vistasComFicha={vistasComFicha} />
+        <DraftRoleEditor names={[item.brawler]} /><section className="brawler-profile-hero"><div className="profile-hero-image">{image ? <img src={image} alt={item.brawler} /> : <span>{item.brawler.slice(0, 2).toUpperCase()}</span>}</div><div className="profile-hero-copy"><h1>{item.brawler}</h1><div className="profile-hero-tags">{item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{draftRoleLabels[item.role]}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}<span className="profile-tier">{item.isRankedAvailable ? `Tier ${item.bestRow.tier ?? "—"}` : "Aguardando Ranked"}</span><span className="profile-map">{item.isRankedAvailable ? `Melhor registo: ${item.bestRow.map} · ${item.bestRow.mode}` : "Ainda sem métricas por mapa na rotação"}</span></div><p>{item.isRankedAvailable ? "Contra quem ganha, com quem perde e com quem joga bem, como cada fonte publica." : "Sem métricas Ranked publicadas. O perfil não substitui dados de Trophy ou Showdown por dados de Ranked."}</p></div><div className="profile-hero-score"><span>Score Híbrido</span><strong>{item.isRankedAvailable ? score(item.bestRow.score) : "—"}</strong><small>{item.isRankedAvailable ? `Win Rate ${metric(item.winRate)}` : "Win Rate Ranked —"}</small></div></section>
+        <section className="profile-metrics"><div><span>Uso</span><strong>{item.isRankedAvailable ? metric(item.usageRate) : "—"}</strong></div><div><span>Vitória</span><strong>{item.isRankedAvailable ? metric(item.winRate) : "—"}</strong></div><div><span>Ganha a</span><strong>{totalTargets}</strong></div><div><span>Perde com</span><strong>{totalCounteredBy}</strong></div></section>
+        {/* O modo e as fontes numa linha; antes eram dois cartões de texto. */}
+        <section className="ficha-contexto" aria-label="Modo dos counters e sinergias BrawlScope">
+          <label className="brawler-opponent-select"><span>Modo</span><select value={selectedModeId} onChange={(event) => setSelectedModeId(event.target.value)}><option value="global">Geral</option>{brawlScopeModes.map((mode) => <option key={mode.modeId} value={mode.modeId}>{mode.label}</option>)}</select><ChevronRight size={14} /></label>
+          <div className="source-link-stack" title="Countera e Counterado por juntam as listas do BrawlScope, PL Prodigy e Brawl Planet. Best e Worst Teammates são do Brawl Planet."><a href={BRAWLSCOPE_URL} target="_blank" rel="noreferrer">BrawlScope <ExternalLink size={13} /></a><a href={prodigyProfile?.sourceUrl ?? PL_PRODIGY_URL} target="_blank" rel="noreferrer">PL Prodigy <ExternalLink size={13} /></a><a href={planetProfile?.sourceUrl ?? BRAWL_PLANET_URL} target="_blank" rel="noreferrer">Brawl Planet <ExternalLink size={13} /></a><a href={TOP_BRAWL_URL} target="_blank" rel="noreferrer">TopBrawl <ExternalLink size={13} /></a></div>
+        </section>
+        <div className="inicio-abas" role="tablist" aria-label="O que ver">
+          {([["counters", "Counters"], ["sinergias", "Sinergias"], ["todos", "Contra todos"]] as const).map(([id, rotulo]) => (
+            <button key={id} type="button" role="tab" aria-selected={aba === id} className={aba === id ? "is-active" : ""} onClick={() => setAba(id)}>{rotulo}</button>
+          ))}
+        </div>
+        {aba === "counters" && <div className="brawler-relation-columns"><CounterSourceGrid item={item} catalog={catalog} direction="targets" modeId={counterModeId} /><CounterSourceGrid item={item} catalog={catalog} direction="counteredBy" modeId={counterModeId} /></div>}
+        {aba === "sinergias" && <>
+          <BrawlScopeSynergy item={item} catalog={catalog} modeId={counterModeId} />
+          <div className="brawler-relation-columns synergies-full"><BestTeammates item={item} catalog={catalog} /><WorstTeammates item={item} catalog={catalog} /></div>
+        </>}
+        {aba === "todos" && <BrawlScopeMatchupMatrix item={item} catalog={catalog} modeId={counterModeId} vistasComFicha={vistasComFicha} />}
         <section className="profile-build-panel"><div className="build-panel-icon"><Zap size={18} /></div><div><span className="section-kicker">BUILD DE REFERÊNCIA</span><h2>{item.isRankedAvailable ? `Preparação para ${item.bestRow.mode}` : "Ainda sem build Ranked"}</h2><p>{item.isRankedAvailable ? <>Gadget: <strong>{item.build?.gadget}</strong> · Star Power: <strong>{item.build?.starPower}</strong> · Engrenagens: <strong>{item.build?.gears.join(", ")}</strong></> : "O site não cria build, taxa de vitória, uso ou matchups de Ranked antes das fontes publicarem estes dados."}</p></div>{item.isRankedAvailable ? <button type="button" onClick={() => navigate(`/draft?brawler=${encodeURIComponent(item.brawler)}`)}><Swords size={15} /> Usar no Draft</button> : <span className="profile-map">Aguardando elegibilidade Ranked</span>}</section>
       </main>
-      <footer className="app-footer"><span>BRAWL HÍBRIDO / BRAWLER GUIDE</span><span>Counter intelligence · proveniência explícita</span></footer>
     </div>
+    <MobileNav pathname="/brawlers" />
   </div>;
 }

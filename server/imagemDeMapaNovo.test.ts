@@ -40,11 +40,16 @@ describe("imagem de um mapa que acabou de entrar na rotação", () => {
   });
 
   it("o cliente procura o id antes da tabela escrita à mão", () => {
-    const home = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
     // Sem comentários: eles falam da tabela antiga pelo nome, e têm de poder.
-    const noEcra = home.replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(noEcra).toContain("map.id ?? mapAssetIds[map.name]");
+    const semComentarios = (ficheiro: string) =>
+      readFileSync(resolve(process.cwd(), ficheiro), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    // A regra vive num só sítio desde a v127, partilhada pela entrada e pelo mapa dos duelos.
+    expect(semComentarios("client/src/lib/imagemDoMapa.ts")).toContain("map.id ?? mapAssetIds[map.name]");
     // E nenhuma chamada volta a passar só o nome, que era o que fechava a porta.
-    expect(noEcra).not.toMatch(/mapImageFor\(\s*\w+\.name\s*\)/);
+    for (const pagina of ["client/src/pages/Home.tsx", "client/src/pages/Draft.tsx"]) {
+      const noEcra = semComentarios(pagina);
+      expect(noEcra).toContain('from "@/lib/imagemDoMapa"');
+      expect(noEcra).not.toMatch(/mapImageFor\(\s*\w+\.name\s*\)/);
+    }
   });
 });

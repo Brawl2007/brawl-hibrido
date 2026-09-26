@@ -1,6 +1,8 @@
 import { getMatchupValue, describeMatchupValue, formatMatchupPercent } from "@shared/counterMatchupValue";
 import { useCounterSync } from "@/contexts/CounterSyncContext";
 import { useEffect, useMemo, useState } from "react";
+import { BarraDoSite } from "@/components/BarraDoSite";
+import { MobileNav } from "@/components/MobileNav";
 import { ArrowLeft, BarChart3, ChevronRight, Database, Search, Swords, Target } from "lucide-react";
 import { allRankedRows, type RankedRow } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
@@ -60,24 +62,24 @@ export default function MatchupMatrix() {
       .sort((a, b) => Number(b.hasSufficientSample) - Number(a.hasSufficientSample) || b.samples - a.samples || a.opponent.localeCompare(b.opponent, "pt-PT")),
     [brawler, brawlerNames, filter, query]
   );
+  // 106 adversários de uma vez eram 12 000 px no telemóvel: mostram-se 24 e o resto a pedido.
+  const [verTodos, setVerTodos] = useState(false);
   const observedPairs = row.filter((cell) => cell.samples > 0).length;
   const adequatePairs = row.filter((cell) => cell.hasSufficientSample).length;
   const selectedBrawlerRow = rowByName.get(brawler);
   const selectedOpponentRow = rowByName.get(opponent);
 
   return (
+    <>
+    <BarraDoSite ativo="matriz">
+      <span className="live-chip"><Database size={14} /> {observedMatchupSource.rankedMatches} partidas da API oficial</span>
+    </BarraDoSite>
     <main className="observed-matrix-page">
-      <header className="observed-topbar">
-        <a className="observed-back" href="/draft"><ArrowLeft size={16} /> Voltar ao Draft</a>
-        <div className="observed-brand"><span className="observed-brand-mark" /> BRAWL HÍBRIDO <i>·</i> MATRIZ 1V1</div>
-        <div className="observed-source"><Database size={14} /> API oficial · {observedMatchupSource.rankedMatches} partidas</div>
-      </header>
 
       <section className="observed-hero">
         <div>
-          <span className="observed-kicker"><BarChart3 size={13} /> EVIDÊNCIA OBSERVADA</span>
           <h1>Matriz de <em>Matchups 1v1</em></h1>
-          <p>Confrontos agregados a partir de partidas Ranked 3v3 reais. Cada leitura é isolada por <strong>modo de jogo</strong>; a percentagem só é exibida quando o par alcança <strong>{observedMatchupSource.minimumSample} partidas no modo selecionado</strong>.</p>
+          <p>Partidas Ranked reais, separadas por modo. A percentagem só aparece com <strong>{observedMatchupSource.minimumSample} partidas</strong> ou mais.</p>
         </div>
         <div className="observed-meta-cards">
           <div><small>MODO ATIVO</small><strong>{readableMode(mode)}</strong><p>dados sem mistura de modos</p></div>
@@ -87,7 +89,7 @@ export default function MatchupMatrix() {
       </section>
 
       <section className="observed-mode-deck" aria-label="Escolher modo de jogo para a matriz observada">
-        <div className="observed-mode-copy"><span className="observed-kicker"><Swords size={13} /> DADOS ISOLADOS POR MODO</span><h2>Escolhe a modalidade</h2><p>As amostras, vitórias e derrotas nunca são combinadas entre modos diferentes.</p></div>
+        <div className="observed-mode-copy"><h2>Escolhe o modo</h2></div>
         <div className="observed-mode-list">
           {modes.map((modeName) => {
             const records = observedMatchups.filter((entry) => entry.mode === modeName);
@@ -121,7 +123,7 @@ export default function MatchupMatrix() {
           <label className="observed-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtrar adversário" aria-label="Filtrar adversário" /></label>
         </div>
         <div className="observed-row-grid">
-          {row.map((cell) => {
+          {row.slice(0, verTodos || query.trim() ? row.length : 24).map((cell) => {
             const foe = rowByName.get(cell.opponent);
             return <button key={cell.opponent} className={`observed-cell ${cell.hasSufficientSample ? "has-sample" : ""} ${cell.opponent === opponent ? "is-selected" : ""}`} onClick={() => setOpponent(cell.opponent)}>
               <span className="observed-cell-avatar" style={brawlerImageFor(foe) ? { backgroundImage: `url(${brawlerImageFor(foe)})` } : undefined}>{!brawlerImageFor(foe) && cell.opponent.slice(0, 2)}</span>
@@ -129,9 +131,12 @@ export default function MatchupMatrix() {
             </button>;
           })}
         </div>
+        {!verTodos && !query.trim() && row.length > 24 && <button type="button" className="ver-todos" onClick={() => setVerTodos(true)}>Ver todos ({row.length})</button>}
       </section>
 
       <footer className="observed-method"><Swords size={16} /><p><strong>Leitura correta:</strong> a percentagem é uma matriz de coocorrência em equipas adversárias de partidas Ranked 3v3, e não uma medição isolada de lane. O Counter Pick usa o delta do BrawlScope mais confirmações de PL Prodigy e Brawl Planet.</p></footer>
     </main>
+    <MobileNav pathname="/matchups" />
+    </>
   );
 }

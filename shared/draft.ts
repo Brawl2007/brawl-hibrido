@@ -1,3 +1,4 @@
+import { versaoDoMotor } from "./versaoDoMotor";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
 import { getMatchupValue, describeMatchupValue, getBrawlScopeReading } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
@@ -19,7 +20,7 @@ import {
   type BrawlPlanetMapTeam,
   type BrawlPlanetMapTeamEntry,
 } from "./brawlPlanetMapTeams";
-import { defaultDraftRuleSettings, getCounterPickMultiplier, normalizeDraftRuleSettings, type DraftRuleSettings } from "./draftRules";
+import { defaultDraftRuleSettings, getCounterPickMultiplier, regrasDoMotor, type DraftRuleSettings } from "./draftRules";
 
 export type DraftKind = "ban" | "pick";
 export type DraftStep = { kind: DraftKind; team: DraftTeam; label: string };
@@ -132,7 +133,7 @@ export function isInActiveCounterWindow(candidateName: string, topRecommendation
 }
 
 export function getCounterBonusRate(pickNumber?: number, ruleSettings?: Partial<DraftRuleSettings>) {
-  const rules = normalizeDraftRuleSettings(ruleSettings);
+  const rules = regrasDoMotor(ruleSettings);
   const pick = getDraftPickNumber(pickNumber);
   const rates: Record<number, number> = {
     1: rules.counterPick1,
@@ -146,7 +147,7 @@ export function getCounterBonusRate(pickNumber?: number, ruleSettings?: Partial<
 }
 
 export function getSynergyBonusRate(pickNumber?: number, ruleSettings?: Partial<DraftRuleSettings>) {
-  const rules = normalizeDraftRuleSettings(ruleSettings);
+  const rules = regrasDoMotor(ruleSettings);
   const pick = getDraftPickNumber(pickNumber);
   const rates: Record<number, number> = {
     1: rules.synergyPick1,
@@ -164,7 +165,7 @@ export function getMapTeamSynergyRate(pickNumber?: number, ruleSettings?: Partia
 }
 
 export function getBannedCounterBonusRate(pickNumber?: number, ruleSettings?: Partial<DraftRuleSettings>) {
-  const rules = normalizeDraftRuleSettings(ruleSettings);
+  const rules = regrasDoMotor(ruleSettings);
   const requestedPick = typeof pickNumber === "number" && Number.isFinite(pickNumber)
     ? Math.floor(pickNumber)
     : 1;
@@ -236,7 +237,24 @@ export const brawlerClassCatalog: Record<string, string> = {
   "Tara": "Destruidor", "Tick": "Lançador", "Trunk": "Tank", "Wendy": "Suporte", "Willow": "Controlador", "Ziggy": "Controlador"
 };
 
+/**
+ * Guardada por nome. Percorria o catálogo inteiro e passava CADA chave a
+ * minúsculas em cada chamada — centenas de chamadas por pick, para uma
+ * resposta que, para o mesmo nome, é sempre a mesma: o catálogo e a lista de
+ * lançadores são constantes do módulo.
+ */
+const classesGuardadas = new Map<string, string>();
 export function getBrawlerClass(brawlerName: string): string {
+  const guardada = classesGuardadas.get(brawlerName);
+  if (guardada !== undefined) return guardada;
+  const classe = calcularClasseDoBrawler(brawlerName);
+  if (classesGuardadas.size > 4000) classesGuardadas.clear();
+  classesGuardadas.set(brawlerName, classe);
+  return classe;
+}
+
+/** O cálculo sem cache. Exportado só para o teste que o compara com a cache. */
+export function calcularClasseDoBrawler(brawlerName: string): string {
   const clean = brawlerName.trim().toLowerCase();
   for (const [key, cls] of Object.entries(brawlerClassCatalog)) {
     if (key.toLowerCase() === clean) return cls;
@@ -557,6 +575,10 @@ export type DraftSignal = {
 	    nonTop30CounterBonusTargets: string[];
 	    /** Inimigos já cobertos por um aliado; anulam apenas o Counter unitário redundante. */
 	    coveredCounterTargets: Array<{ enemy: string; allies: string[] }>;
+	    /** Dos cobertos, aqueles em que o aliado tem mesmo o inimigo no Top 10 dele. */
+	    fullyCoveredTargets: Array<{ enemy: string; allies: string[] }>;
+	    /** Inimigos cujo bónus a regra opcional "resposta já coberta" retirou. Vazio com a regra desligada. */
+	    suppressedCounterTargets: string[];
 	    /** Bans no Top 25 que não geram bónus porque o candidato está fora do Top 30 base. */
 	    nonTop30BannedCounters: string[];
     /** Bans que counteram o candidato, mas estão fora do Top 25 de Score Híbrido base do mapa. */
@@ -645,12 +667,20 @@ function counterKey(value: string) {
   return normalizeCounterBrawlerName(value);
 }
 
+/** Memorizada pela mesma razão que `normalizeCounterBrawlerName`: pura, e
+ *  chamada milhares de vezes por interação sobre os mesmos nomes. */
+const nomesMostrados = new Map<string, string>();
 function displayCounterName(value: string) {
-  return value
+  const guardado = nomesMostrados.get(value);
+  if (guardado !== undefined) return guardado;
+  const resultado = value
     .trim()
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  if (nomesMostrados.size > 4000) nomesMostrados.clear();
+  nomesMostrados.set(value, resultado);
+  return resultado;
 }
 
 function uniqueCounterNames(names: string[]) {
@@ -737,7 +767,45 @@ function getDraftCounterDirection(attacker: string, defender: string, reciprocal
   return getResolvedCounterDirection(attacker, defender, modeId)?.direction ?? null;
 }
 
+/**
+ * O perfil de counters de um brawler, guardado.
+ *
+ * MEDIDO ANTES (Draft, sem abrandar o CPU): escrever UMA letra na pesquisa
+ * custava 25ms de JavaScript, escolher um brawler 86ms — num telemóvel médio,
+ * quatro vezes isso. A maior fatia era esta função: cada cartão de sugestão
+ * chama-a a cada desenho, e cada chamada normaliza os ~106 nomes candidatos e
+ * cruza o brawler com cada um deles. Doze cartões, ~1300 confrontos, a cada
+ * tecla — para chegar sempre à mesma resposta.
+ *
+ * A resposta só depende dos argumentos e dos quatro estados de módulo que o
+ * `versaoDoMotor` segue. Mudou algum deles, a versão avança e a cache
+ * esvazia-se na chamada seguinte.
+ *
+ * O perfil devolvido vai CONGELADO: é partilhado entre todos os que pedem o
+ * mesmo, e quem o alterasse no sítio (um `.sort()` sem cópia) estragava-o para
+ * os outros sem dar erro nenhum. Congelado, a tentativa rebenta alto.
+ */
+const perfisGuardados = new Map<string, CounterProfile>();
+let versaoDosPerfis = -1;
 export function getCounterProfile(brawler: string, candidateNames: string[] = [], modeId?: string): CounterProfile {
+  const versao = versaoDoMotor();
+  if (versao !== versaoDosPerfis || perfisGuardados.size > 20000) {
+    perfisGuardados.clear();
+    versaoDosPerfis = versao;
+  }
+  const chave = `${modeId ?? ""}\u0000${brawler}\u0000${candidateNames.join("\u0001")}`;
+  const guardado = perfisGuardados.get(chave);
+  if (guardado) return guardado;
+  const perfil = calcularPerfilDeCounter(brawler, candidateNames, modeId);
+  Object.freeze(perfil.counters);
+  Object.freeze(perfil.counteredBy);
+  Object.freeze(perfil);
+  perfisGuardados.set(chave, perfil);
+  return perfil;
+}
+
+/** O cálculo sem cache. Exportado só para o teste que o compara com a cache. */
+export function calcularPerfilDeCounter(brawler: string, candidateNames: string[] = [], modeId?: string): CounterProfile {
   const key = counterKey(brawler);
   const sourcePriority: Record<string, number> = {
     "BrawlScope": 0,
@@ -841,6 +909,165 @@ export function calculateLaneMatchup<T extends DraftRow>(ally: T, enemy: T, posi
   if (direct) return { ally: ally.brawler, enemy: enemy.brawler, score: direct.counterScore, position, source: direct.counterDelta > 0 ? "explicit-counter" : "explicit-defense", note: direct.note };
   if (reverse) return { ally: ally.brawler, enemy: enemy.brawler, score: 100 - reverse.counterScore, position, source: reverse.counterDelta > 0 ? "explicit-defense" : "explicit-counter", note: reverse.note };
   return { ally: ally.brawler, enemy: enemy.brawler, score: inferred, position, source: "win-rate-inference", note: `Inferência por Win Rate: ${allyWinRate.toFixed(1)}% aliado vs ${enemyWinRate.toFixed(1)}% adversário; confirma o matchup através da execução e cobertura da lane.` };
+}
+
+export type DueloAtribuido<T extends DraftRow> = {
+  ally: T;
+  enemy: T;
+  /** Vantagem de `ally` sobre `enemy`, 0–100, a mesma de `calculateLaneMatchup`. */
+  score: number;
+  /** Porque é este o adversário, dito na perspetiva da equipa favorecida. */
+  motivo: string;
+};
+
+/**
+ * Quem joga contra quem na matriz 1v1.
+ *
+ * Emparelhar por função (Mid contra Mid, Lane contra Lane) ignorava os
+ * counters: com El Primo, Gus e Dynamike do outro lado, o Mortis ficava com
+ * quem calhasse na mesma posição, mesmo sendo a Dynamike quem ele pune.
+ *
+ * Aqui escolhe-se a combinação de duelos que dá mais vantagem à equipa
+ * favorecida no TOTAL, e não a cada brawler isolado. É isso que permite a um
+ * brawler deixar o seu melhor alvo a um colega que só ganha a esse adversário
+ * e ficar com o segundo — a soma da equipa é maior assim.
+ *
+ * Com três de cada lado há seis combinações; experimentam-se todas. Empates
+ * desfazem-se por: pior duelo menos mau (não sacrificar ninguém), depois
+ * função igual (Mid com Mid, como antes), depois a ordem das escolhas.
+ */
+export function atribuirDuelosPorCounter<T extends DraftRow>(
+  allyRows: readonly T[],
+  enemyRows: readonly T[],
+  favorece: "ally" | "enemy" = "ally",
+  /** Vantagem 0–100 de ally sobre enemy. Por omissão, a leitura híbrida do cartão. */
+  pontuar: (ally: T, enemy: T) => number = (ally, enemy) => calculateLaneMatchup(ally, enemy).score,
+): DueloAtribuido<T>[] {
+  const pares = Math.min(allyRows.length, enemyRows.length);
+  if (!pares) return [];
+  const scores = allyRows.map((ally) => enemyRows.map((enemy) => pontuar(ally, enemy)));
+  const sinal = favorece === "ally" ? 1 : -1;
+  const vantagem = (a: number, e: number) => sinal * (scores[a][e] - 50);
+  const eMid = (row: T) => inferDraftRole(row.brawler) === "mid";
+  const mesmaFuncao = (a: number, e: number) => (eMid(allyRows[a]) === eMid(enemyRows[e]) ? 1 : 0);
+
+  // Percorre os emparelhamentos do lado mais curto para o mais comprido.
+  const aliadosMandam = allyRows.length <= enemyRows.length;
+  const curto = aliadosMandam ? allyRows.length : enemyRows.length;
+  const comprido = aliadosMandam ? enemyRows.length : allyRows.length;
+  let melhor: { pares: Array<[number, number]>; total: number; pior: number; funcao: number } | null = null;
+  const usados = new Array<boolean>(comprido).fill(false);
+  const atual: Array<[number, number]> = [];
+  const EPS = 1e-9;
+  const percorrer = (i: number) => {
+    if (i === curto) {
+      const valores = atual.map(([a, e]) => vantagem(a, e));
+      const total = valores.reduce((soma, valor) => soma + valor, 0);
+      const pior = Math.min(...valores);
+      const funcao = atual.reduce((soma, [a, e]) => soma + mesmaFuncao(a, e), 0);
+      const ganha = !melhor
+        || total > melhor.total + EPS
+        || (Math.abs(total - melhor.total) <= EPS && (pior > melhor.pior + EPS
+          || (Math.abs(pior - melhor.pior) <= EPS && funcao > melhor.funcao)));
+      if (ganha) melhor = { pares: atual.map(([a, e]) => [a, e] as [number, number]), total, pior, funcao };
+      return;
+    }
+    for (let j = 0; j < comprido; j++) {
+      if (usados[j]) continue;
+      usados[j] = true;
+      atual.push(aliadosMandam ? [i, j] : [j, i]);
+      percorrer(i + 1);
+      atual.pop();
+      usados[j] = false;
+    }
+  };
+  percorrer(0);
+  const escolhidos = (melhor as { pares: Array<[number, number]> } | null)?.pares ?? [];
+  escolhidos.sort((left, right) => left[0] - right[0]);
+
+  const adversarioDe = new Map(escolhidos.map(([a, e]) => [e, a]));
+  return escolhidos.map(([a, e]) => {
+    const ally = allyRows[a];
+    const enemy = enemyRows[e];
+    // O motivo fala pela equipa favorecida: o "próprio" é o brawler dessa equipa.
+    const proprio = favorece === "ally" ? ally.brawler : enemy.brawler;
+    const alvo = favorece === "ally" ? enemy.brawler : ally.brawler;
+    const deste = vantagem(a, e);
+    const opcoes = favorece === "ally"
+      ? enemyRows.map((_, j) => ({ nome: enemyRows[j].brawler, valor: vantagem(a, j), quem: adversarioDe.get(j) }))
+      : allyRows.map((_, j) => ({ nome: allyRows[j].brawler, valor: vantagem(j, e), quem: escolhidos.find(([aa]) => aa === j)?.[1] }));
+    const melhorAlvo = opcoes.reduce((top, opcao) => (opcao.valor > top.valor + EPS ? opcao : top), opcoes.find((opcao) => opcao.nome === alvo)!);
+    let motivo: string;
+    if (melhorAlvo.nome === alvo) {
+      motivo = deste > 0
+        ? `${alvo} é o adversário a quem ${proprio} mais ganha.`
+        : `Nenhum adversário é favorável a ${proprio}; ${alvo} é o duelo menos mau.`;
+    } else {
+      const colega = melhorAlvo.quem === undefined ? undefined : favorece === "ally" ? allyRows[melhorAlvo.quem]?.brawler : enemyRows[melhorAlvo.quem]?.brawler;
+      motivo = colega
+        ? `${proprio} ganharia mais a ${melhorAlvo.nome}, mas fica com ${alvo} para ${colega} jogar contra ${melhorAlvo.nome}: a equipa soma mais assim.`
+        : `${proprio} ganharia mais a ${melhorAlvo.nome}, mas ${alvo} dá mais vantagem à equipa no total.`;
+    }
+    return { ally, enemy, score: scores[a][e], motivo };
+  });
+}
+
+/**
+ * O que o PL Prodigy diz de um duelo, e só ele: 1 se `ally` ganha a `enemy`,
+ * -1 se perde, 0 se nenhuma das duas guias fala do par (ou se se contradizem).
+ *
+ * Cada guia publica um Top 8 de "counters" e outro de "countered by", sem
+ * percentagem. Vale qualquer uma das duas páginas: a do `ally` a dizer que
+ * ganha, ou a do `enemy` a dizer que perde com ele — é o que a fonte publica,
+ * e nas leituras de produção nenhum par tem as duas páginas em contradição.
+ */
+export function leituraDoPLProdigy(ally: string, enemy: string): -1 | 0 | 1 {
+  const chave = (nome: string) => normalizeCounterBrawlerName(nome);
+  const perfil = (nome: string) => getCounterSourceProfiles(nome).find((profile) => profile.source === "PL Prodigy");
+  const tem = (lista: readonly { brawler: string }[] | undefined, nome: string) => lista?.some((r) => chave(r.brawler) === chave(nome)) ?? false;
+  const doAliado = perfil(ally);
+  const doAdversario = perfil(enemy);
+  const ganha = tem(doAliado?.targets, enemy) || tem(doAdversario?.counteredBy, ally);
+  const perde = tem(doAliado?.counteredBy, enemy) || tem(doAdversario?.targets, ally);
+  return ganha === perde ? 0 : ganha ? 1 : -1;
+}
+
+export type PosicaoNoMapa = "left" | "mid" | "right";
+
+/**
+ * Em que coluna do mapa dos duelos fica cada brawler da tua equipa.
+ *
+ * O de Mid vai para o meio, os de Lane para as pontas, e o que sobra (Flex,
+ * ou um segundo Mid) ocupa o primeiro lugar livre, a começar pelo meio. Antes
+ * a ordem era esquerda→meio→direita com recurso imediato, e um só brawler de
+ * Mid acabava na lane esquerda porque era o primeiro a ser procurado.
+ *
+ * `ocupadas` deixa preencher em duas passagens: primeiro os duelos, depois os
+ * brawlers ainda sem adversário nas colunas que ficaram livres.
+ */
+export function posicionarNoMapa<T>(
+  itens: readonly T[],
+  funcaoDe: (item: T) => DraftRole,
+  ocupadas: ReadonlySet<PosicaoNoMapa> = new Set(),
+): Array<{ position: PosicaoNoMapa; item: T }> {
+  const livres = [...itens];
+  const tirar = (quer: (item: T) => boolean) => {
+    const indice = livres.findIndex(quer);
+    return indice >= 0 ? livres.splice(indice, 1)[0] : undefined;
+  };
+  const lugar = new Map<PosicaoNoMapa, T>();
+  const pedir = (position: PosicaoNoMapa, quer: (item: T) => boolean) => {
+    if (ocupadas.has(position) || lugar.has(position)) return;
+    const item = tirar(quer);
+    if (item !== undefined) lugar.set(position, item);
+  };
+  pedir("mid", (item) => funcaoDe(item) === "mid");
+  pedir("left", (item) => funcaoDe(item) === "side");
+  pedir("right", (item) => funcaoDe(item) === "side");
+  for (const position of ["mid", "left", "right"] as const) pedir(position, () => true);
+  return (["left", "mid", "right"] as const)
+    .filter((position) => lugar.has(position))
+    .map((position) => ({ position, item: lugar.get(position) as T }));
 }
 
 export function getPositionRecommendation(brawler: string, enemyRows: Array<{ brawler: string; modeId?: string }>): { position: DraftPosition; label: string; advice: string } {
@@ -984,7 +1211,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const coverage = coverageValues.filter((value) => numeric(value) !== null).length / coverageValues.length;
   const role = inferDraftRole(row.brawler);
   const roleFit = !context.role || context.role === "Todas" ? 0.5 : role === context.role ? 1 : role === "flex" ? 0.62 : 0.18;
-  const ruleSettings = normalizeDraftRuleSettings(context.ruleSettings);
+  const ruleSettings = regrasDoMotor(context.ruleSettings);
   const allyRows = context.allyRows ?? [];
   const enemyRows = context.enemyRows ?? [];
   const fit = clamp((roleObjectiveFit(context.mapModeId, role) * 100 * 0.75) + (roleFit * 100 * 0.25));
@@ -1060,6 +1287,30 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     }))
     .filter((coverage) => coverage.allies.length > 0);
   const coveredCounterTargetKeys = new Set(coveredCounterTargets.map((coverage) => counterKey(coverage.enemy)));
+  /**
+   * Cobertura a sério: o aliado tem aquele inimigo no Top 10 do que ele countera.
+   *
+   * A diferença entre isto e `coveredCounterTargets` é a que decide se vale a
+   * pena não pagar o bónus outra vez. Um aliado com um delta positivo residual
+   * contra o inimigo não o está a responder — está só a não perder. Um aliado
+   * que o tem nos dez primeiros da lista publicada dele, esse responde.
+   *
+   * A lista usada é a mesma que o bónus de ban usa, do outro lado: ali é o Top
+   * 10 de quem me countera, aqui é o Top 10 de quem o aliado countera.
+   */
+  const top10TargetKeysOf = (brawler: string) => new Set(
+    getCounterSourceProfiles(brawler, getBrawlScopeReading() === "byMode" ? context.mapModeId : undefined)
+      .filter((profile) => profile.source === "BrawlScope" || profile.source === "PL Prodigy")
+      .flatMap((profile) => profile.targets.slice(0, 10))
+      .map((relation) => counterKey(relation.brawler)),
+  );
+  const fullyCoveredTargets = coveredCounterTargets
+    .map((coverage) => ({
+      enemy: coverage.enemy,
+      allies: coverage.allies.filter((ally) => top10TargetKeysOf(ally).has(counterKey(coverage.enemy))),
+    }))
+    .filter((coverage) => coverage.allies.length > 0);
+  const fullyCoveredKeys = new Set(fullyCoveredTargets.map((coverage) => counterKey(coverage.enemy)));
   /**
    * A supressão do "Counter unitário já coberto" era da era da taxa fixa: dar
    * +5% ao segundo brawler que respondia ao mesmo inimigo era mesmo pagar duas
@@ -1203,11 +1454,36 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const banBonusRate = getBannedCounterBonusRate(context.pickNumber, ruleSettings);
   const banBonusPick = getBannedCounterBonusPick(context.pickNumber);
   const hybridPoints = metaSignal;
-  const brawlScopeEnemyDeltas = !isAlreadyChosen
+  const enemyDeltaPairs = !isAlreadyChosen
     ? enemyRows
-      .map((enemy) => getMatchupValue(row.brawler, enemy.brawler, context.mapModeId).total)
-      .filter((delta) => delta !== 0)
+      .map((enemy) => ({ enemy: enemy.brawler, delta: getMatchupValue(row.brawler, enemy.brawler, context.mapModeId).total }))
+      .filter((par) => par.delta !== 0)
     : [];
+  /**
+   * A regra opcional "resposta já coberta".
+   *
+   * Ligada, um inimigo que já tem resposta a sério de um aliado deixa de pagar
+   * bónus ao candidato seguinte: a resposta já está no tabuleiro, e pagá-la
+   * outra vez é contar duas vezes a mesma solução.
+   *
+   * A excepção é o que impede a regra de se virar contra quem a liga: um
+   * candidato que responde a DOIS ou mais inimigos mantém tudo. Esse não está a
+   * repetir a resposta do aliado — está a cobrir uma frente que mais ninguém
+   * cobre, e é precisamente a escolha que o Draft devia premiar.
+   *
+   * Conta-se por inimigos respondidos, não por deltas positivos: o que faz de
+   * alguém uma resposta dupla é enfrentar dois inimigos, não somar dois números.
+   */
+  const suppressionLigada = ruleSettings.coveredCounterSuppression >= 0.5;
+  const inimigosRespondidos = enemyDeltaPairs.filter((par) => par.delta > 0).length;
+  const respostaMultipla = inimigosRespondidos >= 2;
+  const suppressedCounterTargets = suppressionLigada && !respostaMultipla
+    ? enemyDeltaPairs.filter((par) => par.delta > 0 && fullyCoveredKeys.has(counterKey(par.enemy))).map((par) => par.enemy)
+    : [];
+  const suppressedKeys = new Set(suppressedCounterTargets.map(counterKey));
+  const brawlScopeEnemyDeltas = enemyDeltaPairs
+    .filter((par) => !suppressedKeys.has(counterKey(par.enemy)))
+    .map((par) => par.delta);
   // O ajuste configurável multiplica a percentagem publicada do confronto: 1
   // mantém o delta da fonte, 2 duplica, 3 triplica, 0,5 reduz para metade.
   /**
@@ -1269,7 +1545,9 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
 	const activeBonuses = includePresentation ? [
     ...(counterPoints ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · delta BrawlScope${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
     ...(nonTop30CounterBonusTargets.length ? [`Counter fora do Top 30 · 0% (${row.brawler} não recebe bónus de Counter de Pick neste mapa)`] : []),
-    ...(coveredCounterTargets.length ? [`Resposta já coberta (${coveredCounterTargets.map((coverage) => `${coverage.enemy} também counterado por ${coverage.allies.join(", ")}`).join(" · ")})`] : []),
+    ...(suppressedCounterTargets.length
+      ? [`Resposta já coberta · bónus retirado (${fullyCoveredTargets.filter((coverage) => suppressedCounterTargets.includes(coverage.enemy)).map((coverage) => `${coverage.enemy} já respondido por ${coverage.allies.join(", ")}`).join(" · ")})`]
+      : coveredCounterTargets.length ? [`Resposta já coberta · bónus mantido (${coveredCounterTargets.map((coverage) => `${coverage.enemy} também counterado por ${coverage.allies.join(", ")}`).join(" · ")})`] : []),
     ...(missingMidPoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingMid * 100}%` : `Mid em falta +${ruleSettings.missingMid * 100}%`] : []),
     ...(missingSidePoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingSide * 100}%` : `Lane em falta +${ruleSettings.missingSide * 100}%`] : []),
     ...(banPoints ? [`Counter banido +${banBonusRate * 100 * bannedCounters.length}% (${bannedCounters.length} counter${bannedCounters.length === 1 ? "" : "s"} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · pick ${banBonusPick}: +${banBonusRate * 100}% por counter)`] : []),
@@ -1439,6 +1717,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       nonTop30CounterBonusTargets,
       nonTop30BannedCounters,
       coveredCounterTargets,
+      fullyCoveredTargets,
+      suppressedCounterTargets,
       nonTop25BannedCounters,
       bannedCounters,
       registeredBans,

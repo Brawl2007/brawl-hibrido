@@ -1,0 +1,32 @@
+Tipos de letra alojados aqui, em vez de pedidos ao Google.
+
+  Lilita One ......... SIL Open Font License 1.1 — Juan Pablo del Peral
+  Barlow Condensed ... SIL Open Font License 1.1 — Jeremy Tribby
+  Space Grotesk ...... SIL Open Font License 1.1 — Florian Karsten
+
+A OFL 1.1 permite redistribuir os ficheiros desde que a licença seja
+mencionada e os nomes não sejam usados para promover trabalhos derivados.
+É o que este ficheiro faz.
+
+POR QUE ESTÃO AQUI E NÃO NO GOOGLE
+
+O <link> para fonts.googleapis.com bloqueia a pintura da página: o browser
+tem de resolver DNS, abrir TLS e ler uma folha de estilos noutro domínio
+antes de desenhar a primeira letra. Depois disso ainda vai a um SEGUNDO
+domínio (fonts.gstatic.com) buscar os ficheiros.
+
+Enquanto isso não chega, o título de 88px do início aparece num sans
+qualquer e salta para o tipo certo a meio — e o Lilita One é justamente o
+que dá à interface o ar do jogo. A identidade chegava atrasada e a saltar.
+
+Aqui são cinco ficheiros de 100 KB no total, servidos do mesmo sítio que o
+resto do site, com `font-display: swap` e pré-carregamento do Lilita One.
+
+Só o subconjunto `latin` foi guardado. Cobre U+0000–00FF, ou seja todo o
+português acentuado (ç ã õ á é í ó ú â ê ô). O `latin-ext` serve línguas
+que o site não usa e duplicava o peso.
+
+Para atualizar: pedir a
+https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Lilita+One&family=Space+Grotesk:wght@400;500;600;700&display=swap
+com um User-Agent de Chrome, tirar de lá os URL dos blocos `/* latin */` e
+voltar a gravar com estes nomes.

@@ -91,9 +91,23 @@ describe("chips de pontuação do Draft", () => {
     expect(draftSource).toContain("Configurações das regras percentuais do Draft");
     expect(draftSource).toContain("ruleSettings: draftRuleSettings");
     expect(draftSource).toContain("draftRuleSettings.sameClassPenalty * 100");
-    // A taxa continua a ser lida das regras configuráveis, agora pelo pick global
-    // já resolvido em vez de um parâmetro local.
-    expect(draftSource).toContain("getCounterBonusRate(analysisGlobalPickNumber, draftRuleSettings) * 100");
+    /*
+     * Esta linha exigia `getCounterBonusRate(analysisGlobalPickNumber, ...)`,
+     * com o comentário "a taxa continua a ser lida das regras configuráveis".
+     * Já não é verdade, e não era há muito: o bónus de Counter é o delta
+     * publicado do confronto vezes o ajuste do pick, e `counterPickN` não entra
+     * em conta nenhuma — posto a 60, o ecrã prometia "+60% por matchup direto
+     * literal" e o Score não mexia um decimal.
+     *
+     * O teste estava a guardar esse erro em vez de o apanhar. Passa a exigir o
+     * que o Score faz mesmo: o ajuste do pick, que é o que de facto multiplica
+     * a percentagem publicada.
+     */
+    expect(draftSource).toContain("getCounterPickMultiplier(analysisGlobalPickNumber, draftRuleSettings)");
+    // A garantia de que o valor morto não volta a alimentar texto está em
+    // `frasesDoPainel.test.ts`, que limpa os comentários antes de procurar —
+    // aqui a fonte é lida crua, e o comentário que explica esta correção cita
+    // o nome antigo de propósito, para o próximo leitor perceber o que mudou.
     expect(draftSource).toContain("rateFromContextualPoints(signal.scoreBreakdown.enemyCounterPenaltyPoints");
     expect(draftSource).toContain("label: `Risco Counter Top ${windowSize}`");
     expect(draftSource).toContain("rateFromContextualPoints(signal.scoreBreakdown.sameClassPenaltyPoints");
@@ -149,12 +163,13 @@ describe("chips de pontuação do Draft", () => {
     expect(draftSource).toContain("matchup-team-score-summary");
     expect(draftSource).toContain("REPARTIÇÃO DA SOMA");
     expect(draftSource).toContain("DETALHAMENTO DOS PONTOS");
-    expect(draftSource).toContain("PONTOS FINAIS · AZUL");
-    expect(draftSource).toContain("PONTOS FINAIS · VERMELHA");
+    // Os nomes seguem a perspetiva (v125): a tua equipa é {NOS}, a outra {ELES}.
+    expect(draftSource).toContain("PONTOS FINAIS · {NOS}");
+    expect(draftSource).toContain("PONTOS FINAIS · {ELES}");
     expect(draftSource).toContain("da soma");
     expect(draftSource).toContain("matchup-team-score-trophy");
-    expect(draftSource).toContain("AZUL LIDERA");
-    expect(draftSource).toContain("VERMELHA LIDERA");
+    expect(draftSource).toContain("`${NOS} LIDERA`");
+    expect(draftSource).toContain("`${ELES} LIDERA`");
     expect(draftSource).toContain("EMPATE 50/50");
   });
 
@@ -269,14 +284,21 @@ describe("chips de pontuação do Draft", () => {
       },
     );
 
+    /**
+     * Este chip dizia "sem bónus repetido" e o Score pagava o bónus na mesma —
+     * o teste guardava a mentira em vez de a apanhar, porque só comparava o
+     * texto com ele próprio. Agora diz o que acontece, e com a regra desligada
+     * (o padrão) o que acontece é o bónus ser pago.
+     */
     expect(getActiveDraftBonuses(signal, inferDraftRole("Brock"))).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        label: "Counter unitário já coberto",
+        label: "Counter já coberto · bónus mantido",
         rate: 0,
         points: 0,
-        source: "Bea já counterado por Angelo · sem bónus repetido",
+        source: "Bea já counterado por Angelo · o delta deste par é teu e conta na mesma",
       }),
     ]));
+    expect(signal.scoreBreakdown.counterPoints).toBeGreaterThan(0);
   });
 
   it("expõe o risco literal da janela Top 16 sem alterar o Score antes de picks", () => {
@@ -378,7 +400,9 @@ describe("atualização prioritária do Draft", () => {
     expect(draftSource).toMatch(/setChoices\(nextChoices\);\s*setSelectedStepIndex\(null\);\s*scheduleContextualAnalysis\(nextChoices, currentSkipped, null\)/);
     expect(draftSource).toContain('scheduleContextualAnalysis(choices, nextSkipped, null);');
     expect(draftSource).toContain('scheduleContextualAnalysis(nextChoices, nextSkipped, index);');
-    expect(draftSource).toContain('selectionLockedNames={lockedNames}');
+    // A pesquisa rápida passou para a caixa das sugestões: Enter escolhe o
+    // primeiro que ainda está livre.
+    expect(draftSource).toContain('const primeiro = visibleRankedEntries.find((entry) => !lockedNames.has(entry.row.brawler));');
     expect(draftSource).toContain('const DraftCard = memo(function DraftCard');
     expect(draftSource).toContain('completedPickCount={analysisCompletedPickCount}');
     expect(draftSource).toContain('getDraftCounterWindow(currentRows, analysisLockedNames, "", baseRoleContext)');
@@ -388,7 +412,7 @@ describe("atualização prioritária do Draft", () => {
     expect(draftSource).toContain('const pagedRankedEntries = useMemo(() => visibleRankedEntries.slice');
     expect(draftSource).toContain('const activeCounterWindow = useMemo(() => topRecommendationNames.slice');
     expect(draftSource).toContain('activeCounterWindow={activeCounterWindow}');
-    expect(draftSource).toContain('<QuickPickRail activeStep={activeDraftStep} entries={rankedDraftEntries}');
+    expect(draftSource).toContain('if (event.key === "Enter") escolherOPrimeiro();');
     expect(draftSource).not.toContain('rankDraftEntries(rows, lockedNames');
     expect(draftSource).toContain('entry.draftScore');
     expect(draftSource).toContain('entry.rank');
