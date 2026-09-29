@@ -3,6 +3,7 @@ import { nomeDoModo, resumirPartidas } from "@shared/partidasObservadas";
 import { listObservedBattlesParaResumo, listObservedMapsParaResumo } from "./db";
 import { lerNomesDosMapas } from "./observedMatchCollection";
 import { intervaloDoRank } from "@shared/ranksDoRanked";
+import { fichaDoBrawler } from "@shared/fichaDaApi";
 
 /** Uma rede de segurança para a memória da função; a página diz se for atingida. */
 const LIMITE_DE_PARTIDAS = 60_000;
@@ -69,3 +70,27 @@ export async function resumoDasPartidas(filtro: FiltroDasPartidas): Promise<Resu
   if (guardados.size > 200) guardados.delete(guardados.keys().next().value as string);
   return valor;
 }
+
+/**
+ * A ficha de um brawler para a Matriz 1v1 (botão «API»): só as linhas dele,
+ * para o telemóvel não descarregar o resumo inteiro. Usa os mesmos resumos
+ * guardados que a página «Partidas».
+ */
+export async function fichaDaMatriz(filtro: FiltroDasPartidas & { brawler: string }) {
+  const [resumo, geral] = await Promise.all([
+    resumoDasPartidas(filtro),
+    resumoDasPartidas({ dias: filtro.dias, rank: filtro.rank }),
+  ]);
+  return {
+    geradoEm: resumo.geradoEm,
+    dias: resumo.dias,
+    filtro: resumo.filtro,
+    limiteAtingido: resumo.limiteAtingido,
+    modos: geral.modos,
+    mapas: geral.mapas,
+    brawlers: resumo.brawlers.map((linha) => ({ brawler: linha.brawler, jogos: linha.jogos })),
+    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo),
+  };
+}
+
+export type FichaDaMatriz = Awaited<ReturnType<typeof fichaDaMatriz>>;

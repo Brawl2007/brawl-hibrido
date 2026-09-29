@@ -133,7 +133,10 @@ describe("as outras páginas também sem rolar tanto (v144)", () => {
     const ficha = ler("client/src/pages/BrawlerDetail.tsx");
     expect(ficha).toContain('{aba === "counters" &&');
     expect(ficha).toContain('{aba === "todos" && <BrawlScopeMatchupMatrix');
-    expect(ler("client/src/pages/MatchupMatrix.tsx")).toContain("row.slice(0, verTodos || query.trim() ? row.length : 24)");
+    // v161: a Matriz nova (estilo BrawlScope) também mostra 24 confrontos e o resto a pedido.
+    const matriz = ler("client/src/pages/MatchupMatrix.tsx");
+    expect(matriz).toContain("const LISTA_INICIAL = 24;");
+    expect(matriz).toContain("const mostrar = verTodos || termo ? totalDaLista : LISTA_INICIAL;");
   });
 });
 

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useApiOficial } from "@/hooks/useApiOficial";
 import { definirFonteObservada, JOGOS_DE_PRIOR, montarFonteObservada } from "@shared/counterMatchupValue";
 
 /**
@@ -17,9 +18,6 @@ import { definirFonteObservada, JOGOS_DE_PRIOR, montarFonteObservada } from "@sh
  * Um mapa ainda sem partidas fica com toda a gente a 50% e sem bónus: é a
  * verdade de «não sabemos», e o aviso no ecrã diz quantas partidas há.
  */
-const CHAVE = "draft-so-api-oficial";
-const CHAVE_DOS_DIAS = "draft-so-api-oficial-dias";
-
 function normalizarNome(nome: string | undefined) {
   return (nome ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -35,45 +33,14 @@ export type DadosDoMapaDaApi = {
 const SEM_PARTIDAS: DadosDoMapaDaApi = { partidas: 0, brawlers: [], confrontos: [], sinergias: [] };
 
 export function useFonteApi(nomeDoMapa: string | undefined) {
-  const [ligada, setLigada] = useState(() => {
-    try {
-      return localStorage.getItem(CHAVE) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [dias, setDiasGuardados] = useState(() => {
-    try {
-      const guardado = Number(localStorage.getItem(CHAVE_DOS_DIAS));
-      return Number.isInteger(guardado) && guardado >= 0 && guardado <= 3650 && localStorage.getItem(CHAVE_DOS_DIAS) !== null ? guardado : 30;
-    } catch {
-      return 30;
-    }
-  });
-  const setDias = useCallback((novos: number) => {
-    setDiasGuardados(novos);
-    try {
-      localStorage.setItem(CHAVE_DOS_DIAS, String(novos));
-    } catch {
-      // Sem armazenamento: vale só nesta visita.
-    }
-  }, []);
-  const alternar = useCallback(() => {
-    setLigada((atual) => {
-      const nova = !atual;
-      try {
-        localStorage.setItem(CHAVE, nova ? "1" : "0");
-      } catch {
-        // Sem armazenamento: fica ligado só nesta visita.
-      }
-      return nova;
-    });
-  }, []);
+  // O mesmo interruptor do site todo (Draft, Mapas, Matriz): ver `useApiOficial`.
+  const { ligada, alternar, dias, setDias, rank, setRank } = useApiOficial();
+  const doRank = rank || undefined;
 
-  const lista = trpc.observedMatches.partidas.useQuery({ dias }, { enabled: ligada, staleTime: 120_000, placeholderData: (anterior) => anterior });
+  const lista = trpc.observedMatches.partidas.useQuery({ dias, rank: doRank }, { enabled: ligada, staleTime: 120_000, placeholderData: (anterior) => anterior });
   const mapa = lista.data?.mapas.find((entrada) => normalizarNome(entrada.nome) === normalizarNome(nomeDoMapa));
   const doMapa = trpc.observedMatches.partidas.useQuery(
-    { dias, mapId: mapa?.mapId },
+    { dias, rank: doRank, mapId: mapa?.mapId },
     // Ao mudar o período, os números anteriores ficam até chegarem os novos — sem saltar para as outras fontes.
     { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000, placeholderData: (anterior) => anterior },
   );
@@ -95,17 +62,24 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     dados,
     dias,
     setDias,
+    rank,
+    setRank,
     aCarregar: ligada && (lista.isLoading || (Boolean(mapa?.mapId) && doMapa.isLoading)),
     /** Muda sempre que a fonte do motor muda — entra nas dependências do ranking. */
     versao,
+    /** Todas as partidas do período (com a contagem de cada mapa), para a secção Mapas. */
+    geral: ligada ? lista.data : undefined,
   };
 }
 
 /**
  * As linhas do mapa com a vitória e o uso das partidas recolhidas, e sem as
- * outras fontes. A vitória é puxada para 50% com poucos jogos (os mesmos
- * `JOGOS_DE_PRIOR` jogos imaginários dos confrontos); o uso é a percentagem de
- * partidas em que o brawler apareceu.
+ * outras fontes. Para ORDENAR, a vitória é puxada para 50% com poucos jogos
+ * (os mesmos `JOGOS_DE_PRIOR` jogos imaginários dos confrontos): três jogos a
+ * 100% não passam à frente de trezentos a 60%. Para MOSTRAR, fica também a
+ * vitória medida (`vitoriaNaApi`) e os jogos (`jogosNaApi`), que batem com a
+ * página «Partidas». O uso é a percentagem de partidas em que o brawler
+ * apareceu.
  */
 export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[], dados: DadosDoMapaDaApi): T[] {
   const porNome = new Map(dados.brawlers.map((linha) => [normalizarNome(linha.brawler), linha]));
@@ -116,6 +90,8 @@ export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[],
     return {
       ...linha,
       winRate: ((vitorias + JOGOS_DE_PRIOR * 0.5) / (jogos + JOGOS_DE_PRIOR)) * 100,
+      /** A vitória medida, sem o ajuste: é a que o ecrã mostra (a mesma da página «Partidas»). */
+      vitoriaNaApi: jogos > 0 ? (vitorias / jogos) * 100 : null,
       usage: dados.partidas > 0 ? (jogos / dados.partidas) * 100 : 0,
       topBrawlWinRate: null,
       topBrawlUseRate: null,
@@ -127,4 +103,29 @@ export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[],
       jogosNaApi: jogos,
     };
   });
+}
+
+export type PartidasDeTodosOsMapas = {
+  mapas: ReadonlyArray<{ mapId: string; nome: string; partidas: number }>;
+  brawlersPorMapa: Readonly<Record<string, ReadonlyArray<{ brawler: string; jogos: number; vitorias: number }>>>;
+};
+
+/**
+ * `linhasDaApi` para todos os mapas de uma vez (a secção Mapas da página
+ * inicial): cada mapa recebe as partidas dele. Um mapa sem partidas fica com
+ * toda a gente a 50% e uso 0 — «não sabemos», como no Draft.
+ */
+export function linhasDosMapasDaApi<T extends { brawler: string; map: string }>(linhas: readonly T[], geral: PartidasDeTodosOsMapas): T[] {
+  const porNome = new Map(geral.mapas.map((mapa) => [normalizarNome(mapa.nome), mapa]));
+  const porMapa = new Map<string, T[]>();
+  for (const linha of linhas) {
+    const doMapa = porMapa.get(linha.map);
+    if (doMapa) doMapa.push(linha);
+    else porMapa.set(linha.map, [linha]);
+  }
+  return Array.from(porMapa, ([nome, doMapa]) => {
+    const mapa = porNome.get(normalizarNome(nome));
+    const brawlers = mapa ? geral.brawlersPorMapa[mapa.mapId] ?? [] : [];
+    return linhasDaApi(doMapa, { partidas: mapa?.partidas ?? 0, brawlers, confrontos: [], sinergias: [] });
+  }).flat();
 }

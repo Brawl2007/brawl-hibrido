@@ -62,6 +62,12 @@ import { Switch } from "@/components/ui/switch";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
 import { mapImageFor } from "@/lib/imagemDoMapa";
 import { SeletorDeElo } from "@/components/SeletorDeElo";
+import { BotaoApiOficial } from "@/components/BotaoApiOficial";
+import { SeletorDeRank } from "@/components/SeletorDeRank";
+import type { IdDoRank } from "@shared/ranksDoRanked";
+import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
+import { linhasDosMapasDaApi, useFonteApi } from "@/hooks/useFonteApi";
+import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { hybridWeightsLabel, hybridWeightsSentence, useHybridWeights, type HybridWeightsPreference } from "@/lib/hybridWeights";
 import { officialSourceBalance, useSourceBalance, type SourceBalancePreference } from "@/lib/sourceBalance";
 import { buildMapsTsv } from "@shared/mapTsv";
@@ -315,6 +321,7 @@ function MapSelector({
   rows,
   onCopyMaps,
   onDownloadMaps,
+  api,
 }: {
   maps: MapSummary[];
   selectedMap: MapSummary;
@@ -325,6 +332,8 @@ function MapSelector({
   rows: RankedRow[];
   onCopyMaps: () => void;
   onDownloadMaps: () => void;
+  /** O interruptor «API oficial» (o mesmo do Draft e da Matriz). */
+  api: { ligada: boolean; alternar: () => void; dias: number; setDias: (dias: number) => void; rank: IdDoRank | ""; setRank: (rank: IdDoRank | "") => void; partidasDoMapa: number | null };
 }) {
   const visibleMaps = modeFilter === "Todos" ? maps : maps.filter((map) => map.mode === modeFilter);
 
@@ -370,7 +379,22 @@ function MapSelector({
           </div>
         </div>
       </div>
-      <SeletorDeElo mapa={selectedMap.name} />
+      <div className="mapas-fonte">
+        <BotaoApiOficial ligada={api.ligada} onAlternar={api.alternar} />
+        {api.ligada ? (
+          <>
+            <SeletorDePeriodo className="mapas-fonte-periodo" dias={api.dias} onChange={api.setDias} />
+            <SeletorDeRank className="mapas-fonte-rank" rank={api.rank} onChange={api.setRank} />
+            <span className="mesa-fonte-api-nota" role="status">
+              {api.partidasDoMapa === null
+                ? "A ler as partidas…"
+                : `${api.partidasDoMapa.toLocaleString("pt-PT")} partidas Ranked em ${selectedMap.name}${api.partidasDoMapa < 100 ? " · ainda poucas: os números estão perto de 50%" : ""}`}
+            </span>
+          </>
+        ) : null}
+      </div>
+      {/* Com a API ligada, o elo das fontes não se aplica: contam as partidas recolhidas. */}
+      {api.ligada ? null : <SeletorDeElo mapa={selectedMap.name} />}
       <div className="map-strip">
         {visibleMaps.map((map, index) => {
           const selected = map.name === selectedMap.name;
@@ -898,6 +922,24 @@ export default function Home() {
     [winRateWeight, starPlayerWeight, topBrawlWeight, liveRows, liveMapSummaries],
   );
   const [selectedMap, setSelectedMap] = useState<MapSummary>(() => liveMapSummaries.find((map) => map.name === "Beach Ball") ?? liveMapSummaries[0]);
+  /**
+   * «API oficial» ligada (o mesmo interruptor do Draft e da Matriz): a vitória
+   * e o uso de cada brawler, em cada mapa, saem das partidas Ranked recolhidas
+   * e as fontes deixam de contar. Sem Star Player, que a API não dá.
+   */
+  const fonteApi = useFonteApi(selectedMap?.name);
+  const linhasDosMapas = useMemo(
+    () => fonteApi.ligada && fonteApi.geral
+      ? calculateHybridScoresByMap(linhasDosMapasDaApi(mapDisplayRows, fonteApi.geral), winRateWeight, topBrawlWeight, 0)
+      : mapDisplayRows,
+    [fonteApi.ligada, fonteApi.geral, mapDisplayRows, winRateWeight, topBrawlWeight],
+  );
+  const resumosDosMapas = useMemo(() => {
+    if (!fonteApi.ligada || !fonteApi.geral) return liveMapSummaries;
+    const melhor = new Map<string, number>();
+    for (const linha of linhasDosMapas) if (typeof linha.score === "number") melhor.set(linha.map, Math.max(melhor.get(linha.map) ?? 0, linha.score));
+    return liveMapSummaries.map((mapa) => ({ ...mapa, topScore: melhor.get(mapa.name) ?? 0 }));
+  }, [fonteApi.ligada, fonteApi.geral, linhasDosMapas, liveMapSummaries]);
   const [modeFilter, setModeFilter] = useState("Todos");
   const [activeSection, setActiveSection] = useState("dashboard");
 
@@ -929,7 +971,7 @@ export default function Home() {
   const frescura = descreverFrescura(statusQuery.data?.sourceReadAt ?? null);
   const handleRefresh = startRefresh;
 
-  const currentRows = useMemo(() => mapDisplayRows.filter((row) => row.map === selectedMap.name), [mapDisplayRows, selectedMap.name]);
+  const currentRows = useMemo(() => linhasDosMapas.filter((row) => row.map === selectedMap.name), [linhasDosMapas, selectedMap.name]);
   /**
    * Quem lidera o mapa escolhido: a linha medida com o Score mais alto.
    *
@@ -1048,15 +1090,26 @@ export default function Home() {
             </div>
             {aba === "maps" && (
               <MapSelector
-                maps={liveMapSummaries}
+                maps={resumosDosMapas}
                 selectedMap={selectedMap}
                 onSelect={selectMap}
                 modeFilter={modeFilter}
                 onModeFilter={setModeFilter}
                 modeOptions={liveModeOptions}
-                rows={mapDisplayRows}
+                rows={linhasDosMapas}
                 onCopyMaps={copyMapsTsv}
                 onDownloadMaps={downloadMapsTsv}
+                api={{
+                  ligada: fonteApi.ligada,
+                  alternar: fonteApi.alternar,
+                  dias: fonteApi.dias,
+                  setDias: fonteApi.setDias,
+                  rank: fonteApi.rank,
+                  setRank: fonteApi.setRank,
+                  partidasDoMapa: fonteApi.geral
+                    ? fonteApi.geral.mapas.find((mapa) => mapa.nome.toLowerCase().replace(/[^a-z0-9]/g, "") === selectedMap.name.toLowerCase().replace(/[^a-z0-9]/g, ""))?.partidas ?? 0
+                    : null,
+                }}
               />
             )}
             {aba === "rotation-averages" && (
