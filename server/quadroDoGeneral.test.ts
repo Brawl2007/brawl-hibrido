@@ -27,7 +27,7 @@ import { aplicarRotulos, caminhoLivre, corrigirCasas, grelhaEmTexto, linhaLivre,
 import { lerPng } from "./png";
 import { lerTerrenoDaImagem } from "./terrenoDoMapa";
 import { ateAo, conferirBuilds, escolherModelo, modelosDoPedido, opcoesDeBuild, ordenarModelos, pedirPlanoAoGeneral, pesquisarAtualidade } from "./generalIA";
-import { fornecedorDaChave, guardarChaveDeReserva, lerChavesDeReserva, lerJsonDaResposta, modelosDasReservas, ordenarModelosDeReserva } from "./iaDeReserva";
+import { fornecedorDaChave, fornecedorPorId, guardarChaveDeReserva, lerChavesDeReserva, lerJsonDaResposta, listaDeFornecedores, modelosDasReservas, ordenarModelosDeReserva } from "./iaDeReserva";
 import { imagemSegura, lerCatalogo } from "./catalogoDeBuilds";
 
 const NOSSOS = ["Nori", "Lou", "R-T"];
@@ -973,6 +973,10 @@ describe("várias IAs de reserva e a escolha da principal", () => {
       expect(conversa.headers.authorization).toBe(`Bearer ${chave}`);
       expect(conversa.headers.accept).toBe("application/vnd.github+json");
       expect(conversa.corpo.max_tokens).toBe(4000);
+      // O que a OpenAI pede à parte não muda as outras.
+      expect(conversa.corpo.temperature).toBe(0.4);
+      expect(conversa.corpo.max_completion_tokens).toBeUndefined();
+      expect(conversa.corpo.reasoning_effort).toBeUndefined();
       expect(github.pedidos.every((p) => !p.url.includes(chave))).toBe(true);
     });
   });
@@ -1003,6 +1007,58 @@ describe("várias IAs de reserva e a escolha da principal", () => {
     await comChaves({}, async () => {
       await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, gemini.buscar, { principal: "cerebras", soEssa: true })).rejects.toThrow(/só a IA de reserva \(Cerebras\)/);
     }, true);
+  });
+
+  it("OpenAI (ChatGPT): reconhece-se pela sk-proj-, é paga, fica em último e só com modelos que conversam", async () => {
+    expect(fornecedorDaChave(`sk-proj-${"A1b2_C3-d4".repeat(4)}`)?.id).toBe("openai");
+    expect(fornecedorDaChave(`sk-svcacct-${"A1b2C3d4".repeat(4)}`)?.id).toBe("openai");
+    // A OpenRouter continua a ser a OpenRouter; a chave antiga da OpenAI (só sk-) escolhe-se na lista.
+    expect(fornecedorDaChave("sk-or-v1-abcdefghijklmnopqrstuvwx")?.id).toBe("openrouter");
+    expect(fornecedorDaChave(`sk-${"Ab12Cd34".repeat(6)}`)).toBeNull();
+    expect(listaDeFornecedores().filter((f) => f.pago).map((f) => f.id)).toEqual(["openai"]);
+    expect(listaDeFornecedores().at(-1)?.id).toBe("openai");
+    // A lista da OpenAI não diz o que cada modelo faz: fora a voz, as imagens, o Realtime e os que só a API Responses aceita.
+    expect(ordenarModelosDeReserva([
+      "whisper-1", "gpt-4o-mini", "dall-e-3", "gpt-image-1", "gpt-4o-realtime-preview", "o1-pro", "gpt-5", "o3", "o3-mini",
+      "text-embedding-3-large", "gpt-4o-2024-08-06", "gpt-5-codex", "gpt-5-pro", "gpt-4o-mini-tts", "gpt-4o-search-preview", "gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4.1",
+    ], null, fornecedorPorId("openai").soModelos)).toEqual(["gpt-4.1", "gpt-4o", "gpt-4o-mini", "gpt-5", "o3", "o3-mini"]);
+
+    const openai = fornecedorFalso({ modelos: { object: "list", data: [{ id: "gpt-5", object: "model" }, { id: "whisper-1", object: "model" }, { id: "gpt-4.1", object: "model" }] } });
+    await comChaves({ openai: unica("sk-proj-"), groq: unica("gsk_") }, async () => {
+      expect((await lerChavesDeReserva()).map((c) => c.fornecedor.id)).toEqual(["groq", "openai"]);
+      expect((await modelosDasReservas(openai.buscar)).openai?.modelos).toEqual(["gpt-4.1", "gpt-5"]);
+      // O GPT-5 pensa antes de responder: sem temperatura, max_completion_tokens e raciocínio curto.
+      const r5 = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, openai.buscar, { principal: "openai", soEssa: true, modelos: { openai: "gpt-5" } });
+      expect(r5.modelo).toBe("OpenAI (ChatGPT) · gpt-5");
+      const [pedido5] = openai.pedidos.filter((p) => p.url.endsWith("/chat/completions"));
+      expect(pedido5.corpo).toMatchObject({ model: "gpt-5", max_completion_tokens: 16000, reasoning_effort: "low", response_format: { type: "json_object" } });
+      expect(pedido5.corpo.temperature).toBeUndefined();
+      expect(pedido5.corpo.max_tokens).toBeUndefined();
+      // O GPT-4.1 (o de omissão) aceita temperatura e não raciocina.
+      const r41 = await pedirPlanoAoGeneral({ ...pedido, mapaId: null }, openai.buscar, { principal: "openai", soEssa: true, modelos: {} });
+      expect(r41.modelo).toBe("OpenAI (ChatGPT) · gpt-4.1");
+      const pedido41 = openai.pedidos.filter((p) => p.url.endsWith("/chat/completions")).at(-1)!;
+      expect(pedido41.corpo).toMatchObject({ model: "gpt-4.1", temperature: 0.4, max_completion_tokens: 16000 });
+      expect(pedido41.corpo.reasoning_effort).toBeUndefined();
+      expect(pedido41.corpo.max_tokens).toBeUndefined();
+    });
+  });
+
+  it("OpenAI sem saldo: diz logo que a API é paga à parte, sem gastar os outros modelos", async () => {
+    const semSaldo = fornecedorFalso({
+      modelos: { data: [{ id: "gpt-4.1" }, { id: "gpt-4o" }, { id: "gpt-5" }] },
+      resposta: { status: 429, corpo: { error: { message: "You exceeded your current quota, please check your plan and billing details.", type: "insufficient_quota", code: "insufficient_quota" } } },
+    });
+    await comChaves({ openai: unica("sk-proj-") }, async () => {
+      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, semSaldo.buscar, { principal: "openai", soEssa: true })).rejects.toThrow(/não tem saldo.*assinatura do ChatGPT não conta.*billing/);
+      expect(semSaldo.pedidos.filter((p) => p.url.endsWith("/chat/completions"))).toHaveLength(1);
+    });
+    // Um limite normal (429 sem ser de saldo) continua a passar ao modelo seguinte.
+    const noLimite = fornecedorFalso({ modelos: { data: [{ id: "gpt-4.1" }, { id: "gpt-4o" }] }, resposta: { status: 429, corpo: { error: { message: "Rate limit reached", type: "requests", code: "rate_limit_exceeded" } } } });
+    await comChaves({ openai: unica("sk-proj-") }, async () => {
+      await expect(pedirPlanoAoGeneral({ ...pedido, mapaId: null }, noLimite.buscar, { principal: "openai", soEssa: true })).rejects.toThrow(/OpenAI \(ChatGPT\) também não conseguiu/);
+      expect(noLimite.pedidos.filter((p) => p.url.endsWith("/chat/completions")).map((p) => p.corpo.model)).toEqual(["gpt-4.1", "gpt-4o"]);
+    });
   });
 
   it("a chave antiga (uma só reserva) continua a valer, e uma nova do mesmo fornecedor substitui-a", async () => {

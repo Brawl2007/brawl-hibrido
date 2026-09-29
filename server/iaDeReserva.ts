@@ -1,7 +1,7 @@
 /**
- * As IAs de reserva: outras IAs gratuitas que fazem o plano quando a Gemini
- * chega ao limite (ou quando o dono prefere outra) — Groq, OpenRouter, GitHub
- * Models, Hugging Face, Requesty, Mistral e Cerebras.
+ * As IAs de reserva: outras IAs que fazem o plano quando a Gemini chega ao
+ * limite (ou quando o dono prefere outra) — Groq, OpenRouter, GitHub Models,
+ * Hugging Face, Requesty, Mistral, Cerebras e a OpenAI (a do ChatGPT).
  *
  * PORQUÊ ESTAS
  *
@@ -12,6 +12,13 @@
  * github_pat_, hf_, csk-) reconhece-se sozinha; nas outras (Mistral, Requesty)
  * o dono diz de quem é. Na OpenRouter e na Requesty só se usam os modelos
  * gratuitos, para nunca gastar créditos.
+ *
+ * A OPENAI É PAGA
+ *
+ * É a única que não tem uso gratuito: cada plano gasta do saldo da API do dono
+ * (platform.openai.com). A assinatura do ChatGPT (Plus) não serve para isto: a
+ * API é à parte. Por isso fica em último na ordem das reservas — só faz o plano
+ * quando o dono a escolhe como principal, ou quando as gratuitas falharam.
  *
  * A CHAVE
  *
@@ -31,7 +38,7 @@ export const CHAVE_DE_RESERVA_SETTING = "iaReservaApiKey";
 const settingDe = (id: IdDaReserva) => `iaReserva.${id}`;
 
 type Buscar = typeof fetch;
-export const IDS_DAS_RESERVAS = ["groq", "openrouter", "github", "huggingface", "requesty", "mistral", "cerebras"] as const;
+export const IDS_DAS_RESERVAS = ["groq", "openrouter", "github", "huggingface", "requesty", "mistral", "cerebras", "openai"] as const;
 export type IdDaReserva = (typeof IDS_DAS_RESERVAS)[number];
 export type Fornecedor = {
   id: IdDaReserva;
@@ -44,6 +51,14 @@ export type Fornecedor = {
    * os de preço zero, quando a lista diz o preço (Requesty); null = todos.
    */
   soGratuitos: "sufixo" | "preco" | null;
+  /**
+   * Só os modelos com este nome. A lista da OpenAI não diz o que cada modelo
+   * faz, e metade não conversa (voz, imagens, Realtime, os "-pro" só da API
+   * Responses).
+   */
+  soModelos?: RegExp;
+  /** Sem uso gratuito: cada pedido gasta do saldo do dono. */
+  pago?: boolean;
   ondeCriar: string;
   /** A forma da chave, quando a tem. Sem forma, o dono diz de quem é. */
   forma: RegExp | null;
@@ -62,6 +77,14 @@ const FORNECEDORES: readonly Omit<Fornecedor, "base">[] = [
   { id: "requesty", nome: "Requesty", caminhoDosModelos: "/models", caminhoDaConversa: "/chat/completions", soGratuitos: "preco", ondeCriar: "app.requesty.ai/api-keys", forma: null, exemplo: "a chave da Requesty", maxTokens: 8000 },
   { id: "mistral", nome: "Mistral", caminhoDosModelos: "/models", caminhoDaConversa: "/chat/completions", soGratuitos: null, ondeCriar: "console.mistral.ai/api-keys", forma: null, exemplo: "a chave da Mistral", maxTokens: 8000 },
   { id: "cerebras", nome: "Cerebras", caminhoDosModelos: "/models", caminhoDaConversa: "/chat/completions", soGratuitos: null, ondeCriar: "cloud.cerebras.ai", forma: /^csk-[\w-]{20,}$/, exemplo: "csk-…", maxTokens: 8000 },
+  // As chaves de hoje começam por sk-proj- (as antigas, só sk-, escolhem-se na lista).
+  // Os modelos de raciocínio (GPT-5, o3, o4-mini) pensam antes de responder: o
+  // limite tem folga para o raciocínio e para o plano.
+  {
+    id: "openai", nome: "OpenAI (ChatGPT)", caminhoDosModelos: "/models", caminhoDaConversa: "/chat/completions", soGratuitos: null,
+    soModelos: /^(gpt-(4o|4\.1|[5-9](\.\d+)?)(-mini|-nano)?|o[3-9](-mini)?)$/, pago: true,
+    ondeCriar: "platform.openai.com/api-keys", forma: /^sk-(proj|svcacct|admin)-[\w-]{20,}$/, exemplo: "sk-proj-…", maxTokens: 16000,
+  },
 ];
 const BASES: Record<IdDaReserva, string> = {
   groq: "https://api.groq.com/openai/v1",
@@ -71,6 +94,7 @@ const BASES: Record<IdDaReserva, string> = {
   requesty: "https://router.requesty.ai/v1",
   mistral: "https://api.mistral.ai/v1",
   cerebras: "https://api.cerebras.ai/v1",
+  openai: "https://api.openai.com/v1",
 };
 
 /** O fornecedor pelo nome curto. `IA_RESERVA_BASE` só existe para testes locais com uma IA falsa. */
@@ -87,7 +111,7 @@ export function fornecedorDaChave(chave: string): Fornecedor | null {
 
 /** Os fornecedores, para o ecrã: nome, onde criar a chave e como ela começa. */
 export function listaDeFornecedores() {
-  return FORNECEDORES.map(({ id, nome, ondeCriar, exemplo, forma }) => ({ id, nome, ondeCriar, exemplo, reconheceSozinha: Boolean(forma) }));
+  return FORNECEDORES.map(({ id, nome, ondeCriar, exemplo, forma, pago }) => ({ id, nome, ondeCriar, exemplo, reconheceSozinha: Boolean(forma), pago: pago === true }));
 }
 
 export type ChaveDeReserva = { fornecedor: Fornecedor; key: string; origin: "ambiente" | "site" };
@@ -137,7 +161,13 @@ const PREFERENCIA = [
   /llama-4-maverick/i, /llama-4-scout/i, /gpt-oss-120b/, /kimi-k2/i, /llama-3\.3-70b/i, /qwen-?3/i, /gemma-3-27b/, /deepseek/i, /mistral-small/, /llama/i,
 ];
 const SO_TEXTO_NAO = /whisper|tts|guard|embed|moderation|audio|playai|compound|orpheus|ocr|rerank|dall-e|flux|stable-diffusion|image-gen|transcri/i;
-const veImagensPeloNome = (modelo: string) => /llama-4|gemma-3|vision|-vl|maverick|scout|pixtral|gpt-4\.1|gpt-4o|mistral-(medium|small)/i.test(modelo);
+const veImagensPeloNome = (modelo: string) => /llama-4|gemma-3|vision|-vl|maverick|scout|pixtral|gpt-4\.1|gpt-4o|gpt-5|(^|\/)(o3$|o[4-9])|mistral-(medium|small)/i.test(modelo);
+/**
+ * Os modelos de raciocínio da OpenAI (GPT-5, o3, o4-mini): não aceitam outra
+ * temperatura nem `max_tokens` (querem `max_completion_tokens`), e pensam
+ * pouco quando se lhes pede ("low") — o plano tem de chegar antes da partida.
+ */
+export const pensaAntes = (modelo: string) => /(^|\/)(gpt-[5-9]|o[3-9])/.test(modelo);
 
 /** Um modelo da lista do fornecedor: o nome e, quando a lista o diz, o que vê, o que escreve e o preço. */
 export type ModeloDaLista = { id: string; veImagens: boolean | null; escreveTexto: boolean | null; gratuito: boolean | null };
@@ -158,11 +188,12 @@ export function lerModeloDaLista(bruto: unknown): ModeloDaLista | null {
   return { id: m.id, veImagens, escreveTexto, gratuito };
 }
 
-function ordenarModelos(lista: readonly (string | ModeloDaLista)[], soGratuitos: Fornecedor["soGratuitos"]) {
+function ordenarModelos(lista: readonly (string | ModeloDaLista)[], soGratuitos: Fornecedor["soGratuitos"], soModelos?: RegExp) {
   const modelos = lista.map((m) => (typeof m === "string" ? { id: m, veImagens: null, escreveTexto: null, gratuito: null } : m));
   const dizemOPreco = modelos.some((m) => m.gratuito !== null);
   const uteis = modelos
     .filter((m) => m.escreveTexto !== false && !SO_TEXTO_NAO.test(m.id))
+    .filter((m) => !soModelos || soModelos.test(m.id))
     .filter((m) => soGratuitos !== "sufixo" || m.id.endsWith(":free"))
     .filter((m) => soGratuitos !== "preco" || !dizemOPreco || m.gratuito === true);
   const posicao = (id: string) => {
@@ -173,8 +204,8 @@ function ordenarModelos(lista: readonly (string | ModeloDaLista)[], soGratuitos:
 }
 
 /** Os nomes dos modelos úteis, pela ordem em que se tentam. */
-export function ordenarModelosDeReserva(lista: readonly (string | ModeloDaLista)[], soGratuitos: Fornecedor["soGratuitos"] | boolean) {
-  return ordenarModelos(lista, soGratuitos === true ? "sufixo" : soGratuitos === false ? null : soGratuitos).map((m) => m.id);
+export function ordenarModelosDeReserva(lista: readonly (string | ModeloDaLista)[], soGratuitos: Fornecedor["soGratuitos"] | boolean, soModelos?: RegExp) {
+  return ordenarModelos(lista, soGratuitos === true ? "sufixo" : soGratuitos === false ? null : soGratuitos, soModelos).map((m) => m.id);
 }
 
 /** Por chave: os modelos pela ordem e os que veem imagens. */
@@ -227,8 +258,8 @@ async function modelosPara(fornecedor: Fornecedor, chave: string, buscar: Buscar
   // O catálogo do GitHub é uma lista; os outros vêm em { data: [...] }.
   const brutos = Array.isArray(dados) ? dados : ((dados as { data?: unknown[] })?.data ?? []);
   const lidos = brutos.map(lerModeloDaLista).filter((m): m is ModeloDaLista => Boolean(m));
-  const ordenados = ordenarModelos(lidos, fornecedor.soGratuitos);
-  if (!ordenados.length) throw new ErroDaReserva(`A chave da ${fornecedor.nome} funciona, mas não tem nenhum modelo gratuito que escreva texto.`);
+  const ordenados = ordenarModelos(lidos, fornecedor.soGratuitos, fornecedor.soModelos);
+  if (!ordenados.length) throw new ErroDaReserva(`A chave da ${fornecedor.nome} funciona, mas não tem nenhum modelo${fornecedor.pago ? "" : " gratuito"} que escreva texto.`);
   const resultado = {
     ordem: ordenados.map((m) => m.id),
     comImagem: new Set(ordenados.filter((m) => m.veImagens ?? veImagensPeloNome(m.id)).map((m) => m.id)),
@@ -299,16 +330,23 @@ export async function gerarJsonNaReserva(reserva: { fornecedor: Fornecedor; key:
       const conteudo = comImagem
         ? [{ type: "text", text: texto }, { type: "image_url", image_url: { url: `data:${imagem!.mime_type};base64,${imagem!.data}` } }]
         : texto;
+      const raciocinio = fornecedor.id === "openai" && pensaAntes(modelo);
       const corpo = {
         model: modelo,
         messages: [{ role: "user", content: conteudo }],
-        temperature: temperatura,
-        max_tokens: fornecedor.maxTokens,
+        ...(raciocinio ? {} : { temperature: temperatura }),
+        // Na OpenAI, `max_completion_tokens` serve a todos os modelos (os de raciocínio recusam `max_tokens`).
+        ...(fornecedor.id === "openai" ? { max_completion_tokens: fornecedor.maxTokens } : { max_tokens: fornecedor.maxTokens }),
+        ...(raciocinio && !simples ? { reasoning_effort: "low" } : {}),
         ...(simples ? {} : { response_format: { type: "json_object" } }),
       };
       try {
         const { status, ok, texto: resposta } = await pedir(fornecedor, chave, fornecedor.caminhoDaConversa, buscar, corpo, limiteMs);
         if (status === 401 || status === 403) throw erroDaChave(fornecedor, status, resposta);
+        // Sem saldo, nenhum modelo da mesma chave vai conseguir: não vale a pena tentar os outros.
+        if (fornecedor.id === "openai" && status === 429 && /insufficient_quota/.test(resposta)) {
+          throw new ErroDaReserva(`A conta da ${fornecedor.nome} não tem saldo para a API (a assinatura do ChatGPT não conta). Carrega-a em platform.openai.com/settings/organization/billing.`);
+        }
         if (!ok) {
           console.warn(`[General] reserva ${fornecedor.nome} ${modelo}${simples ? " (simples)" : ""} respondeu ${status}: ${mensagemDoFornecedor(resposta)}`);
           falhas.push(`${modelo}: ${status} ${mensagemDoFornecedor(resposta).slice(0, 90)}`);

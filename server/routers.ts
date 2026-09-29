@@ -162,7 +162,7 @@ export const appRouter = router({
         const pelaForma = input.key ? fornecedorDaChave(input.key) : null;
         if (input.fornecedor === "auto" && !input.key) return { saved: false, test: { ok: false, reason: "Diz de que IA é a chave a apagar." } };
         if (input.fornecedor === "auto" && !pelaForma) {
-          return { saved: false, test: { ok: false, reason: "Não reconheço esta chave pela forma. Escolhe de que IA é (Mistral e Requesty não têm forma própria)." } };
+          return { saved: false, test: { ok: false, reason: "Não reconheço esta chave pela forma. Escolhe de que IA é (a Mistral, a Requesty e as chaves antigas da OpenAI, só «sk-», não têm forma própria)." } };
         }
         // Uma chave com a forma de outra IA foi colada no sítio errado.
         if (input.fornecedor !== "auto" && pelaForma && pelaForma.id !== input.fornecedor) {
