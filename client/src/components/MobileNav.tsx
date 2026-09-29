@@ -1,4 +1,4 @@
-import { Crosshair, Gauge, Layers3, Sparkles } from "lucide-react";
+import { Crosshair, Database, Gauge, Sparkles } from "lucide-react";
 
 /**
  * Navegação inferior para telemóvel.
@@ -19,7 +19,8 @@ const DESTINOS = [
   { href: "/", label: "Início", icon: Gauge, match: (path: string) => path === "/" },
   { href: "/draft", label: "Draft", icon: Sparkles, match: (path: string) => path.startsWith("/draft") },
   { href: "/brawlers", label: "Brawlers", icon: Crosshair, match: (path: string) => path.startsWith("/brawlers") },
-  { href: "/matchups", label: "Matriz 1v1", icon: Layers3, match: (path: string) => path.startsWith("/matchups") },
+  // As partidas recolhidas (1v1, equipas, sinergias) substituem a Matriz, que é uma amostra fixa antiga.
+  { href: "/partidas", label: "Partidas", icon: Database, match: (path: string) => path.startsWith("/partidas") || path.startsWith("/matchups") },
 ] as const;
 
 export function MobileNav({ pathname }: { pathname?: string }) {

@@ -74,11 +74,11 @@ export function createApp() {
    */
   app.get("/api/cron/sync", handleCronSync);
   /**
-   * Recolha de partidas Ranked da API oficial, de hora a hora.
+   * Recolha de partidas Ranked da API oficial, de 15 em 15 minutos.
    *
    * Na Vercel ninguém a chamava: só o servidor antigo, que ficava sempre de pé,
    * a corria no ciclo dele. Quem a chama agora é o GitHub Actions
-   * (`.github/workflows/recolher-partidas.yml`), de hora a hora, e o cron
+   * (`.github/workflows/recolher-partidas.yml`), de 15 em 15 minutos, e o cron
    * diário da Vercel como reserva.
    *
    * É público de propósito, para o GitHub Actions não precisar de segredos. O

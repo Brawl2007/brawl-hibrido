@@ -16,6 +16,7 @@ export const DESTINOS_DO_SITE = [
   { id: "inicio", label: "Início", href: "/" },
   { id: "mapas", label: "Mapas", href: "/#maps" },
   { id: "draft", label: "Draft", href: "/draft" },
+  { id: "partidas", label: "Partidas", href: "/partidas" },
   { id: "matriz", label: "Matriz 1v1", href: "/matchups" },
   { id: "brawlers", label: "Brawlers", href: "/brawlers" },
   { id: "fontes", label: "Fontes", href: "/#sources" },

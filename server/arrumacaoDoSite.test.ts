@@ -10,7 +10,7 @@ import { resolve } from "node:path";
  * clicar". Estes testes seguram cada uma dessas decisões.
  */
 const ler = (caminho: string) => readFileSync(resolve(process.cwd(), caminho), "utf8");
-const PAGINAS = ["client/src/pages/Home.tsx", "client/src/pages/Draft.tsx", "client/src/pages/Brawlers.tsx", "client/src/pages/BrawlerDetail.tsx", "client/src/pages/MatchupMatrix.tsx"];
+const PAGINAS = ["client/src/pages/Home.tsx", "client/src/pages/Draft.tsx", "client/src/pages/Brawlers.tsx", "client/src/pages/BrawlerDetail.tsx", "client/src/pages/MatchupMatrix.tsx", "client/src/pages/Partidas.tsx"];
 
 describe("o menu em cima", () => {
   it("todas as páginas usam a mesma barra, e nenhuma volta à barra lateral", () => {
@@ -21,10 +21,11 @@ describe("o menu em cima", () => {
     }
   });
 
-  it("os sete destinos, pela ordem do site", () => {
+  it("os oito destinos, pela ordem do site", () => {
     const barra = ler("client/src/components/BarraDoSite.tsx");
     const rotulos = [...barra.matchAll(/label: "([^"]+)"/g)].map((m) => m[1]);
-    expect(rotulos).toEqual(["Início", "Mapas", "Draft", "Matriz 1v1", "Brawlers", "Fontes", "Como funciona"]);
+    // v156: «Partidas» — as partidas Ranked recolhidas — ao lado da Matriz.
+    expect(rotulos).toEqual(["Início", "Mapas", "Draft", "Partidas", "Matriz 1v1", "Brawlers", "Fontes", "Como funciona"]);
   });
 
   it("no telemóvel os destinos saem de cima, porque a barra de baixo já os tem", () => {
@@ -287,7 +288,8 @@ describe("v150: revisão do site (telemóvel, textos, retratos, títulos)", () =
     expect(ficha).not.toMatch(/strong against|Struggles against|Ranked SSE|Win Rate \$\{/i);
     expect(ler("client/src/pages/Brawlers.tsx")).not.toMatch(/"cópia do site"|rankedSync\.version \?/);
     expect(ler("client/src/pages/Home.tsx")).not.toContain('"Meta snapshot"');
-    expect(ler("client/src/components/MobileNav.tsx")).toContain('label: "Matriz 1v1"');
+    // v156: no telemóvel, «Partidas» (dados recolhidos) ocupa o lugar da Matriz (amostra fixa antiga).
+    expect(ler("client/src/components/MobileNav.tsx")).toContain('label: "Partidas"');
   });
   it("os retratos mostram as iniciais quando a imagem falha", () => {
     expect(ler("client/src/components/Retrato.tsx")).toContain("onError={() => setFalhou(src)}");

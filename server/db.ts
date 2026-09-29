@@ -1,5 +1,5 @@
 import { OWNER_LOGIN_OPEN_ID } from "@shared/ownerLogin";
-import { and, count, desc, eq, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import {
@@ -967,6 +967,45 @@ export async function recordObservedBattlesBatch(
     battlesInserted: novas.length,
     pairObservations: novas.reduce((total, entrada) => total + entrada.deltas.length, 0),
   };
+}
+
+/**
+ * As partidas Ranked guardadas, para a página «Partidas».
+ *
+ * Só as colunas precisas, filtradas por data, modo e mapa na própria base.
+ * O limite é uma rede de segurança para a função não rebentar com a memória;
+ * se algum dia for atingido, a página diz quantas partidas contou.
+ */
+export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode?: string; mapId?: string; limite?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  const condicoes = [
+    filtro.desde ? gte(observedBattles.battleTime, filtro.desde) : undefined,
+    filtro.mode ? eq(observedBattles.mode, filtro.mode) : undefined,
+    filtro.mapId ? eq(observedBattles.mapId, filtro.mapId) : undefined,
+  ].filter((condicao): condicao is NonNullable<typeof condicao> => Boolean(condicao));
+  return lerDaBase("listObservedBattlesParaResumo", () => db
+    .select({
+      mapId: observedBattles.mapId,
+      mode: observedBattles.mode,
+      winningTeam: observedBattles.winningTeam,
+      losingTeam: observedBattles.losingTeam,
+    })
+    .from(observedBattles)
+    .where(condicoes.length ? and(...condicoes) : undefined)
+    .orderBy(desc(observedBattles.battleTime))
+    .limit(filtro.limite ?? 60_000), []);
+}
+
+/** Quantas partidas há por mapa e modo, para os filtros da página. */
+export async function listObservedMapsParaResumo(desde?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return lerDaBase("listObservedMapsParaResumo", () => db
+    .select({ mapId: observedBattles.mapId, mode: observedBattles.mode, partidas: count() })
+    .from(observedBattles)
+    .where(desde ? gte(observedBattles.battleTime, desde) : undefined)
+    .groupBy(observedBattles.mapId, observedBattles.mode), []);
 }
 
 export async function listObservedMatchCollectionRuns(limit = 8) {
