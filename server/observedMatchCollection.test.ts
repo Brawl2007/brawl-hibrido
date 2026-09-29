@@ -139,3 +139,13 @@ describe("soma dos pares em lote", () => {
     expect(a[0].wins).toBe(1);
   });
 });
+
+describe("recolha sem chave", () => {
+  it("diz que falta a chave em vez de dizer que a API não tem jogadores", async () => {
+    delete process.env.BRAWL_STARS_API_KEY;
+    const { collectObservedRankedMatches } = await import("./observedMatchCollection");
+    const resultado = await collectObservedRankedMatches("manual");
+    expect(resultado).toMatchObject({ ok: false });
+    expect((resultado as { error: string }).error).toMatch(/Sem chave da API oficial/);
+  });
+});

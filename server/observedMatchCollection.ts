@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   fetchOfficialBattleLog,
   fetchOfficialRankedPlayers,
+  isOfficialApiConfigured,
   type OfficialBattleLogEntry,
 } from "./brawlStarsApi";
 import {
@@ -184,6 +185,8 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
   await updateObservedMatchCollectionConfig({ lastStatus: "running", lastStartedAt: startedAt, lastError: null });
 
   try {
+    // Sem chave, a API devolve listas vazias em silêncio; dizê-lo evita procurar o problema no sítio errado.
+    if (!isOfficialApiConfigured()) throw new Error("Sem chave da API oficial neste ambiente: guarda-a no painel do Draft (as versões de teste da Vercel não usam a base de dados de produção).");
     const volta = voltaDaRecolha(startedAt);
     const listas = await Promise.all(["global", ...paisesDaVolta(volta)].map((pais) => fetchOfficialRankedPlayers(pais)));
     const players = jogadoresDaVolta(
