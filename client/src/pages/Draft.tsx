@@ -2509,6 +2509,7 @@ export default function Draft() {
     [analysisChoices, draftSequence],
   );
   const banNames = useMemo(() => new Set(draftSequence.map((step, index) => step.kind === "ban" ? analysisChoices[index] : null).filter(Boolean) as string[]), [analysisChoices, draftSequence]);
+  const bansDoQuadro = useMemo(() => [...banNames], [banNames]);
   const pickNames = useMemo(() => new Set(draftSequence.map((step, index) => step.kind === "pick" ? analysisChoices[index] : null).filter(Boolean) as string[]), [analysisChoices, draftSequence]);
   // Ranked rule: any resolved ban or pick locks the brawler for the rest of the sequence.
   const lockedNames = useMemo(() => getDraftLockedNames(draftSequence, choices, activeStepIndex), [draftSequence, choices, activeStepIndex]);
@@ -2999,6 +3000,7 @@ export default function Draft() {
                   nossos={allyPickRows}
                   deles={myTeam === "blue" ? redPicks : bluePicks}
                   retratoDe={retratoNoQuadro}
+                  bans={bansDoQuadro}
                 />
                 </Suspense>
                 <LaneMatchupDesk myTeam={myTeam} semMapa mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />

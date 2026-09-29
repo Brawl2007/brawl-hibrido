@@ -20,7 +20,11 @@ import { probeAllSources } from "./sourceProbe";
 import { fichaDaMatriz, resumoDasPartidas } from "./partidasResumo";
 import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
 import { IP_DO_PROXY_ROYALEAPI, normalizarCaminhoDaApi, probeOfficialApi, setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
-import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
+import { ErroDoGeneral, ateAo, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
+import { esquemaDoPedidoTatico } from "./decisoesTaticas";
+import { estrategiaRecebida, pedirEstrategiaTatica } from "./estrategiaJev";
+import { explicarEstrategia } from "./explicacaoTatica";
+import { jevConfigurado } from "./jevCliente";
 import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
 import { IDS_DAS_RESERVAS, fornecedorDaChave, fornecedorPorId, guardarChaveDeReserva, lerChavesDeReserva, listaDeFornecedores, modelosDasReservas, testarChaveDeReserva } from "./iaDeReserva";
@@ -65,6 +69,18 @@ import { normalizeObservedMode, resolveObservedMapId } from "./observedMatchColl
  *
  * Agora diz o que falta e o valor exato a configurar.
  */
+/** Qual IA de texto faz o plano (ou a explicação). Os modelos só valem se estiverem na lista da chave (o servidor confere). */
+const esquemaDaEscolhaDaIA = z.object({
+  rapido: z.boolean().optional(),
+  principal: z.enum(["gemini", "reserva", ...IDS_DAS_RESERVAS]).nullish(),
+  soEssa: z.boolean().optional(),
+  modelos: z.record(z.string().max(20), z.string().trim().max(160).nullable()).optional(),
+  // A forma antiga, de um separador aberto antes da mudança.
+  ordem: z.enum(["gemini-primeiro", "reserva-primeiro", "so-gemini", "so-reserva"]).optional(),
+  modeloGemini: z.string().trim().max(80).nullish(),
+  modeloReserva: z.string().trim().max(160).nullish(),
+});
+
 function exigirDono(ctx: { user: { role: string; openId: string; email: string | null } }, acao: string) {
   if (ctx.user.role === "admin") return;
   const temDonoConfigurado = Boolean((process.env.OWNER_OPEN_ID ?? "").trim() || (process.env.OWNER_EMAIL ?? "").trim());
@@ -146,6 +162,8 @@ export const appRouter = router({
         // As IAs de reserva: de quem é cada chave e os últimos quatro caracteres. A chave nunca sai daqui.
         reservas: reservas.map((r) => ({ id: r.fornecedor.id, nome: r.fornecedor.nome, origin: r.origin, hint: `····${r.key.slice(-4)}` })),
         fornecedores: listaDeFornecedores(),
+        // O Jev (motor tático): só se está configurado. A chave fica no servidor — nem os últimos caracteres saem.
+        jev: { configurado: jevConfigurado() },
       };
     }),
     /** Os modelos que cada chave tem, para o dono escolher qual faz o plano. Não gasta pedidos de geração. */
@@ -193,16 +211,7 @@ export const appRouter = router({
         dadosDe: z.string().max(40).nullish(),
         elo: z.string().max(20).nullish(),
         // Qual IA faz o plano. Os modelos só valem se estiverem na lista da chave (o servidor confere).
-        ia: z.object({
-          rapido: z.boolean().optional(),
-          principal: z.enum(["gemini", "reserva", ...IDS_DAS_RESERVAS]).nullish(),
-          soEssa: z.boolean().optional(),
-          modelos: z.record(z.string().max(20), z.string().trim().max(160).nullable()).optional(),
-          // A forma antiga, de um separador aberto antes da mudança.
-          ordem: z.enum(["gemini-primeiro", "reserva-primeiro", "so-gemini", "so-reserva"]).optional(),
-          modeloGemini: z.string().trim().max(80).nullish(),
-          modeloReserva: z.string().trim().max(160).nullish(),
-        }).optional(),
+        ia: esquemaDaEscolhaDaIA.optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         exigirDono(ctx, "pedir um plano à IA");
@@ -212,6 +221,32 @@ export const appRouter = router({
         } catch (erro) {
           const mensagem = erro instanceof ErroDoGeneral || erro instanceof Error ? erro.message : "A IA falhou.";
           throw new TRPCError({ code: erro instanceof ErroDoGeneral ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR", message: mensagem });
+        }
+      }),
+    /**
+     * O motor tático (Jev): decisões estruturadas para o fim do draft. Nunca
+     * falha por causa do Jev — sem chave, sem créditos, em baixo ou a demorar,
+     * devolve `motor: "indisponivel"` e o quadro segue com a IA padrão.
+     */
+    estrategiaTatica: protectedProcedure
+      .input(esquemaDoPedidoTatico)
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "pedir a estratégia ao motor tático (Jev)");
+        // O terreno costuma estar em memória; se demorar, o Jev decide sem ele.
+        const terreno = input.mapaId ? await ateAo(obterTerreno(input.mapaId).catch(() => null), 2_500, null) : null;
+        return pedirEstrategiaTatica(input, { terreno });
+      }),
+    /** A IA de texto a explicar a estratégia do Jev. Só devolve texto: a estratégia fica a do Jev. */
+    explicarEstrategia: protectedProcedure
+      .input(z.object({ pedido: esquemaDoPedidoTatico, estrategia: z.unknown(), ia: esquemaDaEscolhaDaIA.optional() }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "pedir a explicação da estratégia");
+        const conferida = estrategiaRecebida(input.estrategia, input.pedido);
+        if (!conferida.ok) throw new TRPCError({ code: "BAD_REQUEST", message: `A estratégia não é deste draft (${conferida.problemas[0]}).` });
+        try {
+          return await explicarEstrategia(conferida.estrategia, input.pedido, input.ia ?? {});
+        } catch (erro) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: erro instanceof Error ? erro.message : "A IA não conseguiu explicar." });
         }
       }),
   }),

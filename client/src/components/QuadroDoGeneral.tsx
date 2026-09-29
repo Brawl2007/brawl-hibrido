@@ -46,10 +46,18 @@ import {
 } from "@shared/quadroDoGeneral";
 import { TIPOS_DE_CASA, pontoLivre, type TerrenoDoMapa, type TipoDeCasa } from "@shared/terrenoDoMapa";
 import { qualidadeDeOrigem, type QualidadeDoMapa } from "./qualidadeDoMapa";
-import type { AlvoDoCursor, AmeacaNo3D, CamaraDaCena, ComandoDeCamara, DueloNo3D, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
+import type { AlvoDoCursor, AmeacaNo3D, CamaraDaCena, ComandoDeCamara, DueloNo3D, EfeitoNo3D, Ferramenta, FichaNo3D, Vista } from "./Quadro3D";
 import { COR_DA_SETA, COR_DO_MARCADOR } from "./coresDoQuadro";
+import { ControlosDaSimulacao, PainelTatico, type ResultadoDoMotor } from "./PainelTatico";
+import { montarTimeline } from "@shared/timelineTatica";
+import type { ExplicacaoTatica } from "@shared/estrategiaTatica";
+import { useSimulacaoTatica } from "@/hooks/useSimulacaoTatica";
 
 const Quadro3D = lazy(() => import("./Quadro3D"));
+const SEM_EFEITOS: EfeitoNo3D[] = [];
+const ignorar = () => {};
+/** Cada passo da simulação pede um enquadramento novo à câmara. */
+let enquadramentosPedidos = 0;
 
 type Linha = RankedRow;
 
@@ -60,6 +68,8 @@ type Props = {
   nossos: Linha[];
   deles: Linha[];
   retratoDe: (linha: Linha) => string | null;
+  /** Os bans deste draft: entram no estado que o motor tático (Jev) lê. */
+  bans?: string[];
 };
 
 const NOME_DA_FUNCAO = { mid: "mid", side: "lane", flex: "flex" } as const;
@@ -169,6 +179,8 @@ type EstadoDaIA = {
   hint: string | null;
   reservas?: Array<{ id: string; nome: string; origin: string; hint: string }>;
   fornecedores?: Fornecedor[];
+  /** O motor tático: só se está configurado no servidor (a chave nunca vem cá). */
+  jev?: { configurado: boolean };
 };
 type ModelosDasIAs = { gemini: string[] | null; reservas: Record<string, { fornecedor: string; modelos: string[]; erro: string | null }> };
 
@@ -180,7 +192,7 @@ function lerGuardado(chave: string) {
   }
 }
 
-export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoDe }: Props) {
+export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoDe, bans }: Props) {
   const ehDono = useEhDono();
   const { capturedAt, elo } = useRankedSync();
   const nomesNossos = useMemo(() => nossos.map((linha) => linha.brawler), [nossos]);
@@ -189,9 +201,18 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   const [plano, setPlano] = useState<PlanoDoGeneral>(() => lerPlanoGuardado(lerGuardado(chave), nomesNossos, nomesDeles));
   const [chaveCarregada, setChaveCarregada] = useState(chave);
   // Outro draft (outro mapa ou outras equipas): outro plano.
+  // O motor tático (Jev): a estratégia deste draft e a explicação da IA, à parte do plano.
+  const [tatica, setTatica] = useState<ResultadoDoMotor | null>(null);
+  const [explicacao, setExplicacao] = useState<{ explicacao: ExplicacaoTatica; modelo: string } | null>(null);
+  const [erroDaExplicacao, setErroDaExplicacao] = useState<string | null>(null);
+  const [simulando, setSimulando] = useState(false);
   if (chaveCarregada !== chave) {
     setChaveCarregada(chave);
     setPlano(lerPlanoGuardado(lerGuardado(chave), nomesNossos, nomesDeles));
+    setTatica(null);
+    setExplicacao(null);
+    setErroDaExplicacao(null);
+    setSimulando(false);
   }
   useEffect(() => {
     try {
@@ -257,7 +278,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     const focos = (p.cena ?? []).map((c) => ({ chave: chaveDaFicha(c.ladoDoFoco, c.foco), lento: c.lento }));
     return { n: Date.now(), duracaoMs: Math.max(DURACAO_DA_CENA_MS, focos.length * 2600 + 5000), camara, ...(focos.length ? { focos } : {}) };
   };
-  const comecarCena = () => setCinema(cenaDe(plano));
+  const comecarCena = () => { setSimulando(false); setCinema(cenaDe(plano)); };
   useEffect(() => {
     if (!cinema) return;
     const inicio = Date.now();
@@ -305,6 +326,30 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       });
     },
     onError: (e) => toast.error("A IA não conseguiu fazer o plano.", { description: e.message }),
+  });
+  const explicarEstrategia = trpc.general.explicarEstrategia.useMutation({
+    onSuccess: (resultado) => { setExplicacao(resultado as { explicacao: ExplicacaoTatica; modelo: string }); setErroDaExplicacao(null); },
+    onError: (e) => setErroDaExplicacao(e.message || "A IA não conseguiu explicar."),
+  });
+  const pedirEstrategia = trpc.general.estrategiaTatica.useMutation({
+    onSuccess: (resultado, pedido) => {
+      const r = resultado as ResultadoDoMotor;
+      setTatica(r);
+      if (r.motor === "jev") {
+        toast.success(r.emCache ? "Estratégia do Jev (já decidida para este draft)." : `O Jev decidiu em ${r.segundos} s.`, { description: "Decisões na coluna do General tático. A IA de texto só as explica." });
+        // A IA de texto explica — nunca decide. Só se houver alguma com chave.
+        if (temAlgumaIA) { setExplicacao(null); setErroDaExplicacao(null); explicarEstrategia.mutate({ pedido, estrategia: r.estrategia, ia: escolhaParaOServidor() }); }
+      } else {
+        toast.message(r.aviso, { description: r.detalhe });
+        // Sem Jev: o General de sempre (a IA padrão), se ainda não houver plano.
+        if (temAlgumaIA && !temPlanoDaIA && !pedirPlano.isPending) pedir();
+      }
+    },
+    // Um erro do pedido (ex.: um nome de mapa que o servidor não aceita) também não pára nada: segue a IA padrão.
+    onError: (e) => {
+      setTatica({ motor: "indisponivel", motivo: "erro", aviso: "Motor tático Jev indisponível — usando estratégia da IA padrão.", detalhe: e.message, estrategiaBase: null });
+      if (temAlgumaIA && !temPlanoDaIA && !pedirPlano.isPending) pedir();
+    },
   });
   const rotularTerreno = trpc.general.rotularTerreno.useMutation({
     onSuccess: (resultado) => {
@@ -401,6 +446,43 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   })), [nossos, deles]);
   const duelos3D = useMemo<DueloNo3D[]>(() => duelos.map((d) => ({ nosso: chaveDaFicha("nos", d.nosso), deles: chaveDaFicha("eles", d.deles), vantagem: d.vantagem })), [duelos]);
 
+  /*
+   * A simulação da estratégia: a do Jev, ou a base das regras quando o Jev não
+   * está. O motor 3D de sempre (Quadro3D) executa-a passo a passo — as fichas
+   * andam (nunca saltam), a câmara enquadra o que importa, os ataques são
+   * tiros genéricos. Enquanto simula, o plano não se edita.
+   */
+  const estrategiaParaSimular = tatica?.motor === "jev" ? tatica.estrategia : tatica?.estrategiaBase ?? null;
+  const timeline = useMemo(() => (estrategiaParaSimular ? montarTimeline(estrategiaParaSimular, { terreno, modoId: mapa?.modeId }) : null), [estrategiaParaSimular, terreno, mapa?.modeId]);
+  const simulacao = useSimulacaoTatica(timeline);
+  const passoSimulado = simulando && timeline ? simulacao.passo : null;
+  const simular = () => {
+    if (!timeline) return;
+    setCinema(null);
+    setMomento("inicio");
+    setSimulando(true);
+    simulacao.comandar({ tipo: "reiniciar" });
+  };
+  const sairDaSimulacao = () => {
+    simulacao.comandar({ tipo: "pausar" });
+    setSimulando(false);
+    setVista((atual) => ({ id: "nossa", pedido: atual.pedido + 1 }));
+  };
+  const fichasNoEcra = useMemo<FichaNo3D[]>(() => (passoSimulado
+    ? fichas.map((f) => ({
+      ...f,
+      ponto: passoSimulado.posicoes[f.chave] ?? f.ponto,
+      destaque: passoSimulado.destaque.includes(f.chave),
+      // Movimento reduzido: chega sem animação. Um dash chega depressa.
+      deslizeMs: simulacao.movimentoReduzido ? 0 : passoSimulado.rapidos.includes(f.chave) ? 380 : 900,
+    }))
+    : fichas), [fichas, passoSimulado, simulacao.movimentoReduzido]);
+  // Os confrontos no mapa são os da estratégia (podem não ser os duelos do site).
+  const duelosNoEcra = useMemo<DueloNo3D[]>(() => (passoSimulado && estrategiaParaSimular
+    ? estrategiaParaSimular.confrontos.map((c) => ({ nosso: chaveDaFicha("nos", c.nosso), deles: chaveDaFicha("eles", c.deles), vantagem: duelos.find((d) => d.nosso === c.nosso && d.deles === c.deles)?.vantagem ?? 50 }))
+    : duelos3D), [passoSimulado, estrategiaParaSimular, duelos, duelos3D]);
+  const enquadrar = useMemo(() => (passoSimulado ? { pontos: passoSimulado.camara, n: ++enquadramentosPedidos } : null), [passoSimulado]);
+
   const moverFicha = (chaveDaFichaMovida: string, ponto: PontoNoMapa) =>
     mudarCamadas((atuais) => ({ ...atuais, posicoes: { ...atuais.posicoes, [chaveDaFichaMovida]: pontoLivre(terrenoAqui, ponto) } }));
   const acrescentarSeta = (seta: Omit<PlanoDoGeneral["setas"][number], "id">) =>
@@ -427,6 +509,39 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     corrigirCasas.mutate({ mapaId, casas: [{ coluna, linha, tipo: tipoDaCorrecao === "imagem" ? null : tipoDaCorrecao }] });
   };
 
+  /** A IA de texto escolhida pelo dono, na forma que o servidor aceita (a mesma do plano e da explicação). */
+  const escolhaParaOServidor = () => ({
+    principal: (iasComChave.some((ia) => ia.id === principalAgora) ? principalAgora : iasComChave[0]?.id ?? "gemini") as never,
+    soEssa: escolhaDaIA.soEssa,
+    rapido: escolhaDaIA.rapido,
+    modelos: Object.fromEntries(Object.entries(escolhaDaIA.modelos).filter(([id, m]) => m && iasComChave.some((ia) => ia.id === id))),
+  });
+  /** O que o motor tático lê: só dados reais do draft (o servidor junta classe, alcance, counters, sinergias e terreno). */
+  const pedidoTatico = () => ({
+    mapa: mapa?.name ?? "",
+    modoId: mapa?.modeId ?? "",
+    mapaId,
+    nossos: nossos.map((linha) => ({ brawler: linha.brawler, funcao: NOME_DA_FUNCAO[inferDraftRole(linha.brawler)] })),
+    deles: deles.map((linha) => ({ brawler: linha.brawler, funcao: NOME_DA_FUNCAO[inferDraftRole(linha.brawler)] })),
+    duelos: duelos.map(({ nosso, deles: delesNome, vantagem }) => ({ nosso, deles: delesNome, vantagem })),
+    numeros: [
+      ...nossos.map((linha) => ({ brawler: linha.brawler, lado: "nos" as const, vitoria: numeroOuNulo(linha.winRate), uso: numeroOuNulo(linha.usage) })),
+      ...deles.map((linha) => ({ brawler: linha.brawler, lado: "eles" as const, vitoria: numeroOuNulo(linha.winRate), uso: numeroOuNulo(linha.usage) })),
+    ],
+    bans: (bans ?? []).slice(0, 6),
+    dadosDe: capturedAt ?? null,
+    elo: ELOS_BRAWL_PLANET.find((item) => item.id === elo)?.nome ?? null,
+  });
+  const pedirAoJev = () => {
+    if (!mapa?.name) { toast.error("Escolhe o mapa primeiro."); return; }
+    pedirEstrategia.mutate(pedidoTatico());
+  };
+  const pedirExplicacao = () => {
+    if (tatica?.motor !== "jev") return;
+    setErroDaExplicacao(null);
+    explicarEstrategia.mutate({ pedido: pedidoTatico(), estrategia: tatica.estrategia, ia: escolhaParaOServidor() });
+  };
+
   const pedir = () => {
     if (!mapa?.name) {
       toast.error("Escolhe o mapa primeiro.");
@@ -447,12 +562,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
       ],
       dadosDe: capturedAt ?? null,
       elo: ELOS_BRAWL_PLANET.find((item) => item.id === elo)?.nome ?? null,
-      ia: {
-        principal: (iasComChave.some((ia) => ia.id === principalAgora) ? principalAgora : iasComChave[0]?.id ?? "gemini") as never,
-        soEssa: escolhaDaIA.soEssa,
-        rapido: escolhaDaIA.rapido,
-        modelos: Object.fromEntries(Object.entries(escolhaDaIA.modelos).filter(([id, m]) => m && iasComChave.some((ia) => ia.id === id))),
-      },
+      ia: escolhaParaOServidor(),
     });
   };
 
@@ -524,14 +634,22 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
   // Quando o draft fecha, o plano pede-se sozinho — uma vez por draft, e só se
   // ainda não houver plano da IA para estas equipas. Cada segundo conta: a
   // partida começa ~15 s depois.
+  //
+  // Com o Jev configurado, é ele que decide primeiro; a IA padrão só entra se
+  // ele falhar (e a IA de texto explica a estratégia dele). Sem Jev, o plano da
+  // IA padrão como sempre — e a estratégia base das regras, para a simulação,
+  // pedida ao mesmo tempo (é instantânea: não chega a sair do servidor).
+  const jevConfigurado = estado?.jev?.configurado === true;
   const jaPediuSozinho = useRef<string | null>(null);
   useEffect(() => {
-    if (!ehDono || !escolhaDaIA.automatico || !estado || !temAlgumaIA || !mapa?.name) return;
-    if (temPlanoDaIA || pedirPlano.isPending || jaPediuSozinho.current === chave) return;
+    if (!ehDono || !escolhaDaIA.automatico || !estado || !mapa?.name) return;
+    if (pedirPlano.isPending || pedirEstrategia.isPending || jaPediuSozinho.current === chave) return;
+    if (!jevConfigurado && !temAlgumaIA) return;
     jaPediuSozinho.current = chave;
-    pedir();
-    // `pedir` muda a cada render; o que decide são as condições acima.
-  }, [ehDono, escolhaDaIA.automatico, estado, temAlgumaIA, mapa?.name, temPlanoDaIA, pedirPlano.isPending, chave]);
+    if (!tatica && nossos.length === 3 && deles.length === 3) pedirEstrategia.mutate(pedidoTatico());
+    if (!jevConfigurado && temAlgumaIA && !temPlanoDaIA) pedir();
+    // `pedir` e `pedidoTatico` mudam a cada render; o que decide são as condições acima.
+  }, [ehDono, escolhaDaIA.automatico, estado, temAlgumaIA, jevConfigurado, mapa?.name, temPlanoDaIA, pedirPlano.isPending, pedirEstrategia.isPending, chave]);
 
   // Os segundos a contar enquanto a IA pensa: esperar sem saber quanto falta é pior.
   const [segundos, setSegundos] = useState(0);
@@ -779,6 +897,11 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         >
           {aReproduzir ? "❚❚ Parar" : "▶ Ver a partida"}
         </button>
+        {timeline && (
+          <button type="button" className="qg-reproduzir qg-reproduzir--tatico" onClick={() => (simulando ? sairDaSimulacao() : simular())}>
+            {simulando ? "✕ Sair da simulação" : "▶ Simular estratégia"}
+          </button>
+        )}
         {textoDoMomento && (textoDoMomento.resumo || textoDoMomento.seGanhar || textoDoMomento.sePerder) && (
           <div className="qg-momento-texto" aria-live="polite">
             {textoDoMomento.resumo && <strong>{textoDoMomento.resumo}</strong>}
@@ -799,14 +922,17 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 qualidade={qualidade}
                 imagem={mapaId ? `/api/imagens/mapa/${mapaId}.png` : null}
                 terreno={terreno}
-                fichas={fichas}
-                setas={camadas.setas}
-                marcadores={camadas.marcadores}
-                duelos={duelos3D}
-                trilhos={passosFantasma && momento === "inicio" ? plano.trilhos : semTrilhos}
-                notasNoMapa={notasNoMapa}
+                fichas={fichasNoEcra}
+                setas={passoSimulado ? passoSimulado.setas : camadas.setas}
+                marcadores={passoSimulado ? passoSimulado.marcadores : camadas.marcadores}
+                duelos={duelosNoEcra}
+                trilhos={passosFantasma && momento === "inicio" && !passoSimulado ? plano.trilhos : semTrilhos}
+                notasNoMapa={notasNoMapa || Boolean(passoSimulado)}
                 paredesPartidas={camadas.paredesPartidas}
-                ameacas={verAmeacas ? ameacas3D : semAmeacas}
+                ameacas={verAmeacas && !passoSimulado ? ameacas3D : semAmeacas}
+                enquadrar={enquadrar}
+                efeitos={passoSimulado ? passoSimulado.efeitos : SEM_EFEITOS}
+                movimentoReduzido={simulacao.movimentoReduzido}
                 perspetiva={perspetiva}
                 onCasa={corrigirCasa}
                 ferramenta={ferramenta}
@@ -818,15 +944,18 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 cinema={cinema}
                 onFimDoCinema={() => setCinema(null)}
                 onEtapaDoCinema={setEtapa}
-                onMoverFicha={moverFicha}
-                onMoverMarcador={(id, ponto) => mudarCamadas((atuais) => ({ ...atuais, marcadores: atuais.marcadores.map((m) => (m.id === id ? { ...m, ponto } : m)) }))}
-                onNovaSeta={acrescentarSeta}
-                onNovoMarcador={acrescentarMarcador}
-                onApagar={apagar}
+                onMoverFicha={passoSimulado ? ignorar : moverFicha}
+                onMoverMarcador={passoSimulado ? ignorar : (id, ponto) => mudarCamadas((atuais) => ({ ...atuais, marcadores: atuais.marcadores.map((m) => (m.id === id ? { ...m, ponto } : m)) }))}
+                onNovaSeta={passoSimulado ? ignorar : acrescentarSeta}
+                onNovoMarcador={passoSimulado ? ignorar : acrescentarMarcador}
+                onApagar={passoSimulado ? ignorar : apagar}
                 onCursor={setCursor}
                 onErro={setErro3D}
               />
             </Suspense>
+          )}
+          {passoSimulado && timeline && (
+            <ControlosDaSimulacao timeline={timeline} passo={passoSimulado} indice={simulacao.indice} leitor={simulacao.leitor} comandar={simulacao.comandar} onSair={sairDaSimulacao} />
           )}
           {aReproduzir && (
             <div className="qg-cinema" aria-live="polite">
@@ -853,6 +982,21 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         </div>
 
         <aside className="quadro-general-ordens" aria-label="Ordens do general">
+          {ehDono && (
+            <PainelTatico
+              resultado={tatica}
+              aPedir={pedirEstrategia.isPending}
+              jevConfigurado={jevConfigurado}
+              explicacao={explicacao}
+              aExplicar={explicarEstrategia.isPending}
+              erroDaExplicacao={erroDaExplicacao}
+              aSimular={simulando}
+              onPedir={pedirAoJev}
+              onSimular={simular}
+              onExplicar={pedirExplicacao}
+              retratoDe={(nome, lado) => { const linha = (lado === "nos" ? nossos : deles).find((l) => l.brawler === nome); return linha ? retratoDe(linha) : null; }}
+            />
+          )}
           {plano.resumo || plano.condicaoDeVitoria ? (
             <div className="qg-resumo">
               {plano.resumo && <strong>{plano.resumo}</strong>}

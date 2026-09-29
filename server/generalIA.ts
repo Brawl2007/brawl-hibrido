@@ -245,7 +245,7 @@ const esperar = (ms: number) => new Promise((resolver) => setTimeout(resolver, m
  * ou 404 passa ao modelo seguinte. Chave recusada pára logo: nenhum modelo a
  * vai aceitar.
  */
-async function gerarJson(
+export async function gerarJson(
   chave: string,
   partes: ParteDoPedido[],
   esquema: unknown,
