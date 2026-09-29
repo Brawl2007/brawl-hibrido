@@ -49,3 +49,13 @@ describe("caminho da API oficial", () => {
     expect(readFileSync(resolve(process.cwd(), "client/src/pages/Draft.tsx"), "utf8")).toContain("trpc.syncJobs.setApiVia.useMutation");
   });
 });
+
+describe("chave longa da Supercell", () => {
+  it("aceita tokens com mais de 512 caracteres e tira os espaços colados", () => {
+    const rotas = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
+    const bloco = rotas.slice(rotas.indexOf("setApiKey: protectedProcedure"), rotas.indexOf("setApiVia: protectedProcedure") > rotas.indexOf("setApiKey: protectedProcedure") ? rotas.indexOf("setApiVia: protectedProcedure") : undefined);
+    expect(bloco).toContain("z.string().max(4096)");
+    expect(bloco).not.toContain("max(512)");
+    expect(bloco).toContain('input.key.replace(/\\s+/g, "")');
+  });
+});

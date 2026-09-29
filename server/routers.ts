@@ -496,12 +496,17 @@ export const appRouter = router({
      * à plataforma de alojamento, o site ficava impossível de configurar mesmo
      * com o dono à frente dele. Testar logo a seguir a gravar evita o pior
      * cenário — guardar uma chave errada e só descobrir daí a quinze minutos.
+     *
+     * As chaves da Supercell são tokens longos — passam dos 512 caracteres, e o
+     * limite antigo recusava a chave inteira com "Too big". 4096 cobre o token
+     * com folga. Os espaços e as quebras de linha que vêm ao copiar do portal
+     * saem todos: um token não tem nenhum.
      */
     setApiKey: protectedProcedure
-      .input(z.object({ key: z.string().trim().max(512) }))
+      .input(z.object({ key: z.string().max(4096) }))
       .mutation(async ({ ctx, input }) => {
         exigirDono(ctx, "definir a chave da API oficial");
-        const limpa = input.key.trim();
+        const limpa = input.key.replace(/\s+/g, "");
         await setSetting(BRAWL_STARS_API_KEY_SETTING, limpa || null);
         setRuntimeApiKey(limpa || null);
         const teste = await probeOfficialApi();
