@@ -1,13 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, beforeAll, afterAll } from "vitest";
 import { setCounterSyncSnapshot } from "@shared/counterSourceRelations";
 import { allRankedRows } from "../client/src/data/rankedData";
-import { analyzeDraftComposition, brawlerClassCatalog, buildScrimSequence, calculateDraftSignal, calculateLaneMatchup, draftSignalBonuses, draftSteps, estimateDraftWinProbability, getBannedCounterBonusPick, getBannedCounterBonusRate, getBrawlerClass, getCounterBonusRate, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getMapTeamSynergyRate, getPositionRecommendation, getSynergyBonusRate, getTopCounterWindowSize, inferDraftRole, isArtilleryBrawler, isOpeningLongRangeEligible, normalizeScrimSequence, officialBrawlerClasses, openingRangeThreshold, rankCounterRows, rankDraftEntries, rankDraftRows, rankHybridUsageRows, remapDraftProgress } from "@shared/draft";
+import { analyzeDraftComposition, brawlerClassCatalog, buildScrimSequence, calculateDraftSignal as calculateDraftSignalDoMotor, calculateLaneMatchup, draftSignalBonuses, draftSteps, estimateDraftWinProbability, getBannedCounterBonusPick, getBannedCounterBonusRate, getBrawlerClass, getCounterBonusRate, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getMapTeamSynergyRate, getPositionRecommendation, getSynergyBonusRate, getTopCounterWindowSize, inferDraftRole, isArtilleryBrawler, isOpeningLongRangeEligible, normalizeScrimSequence, officialBrawlerClasses, openingRangeThreshold, rankCounterRows, rankDraftEntries as rankDraftEntriesDoMotor, rankDraftRows, rankHybridUsageRows, remapDraftProgress } from "@shared/draft";
 import { getCounterSourceProfiles, getLiteralCounterRelations, getResolvedCounterDirection } from "@shared/counterSourceRelations";
 import { defaultDraftRuleSettings, normalizeDraftRuleSettings } from "@shared/draftRules";
 import { brawlScopeCounterData } from "@shared/brawlScopeCounterData";
 import { getMatchupValue } from "@shared/counterMatchupValue";
 import { normalizeCounterBrawlerName } from "@shared/counterSyncSnapshot";
 import { definirLeituraDasDuasFichas as definirFichasDoFicheiro } from "@shared/counterMatchupValue";
+
+/**
+ * v168: por omissão, um confronto só conta a partir de 55% (`counterMinimo`).
+ * Este ficheiro mede a mecânica dos counters (sinal por lado, cobertura,
+ * direções, penalizações) com deltas pequenos, por isso corre com o limiar de
+ * antes (50%: qualquer diferença conta). O limiar tem testes próprios em
+ * `server/regrasV168.test.ts`, com o motor tal como vem.
+ */
+const SEM_LIMIAR = { counterMinimo: 0.5 };
+type ContextoDoSinal = NonNullable<Parameters<typeof calculateDraftSignalDoMotor>[1]>;
+const calculateDraftSignal: typeof calculateDraftSignalDoMotor = (row, context = {} as ContextoDoSinal, ...resto) =>
+  calculateDraftSignalDoMotor(row, { ...context, ruleSettings: { ...SEM_LIMIAR, ...context.ruleSettings } }, ...resto);
+const rankDraftEntries: typeof rankDraftEntriesDoMotor = (rows, locked, query, tier, context = {}) =>
+  rankDraftEntriesDoMotor(rows, locked, query, tier, { ...context, ruleSettings: { ...SEM_LIMIAR, ...context.ruleSettings } });
 
 // Este ficheiro prova a leitura de uma só ficha (a do candidato), a regra de
 // antes da v153. A média das duas fichas tem os testes em `duasFichas.test.ts`.

@@ -42,14 +42,25 @@ describe("fonte observada (Só API oficial)", () => {
     expect(getMatchupValue("Nori", "Doug").total).toBe(0);
   });
 
-  it("sinergia e anti-sinergia vêm das partidas e mexem no Score", () => {
+  it("sinergia e anti-sinergia vêm das partidas e mexem no Score (com a regra da dupla desligada)", () => {
     definirFonteObservada(montarFonteObservada(resumo));
     expect(sinergiaObservada("Lumi", "Bull")!).toBeGreaterThan(0);
     expect(sinergiaObservada("Lumi", "Poco")!).toBeLessThan(0);
-    const comBull = calculateDraftSignal(row("Lumi"), { allyRows: [row("Bull")], pickNumber: 4 }).scoreBreakdown;
-    const comPoco = calculateDraftSignal(row("Lumi"), { allyRows: [row("Poco")], pickNumber: 4 }).scoreBreakdown;
+    const antes = { sinergiaSoAcimaDaVitoria: 0 };
+    const comBull = calculateDraftSignal(row("Lumi"), { allyRows: [row("Bull")], pickNumber: 4, ruleSettings: antes }).scoreBreakdown;
+    const comPoco = calculateDraftSignal(row("Lumi"), { allyRows: [row("Poco")], pickNumber: 4, ruleSettings: antes }).scoreBreakdown;
     expect(comBull.synergyPoints).toBeGreaterThan(0);
     expect(comPoco.synergyPoints).toBeLessThan(0);
+  });
+
+  it("v168 · com a API, a dupla só conta quando o par ganha mais neste mapa do que ele sozinho neste mapa", () => {
+    definirFonteObservada(montarFonteObservada(resumo));
+    const comBull = calculateDraftSignal(row("Lumi"), { allyRows: [row("Bull")], pickNumber: 4 }).scoreBreakdown;
+    const comPoco = calculateDraftSignal(row("Lumi"), { allyRows: [row("Poco")], pickNumber: 4 }).scoreBreakdown;
+    // Lumi com o Bull ganha mais do que a Lumi sozinha: conta.
+    expect(comBull.synergyPoints).toBeGreaterThan(0);
+    // Lumi com o Poco ganha menos: não conta (nem tira).
+    expect(comPoco.synergyPoints).toBe(0);
   });
 
   it("desligar volta às fontes de sempre", () => {

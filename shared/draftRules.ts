@@ -123,6 +123,32 @@ export type DraftRuleSettings = {
    * `definirLeituraDasDuasFichas` em `counterMatchupValue.ts`.
    */
   lerAsDuasFichas: number;
+  /**
+   * Interruptor (0/1): a sinergia de equipa tripla — a «Composição do mapa», uma
+   * equipa de três publicada pelo Brawl Planet para o mapa. Desligada por
+   * omissão (v168): no Híbrido conta só a sinergia de dupla.
+   */
+  sinergiaDeEquipaTripla: number;
+  /**
+   * Interruptor (0/1). Ligado (padrão): a sinergia de dupla só conta quando o
+   * par ganha MAIS do que o brawler sozinho — a percentagem publicada do par é
+   * positiva. Com «API oficial», é a vitória do par neste mapa contra a vitória
+   * dele sozinho neste mapa. Uma dupla sem número publicado, ou abaixo, não
+   * conta (nem tira: para tirar existe o Worst Teammate).
+   */
+  sinergiaSoAcimaDaVitoria: number;
+  /**
+   * A percentagem do confronto a partir da qual um counter conta: 0,55 = 55%.
+   * É a mesma percentagem que os duelos mostram (50% + a diferença publicada).
+   * Vale para os dois lados: o bónus só com 55% ou mais a favor, e o desbónus
+   * de counter (e a pressão por aliado) só quando o adversário tem 55% ou mais
+   * contra. Em 50%, qualquer diferença conta (como era antes da v168).
+   */
+  counterMinimo: number;
+  /** Interruptores (0/1) para desligar desbónus inteiros, sem perder a percentagem guardada. */
+  desbonusMesmaClasse: number;
+  desbonusWorstTeammate: number;
+  desbonusPressaoPorAliado: number;
 };
 
 export const defaultDraftRuleSettings: DraftRuleSettings = {
@@ -195,6 +221,12 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   worstTeammatePenalty: 0.03,
   coveredCounterSuppression: 0,
   lerAsDuasFichas: 1,
+  sinergiaDeEquipaTripla: 0,
+  sinergiaSoAcimaDaVitoria: 1,
+  counterMinimo: 0.55,
+  desbonusMesmaClasse: 1,
+  desbonusWorstTeammate: 1,
+  desbonusPressaoPorAliado: 1,
 };
 
 export const draftRuleSettingKeys = Object.keys(defaultDraftRuleSettings) as (keyof DraftRuleSettings)[];

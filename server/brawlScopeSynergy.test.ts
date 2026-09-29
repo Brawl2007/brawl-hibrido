@@ -125,7 +125,25 @@ describe("leitura da sinergia literal BrawlScope", () => {
   });
 });
 
+/** As regras de antes da v168 (equipa tripla ligada, qualquer par conta), para os testes que medem esses mecanismos. */
+const REGRAS_ANTES_DA_V168 = { sinergiaDeEquipaTripla: 1, sinergiaSoAcimaDaVitoria: 0, counterMinimo: 0.5 };
+
 describe("bónus de sinergia BrawlScope no Draft", () => {
+  it("v168 · a dupla só conta quando o par ganha mais do que ele sozinho (percentagem publicada positiva)", () => {
+    setBrawlScopeReading("overall");
+    for (const [delta, conta] of [[4.4, true], [0, false], [-3.2, false]] as const) {
+      setCounterSyncSnapshot(snapshot({ synergies: [{ owner: "Nori", teammate: "Gus", delta, rank: 1, source: "brawlscope", sourceUrl: noriUrl }] }));
+      const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+      expect(signal.scoreBreakdown.synergyPoints > 0).toBe(conta);
+      if (!conta) expect(signal.scoreBreakdown.synergyPoints).toBe(0);
+    }
+    // Sem percentagem publicada não se sabe se o par ganha mais: não conta.
+    setCounterSyncSnapshot(snapshot());
+    const semNumero = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+    expect(semNumero.scoreBreakdown.synergyPoints).toBe(0);
+    expect(semNumero.bonusSources.synergyAllies).toEqual([]);
+  });
+
   it("usa a percentagem publicada pela fonte como bónus", () => {
     setBrawlScopeReading("overall");
     setCounterSyncSnapshot(snapshot({
@@ -162,7 +180,7 @@ describe("bónus de sinergia BrawlScope no Draft", () => {
     for (const delta of [6.1, 2.4, 0]) {
       publish(delta);
       expect(getBrawlScopeSynergyTeammates("Nori", "knockout")[0].delta).toBe(delta);
-      const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+      const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], ruleSettings: REGRAS_ANTES_DA_V168 });
       expect(signal.scoreBreakdown.hasPublishedSynergyRate).toBe(true);
       expect(signal.scoreBreakdown.synergyBonusRate).toBeCloseTo(delta / 100);
       expect(getBrawlScopeSynergyTeammates("Nori")[0].delta).toBe(9);
@@ -170,12 +188,12 @@ describe("bónus de sinergia BrawlScope no Draft", () => {
       expect(getBrawlScopeSynergyTeammates("Nori", "heist")[0].delta).toBe(9);
     }
     setBrawlScopeReading("overall");
-    expect(calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] }).scoreBreakdown.synergyBonusRate).toBeCloseTo(0.09);
+    expect(calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], ruleSettings: REGRAS_ANTES_DA_V168 }).scoreBreakdown.synergyBonusRate).toBeCloseTo(0.09);
   });
 
   it("aplica a taxa configurada do pick quando a fonte não publica percentagem", () => {
     setCounterSyncSnapshot(snapshot());
-    const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+    const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], ruleSettings: REGRAS_ANTES_DA_V168 });
 
     expect(signal.scoreBreakdown.synergyPoints).toBeCloseTo(signal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
     expect(signal.bonusSources.synergySource).toBe("BrawlScope");
@@ -221,7 +239,7 @@ describe("bónus de sinergia BrawlScope no Draft", () => {
     const mapTeams = [
       { map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58.1, sourceUrl: "https://www.brawlplanet.com/maps/flaring-phoenix" },
     ];
-    const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], mapTeams, mapName: "Flaring Phoenix" });
+    const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], mapTeams, mapName: "Flaring Phoenix", ruleSettings: REGRAS_ANTES_DA_V168 });
 
     expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
     expect(signal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);

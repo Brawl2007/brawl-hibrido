@@ -102,6 +102,8 @@ describe("counter_snapshot push", () => {
       return rankDraftEntries([row], new Set<string>(), "", "Todos", {
         counterSnapshotVersion: state.version, mapModeId: "brawl-ball", enemyRows: [enemy],
         pickNumber: 4, baseHybridTop30Names: ["Bibi"],
+        // v168: o limiar de 55% cortaria o delta pequeno deste teste; aqui mede-se o push, não o limiar.
+        ruleSettings: { counterMinimo: 0.5 },
       })[0];
     };
     const payload = createSnapshot();

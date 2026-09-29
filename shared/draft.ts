@@ -1254,7 +1254,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   );
   // A composição do mapa é a evidência mais específica; não acumulamos o
   // Best Teammate global para o mesmo candidato e evitamos bónus duplicado.
-  const hasMapTeamSynergy = Boolean(mapTeamSynergy);
+  // A equipa tripla só conta com o interruptor ligado (desligado por omissão desde a v168).
+  const hasMapTeamSynergy = Boolean(mapTeamSynergy) && ruleSettings.sinergiaDeEquipaTripla >= 0.5;
   // Uma única fatia de bónus de sinergia por candidato, atribuída à fonte mais
   // prioritária que publicou o aliado já escolhido: BrawlScope antes de Brawl
   // Planet, a mesma ordem usada na resolução de counters.
@@ -1266,13 +1267,23 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const activeSynergyAllies = synergySource === "BrawlScope" ? activeBrawlScopeSynergyAllies : activeBestTeammates;
   // Relações literais correspondentes aos aliados ativos, para ler a percentagem
   // publicada pela fonte que sustenta o bónus.
+  /**
+   * v168: a dupla só conta quando o par ganha mais do que o brawler sozinho —
+   * a percentagem publicada do par (vitória do par menos a dele) é positiva.
+   * Sem número publicado não se sabe, e não conta.
+   */
+  const sinergiaSoAcima = ruleSettings.sinergiaSoAcimaDaVitoria >= 0.5;
+  const parAcimaDaVitoria = (relation: { delta?: number }) => typeof relation.delta === "number" && Number.isFinite(relation.delta) && relation.delta > 0;
   const activeSynergyRelations = (synergySource === "BrawlScope" ? brawlScopeSynergyTeammates : brawlPlanetProfile?.bestTeammates ?? [])
-    .filter((relation) => activeSynergyAllies.some((ally) => counterKey(ally) === counterKey(relation.brawler)));
+    .filter((relation) => activeSynergyAllies.some((ally) => counterKey(ally) === counterKey(relation.brawler)))
+    .filter((relation) => !sinergiaSoAcima || parAcimaDaVitoria(relation));
   const synergySourceUrl = synergySource === "BrawlScope"
     ? brawlScopeSynergyTeammates.find((relation) => counterKey(relation.brawler) === counterKey(activeSynergyAllies[0] ?? ""))?.sourceUrl
       ?? brawlScopeProfile?.sourceUrl
     : brawlPlanetProfile?.sourceUrl;
-  const hasSynergy = activeSynergyAllies.length > 0;
+  const hasSynergy = sinergiaSoAcima ? activeSynergyRelations.length > 0 : activeSynergyAllies.length > 0;
+  // Os aliados que dão mesmo sinergia (com a regra da v168, só os pares acima da vitória dele).
+  const aliadosDaSinergia = sinergiaSoAcima ? activeSynergyRelations.map((relation) => relation.brawler) : activeSynergyAllies;
   const synergy = hasSynergy ? 100 : 0;
   const directCounters = enemyRows
     .map((enemy) => getCounterMatchup(row.brawler, enemy.brawler, context.reciprocalCounterScores, context.mapModeId))
@@ -1395,14 +1406,19 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       .map((enemy) => enemy.brawler)
       .filter((enemy) => getDraftCounterDirection(row.brawler, enemy, context.reciprocalCounterScores, context.mapModeId) === "counteredBy")
     : [];
+  // v168: a pressão por aliado também só conta com o adversário a 55% ou mais contra (ver `counterMinimo`).
+  const limiarDaPressao = Math.max(0, ruleSettings.counterMinimo * 100 - 50);
+  const counteradoPor = (quem: string, inimigo: string) => limiarDaPressao <= 0
+    ? getDraftCounterDirection(quem, inimigo, context.reciprocalCounterScores, context.mapModeId) === "counteredBy"
+    : getMatchupValue(quem, inimigo, context.mapModeId).total <= -limiarDaPressao + 1e-9;
   const repeatedEnemyCounterPressures = isAlreadyChosen
     ? []
     : enemyRows
-      .filter((enemy) => getDraftCounterDirection(row.brawler, enemy.brawler, context.reciprocalCounterScores, context.mapModeId) === "counteredBy")
+      .filter((enemy) => counteradoPor(row.brawler, enemy.brawler))
       .map((enemy) => {
         const counteredAllies = allyRows
           .map((ally) => ally.brawler)
-          .filter((ally) => getDraftCounterDirection(ally, enemy.brawler, context.reciprocalCounterScores, context.mapModeId) === "counteredBy");
+          .filter((ally) => counteradoPor(ally, enemy.brawler));
         const count = Math.min(counteredAllies.length, 2);
         return {
           enemy: enemy.brawler,
@@ -1466,10 +1482,18 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const banBonusRate = getBannedCounterBonusRate(context.pickNumber, ruleSettings);
   const banBonusPick = getBannedCounterBonusPick(context.pickNumber);
   const hybridPoints = metaSignal;
+  /**
+   * v168: um confronto só conta a partir de `counterMinimo` (55%), na mesma
+   * percentagem que os duelos mostram — 50% + a diferença publicada. A favor,
+   * o bónus só com 55% ou mais; contra, o desbónus só quando o adversário tem
+   * 55% ou mais (o duelo em 45% ou menos). Entre os dois, não conta.
+   */
+  const limiarDoCounter = Math.max(0, ruleSettings.counterMinimo * 100 - 50);
+  const confrontoConta = (delta: number) => delta !== 0 && Math.abs(delta) >= limiarDoCounter - 1e-9;
   const enemyDeltaPairs = !isAlreadyChosen
     ? enemyRows
       .map((enemy) => ({ enemy: enemy.brawler, delta: getMatchupValue(row.brawler, enemy.brawler, context.mapModeId).total }))
-      .filter((par) => par.delta !== 0)
+      .filter((par) => confrontoConta(par.delta))
     : [];
   /**
    * A regra opcional "resposta já coberta".
@@ -1529,6 +1553,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const sinergiasDaApi = soApi
     ? allyRows.map((ally) => ({ aliado: ally.brawler, delta: sinergiaObservada(row.brawler, ally.brawler) }))
       .filter((par): par is { aliado: string; delta: number } => par.delta !== null && par.delta !== 0)
+      // v168: só o par que ganha mais neste mapa do que ele sozinho neste mapa.
+      .filter((par) => !sinergiaSoAcima || par.delta > 0)
     : [];
   const taxaDeSinergiaDaApi = sinergiasDaApi.reduce((soma, par) => soma + par.delta / 100, 0);
   const effectiveSynergyRate = soApi ? taxaDeSinergiaDaApi : hasPublishedSynergyRate ? publishedSynergyRate : synergyBonusRate;
@@ -1539,7 +1565,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const enemyCounterDeltaRate = 0;
   const enemyCounterPenaltyPoints = 0;
   const enemyCounterPenaltyPercent = 0;
-  const repeatedEnemyCounterPressurePoints = repeatedEnemyCounterPressures.length
+  const repeatedEnemyCounterPressurePoints = repeatedEnemyCounterPressures.length && ruleSettings.desbonusPressaoPorAliado >= 0.5
     ? hybridPoints * repeatedEnemyCounterPressures.reduce((sum, pressure) => sum + pressure.rate, 0)
     : 0;
   const repeatedEnemyCounterPressurePercent = Math.round(repeatedEnemyCounterPressures.reduce((sum, pressure) => sum + pressure.rate, 0) * 100);
@@ -1556,8 +1582,9 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     .map((r) => r.brawler)
     .filter((bName) => getBrawlerClass(bName) === candidateClass);
   const sameClassCount = sameClassTriggerAllies.length;
-  const sameClassPenaltyPoints = sameClassCount > 0 ? hybridPoints * ruleSettings.sameClassPenalty * sameClassCount : 0;
-  const worstTeammatePenaltyPoints = activeWorstTeammates.length
+  // Os dois desbónus podem ser desligados nas regras, sem perder a percentagem guardada.
+  const sameClassPenaltyPoints = sameClassCount > 0 && ruleSettings.desbonusMesmaClasse >= 0.5 ? hybridPoints * ruleSettings.sameClassPenalty * sameClassCount : 0;
+  const worstTeammatePenaltyPoints = activeWorstTeammates.length && ruleSettings.desbonusWorstTeammate >= 0.5
     ? hybridPoints * ruleSettings.worstTeammatePenalty * activeWorstTeammates.length
     : 0;
 
@@ -1580,7 +1607,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ...(openingLongRangePoints ? [`Alcance ≥${openingRangeThreshold} blocos +${ruleSettings.openingLongRange * 100}% (pick ${context.pickNumber})`] : []),
     ...(mapTeamSynergyPoints && mapTeamSynergy ? [`Composição do mapa +${mapTeamSynergyRate * 100}% (pick ${synergyBonusPick} · ${mapTeamSynergy.brawlers.join(" · ")} · ${mapTeamSynergy.winRate.toFixed(1)}% WR)`] : []),
     ...(soApi && synergyPoints ? [`${synergyPoints > 0 ? "Sinergia" : "Anti-sinergia"} ${synergyPoints > 0 ? "+" : ""}${Number((taxaDeSinergiaDaApi * 100).toFixed(2))}% (partidas da API oficial · ${sinergiasDaApi.map((par) => `${par.aliado} ${par.delta > 0 ? "+" : ""}${par.delta}`).join(", ")})`] : []),
-    ...(!soApi && synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${activeSynergyAllies.join(", ")})`] : []),
+    ...(!soApi && synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${aliadosDaSinergia.join(", ")})`] : []),
     ...(enemyCounterPenaltyPoints ? [`Desbônus Enemy Counter -${enemyCounterPenaltyPercent}% (${activeEnemyCounters.length} counter${activeEnemyCounters.length === 1 ? "" : "s"})`] : []),
     ...(repeatedEnemyCounterPressurePoints ? [`Pressão Enemy Counter -${repeatedEnemyCounterPressurePercent}% (${repeatedEnemyCounterPressures.map((pressure) => `${pressure.enemy}: ${pressure.counteredAllies.join(", ")}`).join(" · ")})`] : []),
     ...(topTwentyCounterPenaltyPoints ? [`Desbônus Counter no Top ${topCounterWindowSize} -${topTwentyCounterPenaltyPercent}% (${topTwentyCounters.length} counter${topTwentyCounters.length === 1 ? "" : "s"}: ${topTwentyCounters.join(", ")})`] : []),
@@ -1650,7 +1677,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   if (synergyPoints) {
     const synergyDetail = activeSynergyRelations
       .map((relation) => `${relation.brawler}${typeof relation.delta === "number" ? ` ${relation.delta > 0 ? "+" : ""}${relation.delta}%` : ""}`)
-      .join(", ") || activeSynergyAllies.join(", ");
+      .join(", ") || aliadosDaSinergia.join(", ");
     const rateLabel = `${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}%`;
     reasons.push(synergySource === "BrawlScope"
       ? `Bónus Sinergia BrawlScope ${rateLabel} (${hasPublishedSynergyRate ? "percentagem publicada na ficha" : `taxa do pick ${synergyBonusPick}`}): ${synergyDetail} consta no Top ${brawlScopeSynergyTeammates.length} literal de aliados ("Pair with") publicado pelo BrawlScope para ${row.brawler}.${synergySourceUrl ? ` Fonte: ${synergySourceUrl}` : ""}`
@@ -1748,7 +1775,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       bannedCounters,
       registeredBans,
       bannedNonCounters,
-      synergyAllies: activeSynergyAllies,
+      synergyAllies: aliadosDaSinergia,
       synergySource: synergySource ?? undefined,
       synergySourceUrl: synergySource ? synergySourceUrl : undefined,
       brawlScopeSynergyTop: brawlScopeSynergyTeammates.map((relation) => relation.brawler),

@@ -3,6 +3,9 @@ import { findBrawlPlanetMapTeam, type BrawlPlanetMapTeam } from "@shared/brawlPl
 import { calculateDraftSignal } from "@shared/draft";
 import { defaultDraftRuleSettings } from "@shared/draftRules";
 
+// v168: a equipa tripla vem desligada. Estes testes medem o bónus dela, por isso ligam-na.
+const TRIPLA_LIGADA = { sinergiaDeEquipaTripla: 1 };
+
 const pitStopTeams: BrawlPlanetMapTeam[] = [
   {
     map: "Pit Stop",
@@ -43,8 +46,15 @@ describe("sinergia Brawl Planet por mapa", () => {
     expect(findBrawlPlanetMapTeam("Gus", ["Spike"], pitStopTeams)).toBeNull();
   });
 
-  it("aplica a taxa oficial para a composição literal do mapa e não acumula Best Teammate global", () => {
+  it("v168 · por omissão a equipa tripla não conta no Híbrido", () => {
     const signal = calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams });
+    expect(defaultDraftRuleSettings.sinergiaDeEquipaTripla).toBe(0);
+    expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBe(0);
+    expect(signal.reasons.join(" ")).not.toContain("Composição do mapa");
+  });
+
+  it("aplica a taxa oficial para a composição literal do mapa e não acumula Best Teammate global", () => {
+    const signal = calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams, ruleSettings: TRIPLA_LIGADA });
 
     expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(signal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
     expect(signal.scoreBreakdown.synergyPoints).toBe(0);
@@ -53,8 +63,8 @@ describe("sinergia Brawl Planet por mapa", () => {
   });
 
   it("dá a taxa oficial a Pearl e Bolt quando Brock completa a composição Ranked de Flaring Phoenix", () => {
-    const pearlSignal = calculateDraftSignal(pearl, { allyRows: [brock], mapTeams: flaringPhoenixTeams });
-    const boltSignal = calculateDraftSignal(bolt, { allyRows: [brock], mapTeams: flaringPhoenixTeams });
+    const pearlSignal = calculateDraftSignal(pearl, { allyRows: [brock], mapTeams: flaringPhoenixTeams, ruleSettings: TRIPLA_LIGADA });
+    const boltSignal = calculateDraftSignal(bolt, { allyRows: [brock], mapTeams: flaringPhoenixTeams, ruleSettings: TRIPLA_LIGADA });
 
     expect(pearlSignal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(pearlSignal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
     expect(boltSignal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(boltSignal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
@@ -67,6 +77,7 @@ describe("sinergia Brawl Planet por mapa", () => {
       allyRows: [brock],
       mapTeams: flaringPhoenixTeams,
       pickNumber,
+      ruleSettings: TRIPLA_LIGADA,
     }));
 
     const expectedRates = [

@@ -1847,8 +1847,31 @@ type DraftRuleField = {
 
 const draftRuleSections: Array<{ title: string; description: string; fields: DraftRuleField[] }> = [
   {
+    title: "Sinergia e counters",
+    description: "O que conta como sinergia e como counter no Híbrido.",
+    fields: [
+      {
+        key: "sinergiaSoAcimaDaVitoria",
+        toggle: true,
+        label: "Dupla só acima da vitória dele",
+        helper: "Ligado (padrão): a sinergia de dupla só conta quando o par ganha mais do que o brawler sozinho — a percentagem publicada do par é positiva. Com «API oficial», é a vitória do par neste mapa contra a vitória dele sozinho neste mapa. Um par abaixo, ou sem número publicado, não conta.",
+      },
+      {
+        key: "sinergiaDeEquipaTripla",
+        toggle: true,
+        label: "Sinergia de equipa tripla",
+        helper: "A «Composição do mapa»: uma equipa de três publicada pelo Brawl Planet para este mapa. Desligada por omissão — no Híbrido conta só a dupla.",
+      },
+      {
+        key: "counterMinimo",
+        label: "Counter mínimo",
+        helper: "O confronto só conta a partir desta percentagem, a mesma que os duelos mostram (50% + a diferença publicada). O bónus de counter só com 55% ou mais a favor; o desbónus de counter e a pressão por aliado só quando o adversário tem 55% ou mais contra. Em 50%, qualquer diferença conta.",
+      },
+    ],
+  },
+  {
     title: "Sinergia por Pick",
-    description: "Cada Pick global tem uma percentagem própria. A mesma taxa vale para sinergia literal e composição Brawl Planet do mapa.",
+    description: "Cada Pick global tem uma percentagem própria, para a sinergia de dupla sem percentagem publicada (e para a equipa tripla, se estiver ligada).",
     fields: [
       { key: "synergyPick1", label: "Pick 1" }, { key: "synergyPick2", label: "Pick 2" }, { key: "synergyPick3", label: "Pick 3" },
       { key: "synergyPick4", label: "Pick 4" }, { key: "synergyPick5", label: "Pick 5" }, { key: "synergyPick6", label: "Pick 6" },
@@ -1903,13 +1926,16 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
         // Um campo que aceita um valor e não faz nada é pior do que não existir.
         inactive: "O confronto desfavorável já desconta pontos pelo delta publicado, com sinal negativo. Somar aqui outra penalização contava o mesmo matchup duas vezes — usa o ajuste do Counter por Pick para lhe dar mais ou menos peso.",
       },
-      { key: "repeatedEnemyCounterPressure", label: "Pressão por aliado", helper: "Quando um inimigo já escolhido countera um aliado teu além do candidato." },
+      { key: "desbonusPressaoPorAliado", toggle: true, label: "Pressão por aliado ligada", helper: "Desliga o desbónus de Pressão por aliado sem perder a percentagem guardada ao lado." },
+      { key: "repeatedEnemyCounterPressure", label: "Pressão por aliado", helper: "Quando um inimigo já escolhido countera um aliado teu além do candidato (com 55% ou mais contra cada um — ver «Counter mínimo»)." },
       {
         key: "topCounterPenalty",
         label: "Counter no Top",
         inactive: "Counter no Top é risco possível, não confronto real: penalizá-lo antes de haver picks inimigos reordenava o ranking base. Continua visível na auditoria, sem mexer no Score.",
       },
+      { key: "desbonusMesmaClasse", toggle: true, label: "Mesma classe ligada", helper: "Desliga o desbónus de Mesma classe sem perder a percentagem guardada ao lado." },
       { key: "sameClassPenalty", label: "Mesma classe", helper: "Por cada aliado já escolhido da mesma classe oficial do candidato." },
+      { key: "desbonusWorstTeammate", toggle: true, label: "Worst Teammate ligado", helper: "Desliga o desbónus de Worst Teammate sem perder a percentagem guardada ao lado." },
       { key: "worstTeammatePenalty", label: "Worst Teammate", helper: "Quando a fonte publica o aliado escolhido como mau parceiro deste brawler." },
     ],
   },
