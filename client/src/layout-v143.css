@@ -686,3 +686,27 @@
   .matriz-cara.is-media { width: 38px; height: 38px; }
   .matriz-procura, .matriz-procura input { width: 100%; }
 }
+
+/* ── v162 · Motor do Draft: Brawl Híbrido, PL Prodigy ou MetaPick ── */
+.mesa-motor { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px; border: 1px solid var(--mesa-borda, var(--bh-line)); border-radius: 10px; background: rgba(0, 0, 0, .2); color: var(--bh-text-muted); font-size: 13px; white-space: nowrap; cursor: pointer; }
+.mesa-motor b { color: var(--bh-text); }
+.mesa-motor.is-outro { border-color: var(--bh-gold); }
+.mesa-motor.is-outro b { color: var(--bh-gold); }
+.recommendation-motor { color: var(--bh-gold-soft); font-size: 11.5px; font-weight: 700; }
+.motor-painel { display: grid; gap: 14px; }
+.motor-escolha { display: grid; gap: 8px; }
+.motor-cartao { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--bh-line); border-radius: 12px; background: var(--bh-surface); color: var(--bh-text-muted); text-align: left; font-size: 13px; line-height: 1.45; cursor: pointer; }
+.motor-cartao strong { color: var(--bh-text); font-size: 15px; }
+.motor-cartao.is-active { border-color: var(--bh-gold); background: color-mix(in srgb, var(--bh-gold) 10%, var(--bh-surface)); }
+.motor-barras { display: grid; gap: 10px; }
+.motor-grelha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.motor-barra { display: grid; gap: 4px; min-width: 0; }
+.motor-barra-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.motor-barra-topo b { color: var(--bh-text); font-size: 13.5px; }
+.motor-barra-topo output { color: var(--bh-gold); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.motor-barra input[type="range"] { width: 100%; accent-color: var(--bh-gold); }
+.motor-barra small { color: var(--bh-text-dim); font-size: 11.5px; line-height: 1.4; }
+.motor-repor { justify-self: start; min-height: 34px; padding: 0 12px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(0, 0, 0, .2); color: var(--bh-text); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+@media (max-width: 520px) {
+  .motor-grelha { grid-template-columns: minmax(0, 1fr); }
+}
