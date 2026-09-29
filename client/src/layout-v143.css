@@ -719,3 +719,8 @@
 .matriz-faixa button span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .matriz-faixa button.is-active { border-color: var(--bh-gold); background: color-mix(in srgb, var(--bh-gold) 12%, var(--bh-surface)); color: var(--bh-text); }
 .matriz-faixa .matriz-vazio { flex: 1; }
+
+/* ── v164 · presets do PL Prodigy ── */
+.motor-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.motor-presets button { min-height: 34px; padding: 0 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.motor-presets button.is-active { border-color: var(--bh-gold); color: var(--bh-text); background: color-mix(in srgb, var(--bh-gold) 12%, var(--bh-surface)); }

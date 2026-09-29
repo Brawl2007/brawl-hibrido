@@ -2,7 +2,7 @@ import {
   AJUSTES_METAPICK,
   LIMITES_METAPICK,
   LIMITES_PL_PRODIGY,
-  PESOS_PL_PRODIGY,
+  PRESETS_PL_PRODIGY,
   type AjustesMetaPick,
   type ConfigDoMotor,
   type MotorDoDraft,
@@ -80,13 +80,22 @@ export function PainelDoMotor({ config, onChange }: { config: ConfigDoMotor; onC
 
       {config.motor === "plprodigy" ? (
         <section className="motor-barras" aria-label="Pesos do PL Prodigy">
-          <p className="mesa-painel-nota">Soma dos pesos: <b>{somaDosPesos}%</b>{somaDosPesos !== 100 ? " — o Draft reparte-os na mesma proporção." : "."} Resultado de 0 a 100.</p>
+          <div className="motor-presets" role="group" aria-label="Presets do PL Prodigy">
+            {Object.entries(PRESETS_PL_PRODIGY).map(([id, preset]) => {
+              const ativo = (Object.keys(preset.pesos) as Array<keyof PesosPLProdigy>).every((chave) => preset.pesos[chave] === config.pl[chave]);
+              return (
+                <button key={id} type="button" className={ativo ? "is-active" : ""} aria-pressed={ativo} onClick={() => onChange({ ...config, pl: preset.pesos })}>
+                  {preset.nome}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mesa-painel-nota">Soma dos pesos: <b>{somaDosPesos}%</b>{somaDosPesos !== 100 ? " — o Draft reparte-os na mesma proporção." : "."} Pontos de 0 a 100, na escala do PL.</p>
           <div className="motor-grelha">
             {BARRAS_PL.map((barra) => (
               <Barra key={barra.chave} id={`motor-pl-${barra.chave}`} nome={barra.nome} ajuda={barra.ajuda} valor={config.pl[barra.chave]} min={LIMITES_PL_PRODIGY.min} max={LIMITES_PL_PRODIGY.max} passo={LIMITES_PL_PRODIGY.passo} sufixo="%" onChange={(valor) => onChange({ ...config, pl: { ...config.pl, [barra.chave]: valor } })} />
             ))}
           </div>
-          <button type="button" className="motor-repor" onClick={() => onChange({ ...config, pl: PESOS_PL_PRODIGY })}>Repor os valores do PL Prodigy</button>
         </section>
       ) : null}
 
@@ -103,9 +112,10 @@ export function PainelDoMotor({ config, onChange }: { config: ConfigDoMotor; onC
       ) : null}
 
       <p className="mesa-painel-nota">
-        Nem o PL Prodigy nem o MetaPick publicam a fórmula: estes motores seguem os nomes e os valores das definições deles, com os dados
-        deste site — as fontes, ou as partidas da API com «API oficial» ligado. Os bans, a janela de counters e as regras de sequência do
-        Draft continuam as mesmas.
+        O PL Prodigy e o MetaPick fazem as contas no servidor e não publicam a fórmula. Confirmado por investigação: os dados que usam
+        (mapa, picks de cada lado, bans e os pesos), os valores por omissão, os limites das barras e a escala dos pontos do PL. O resto
+        segue os nomes das barras, com os dados deste site — as fontes, ou as partidas da API com «API oficial» ligado. Os dados deles
+        são outros (o PL usa Masters+, o MetaPick Master I+, cerca de 1 milhão de partidas), por isso a ordem pode não bater.
       </p>
     </div>
   );
