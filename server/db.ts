@@ -880,6 +880,95 @@ export async function recordObservedBattle(
   });
 }
 
+/** Soma os pares de todas as partidas do lote numa linha por mapa, modo e par. */
+export function somarParesDoLote(entradas: ReadonlyArray<{ deltas: readonly ObservedMatchupDelta[] }>) {
+  const somas = new Map<string, ObservedMatchupDelta>();
+  for (const { deltas } of entradas) {
+    for (const delta of deltas) {
+      const chave = [delta.mapId, delta.mode, delta.brawler, delta.opponent].join("\u0000");
+      const atual = somas.get(chave);
+      if (atual) {
+        atual.wins += delta.wins;
+        atual.losses += delta.losses;
+      } else {
+        somas.set(chave, { ...delta });
+      }
+    }
+  }
+  return Array.from(somas.values());
+}
+
+/**
+ * Grava de uma vez todas as partidas de uma recolha.
+ *
+ * POR QUE EXISTE
+ *
+ * `recordObservedBattle` abre uma transação por partida e faz uma inserção por
+ * par de adversários — 1 + 18 idas à base por cada 3 contra 3. Com dezenas de
+ * partidas era aceitável; com as centenas que uma recolha a sério traz, a
+ * função da Vercel esgotava o tempo antes de acabar de gravar.
+ *
+ * Aqui são três pedidos, qualquer que seja o tamanho da recolha: que impressões
+ * digitais já existem, inserir as novas, somar os pares dessas novas. Só as
+ * partidas novas contam para os agregados — repetir uma recolha não duplica.
+ */
+export async function recordObservedBattlesBatch(
+  entradas: ReadonlyArray<{ battle: InsertObservedBattle; deltas: readonly ObservedMatchupDelta[] }>,
+) {
+  const db = await getDb();
+  if (!db || !entradas.length) return { battlesInserted: 0, pairObservations: 0 };
+
+  // A mesma partida chega uma vez por cada jogador seguido que a jogou.
+  const unicas = new Map<string, (typeof entradas)[number]>();
+  for (const entrada of entradas) if (!unicas.has(entrada.battle.fingerprint)) unicas.set(entrada.battle.fingerprint, entrada);
+
+  const impressoes = Array.from(unicas.keys());
+  const existentes = new Set<string>();
+  for (let i = 0; i < impressoes.length; i += 500) {
+    const linhas = await db
+      .select({ fingerprint: observedBattles.fingerprint })
+      .from(observedBattles)
+      .where(inArray(observedBattles.fingerprint, impressoes.slice(i, i + 500)));
+    for (const linha of linhas) existentes.add(linha.fingerprint);
+  }
+  const novas = Array.from(unicas.values()).filter((entrada) => !existentes.has(entrada.battle.fingerprint));
+  if (!novas.length) return { battlesInserted: 0, pairObservations: 0 };
+
+  for (let i = 0; i < novas.length; i += 200) {
+    await db
+      .insert(observedBattles)
+      .values(novas.slice(i, i + 200).map((entrada) => entrada.battle))
+      .onDuplicateKeyUpdate({ set: { fingerprint: sql`fingerprint` } });
+  }
+
+  const pares = somarParesDoLote(novas);
+  for (let i = 0; i < pares.length; i += 400) {
+    await db
+      .insert(observedMatchupAggregates)
+      .values(pares.slice(i, i + 400).map((par) => ({
+        mapId: par.mapId,
+        mode: par.mode,
+        brawler: par.brawler,
+        opponent: par.opponent,
+        wins: par.wins,
+        losses: par.losses,
+        samples: par.wins + par.losses,
+      })))
+      .onDuplicateKeyUpdate({
+        set: {
+          // Sem prefixo de tabela: VALUES() recebe o nome simples da coluna.
+          wins: sql.raw("`wins` + values(`wins`)"),
+          losses: sql.raw("`losses` + values(`losses`)"),
+          samples: sql.raw("`samples` + values(`samples`)"),
+        },
+      });
+  }
+  return {
+    battlesInserted: novas.length,
+    pairObservations: novas.reduce((total, entrada) => total + entrada.deltas.length, 0),
+  };
+}
+
 export async function listObservedMatchCollectionRuns(limit = 8) {
   const db = await getDb();
   if (!db) return [];

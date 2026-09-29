@@ -152,7 +152,11 @@ describe("recolha periódica na Vercel", () => {
 
   it("o cron está declarado e aponta para a rota que existe", () => {
     const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8"));
-    expect(vercel.crons).toEqual([{ path: "/api/cron/sync", schedule: CRON_DA_RECOLHA }]);
+    // A recolha dos dados e, desde a v155, a reserva diária da recolha de partidas.
+    expect(vercel.crons).toEqual([
+      { path: "/api/cron/sync", schedule: CRON_DA_RECOLHA },
+      { path: "/api/partidas/recolher", schedule: "30 17 * * *" },
+    ]);
 
     /**
      * O horário publicado tem de ser o horário a sério.

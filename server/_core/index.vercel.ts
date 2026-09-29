@@ -12,6 +12,7 @@ import { createContext } from "./context";
 import { serveStatic } from "./static";
 import { handleCounterSyncScheduled, handleRankedSyncScheduled } from "../scheduled";
 import { handleCronSync } from "../cronSync";
+import { recolherSeForAltura } from "../observedMatchCollection";
 import { handleObservedMatchCollectionScheduled } from "../observedMatchScheduled";
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
@@ -72,6 +73,27 @@ export function createApp() {
    * funciona aqui, protegida pelo `CRON_SECRET`.
    */
   app.get("/api/cron/sync", handleCronSync);
+  /**
+   * Recolha de partidas Ranked da API oficial, de hora a hora.
+   *
+   * Na Vercel ninguém a chamava: só o servidor antigo, que ficava sempre de pé,
+   * a corria no ciclo dele. Quem a chama agora é o GitHub Actions
+   * (`.github/workflows/recolher-partidas.yml`), de hora a hora, e o cron
+   * diário da Vercel como reserva.
+   *
+   * É público de propósito, para o GitHub Actions não precisar de segredos. O
+   * que o protege é o intervalo mínimo entre recolhas (`podeRecolherAgora`):
+   * chamado antes do tempo, não faz nada e diz quando pode.
+   */
+  app.get("/api/partidas/recolher", async (_req, res) => {
+    try {
+      const resultado = await recolherSeForAltura("scheduled");
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json(resultado);
+    } catch (erro) {
+      res.status(500).json({ ok: false, error: erro instanceof Error ? erro.message : String(erro) });
+    }
+  });
   registarImagensDaBrawlify(app);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);

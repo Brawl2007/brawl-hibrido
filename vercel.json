@@ -29,6 +29,10 @@
     {
       "path": "/api/cron/sync",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/partidas/recolher",
+      "schedule": "30 17 * * *"
     }
   ]
 }

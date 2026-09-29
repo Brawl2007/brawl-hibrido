@@ -26,7 +26,7 @@ import { brawlScopeIndexUrl, brawlScopeProfileUrl, DEFAULT_BRAWLSCOPE_RANK } fro
 import { findBrawlScopeSlugsInIndex, knownBrawlScopeSlugs } from "../shared/brawlScopeSlugs";
 import { parseRankedRotationIndex } from "../shared/rankedRotationSource";
 import { parsePLProdigyGuide, plProdigyGuideUrl } from "../shared/plProdigyParser";
-import { probeOfficialApi, urlDaApi } from "./brawlStarsApi";
+import { IP_DO_PROXY_ROYALEAPI, getCaminhoDaApi, probeOfficialApi, urlDaApi } from "./brawlStarsApi";
 
 export type ProbeStep = {
   label: string;
@@ -233,7 +233,9 @@ async function probeEgressIp(): Promise<SourceProbeResult> {
     const ip = (await fetchText(url, 0, { ignoreBlock: true })).trim();
     const parece = /^[0-9a-f.:]{7,45}$/i.test(ip);
     steps.push(parece
-      ? marca("IP de saída", "ok", `${ip} — é este que tens de declarar ao criar a chave da API oficial do Brawl Stars.`)
+      ? marca("IP de saída", "ok", getCaminhoDaApi() === "royaleapi"
+        ? `${ip} — é o IP deste servidor, mas com o proxy da RoyaleAPI ligado não conta: a chave precisa de ${IP_DO_PROXY_ROYALEAPI}.`
+        : `${ip} — é este que tens de declarar ao criar a chave da API oficial do Brawl Stars.`)
       : marca("IP de saída", "warn", `Resposta inesperada: ${ip.slice(0, 60)}`));
     return { source: "Servidor · IP de saída", url, ok: true, bytes: ip.length, steps };
   } catch (error) {
