@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, beforeAll, afterAll } from "vitest";
 import { setCounterSyncSnapshot } from "@shared/counterSourceRelations";
 import { allRankedRows } from "../client/src/data/rankedData";
 import { analyzeDraftComposition, brawlerClassCatalog, buildScrimSequence, calculateDraftSignal, calculateLaneMatchup, draftSignalBonuses, draftSteps, estimateDraftWinProbability, getBannedCounterBonusPick, getBannedCounterBonusRate, getBrawlerClass, getCounterBonusRate, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getMapTeamSynergyRate, getPositionRecommendation, getSynergyBonusRate, getTopCounterWindowSize, inferDraftRole, isArtilleryBrawler, isOpeningLongRangeEligible, normalizeScrimSequence, officialBrawlerClasses, openingRangeThreshold, rankCounterRows, rankDraftEntries, rankDraftRows, rankHybridUsageRows, remapDraftProgress } from "@shared/draft";
@@ -7,6 +7,12 @@ import { defaultDraftRuleSettings, normalizeDraftRuleSettings } from "@shared/dr
 import { brawlScopeCounterData } from "@shared/brawlScopeCounterData";
 import { getMatchupValue } from "@shared/counterMatchupValue";
 import { normalizeCounterBrawlerName } from "@shared/counterSyncSnapshot";
+import { definirLeituraDasDuasFichas as definirFichasDoFicheiro } from "@shared/counterMatchupValue";
+
+// Este ficheiro prova a leitura de uma só ficha (a do candidato), a regra de
+// antes da v153. A média das duas fichas tem os testes em `duasFichas.test.ts`.
+beforeAll(() => definirFichasDoFicheiro(false));
+afterAll(() => definirFichasDoFicheiro(true));
 
 /**
  * Pontos de Counter esperados para um confronto, calculados a partir da regra do

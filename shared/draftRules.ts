@@ -117,6 +117,12 @@ export type DraftRuleSettings = {
    * publicado: quem acha que o delta de cada par vale por si deixa-o em 0.
    */
   coveredCounterSuppression: number;
+  /**
+   * Interruptor: 0 desligado, 1 ligado. Ligado (padrão), cada confronto vale a
+   * média da ficha do candidato e da ficha do adversário. Ver
+   * `definirLeituraDasDuasFichas` em `counterMatchupValue.ts`.
+   */
+  lerAsDuasFichas: number;
 };
 
 export const defaultDraftRuleSettings: DraftRuleSettings = {
@@ -188,6 +194,7 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   sameClassPenalty: 0.03,
   worstTeammatePenalty: 0.03,
   coveredCounterSuppression: 0,
+  lerAsDuasFichas: 1,
 };
 
 export const draftRuleSettingKeys = Object.keys(defaultDraftRuleSettings) as (keyof DraftRuleSettings)[];

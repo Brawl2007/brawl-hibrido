@@ -1,10 +1,16 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, beforeAll, afterAll } from "vitest";
 import { setCounterSyncSnapshot, getCounterSourceProfiles, isExcludedCounterDirection } from "../shared/counterSourceRelations";
 import fs from "node:fs";
 import { brawlScopeCaptureFileSchema } from "../shared/brawlScopeCapture";
 import { getMatchupValue, getPublishedMatchupValue, setBrawlScopeReading, setBrawlScopeLiveMatchups } from "../shared/counterMatchupValue";
 import { calculateDraftSignal } from "../shared/draft";
 import { getSnapshotSynergies, type CounterSyncSnapshotPayload } from "../shared/counterSyncSnapshot";
+import { definirLeituraDasDuasFichas as definirFichasDoFicheiro } from "../shared/counterMatchupValue";
+
+// Este ficheiro prova a leitura de uma só ficha (a do candidato), a regra de
+// antes da v153. A média das duas fichas tem os testes em `duasFichas.test.ts`.
+beforeAll(() => definirFichasDoFicheiro(false));
+afterAll(() => definirFichasDoFicheiro(true));
 const snapshot: CounterSyncSnapshotPayload = {
   schemaVersion: 2, capturedAt: "2026-09-13", sourceStates: {} as CounterSyncSnapshotPayload["sourceStates"],
   relations: [

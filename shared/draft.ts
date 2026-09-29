@@ -1,6 +1,6 @@
 import { versaoDoMotor } from "./versaoDoMotor";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
-import { getMatchupValue, describeMatchupValue, getBrawlScopeReading } from "./counterMatchupValue";
+import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
 export type DraftTeam = "blue" | "red";
 import { getMainAttackRange } from "./brawlerAttackRanges";
@@ -1877,6 +1877,12 @@ export function getDraftTopRecommendationNames<T extends DraftRow>(rows: T[], lo
 }
 
 export function rankDraftEntries<T extends DraftRow>(rows: T[], lockedNames: Set<string>, query = "", _tier: DraftTier = "Todos", context: DraftRankingContext<T> = {}): RankedDraftEntry<T>[] {
+  // Todas as leituras de confronto desta ordenação usam a mesma regra das fichas.
+  // Só quando a regra vem dita: a interface passa sempre as regras completas, e
+  // uma chamada sem ela não pode desfazer o que o painel escolheu.
+  if (typeof context.ruleSettings?.lerAsDuasFichas === "number") {
+    definirLeituraDasDuasFichas(context.ruleSettings.lerAsDuasFichas >= 0.5);
+  }
   const normalizedQuery = query.trim().toLowerCase();
   const globalEligibleRows = [...rows]
     .filter((row) => !lockedNames.has(row.brawler));

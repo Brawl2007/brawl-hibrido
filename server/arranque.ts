@@ -1,5 +1,5 @@
-import { setRuntimeApiKey } from "./brawlStarsApi";
-import { ensureAppSettingsTable, getStoredApiKey } from "./appSettings";
+import { setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
+import { ensureAppSettingsTable, getStoredApiKey, getStoredApiVia } from "./appSettings";
 import { ensureTables } from "./ensureTables";
 
 /**
@@ -69,5 +69,8 @@ async function executar() {
       setRuntimeApiKey(key || null);
       if (key) console.log(`[Arranque] Chave da API oficial carregada (origem: ${origin}).`);
     })
+    // Por onde a chave sai: direto à Supercell ou pelo proxy da RoyaleAPI.
+    .then(() => getStoredApiVia())
+    .then(({ via }) => setRuntimeApiVia(via))
     .catch(() => undefined);
 }

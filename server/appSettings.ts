@@ -110,3 +110,13 @@ export async function getStoredApiKey() {
   if (daBase) return { key: daBase, origin: "site" as const };
   return { key: "", origin: "nenhuma" as const };
 }
+
+export const BRAWL_STARS_API_VIA_SETTING = "brawlStarsApiVia";
+
+/** Por onde saem os pedidos à API: direto à Supercell ou pelo proxy da RoyaleAPI. */
+export async function getStoredApiVia() {
+  const doAmbiente = (process.env.BRAWL_STARS_API_VIA ?? "").trim();
+  if (doAmbiente) return { via: doAmbiente, origin: "ambiente" as const };
+  const daBase = (await getSetting(BRAWL_STARS_API_VIA_SETTING))?.trim();
+  return { via: daBase || "oficial", origin: daBase ? ("site" as const) : ("nenhuma" as const) };
+}

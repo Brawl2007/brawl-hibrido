@@ -2626,6 +2626,12 @@ main { max-width: 1600px; margin: 0 auto; }
   line-height: 1.5;
 }
 
+.api-key-proxy { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; color: var(--bh-text); font-size: .86rem; font-weight: 700; }
+.api-key-proxy input { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--bh-gold); }
+.api-key-proxy span { display: grid; gap: 2px; }
+.api-key-proxy small { font-weight: 500; }
+.api-key-proxy code { color: var(--bh-gold); }
+
 .api-key-row {
   display: flex;
   flex-wrap: wrap;
