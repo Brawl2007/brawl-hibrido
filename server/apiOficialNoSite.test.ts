@@ -106,3 +106,17 @@ describe("Matriz 1v1 pelas fontes (API desligada)", () => {
     expect(ficha.counters.length + ficha.castiga.length).toBeGreaterThan(0);
   });
 });
+
+describe("Matriz 1v1: qualquer brawler, sempre à vista (v163)", () => {
+  const matriz = ler("client/src/pages/MatchupMatrix.tsx");
+  it("a faixa com todos os brawlers e a procura estão sempre na página, não escondidas atrás de um botão", () => {
+    expect(matriz).toContain('<div className="matriz-faixa" ref={faixaRef} role="listbox" aria-label="Brawlers">');
+    expect(matriz).toContain("{nomesParaEscolher.map((opcao) => {");
+    expect(matriz).toContain('aria-label="Procurar brawler"');
+    expect(matriz).not.toContain("escolherAberto ?");
+  });
+  it("o brawler escolhido vem do endereço (?b=) ou fica guardado; o Sprout é só o primeiro da primeira visita", () => {
+    expect(matriz).toContain('new URLSearchParams(window.location.search).get("b") || localStorage.getItem("matriz-brawler") || "Sprout"');
+    expect(matriz).toContain('localStorage.setItem("matriz-brawler", brawler);');
+  });
+});

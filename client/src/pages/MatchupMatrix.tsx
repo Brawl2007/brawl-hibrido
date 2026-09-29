@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Database, Handshake, Search, Shield, Swords, Target, Users } from "lucide-react";
 import { BarraDoSite } from "@/components/BarraDoSite";
 import { MobileNav } from "@/components/MobileNav";
@@ -152,8 +152,9 @@ export default function MatchupMatrix() {
   });
   const [modo, setModo] = useState<string>("");
   const [mapId, setMapId] = useState<string>("");
-  const [escolherAberto, setEscolherAberto] = useState(false);
   const [procuraDoBrawler, setProcuraDoBrawler] = useState("");
+  const procuraRef = useRef<HTMLInputElement>(null);
+  const faixaRef = useRef<HTMLDivElement>(null);
   const [procura, setProcura] = useState("");
   const [verTodos, setVerTodos] = useState(false);
 
@@ -190,12 +191,28 @@ export default function MatchupMatrix() {
     return { vitoria: media(linhas.map((linha) => linha.winRate)), uso: media(linhas.map((linha) => linha.usage)), mapas: linhas.length };
   }, [api.ligada, rankedSync.snapshot?.rows, brawler, modo]);
 
+  /**
+   * Todos os brawlers, sempre à vista numa faixa com os retratos. Com a API
+   * ligada vêm primeiro os mais jogados no filtro; sem ela, por ordem alfabética.
+   */
   const nomesParaEscolher = useMemo(() => {
-    const daApi = (dados?.brawlers ?? []).map((linha) => nomeBonito(linha.brawler));
-    const todos = Array.from(new Set([...catalogo, ...daApi])).sort((a, b) => a.localeCompare(b, "pt-PT"));
+    const jogos = new Map((dados?.brawlers ?? []).map((linha) => [nomeBonito(linha.brawler).toLowerCase(), linha.jogos]));
+    const todos = Array.from(new Set([...catalogo, ...(dados?.brawlers ?? []).map((linha) => nomeBonito(linha.brawler))]))
+      .sort((a, b) => (jogos.get(b.toLowerCase()) ?? 0) - (jogos.get(a.toLowerCase()) ?? 0) || a.localeCompare(b, "pt-PT"));
     const termo = procuraDoBrawler.trim().toLowerCase();
     return termo ? todos.filter((nome) => nome.toLowerCase().includes(termo)) : todos;
   }, [catalogo, dados?.brawlers, procuraDoBrawler]);
+  const jogosDe = useMemo(() => new Map((dados?.brawlers ?? []).map((linha) => [nomeBonito(linha.brawler).toLowerCase(), linha.jogos])), [dados?.brawlers]);
+  // O escolhido fica no meio da faixa, sem mexer no resto da página.
+  useEffect(() => {
+    const faixa = faixaRef.current;
+    const ativo = faixa?.querySelector<HTMLElement>(".is-active");
+    if (faixa && ativo) faixa.scrollTo({ left: ativo.offsetLeft - faixa.clientWidth / 2 + ativo.clientWidth / 2, behavior: "smooth" });
+  }, [brawler, nomesParaEscolher]);
+  const irParaAProcura = () => {
+    procuraRef.current?.focus();
+    procuraRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const mapasDoModo = useMemo(() => (dados?.mapas ?? []).filter((mapa) => !modo || mapa.mode === modo), [dados?.mapas, modo]);
   const escolherModo = (novo: string) => {
@@ -270,14 +287,37 @@ export default function MatchupMatrix() {
           ) : null}
         </section>
 
+        <section className="matriz-escolher" aria-label="Escolher brawler">
+          <div className="matriz-escolher-topo">
+            <h2 className="matriz-titulo">Escolhe o brawler <small>{nomesParaEscolher.length}</small></h2>
+            <label className="matriz-procura">
+              <Search size={15} aria-hidden="true" />
+              <input ref={procuraRef} value={procuraDoBrawler} onChange={(evento) => setProcuraDoBrawler(evento.target.value)} placeholder="Procurar brawler…" aria-label="Procurar brawler" />
+            </label>
+          </div>
+          <div className="matriz-faixa" ref={faixaRef} role="listbox" aria-label="Brawlers">
+            {nomesParaEscolher.map((opcao) => {
+              const escolhido = opcao.toLowerCase() === brawler.toLowerCase();
+              const jogos = jogosDe.get(opcao.toLowerCase());
+              return (
+                <button key={opcao} type="button" role="option" aria-selected={escolhido} className={escolhido ? "is-active" : ""} onClick={() => { setBrawler(opcao); setVerTodos(false); }} title={jogos ? `${opcao} · ${jogos} jogos` : opcao}>
+                  <Cara nome={opcao} tamanho="pequena" />
+                  <span>{opcao}</span>
+                </button>
+              );
+            })}
+            {!nomesParaEscolher.length ? <p className="matriz-vazio">Nenhum brawler com «{procuraDoBrawler}».</p> : null}
+          </div>
+        </section>
+
         <section className="matriz-cartao" aria-label={`Ficha de ${nome}`}>
           <div className="matriz-cartao-topo">
-            <button type="button" className="matriz-retrato-grande" onClick={() => setEscolherAberto((aberto) => !aberto)} aria-expanded={escolherAberto} title="Escolher outro brawler">
+            <button type="button" className="matriz-retrato-grande" onClick={irParaAProcura} title="Escolher outro brawler">
               <Cara nome={ficha?.brawler ?? brawler} tamanho="grande" />
             </button>
             <div className="matriz-identidade">
               <h2 className="bh-display">{nome}</h2>
-              <button type="button" className="matriz-trocar" onClick={() => setEscolherAberto((aberto) => !aberto)} aria-expanded={escolherAberto}>
+              <button type="button" className="matriz-trocar" onClick={irParaAProcura}>
                 <Search size={13} aria-hidden="true" /> Trocar brawler
               </button>
               <p>
@@ -306,23 +346,6 @@ export default function MatchupMatrix() {
               </div>
             </div>
           </div>
-
-          {escolherAberto ? (
-            <div className="matriz-escolha">
-              <label className="matriz-procura">
-                <Search size={15} aria-hidden="true" />
-                <input autoFocus value={procuraDoBrawler} onChange={(evento) => setProcuraDoBrawler(evento.target.value)} placeholder="Procurar brawler…" aria-label="Procurar brawler" />
-              </label>
-              <div className="matriz-escolha-grelha">
-                {nomesParaEscolher.map((opcao) => (
-                  <button key={opcao} type="button" className={opcao.toLowerCase() === brawler.toLowerCase() ? "is-active" : ""} onClick={() => { setBrawler(opcao); setEscolherAberto(false); setProcuraDoBrawler(""); setVerTodos(false); }}>
-                    <Cara nome={opcao} tamanho="pequena" />
-                    <span>{opcao}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
           <div className="matriz-resumo">
             <div>
