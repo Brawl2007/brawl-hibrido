@@ -559,3 +559,130 @@
   .partidas-nome, .partidas-vitoria, .partidas-uso { font-size: 13px; }
   .partidas-ordem { font-size: 10.5px; letter-spacing: .02em; }
 }
+
+/* ── v161 · Matriz 1v1 ao estilo do BrawlScope, e o botão «API oficial» nos Mapas ── */
+.mapas-fonte { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.mapas-fonte .seletor-periodo, .mapas-fonte .partidas-grupo, .mesa-fonte-api-rank { max-width: 100%; }
+.mesa-fonte-api-rank { flex: 1 1 auto; }
+
+.matriz-pagina { --cor-do-modo: var(--bh-gold); max-width: 1180px; margin: 0 auto; padding: 24px 20px 110px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; color: var(--bh-text); }
+.matriz-pagina > * { min-width: 0; }
+.matriz-cabeca { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.matriz-cabeca h1 { margin: 0; font-size: clamp(30px, 5vw, 44px); line-height: 1; }
+.matriz-cabeca p { margin: 6px 0 0; color: var(--bh-text-muted); font-size: 14px; }
+.matriz-fonte { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+
+.matriz-filtros { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.matriz-filtros > * { min-width: 0; }
+.matriz-modos { display: flex; flex-wrap: wrap; gap: 6px; }
+.matriz-modos button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 13px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 13px; font-weight: 800; cursor: pointer; }
+.matriz-modos button i, .matriz-modo-nome i { width: 10px; height: 10px; border-radius: 3px; background: var(--cor-do-modo); box-shadow: 0 0 8px var(--cor-do-modo); }
+.matriz-modos button.is-active { border-color: var(--cor-do-modo); background: color-mix(in srgb, var(--cor-do-modo) 20%, transparent); color: var(--bh-text); }
+.matriz-filtros-api { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.matriz-mapa { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; max-width: 100%; padding: 0 4px 0 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 13px; font-weight: 700; }
+.matriz-mapa select { width: 100%; min-width: 0; max-width: 100%; min-height: 32px; border: 0; border-radius: 8px; background: var(--bh-surface-2); color: var(--bh-text); font-size: 13px; }
+
+.matriz-cartao { overflow: hidden; border: 1px solid var(--bh-line); border-radius: 18px; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .018) 0 14px, transparent 14px 28px), linear-gradient(135deg, var(--bh-surface) 0%, color-mix(in srgb, var(--bh-violet-deep) 35%, var(--bh-surface)) 100%); }
+.matriz-cartao-topo { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 20px; padding: 24px; }
+.matriz-retrato-grande { padding: 0; border: 0; background: none; cursor: pointer; }
+.matriz-identidade h2 { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; }
+.matriz-identidade p { margin: 8px 0 0; color: var(--bh-text-muted); font-size: 13.5px; line-height: 1.5; }
+.matriz-trocar { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; min-height: 28px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 999px; background: rgba(0, 0, 0, .2); color: var(--bh-gold); font-size: 12px; font-weight: 800; cursor: pointer; }
+.matriz-numeros { display: grid; grid-template-columns: repeat(3, minmax(108px, 1fr)); gap: 10px; }
+.matriz-numeros > div { display: grid; gap: 4px; align-content: start; padding: 14px 16px; border: 1px solid var(--bh-line); border-radius: 14px; background: rgba(0, 0, 0, .22); }
+.matriz-numeros span { color: var(--bh-text-muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.matriz-numeros strong { font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: 26px; line-height: 1; }
+.matriz-numeros strong.is-vitoria { color: var(--bh-positive); }
+.matriz-numeros strong.is-uso { color: var(--bh-gold); }
+.matriz-numeros small { color: var(--bh-text-dim); font-size: 12px; }
+
+.matriz-escolha { display: grid; gap: 10px; padding: 0 24px 20px; }
+.matriz-escolha-grelha { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.matriz-escolha-grelha button { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; border: 1px solid var(--bh-line); border-radius: 10px; background: rgba(0, 0, 0, .2); color: var(--bh-text-muted); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.matriz-escolha-grelha button span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.matriz-escolha-grelha button.is-active { border-color: var(--bh-gold); color: var(--bh-text); }
+
+.matriz-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 16px 24px 20px; border-top: 1px solid var(--bh-line); background: rgba(0, 0, 0, .14); }
+.matriz-resumo h3 { margin: 0 0 8px; color: var(--bh-text-muted); font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+
+.matriz-cara { display: inline-grid; place-items: center; flex: none; overflow: hidden; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: var(--bh-surface-2); color: var(--bh-text-muted); font-size: 11px; }
+.matriz-cara img { width: 100%; height: 100%; object-fit: cover; }
+.matriz-cara.is-pequena { width: 36px; height: 36px; }
+.matriz-cara.is-media { width: 44px; height: 44px; }
+.matriz-cara.is-grande { width: 104px; height: 104px; border: 2px solid var(--bh-negative); border-radius: 16px; font-size: 26px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--bh-negative) 18%, transparent); }
+.matriz-caras { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.matriz-seccao { display: grid; gap: 10px; }
+.matriz-titulo { display: flex; align-items: center; gap: 8px; margin: 0; font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: 22px; letter-spacing: .01em; }
+.matriz-titulo small { color: var(--bh-text-dim); font-family: inherit; font-size: 15px; }
+.matriz-explica { margin: 0; color: var(--bh-text-muted); font-size: 13px; }
+.matriz-vazio { margin: 0; padding: 14px 16px; border: 1px dashed var(--bh-line-strong); border-radius: 12px; color: var(--bh-text-muted); font-size: 13px; }
+
+.matriz-modos-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.matriz-modo-cartao { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--bh-line); border-radius: 14px; background: var(--bh-surface); color: var(--bh-text); text-align: left; cursor: pointer; }
+.matriz-modo-cartao.is-active { border-color: var(--cor-do-modo); box-shadow: 0 0 0 1px var(--cor-do-modo); }
+.matriz-modo-nome { display: inline-flex; align-items: center; gap: 7px; color: var(--bh-text-muted); font-size: 13px; font-weight: 800; }
+.matriz-modo-cartao strong { font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: 26px; line-height: 1; }
+.matriz-modo-cartao.is-bom strong { color: var(--bh-positive); }
+.matriz-modo-cartao.is-mau strong { color: var(--bh-negative); }
+.matriz-modo-cartao small { color: var(--bh-text-dim); font-size: 12px; }
+
+.matriz-colunas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.matriz-coluna { display: grid; gap: 8px; min-width: 0; padding: 16px; border: 1px solid var(--bh-line); border-radius: 16px; background: var(--bh-surface); }
+.matriz-coluna .matriz-titulo { font-size: 17px; text-transform: uppercase; letter-spacing: .04em; }
+.matriz-lista { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.matriz-lista-larga { gap: 4px; }
+.matriz-linha { display: grid; grid-template-columns: 20px auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .025); }
+.matriz-linha.is-counter { background: color-mix(in srgb, var(--bh-positive) 9%, transparent); }
+.matriz-linha.is-castiga { background: color-mix(in srgb, var(--bh-negative) 10%, transparent); }
+.matriz-linha.is-equipa { background: color-mix(in srgb, var(--bh-violet) 10%, transparent); }
+.matriz-posicao { color: var(--bh-text-dim); font-size: 12px; font-weight: 800; text-align: center; }
+.matriz-linha-corpo { display: grid; gap: 5px; min-width: 0; }
+.matriz-linha-topo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.matriz-linha-topo strong { overflow: hidden; font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
+.matriz-etiqueta { flex: none; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-style: normal; font-weight: 800; white-space: nowrap; }
+.is-counter .matriz-etiqueta { background: color-mix(in srgb, var(--bh-positive) 22%, transparent); color: var(--bh-positive); }
+.is-castiga .matriz-etiqueta { background: color-mix(in srgb, var(--bh-negative) 22%, transparent); color: var(--bh-negative); }
+.is-equipa .matriz-etiqueta { background: color-mix(in srgb, var(--bh-violet) 26%, transparent); color: var(--bh-text); }
+.matriz-delta { margin-left: auto; font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: 18px; white-space: nowrap; }
+.is-counter .matriz-delta, .is-equipa .matriz-delta { color: var(--bh-positive); }
+.is-castiga .matriz-delta { color: var(--bh-negative); }
+.matriz-linha small { overflow: hidden; color: var(--bh-text-muted); font-size: 11.5px; text-overflow: ellipsis; }
+.matriz-amostra { color: var(--bh-warning); font-style: normal; }
+.matriz-barra { position: relative; display: block; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .08); }
+.matriz-barra-taxa { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--bh-positive); }
+.is-castiga .matriz-barra-taxa, .matriz-modo-cartao.is-mau .matriz-barra-taxa { background: var(--bh-negative); }
+.is-equipa .matriz-barra-taxa { background: var(--bh-violet); }
+.matriz-modo-cartao .matriz-barra-taxa { background: var(--cor-do-modo); }
+.matriz-barra-habitual { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; background: var(--bh-text); opacity: .75; }
+
+.matriz-todos-cabeca { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.matriz-procura { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; max-width: 100%; padding: 0 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); }
+.matriz-procura input { min-width: 0; width: 220px; max-width: 100%; border: 0; background: none; color: var(--bh-text); font-size: 14px; outline: none; }
+.matriz-seccao .matriz-lista-larga .matriz-linha { grid-template-columns: 26px auto minmax(0, 1fr); }
+.matriz-seccao > .ver-todos { display: block; }
+.matriz-metodo { display: flex; gap: 10px; padding: 14px 16px; border: 1px solid var(--bh-line); border-radius: 14px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 13px; line-height: 1.55; }
+.matriz-metodo p { margin: 0; }
+
+@media (max-width: 1000px) {
+  .matriz-colunas { grid-template-columns: minmax(0, 1fr); }
+  .matriz-cartao-topo { grid-template-columns: auto minmax(0, 1fr); }
+  .matriz-numeros { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .matriz-pagina { padding: 16px 12px 110px; gap: 14px; }
+  .matriz-cartao-topo { gap: 14px; padding: 16px; }
+  .matriz-cara.is-grande { width: 76px; height: 76px; }
+  .matriz-numeros { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .matriz-numeros > div { padding: 10px; }
+  .matriz-numeros strong { font-size: 21px; }
+  .matriz-resumo { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px 16px; }
+  .matriz-escolha { padding: 0 16px 16px; }
+  .matriz-modos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .matriz-modos button { flex: none; }
+  .matriz-mapa { width: 100%; min-width: 0; }
+  .matriz-mapa select { flex: 1 1 0; }
+  .matriz-linha { padding: 9px 10px; gap: 8px; }
+  .matriz-cara.is-media { width: 38px; height: 38px; }
+  .matriz-procura, .matriz-procura input { width: 100%; }
+}

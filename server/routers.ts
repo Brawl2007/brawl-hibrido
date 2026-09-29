@@ -17,7 +17,7 @@ import { rankedPaginasSchema, guardarPaginasRanked } from "./rankedImport";
 import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { resumirPartidas, nomeDoModo } from "@shared/partidasObservadas";
 import { probeAllSources } from "./sourceProbe";
-import { resumoDasPartidas } from "./partidasResumo";
+import { fichaDaMatriz, resumoDasPartidas } from "./partidasResumo";
 import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
 import { IP_DO_PROXY_ROYALEAPI, normalizarCaminhoDaApi, probeOfficialApi, setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
@@ -802,6 +802,19 @@ export const appRouter = router({
         rank: z.enum(["diamante", "mitico", "lendario", "mestre"]).optional(),
       }).optional())
       .query(({ input }) => resumoDasPartidas(input ?? {})),
+    /**
+     * A Matriz 1v1 com a API ligada: counters, quem ele castiga, duplas, trios
+     * e onde ganha, de um brawler, com os mesmos filtros da página «Partidas».
+     */
+    ficha: publicProcedure
+      .input(z.object({
+        brawler: z.string().trim().min(1).max(40),
+        dias: z.number().int().min(0).max(3650).default(30),
+        mode: z.string().trim().min(1).max(64).optional(),
+        mapId: z.string().trim().min(1).max(128).optional(),
+        rank: z.enum(["diamante", "mitico", "lendario", "mestre"]).optional(),
+      }))
+      .query(({ input }) => fichaDaMatriz(input)),
     status: publicProcedure.query(async () => {
       const [config, coverage, runs] = await Promise.all([
         getObservedMatchCollectionConfig(),

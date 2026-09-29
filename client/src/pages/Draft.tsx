@@ -2,6 +2,9 @@ import { Retrato } from "@/components/Retrato";
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
+import { BotaoApiOficial } from "@/components/BotaoApiOficial";
+import { RANKS_DO_FILTRO } from "@shared/ranksDoRanked";
+import { SeletorDeRank } from "@/components/SeletorDeRank";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { idDoMapa, mapImageFor } from "@/lib/imagemDoMapa";
@@ -1386,6 +1389,9 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
   const brawlerImage = brawlerImageFor(row);
   const role = inferDraftRole(row.brawler);
   const roleWinRate = row.winRate;
+  const daApi = "jogosNaApi" in row && typeof (row as { jogosNaApi?: unknown }).jogosNaApi === "number"
+    ? { jogos: (row as { jogosNaApi: number }).jogosNaApi, vitoria: (row as { vitoriaNaApi?: number | null }).vitoriaNaApi ?? null }
+    : null;
   const profile = getCounterProfile(row.brawler, rosterNames);
   const build = getBrawlerBuild(row.brawler, row.modeId);
   const activeBonusItems = getActiveDraftBonuses(signal, role, row.brawler);
@@ -1412,7 +1418,12 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
       <span className="recommendation-avatar com-retrato"><Retrato src={brawlerImage} nome={row.brawler} /></span>
       <span className="recommendation-main">
         <strong>{row.brawler} {banned && <em className="recommendation-ban-note">BAN · EXCLUÍDO</em>}</strong>
-        <small>{role === "side" ? "LANE" : role.toUpperCase()} · Vitória {formatMetric(roleWinRate)} · Uso {formatMetric(row.usage)}</small>
+        {/*
+          * Com a API ligada, a vitória no ecrã é a medida (a mesma da página
+          * «Partidas»), com os jogos ao lado. A que ordena continua ajustada
+          * para 50% com poucos jogos — ver `linhasDaApi`.
+          */}
+        <small>{role === "side" ? "LANE" : role.toUpperCase()} · Vitória {formatMetric(daApi ? daApi.vitoria : roleWinRate)} · Uso {formatMetric(row.usage)}{daApi ? ` · ${daApi.jogos} jogos` : ""}</small>
         {expanded && <>
         <small className="recommendation-factor-line">PONTOS BASE {basePoints.toFixed(2)} · SCORE HÍBRIDO REAL {signal.scoreBreakdown.hybridPoints.toFixed(2)}</small>
         {hasSameClassPenalty && <span className={`recommendation-class-penalty team-${suggestionTeam}`} aria-label={`Desbónus de mesma classe em ${row.brawler}: menos ${formatRulePercentage(sameClassPenaltyRate)} por cento, ativado pelos Picks da equipa ${suggestionTeam === "blue" ? "Azul" : "Vermelha"}: ${sameClassTriggers.join(", ") || "aliado da mesma classe"}`}>
@@ -2837,25 +2848,18 @@ export default function Draft() {
               <ChevronDown size={14} />
             </label>
             {fonteApi.ligada ? null : <SeletorDeElo mapa={selectedMap?.name} />}
-            {/* «Só API oficial»: o Draft passa a ler apenas as partidas recolhidas deste mapa. */}
-            <button
-              type="button"
-              className={`mesa-fonte-api ${fonteApi.ligada ? "is-active" : ""}`}
-              aria-pressed={fonteApi.ligada}
-              onClick={fonteApi.alternar}
-              title="Ligado: só as partidas Ranked recolhidas da API da Supercell, neste mapa, nos últimos 30 dias. Desligado: BrawlScope, Brawl Planet, TopBrawl e PL Prodigy."
-            >
-              <span className="mesa-fonte-api-caixa" aria-hidden="true">{fonteApi.ligada ? "✓" : ""}</span>
-              Só API oficial
-            </button>
+            {/* «API oficial» (o mesmo interruptor dos Mapas e da Matriz): o Draft passa a ler só as partidas recolhidas deste mapa. */}
+            <BotaoApiOficial ligada={fonteApi.ligada} onAlternar={fonteApi.alternar} />
             {fonteApi.ligada ? (
               <span className="mesa-fonte-api-nota" role="status">
                 {fonteApi.aCarregar
                   ? "A ler as partidas…"
-                  : `${(fonteApi.dados?.partidas ?? 0).toLocaleString("pt-PT")} partidas deste mapa (${fonteApi.dias === 0 ? "desde sempre" : fonteApi.dias === 1 ? "últimas 24 h" : `últimos ${fonteApi.dias} dias`})${(fonteApi.dados?.partidas ?? 0) < 100 ? " · ainda poucas: os números estão perto de 50%" : ""}`}
+                  : `${(fonteApi.dados?.partidas ?? 0).toLocaleString("pt-PT")} partidas deste mapa (${fonteApi.dias === 0 ? "desde sempre" : fonteApi.dias === 1 ? "últimas 24 h" : `últimos ${fonteApi.dias} dias`}${fonteApi.rank ? ` · ${RANKS_DO_FILTRO.find((opcao) => opcao.id === fonteApi.rank)?.nome}` : " · todos os ranks"})${(fonteApi.dados?.partidas ?? 0) < 100 ? " · ainda poucas: os números estão perto de 50%" : ""}`}
               </span>
             ) : null}
             {fonteApi.ligada ? <SeletorDePeriodo className="mesa-fonte-api-periodo" dias={fonteApi.dias} onChange={fonteApi.setDias} /> : null}
+            {/* O rank é o mesmo da página «Partidas»: com o mesmo filtro, os números batem. */}
+            {fonteApi.ligada ? <SeletorDeRank className="mesa-fonte-api-rank" rank={fonteApi.rank} onChange={fonteApi.setRank} /> : null}
             <div className="mesa-escolha" role="group" aria-label="Quem escolhe primeiro">
               <span>Começa</span>
               <button type="button" className={initialTeam === "blue" ? "is-active blue" : "blue"} aria-pressed={initialTeam === "blue"} onClick={() => handleInitialTeamChange("blue")}>Azul</button>

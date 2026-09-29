@@ -6,10 +6,11 @@ import { Retrato } from "@/components/Retrato";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
 import { trpc } from "@/lib/trpc";
 import { mapImageFor } from "@/lib/imagemDoMapa";
-import { allRankedRows } from "@/data/rankedData";
-import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
+import { CORES_DOS_MODOS, retratoDe } from "@/lib/visualDasPartidas";
 import { JOGOS_MINIMOS_FIAVEIS, taxaDeUso, taxaDeVitoria } from "@shared/partidasObservadas";
-import { RANKS_DO_FILTRO, type IdDoRank } from "@shared/ranksDoRanked";
+import { SeletorDeRank } from "@/components/SeletorDeRank";
+import { RANKS_DO_FILTRO } from "@shared/ranksDoRanked";
+import { useApiOficial } from "@/hooks/useApiOficial";
 
 /**
  * A página «Partidas»: tudo o que o site sabe a partir dos jogos Ranked que
@@ -36,25 +37,7 @@ const SEPARADORES: Array<{ id: Separador; label: string; icon: typeof Users }> =
   { id: "sinergias", label: "Sinergias", icon: Handshake },
 ];
 
-/** A cor de cada modo, como o jogo os pinta. */
-const CORES_DOS_MODOS: Record<string, string> = {
-  gemgrab: "#9b5cf6",
-  brawlball: "#4f8ff7",
-  heist: "#d946ef",
-  bounty: "#22c3ee",
-  hotzone: "#ef4444",
-  knockout: "#f59e0b",
-};
-
 const DE_CADA_VEZ = 100;
-
-const idsDosBrawlers = new Map<string, number>();
-for (const row of allRankedRows) if (row.brawlerId && !idsDosBrawlers.has(row.brawler.toLowerCase())) idsDosBrawlers.set(row.brawler.toLowerCase(), row.brawlerId);
-
-function retratoDe(nome: string) {
-  const id = idsDosBrawlers.get(nome.toLowerCase()) ?? additionalBrawlerAssetIds[nome];
-  return id ? `https://cdn.brawlify.com/brawlers/borderless/${id}.png` : null;
-}
 
 function Cara({ nome, grande = false }: { nome: string; grande?: boolean }) {
   return (
@@ -108,10 +91,10 @@ function Cabecalho({ rotulo, coluna, ativa, descendente, onOrdenar }: { rotulo: 
 }
 
 export default function Partidas() {
-  const [dias, setDias] = useState<number>(30);
+  // O período e o rank são os do site todo (`useApiOficial`): os mesmos do Draft, dos Mapas e da Matriz.
+  const { dias, setDias, rank, setRank } = useApiOficial();
   const [mode, setMode] = useState<string>("");
   const [mapId, setMapId] = useState<string>("");
-  const [rank, setRank] = useState<IdDoRank | "">("");
   const [separador, setSeparador] = useState<Separador>("brawlers");
   const [coluna, setColuna] = useState<Coluna>("vitoria");
   const [descendente, setDescendente] = useState(true);
@@ -196,15 +179,7 @@ export default function Partidas() {
 
         <section className="partidas-filtros" aria-label="Filtros">
           <SeletorDePeriodo dias={dias} onChange={mudar(setDias)} />
-          <div className="partidas-grupo" role="radiogroup" aria-label="Rank">
-            <span>Rank</span>
-            <button type="button" role="radio" aria-checked={rank === ""} className={rank === "" ? "is-active" : ""} onClick={() => mudar(setRank)("")}>Todos</button>
-            {RANKS_DO_FILTRO.map((opcao) => (
-              <button key={opcao.id} type="button" role="radio" aria-checked={rank === opcao.id} className={rank === opcao.id ? "is-active" : ""} onClick={() => mudar(setRank)(opcao.id)}>
-                {opcao.nome}
-              </button>
-            ))}
-          </div>
+          <SeletorDeRank rank={rank} onChange={mudar(setRank)} />
         </section>
 
         <div className="partidas-corpo">

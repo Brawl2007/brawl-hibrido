@@ -30,6 +30,10 @@ export type ContagemDeSinergia = { a: string; b: string; jogos: number; vitorias
 export type ResumoDasPartidas = {
   partidas: number;
   brawlers: ContagemDeBrawler[];
+  /** Os mesmos números de `brawlers`, separados por modo (para «onde ganha»). */
+  brawlersPorModo: Record<string, ContagemDeBrawler[]>;
+  /** E separados por mapa, pelo número do mapa (para a secção Mapas com a API ligada). */
+  brawlersPorMapa: Record<string, ContagemDeBrawler[]>;
   confrontos: ContagemDeConfronto[];
   equipas: ContagemDeEquipa[];
   sinergias: ContagemDeSinergia[];
@@ -53,8 +57,20 @@ export function resumirPartidas(partidas: readonly PartidaObservada[]): ResumoDa
   const confrontos = new Map<string, ContagemDeConfronto>();
   const equipas = new Map<string, ContagemDeEquipa>();
   const sinergias = new Map<string, ContagemDeSinergia>();
+  const porModo = new Map<string, Map<string, ContagemDeBrawler>>();
+  const porMapa = new Map<string, Map<string, ContagemDeBrawler>>();
+  const grupo = (onde: Map<string, Map<string, ContagemDeBrawler>>, chave: string) => {
+    let lista = onde.get(chave);
+    if (!lista) {
+      lista = new Map();
+      onde.set(chave, lista);
+    }
+    return lista;
+  };
 
   for (const partida of partidas) {
+    const doModo = grupo(porModo, partida.mode);
+    const doMapa = grupo(porMapa, partida.mapId);
     for (const [equipa, adversarios, ganhou] of [
       [partida.vencedores, partida.derrotados, true],
       [partida.derrotados, partida.vencedores, false],
@@ -62,6 +78,8 @@ export function resumirPartidas(partidas: readonly PartidaObservada[]): ResumoDa
       const membros = Array.from(new Set(equipa)).sort();
       for (const brawler of membros) {
         somar(brawlers, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
+        somar(doModo, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
+        somar(doMapa, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
         for (const adversario of new Set(adversarios)) {
           if (adversario === brawler) continue;
           somar(confrontos, `${brawler}\u0000${adversario}`, () => ({ a: brawler, b: adversario, jogos: 0, vitorias: 0 }), ganhou);
@@ -81,6 +99,8 @@ export function resumirPartidas(partidas: readonly PartidaObservada[]): ResumoDa
   return {
     partidas: partidas.length,
     brawlers: porJogos(Array.from(brawlers.values())),
+    brawlersPorModo: Object.fromEntries(Array.from(porModo, ([modo, lista]) => [modo, porJogos(Array.from(lista.values()))])),
+    brawlersPorMapa: Object.fromEntries(Array.from(porMapa, ([mapa, lista]) => [mapa, porJogos(Array.from(lista.values()))])),
     confrontos: porJogos(Array.from(confrontos.values())),
     equipas: porJogos(Array.from(equipas.values())),
     sinergias: porJogos(Array.from(sinergias.values())),

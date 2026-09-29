@@ -74,7 +74,8 @@ describe("fonte observada (Só API oficial)", () => {
 
   it("o Draft tem o botão e o mapa deixa de usar as equipas do Brawl Planet", () => {
     const draft = readFileSync(resolve(process.cwd(), "client/src/pages/Draft.tsx"), "utf8");
-    expect(draft).toContain("Só API oficial");
+    // v161: o botão é o mesmo do site todo (Draft, Mapas, Matriz).
+    expect(draft).toContain("<BotaoApiOficial ligada={fonteApi.ligada} onAlternar={fonteApi.alternar} />");
     expect(draft).toContain("fonteApi.ligada ? [] :");
     expect(draft).toContain("fonteApiVersao: fonteApi.versao");
   });
