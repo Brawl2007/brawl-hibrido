@@ -2,12 +2,13 @@ import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { nomeDoModo, resumirPartidas } from "@shared/partidasObservadas";
 import { listObservedBattlesParaResumo, listObservedMapsParaResumo } from "./db";
 import { lerNomesDosMapas } from "./observedMatchCollection";
+import { intervaloDoRank } from "@shared/ranksDoRanked";
 
 /** Uma rede de segurança para a memória da função; a página diz se for atingida. */
 const LIMITE_DE_PARTIDAS = 60_000;
 const VALIDADE_MS = 180_000;
 
-export type FiltroDasPartidas = { dias?: 0 | 1 | 7 | 30; mode?: string; mapId?: string };
+export type FiltroDasPartidas = { dias?: 0 | 1 | 7 | 30; mode?: string; mapId?: string; rank?: string };
 
 function lerEquipa(texto: string) {
   try {
@@ -21,9 +22,11 @@ function lerEquipa(texto: string) {
 async function calcular(filtro: FiltroDasPartidas) {
   const dias = filtro.dias ?? 30;
   const desde = dias > 0 ? new Date(Date.now() - dias * 86_400_000) : undefined;
+  const rank = intervaloDoRank(filtro.rank);
+  const intervalo = rank ? { min: rank.min, max: rank.max } : undefined;
   const [linhas, porMapa, nomesGuardados] = await Promise.all([
-    listObservedBattlesParaResumo({ desde, mode: filtro.mode, mapId: filtro.mapId, limite: LIMITE_DE_PARTIDAS }),
-    listObservedMapsParaResumo(desde),
+    listObservedBattlesParaResumo({ desde, mode: filtro.mode, mapId: filtro.mapId, rank: intervalo, limite: LIMITE_DE_PARTIDAS }),
+    listObservedMapsParaResumo(desde, intervalo),
     lerNomesDosMapas(),
   ]);
   const nomeDoMapa = (mapId: string) =>
@@ -39,7 +42,7 @@ async function calcular(filtro: FiltroDasPartidas) {
   return {
     geradoEm: new Date().toISOString(),
     dias,
-    filtro: { mode: filtro.mode ?? null, mapId: filtro.mapId ?? null },
+    filtro: { mode: filtro.mode ?? null, mapId: filtro.mapId ?? null, rank: rank?.id ?? null },
     limiteAtingido: linhas.length >= LIMITE_DE_PARTIDAS,
     modos: Array.from(modos, ([mode, partidas]) => ({ mode, nome: nomeDoModo(mode), partidas })).sort((a, b) => b.partidas - a.partidas),
     mapas: porMapa
@@ -58,7 +61,7 @@ export type ResumoDaPagina = Awaited<ReturnType<typeof calcular>>;
 const guardados = new Map<string, { em: number; valor: ResumoDaPagina }>();
 
 export async function resumoDasPartidas(filtro: FiltroDasPartidas): Promise<ResumoDaPagina> {
-  const chave = JSON.stringify([filtro.dias ?? 30, filtro.mode ?? "", filtro.mapId ?? ""]);
+  const chave = JSON.stringify([filtro.dias ?? 30, filtro.mode ?? "", filtro.mapId ?? "", filtro.rank ?? ""]);
   const guardado = guardados.get(chave);
   if (guardado && Date.now() - guardado.em < VALIDADE_MS) return guardado.valor;
   const valor = await calcular(filtro);

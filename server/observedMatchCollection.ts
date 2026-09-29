@@ -15,6 +15,7 @@ import {
 } from "./db";
 import { RANKED_MAP_SOURCES } from "./rankedSync";
 import { getSetting, setSetting } from "./appSettings";
+import { rankDaPartida } from "@shared/ranksDoRanked";
 
 /**
  * Quantos jogadores cada recolha lê, e quantos de cada vez.
@@ -76,6 +77,8 @@ export type NormalizedObservedBattle = {
   losingTeam: string[];
   sourcePlayerTag: string;
   deltas: ObservedMatchupDelta[];
+  /** Nível de rank dos seis jogadores, quando a API o dá. */
+  rank: { min: number; max: number; medio: number } | null;
 };
 
 function normalizeBrawlerName(value: string | undefined) {
@@ -163,6 +166,7 @@ export function normalizeObservedBattle(
     losingTeam,
     sourcePlayerTag,
     deltas: createMatchupDeltas(mapId, mode, winningTeam, losingTeam),
+    rank: rankDaPartida(battle.teams.flat().map((jogador) => jogador.brawler?.trophies)),
   };
 }
 
@@ -227,8 +231,15 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
           sourcePlayerTag: candidate.sourcePlayerTag,
         },
         deltas: candidate.deltas,
+        rank: candidate.rank,
       })),
     );
+    /** Os níveis de rank vistos, para confirmar a correspondência com os ranks no ar. */
+    const niveisVistos: Record<string, number> = {};
+    for (const candidate of candidates) {
+      const chave = candidate.rank ? String(candidate.rank.medio) : "sem rank";
+      niveisVistos[chave] = (niveisVistos[chave] ?? 0) + 1;
+    }
 
     const completedAt = new Date();
     await updateObservedMatchCollectionRun(runId ?? 0, {
@@ -241,7 +252,7 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     });
     await updateObservedMatchCollectionConfig({ lastStatus: "success", lastCompletedAt: completedAt, lastError: null });
     console.log(`[Partidas] ${logs.length} jogadores lidos · ${candidates.length} partidas Ranked · ${battlesInserted} novas · tipos: ${JSON.stringify(tiposVistos)}`);
-    return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos };
+    return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos, niveisVistos };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido na coleta observada";
     const completedAt = new Date();

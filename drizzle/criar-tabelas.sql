@@ -145,6 +145,14 @@ CREATE TABLE IF NOT EXISTS `observed_match_collection_runs` (
 	CONSTRAINT `observed_match_collection_runs_id` PRIMARY KEY(`id`)
 );
 
+CREATE TABLE IF NOT EXISTS `observed_battle_ranks` (
+	`fingerprint` varchar(64) NOT NULL,
+	`rank_min` int NOT NULL,
+	`rank_max` int NOT NULL,
+	`rank_medio` int NOT NULL,
+	CONSTRAINT `observed_battle_ranks_fingerprint` PRIMARY KEY(`fingerprint`)
+);
+
 CREATE TABLE IF NOT EXISTS `observed_matchup_aggregates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`map_id` varchar(128) NOT NULL,

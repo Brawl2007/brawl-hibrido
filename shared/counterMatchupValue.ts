@@ -162,6 +162,80 @@ export function toOwnerPerspective(publishedDelta: number) {
 }
 
 /**
+ * «Só API oficial»: o Draft a ler apenas as partidas Ranked que o site recolhe.
+ *
+ * Ligado, os confrontos e as sinergias deixam de vir do BrawlScope, do PL
+ * Prodigy e do Brawl Planet e passam a vir das partidas guardadas DO MAPA
+ * escolhido. Desligado (`null`), tudo volta às fontes de sempre.
+ *
+ * O valor de um par é quanto o candidato ganha a mais (ou a menos) do que
+ * costuma ganhar nesse mapa — não contra 50%, senão um brawler forte teria
+ * «counter» contra toda a gente e a força dele contava duas vezes (já está na
+ * base). Com poucos jogos, o valor é puxado para zero: cada par soma
+ * `JOGOS_DE_PRIOR` jogos imaginários à taxa habitual do candidato, e só com
+ * muitos jogos reais a diferença aparece inteira.
+ */
+export const JOGOS_DE_PRIOR = 10;
+
+type ContagemObservada = { jogos: number; vitorias: number };
+export type FonteObservada = {
+  /** Taxa de vitória de cada brawler no mapa, de 0 a 1. */
+  vitoriaNoMapa: ReadonlyMap<string, number>;
+  /** `a␀b` → a contra b. */
+  confrontos: ReadonlyMap<string, ContagemObservada>;
+  /** `a␀b` com a < b → a e b na mesma equipa. */
+  sinergias: ReadonlyMap<string, ContagemObservada>;
+};
+
+let fonteObservada: FonteObservada | null = null;
+
+export function definirFonteObservada(fonte: FonteObservada | null) {
+  fonteObservada = fonte;
+  avancarVersaoDoMotor();
+}
+
+export function fonteObservadaAtiva() {
+  return fonteObservada !== null;
+}
+
+/** Monta a fonte a partir das contagens da página «Partidas» de um mapa. */
+export function montarFonteObservada(dados: {
+  brawlers: ReadonlyArray<{ brawler: string; jogos: number; vitorias: number }>;
+  confrontos: ReadonlyArray<{ a: string; b: string; jogos: number; vitorias: number }>;
+  sinergias: ReadonlyArray<{ a: string; b: string; jogos: number; vitorias: number }>;
+}): FonteObservada {
+  return {
+    vitoriaNoMapa: new Map(dados.brawlers.map((linha) => [key(linha.brawler), linha.jogos ? linha.vitorias / linha.jogos : 0.5])),
+    confrontos: new Map(dados.confrontos.map((linha) => [`${key(linha.a)}\u0000${key(linha.b)}`, { jogos: linha.jogos, vitorias: linha.vitorias }])),
+    sinergias: new Map(dados.sinergias.map((linha) => {
+      const [a, b] = [key(linha.a), key(linha.b)].sort();
+      return [`${a}\u0000${b}`, { jogos: linha.jogos, vitorias: linha.vitorias }];
+    })),
+  };
+}
+
+function diferencaEncolhida(contagem: ContagemObservada | undefined, habitual: number) {
+  if (!contagem || contagem.jogos <= 0) return null;
+  const encolhida = (contagem.vitorias + JOGOS_DE_PRIOR * habitual) / (contagem.jogos + JOGOS_DE_PRIOR);
+  return Math.round((encolhida - habitual) * 10000) / 100;
+}
+
+/** Pontos percentuais que `owner` ganha a mais contra `foe` neste mapa; null sem jogos. */
+export function confrontoObservado(owner: string, foe: string) {
+  if (!fonteObservada) return null;
+  const habitual = fonteObservada.vitoriaNoMapa.get(key(owner)) ?? 0.5;
+  return diferencaEncolhida(fonteObservada.confrontos.get(`${key(owner)}\u0000${key(foe)}`), habitual);
+}
+
+/** Pontos percentuais que `candidato` ganha a mais ao lado de `aliado`; negativo é anti-sinergia. */
+export function sinergiaObservada(candidato: string, aliado: string) {
+  if (!fonteObservada) return null;
+  const habitual = fonteObservada.vitoriaNoMapa.get(key(candidato)) ?? 0.5;
+  const [a, b] = [key(candidato), key(aliado)].sort();
+  return diferencaEncolhida(fonteObservada.sinergias.get(`${a}\u0000${b}`), habitual);
+}
+
+/**
  * Ler as duas fichas do confronto, e não só a do candidato.
  *
  * POR QUE EXISTE
@@ -200,6 +274,8 @@ function deltaDaFicha(titular: string, adversario: string, perfis: CounterSource
 
 export function getMatchupValue(owner: string, foe: string, modeId?: string, reading = activeReading): MatchupValue {
   if (key(owner) === key(foe)) return calculateMatchupValue(null, 0, 0);
+  // «Só API oficial»: nenhuma outra fonte entra, nem as confirmações do PL Prodigy e do Brawl Planet.
+  if (fonteObservada) return calculateMatchupValue(confrontoObservado(owner, foe), 0, 0, { scope: "api-oficial" });
   /**
    * Direções rejeitadas manualmente não valem em lado nenhum — nem na lista, nem
    * no Score. A exclusão é bidirecional na leitura: se a direção A→B foi

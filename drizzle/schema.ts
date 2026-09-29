@@ -399,6 +399,23 @@ export const observedBattles = mysqlTable(
 export type ObservedBattle = typeof observedBattles.$inferSelect;
 export type InsertObservedBattle = typeof observedBattles.$inferInsert;
 
+/**
+ * O rank de cada partida Ranked recolhida, numa tabela à parte.
+ *
+ * A API dá o nível de rank de cada jogador (no campo `trophies` do brawler,
+ * quando a partida é Ranked). Guarda-se o mínimo, o máximo e a média dos seis,
+ * pela impressão digital da partida. Numa tabela própria, e não numa coluna
+ * nova de `observed_battles`, porque o instalador do arranque só cria tabelas —
+ * nunca altera as que existem — e a recolha não pode depender de uma alteração
+ * que falhe. Partidas sem linha aqui são as recolhidas antes da v157.
+ */
+export const observedBattleRanks = mysqlTable("observed_battle_ranks", {
+  fingerprint: varchar("fingerprint", { length: 64 }).primaryKey(),
+  rankMin: int("rank_min").notNull(),
+  rankMax: int("rank_max").notNull(),
+  rankMedio: int("rank_medio").notNull(),
+});
+
 /** Agregado incremental de resultados de equipa por mapa, modo e par direcional. */
 export const observedMatchupAggregates = mysqlTable(
   "observed_matchup_aggregates",

@@ -56,7 +56,8 @@ export type OfficialBattleLogEntry = {
   battle?: {
     type?: string;
     result?: string;
-    teams?: Array<Array<{ tag?: string; brawler?: { name?: string } }>>;
+    /** Numa partida Ranked, `brawler.trophies` é o nível do rank (ver `shared/ranksDoRanked.ts`). */
+    teams?: Array<Array<{ tag?: string; brawler?: { name?: string; trophies?: number } }>>;
   };
 };
 

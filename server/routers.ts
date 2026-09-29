@@ -798,6 +798,7 @@ export const appRouter = router({
         dias: z.union([z.literal(0), z.literal(1), z.literal(7), z.literal(30)]).default(30),
         mode: z.string().trim().min(1).max(64).optional(),
         mapId: z.string().trim().min(1).max(128).optional(),
+        rank: z.enum(["diamante", "mitico", "lendario", "mestre"]).optional(),
       }).optional())
       .query(({ input }) => resumoDasPartidas(input ?? {})),
     status: publicProcedure.query(async () => {

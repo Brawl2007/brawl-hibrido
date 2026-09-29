@@ -485,3 +485,10 @@
   .partidas-seletor { flex: 1 1 100%; }
   .partidas-seletor select { flex: 1 1 auto; }
 }
+
+/* v157 — botão «Só API oficial» no Draft. */
+.mesa-fonte-api { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--mesa-borda, var(--bh-line)); border-radius: 10px; background: rgba(0, 0, 0, .2); color: var(--bh-text-muted); font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mesa-fonte-api.is-active { border-color: var(--bh-positive); color: var(--bh-text); background: rgba(53, 224, 171, .08); }
+.mesa-fonte-api-caixa { display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--bh-line-strong); border-radius: 4px; color: var(--bh-on-gold); font-size: 11px; line-height: 1; }
+.mesa-fonte-api.is-active .mesa-fonte-api-caixa { border-color: var(--bh-positive); background: var(--bh-positive); }
+.mesa-fonte-api-nota { color: var(--bh-text-muted); font-size: 12.5px; }
