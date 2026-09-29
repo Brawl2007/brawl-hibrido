@@ -416,6 +416,29 @@ export const observedBattleRanks = mysqlTable("observed_battle_ranks", {
   rankMedio: int("rank_medio").notNull(),
 });
 
+/**
+ * Os jogadores que a recolha segue além dos rankings (a «bola de neve»).
+ *
+ * Entram quando aparecem numa partida Ranked lida; `next_read_at` diz quando
+ * voltar a lê-los e sobe para quem deixou de jogar. As regras estão em
+ * `server/bolaDeNeve.ts`. Guarda-se só o código do jogador — público na API
+ * oficial — e as datas das leituras.
+ */
+export const observedPlayers = mysqlTable(
+  "observed_players",
+  {
+    tag: varchar("tag", { length: 20 }).primaryKey(),
+    firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+    lastReadAt: timestamp("last_read_at"),
+    nextReadAt: timestamp("next_read_at").defaultNow().notNull(),
+    lastRankedAt: timestamp("last_ranked_at"),
+    emptyReads: int("empty_reads").notNull().default(0),
+  },
+  table => ({
+    nextReadIdx: index("observed_players_next_read_idx").on(table.nextReadAt),
+  })
+);
+
 /** Agregado incremental de resultados de equipa por mapa, modo e par direcional. */
 export const observedMatchupAggregates = mysqlTable(
   "observed_matchup_aggregates",
