@@ -8,7 +8,7 @@ import { intervaloDoRank } from "@shared/ranksDoRanked";
 const LIMITE_DE_PARTIDAS = 60_000;
 const VALIDADE_MS = 180_000;
 
-export type FiltroDasPartidas = { dias?: 0 | 1 | 7 | 30; mode?: string; mapId?: string; rank?: string };
+export type FiltroDasPartidas = { dias?: number; mode?: string; mapId?: string; rank?: string };
 
 function lerEquipa(texto: string) {
   try {

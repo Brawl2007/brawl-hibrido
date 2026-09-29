@@ -6,7 +6,8 @@ import { definirFonteObservada, JOGOS_DE_PRIOR, montarFonteObservada } from "@sh
  * O interruptor «Só API oficial» do Draft.
  *
  * Ligado, o Draft passa a ler apenas as partidas Ranked que o site recolhe da
- * API da Supercell, do mapa escolhido e dos últimos 30 dias:
+ * API da Supercell, do mapa escolhido e do período escolhido (30 dias por
+ * omissão; 24 h, 7, 14, tudo ou os dias que se escreverem):
  *  - a base de cada brawler (vitória e uso) sai dessas partidas, e não do
  *    Brawl Planet nem do TopBrawl;
  *  - os confrontos 1 contra 1 e as sinergias (e anti-sinergias) também, e não
@@ -17,7 +18,7 @@ import { definirFonteObservada, JOGOS_DE_PRIOR, montarFonteObservada } from "@sh
  * verdade de «não sabemos», e o aviso no ecrã diz quantas partidas há.
  */
 const CHAVE = "draft-so-api-oficial";
-const DIAS = 30;
+const CHAVE_DOS_DIAS = "draft-so-api-oficial-dias";
 
 function normalizarNome(nome: string | undefined) {
   return (nome ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -41,6 +42,22 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
       return false;
     }
   });
+  const [dias, setDiasGuardados] = useState(() => {
+    try {
+      const guardado = Number(localStorage.getItem(CHAVE_DOS_DIAS));
+      return Number.isInteger(guardado) && guardado >= 0 && guardado <= 3650 && localStorage.getItem(CHAVE_DOS_DIAS) !== null ? guardado : 30;
+    } catch {
+      return 30;
+    }
+  });
+  const setDias = useCallback((novos: number) => {
+    setDiasGuardados(novos);
+    try {
+      localStorage.setItem(CHAVE_DOS_DIAS, String(novos));
+    } catch {
+      // Sem armazenamento: vale só nesta visita.
+    }
+  }, []);
   const alternar = useCallback(() => {
     setLigada((atual) => {
       const nova = !atual;
@@ -53,11 +70,12 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     });
   }, []);
 
-  const lista = trpc.observedMatches.partidas.useQuery({ dias: DIAS }, { enabled: ligada, staleTime: 120_000 });
+  const lista = trpc.observedMatches.partidas.useQuery({ dias }, { enabled: ligada, staleTime: 120_000, placeholderData: (anterior) => anterior });
   const mapa = lista.data?.mapas.find((entrada) => normalizarNome(entrada.nome) === normalizarNome(nomeDoMapa));
   const doMapa = trpc.observedMatches.partidas.useQuery(
-    { dias: DIAS, mapId: mapa?.mapId },
-    { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000 },
+    { dias, mapId: mapa?.mapId },
+    // Ao mudar o período, os números anteriores ficam até chegarem os novos — sem saltar para as outras fontes.
+    { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000, placeholderData: (anterior) => anterior },
   );
   const dados: DadosDoMapaDaApi | undefined = ligada
     ? mapa ? doMapa.data : lista.data ? SEM_PARTIDAS : undefined
@@ -75,7 +93,8 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     ligada,
     alternar,
     dados,
-    dias: DIAS,
+    dias,
+    setDias,
     aCarregar: ligada && (lista.isLoading || (Boolean(mapa?.mapId) && doMapa.isLoading)),
     /** Muda sempre que a fonte do motor muda — entra nas dependências do ranking. */
     versao,

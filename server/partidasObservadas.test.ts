@@ -76,10 +76,31 @@ describe("a página e o pedido", () => {
 
   it("a página tem os quatro separadores, período, modo, mapa e mostra tudo", () => {
     const pagina = ler("client/src/pages/Partidas.tsx");
-    for (const texto of ['"Brawlers"', '"1 contra 1"', '"Equipas 3v3"', '"Sinergias"', '"24 h"', '"Tudo"', "Todos os modos", "Todos os mapas"]) expect(pagina).toContain(texto);
+    for (const texto of ['"Brawlers"', '"1 contra 1"', '"Equipas 3v3"', '"Sinergias"', "Todos os modos", "Todos os mapas", "<SeletorDePeriodo"]) expect(pagina).toContain(texto);
     // Nada cortado: as listas abrem aos cem, com «Mostrar mais» até ao fim.
     expect(pagina).toContain("Mostrar mais");
     expect(pagina).not.toMatch(/\.slice\(0, (1|3|5|10)\)/);
     expect(ler("client/src/App.tsx")).toContain('<Route path="/partidas" component={Partidas} />');
+  });
+});
+
+describe("período à escolha (v158)", () => {
+  const ler = (caminho: string) => readFileSync(resolve(process.cwd(), caminho), "utf8");
+
+  it("atalhos de 24 h, 7, 14 e 30 dias, tudo, e os dias que se escreverem", async () => {
+    const seletor = ler("client/src/components/SeletorDePeriodo.tsx");
+    for (const texto of ['"24 h"', '"7 dias"', '"14 dias"', '"30 dias"', '"Tudo"', 'aria-label="Número de dias"']) expect(seletor).toContain(texto);
+    const { limitarDias } = await import("../client/src/components/SeletorDePeriodo");
+    expect(limitarDias(21)).toBe(21);
+    expect(limitarDias(9999)).toBe(365);
+    expect(limitarDias(-3)).toBe(0);
+    expect(limitarDias(Number.NaN)).toBe(30);
+  });
+
+  it("o servidor aceita qualquer número de dias e o Draft usa o mesmo controlo", () => {
+    expect(ler("server/routers.ts")).toContain("dias: z.number().int().min(0).max(3650).default(30)");
+    const draft = ler("client/src/pages/Draft.tsx");
+    expect(draft).toContain("<SeletorDePeriodo className=\"mesa-fonte-api-periodo\" dias={fonteApi.dias} onChange={fonteApi.setDias} />");
+    expect(ler("client/src/hooks/useFonteApi.ts")).toContain("{ dias, mapId: mapa?.mapId }");
   });
 });

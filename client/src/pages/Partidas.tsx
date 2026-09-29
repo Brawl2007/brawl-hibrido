@@ -3,6 +3,7 @@ import { Database, Search, Swords, Users, UserRound, Handshake } from "lucide-re
 import { BarraDoSite } from "@/components/BarraDoSite";
 import { MobileNav } from "@/components/MobileNav";
 import { Retrato } from "@/components/Retrato";
+import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
 import { trpc } from "@/lib/trpc";
 import { allRankedRows } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
@@ -22,20 +23,12 @@ import { RANKS_DO_FILTRO, type IdDoRank } from "@shared/ranksDoRanked";
 
 type Separador = "brawlers" | "confrontos" | "equipas" | "sinergias";
 type Ordem = "jogos" | "vitoria" | "derrota";
-type Dias = 0 | 1 | 7 | 30;
 
 const SEPARADORES: Array<{ id: Separador; label: string; icon: typeof Users }> = [
   { id: "brawlers", label: "Brawlers", icon: UserRound },
   { id: "confrontos", label: "1 contra 1", icon: Swords },
   { id: "equipas", label: "Equipas 3v3", icon: Users },
   { id: "sinergias", label: "Sinergias", icon: Handshake },
-];
-
-const PERIODOS: Array<{ dias: Dias; label: string }> = [
-  { dias: 1, label: "24 h" },
-  { dias: 7, label: "7 dias" },
-  { dias: 30, label: "30 dias" },
-  { dias: 0, label: "Tudo" },
 ];
 
 const DE_CADA_VEZ = 100;
@@ -94,7 +87,7 @@ function MaisLinhas({ total, mostradas, onMais }: { total: number; mostradas: nu
 }
 
 export default function Partidas() {
-  const [dias, setDias] = useState<Dias>(30);
+  const [dias, setDias] = useState<number>(30);
   const [mode, setMode] = useState<string>("");
   const [mapId, setMapId] = useState<string>("");
   const [rank, setRank] = useState<IdDoRank | "">("");
@@ -159,14 +152,7 @@ export default function Partidas() {
         </header>
 
         <section className="partidas-filtros" aria-label="Filtros">
-          <div className="partidas-grupo" role="radiogroup" aria-label="Período">
-            <span>Período</span>
-            {PERIODOS.map((periodo) => (
-              <button key={periodo.dias} type="button" role="radio" aria-checked={dias === periodo.dias} className={dias === periodo.dias ? "is-active" : ""} onClick={() => mudar(setDias)(periodo.dias)}>
-                {periodo.label}
-              </button>
-            ))}
-          </div>
+          <SeletorDePeriodo dias={dias} onChange={mudar(setDias)} />
           <div className="partidas-grupo" role="radiogroup" aria-label="Rank">
             <span>Rank</span>
             <button type="button" role="radio" aria-checked={rank === ""} className={rank === "" ? "is-active" : ""} onClick={() => mudar(setRank)("")}>Todos</button>

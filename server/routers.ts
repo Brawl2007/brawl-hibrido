@@ -795,7 +795,8 @@ export const appRouter = router({
      */
     partidas: publicProcedure
       .input(z.object({
-        dias: z.union([z.literal(0), z.literal(1), z.literal(7), z.literal(30)]).default(30),
+        // Qualquer número de dias (0 = tudo); o Draft e a página deixam escrever o que se quiser.
+        dias: z.number().int().min(0).max(3650).default(30),
         mode: z.string().trim().min(1).max(64).optional(),
         mapId: z.string().trim().min(1).max(128).optional(),
         rank: z.enum(["diamante", "mitico", "lendario", "mestre"]).optional(),

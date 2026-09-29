@@ -492,3 +492,14 @@
 .mesa-fonte-api-caixa { display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--bh-line-strong); border-radius: 4px; color: var(--bh-on-gold); font-size: 11px; line-height: 1; }
 .mesa-fonte-api.is-active .mesa-fonte-api-caixa { border-color: var(--bh-positive); background: var(--bh-positive); }
 .mesa-fonte-api-nota { color: var(--bh-text-muted); font-size: 12.5px; }
+
+/* v158 — período à escolha (24 h, 7, 14, 30 dias, tudo ou os dias que se escreverem). */
+.seletor-periodo-dias { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 7px; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.seletor-periodo-dias.is-active { background: var(--bh-gold); color: var(--bh-on-gold); }
+.seletor-periodo-dias input { width: 48px; min-height: 26px; padding: 0 4px; border: 1px solid var(--bh-line); border-radius: 6px; background: var(--bh-surface-2); color: var(--bh-text); font-size: 13px; text-align: center; }
+.seletor-periodo-dias.is-active input { border-color: var(--bh-on-gold); }
+.mesa-fonte-api-periodo { flex: 1 1 100%; }
+@media (max-width: 640px) {
+  /* No telemóvel o período parte em duas linhas: numa só, o campo dos dias ficava cortado à direita. */
+  .seletor-periodo { flex-wrap: wrap; overflow: visible; row-gap: 2px; }
+}
