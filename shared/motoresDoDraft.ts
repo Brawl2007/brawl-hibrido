@@ -1,42 +1,12 @@
 /**
- * Os motores do Draft: o do Brawl Híbrido, e dois que imitam o PL Prodigy e o
- * MetaPick, escolhidos nos Ajustes.
+ * Brawl Híbrido e dois modelos locais inspirados nas definições públicas do
+ * PL Prodigy e do MetaPick. As fórmulas completas dos sites não estão
+ * confirmadas. Os pesos Masters+ abaixo e a regra de ban com inimigos ainda
+ * por revelar foram verificados na interface do PL em 29/09/2026.
  *
- * POR QUE EXISTE
- *
- * O Brawl Híbrido MULTIPLICA: Score do mapa × (1 + bónus). O counter vale uma
- * percentagem da base, e um brawler fraco no mapa quase nunca sobe ao topo só
- * por countrar. O PL Prodigy e o MetaPick SOMAM, com o counter a pesar muito —
- * e é por isso que recomendam coisas que o Brawl Híbrido deixa em 60.º.
- *
- * Nenhum dos dois publica a fórmula: as contas são feitas no servidor deles.
- * A investigação de 29/09/2026 (pedidos que as próprias páginas fazem)
- * confirmou os dados de entrada (mapa, picks de cada lado, bans e os pesos),
- * os valores por omissão, os limites das barras do MetaPick, o preset
- * «Diamante e abaixo» do PL Prodigy e a escala dos pontos do PL (ver
- * `escalaDoPLProdigy`). Confirmou também que, no PL, banir os melhores sobe
- * os pontos dos outros — os pontos são relativos aos candidatos que sobram,
- * como a normalização abaixo. O resto segue os nomes das barras, com os dados
- * deste site — as fontes, ou as partidas da API com «API oficial» ligado:
- *
- * PL Prodigy — soma pesada de seis partes, cada uma posta de 0 a 100 entre os
- * candidatos do mapa: Uso 5%, Vitória 23%, Counter 36%, Encaixe 12%,
- * Sinergia 12%, Ban 12% (preset Masters+; há o de Diamante e abaixo). A soma
- * pesada é o «rawScore» e os pontos passam pela escala do PL.
- *   - Counter: soma do confronto contra cada pick inimigo.
- *   - Sinergia: soma da sinergia com cada aliado já escolhido.
- *   - Encaixe: a função dele no modo do mapa e na equipa (o «fit» do Draft).
- *   - Ban: quantos dos counters dele estão banidos. As fontes não publicam a
- *     taxa de ban de cada brawler; isto é o que o draft em curso diz.
- *
- * MetaPick — força no mapa + bónus somados, com limites de ruído:
- *   pontos = base + 10 × (Counter × C + Sinergia × S − Ban × R)
- *   - C: confrontos contra os picks inimigos, em dezenas de pontos
- *     percentuais (+10 pp = 1,0). Só conta |valor| ≥ Mín. Counter, e o bónus
- *     só vale para os «Top Counter Limit» melhores counters de cada inimigo.
- *   - S: sinergia com os aliados, na mesma unidade, com Mín. Sinergia.
- *   - R: risco — os counters dele que o adversário ainda pode escolher (os
- *     mais fortes, até ao número de picks que lhe faltam).
+ * A normalização por candidatos, a logística e a conversão de pp do MetaPick
+ * são escolhas/estimativas deste projeto, não fórmulas oficiais. Conservam-se
+ * para permitir comparar motores com os mesmos dados. Ver LEIA-ME-v166.md.
  */
 import { getMatchupValue, sinergiaObservada, fonteObservadaAtiva } from "./counterMatchupValue";
 import { getBrawlScopeSynergyTeammates } from "./counterSourceRelations";
@@ -45,13 +15,10 @@ export type MotorDoDraft = "hibrido" | "plprodigy" | "metapick";
 
 export type PesosPLProdigy = { uso: number; vitoria: number; counter: number; encaixe: number; sinergia: number; ban: number };
 /** Os valores por omissão do PL Prodigy (definições «PL Prodigy Settings», rank Masters+). */
-export const PESOS_PL_PRODIGY: PesosPLProdigy = { uso: 5, vitoria: 23, counter: 36, encaixe: 12, sinergia: 12, ban: 12 };
+export const PESOS_PL_PRODIGY: PesosPLProdigy = { uso: 4, vitoria: 20, counter: 40, encaixe: 13, sinergia: 10, ban: 13 };
 
 /**
- * Os presets do PL Prodigy, por rank. O de Masters+ vem das definições do
- * site; o «diamond_below» é o que o próprio site enviou no pedido ao servidor
- * durante a investigação de 29/09/2026 (useRate 9, winRate 27, counterRate 32,
- * fitRate 9, synergyRate 14, banRate 9).
+ * Presets lidos nas definições públicas do PL Prodigy em 29/09/2026.
  */
 export const PRESETS_PL_PRODIGY: Record<"mestre" | "diamanteOuAbaixo", { nome: string; pesos: PesosPLProdigy }> = {
   mestre: { nome: "Masters+", pesos: PESOS_PL_PRODIGY },
@@ -59,12 +26,10 @@ export const PRESETS_PL_PRODIGY: Record<"mestre" | "diamanteOuAbaixo", { nome: s
 };
 
 /**
- * A escala dos pontos do PL Prodigy: o servidor devolve um `rawScore` (0 a 1)
- * e um `totalScore` (0 a 100) que não é 100 × raw. Os dez pares publicados na
- * investigação (97 ← 0,9938; 81 ← 0,5782; … 54 ← 0,3341) batem todos, a menos
- * de 0,5 pontos (arredondamento), com uma logística:
+ * Escala local estimada a partir de dez exemplos da investigação anterior:
  *   total = 100 / (1 + e^(−5,22 × (raw − 0,30)))
- * Deduzida dos números, não publicada — mas não muda a ordem, só a escala.
+ * Ajustar esses exemplos não confirma a fórmula privada do PL. A função
+ * apenas muda a escala; não muda a ordem da soma ponderada local.
  */
 export function escalaDoPLProdigy(raw: number) {
   return 100 / (1 + Math.exp(-5.22 * (raw - 0.3)));
@@ -98,6 +63,52 @@ export type ComponentesDoCandidato = {
 
 export type PontuacaoDoMotor = { brawler: string; pontos: number; partes: Array<{ nome: string; valor: number }> };
 
+export type RelacaoDoMotor = { brawler: string; pp: number };
+export type ContextoDoMotor = {
+  counters: RelacaoDoMotor[];
+  sinergias: RelacaoDoMotor[];
+  countersBanidos: string[];
+  riscos: RelacaoDoMotor[];
+  inimigosPorRevelar: number;
+};
+
+/** Lê os dados do motor escolhido sem herdar as janelas Top 25/30 do Híbrido. */
+export function lerContextoDoMotor(brawler: string, contexto: {
+  inimigos: readonly string[];
+  aliados: readonly string[];
+  bans: Iterable<string>;
+  roster: readonly string[];
+  bloqueados: Iterable<string>;
+  modeId?: string;
+  incluirRiscos: boolean;
+}): ContextoDoMotor {
+  const chave = (nome: string) => nome.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const unicos = (nomes: Iterable<string>) => [...new Map(Array.from(nomes, (nome) => [chave(nome), nome])).values()];
+  const inimigos = unicos(contexto.inimigos);
+  const bans = unicos(contexto.bans);
+  const inimigosPorRevelar = Math.max(0, 3 - inimigos.length);
+  const indisponiveis = new Set(Array.from([
+    ...contexto.bloqueados, ...bans, ...inimigos, ...contexto.aliados, brawler,
+  ], chave));
+  return {
+    counters: inimigos.map((nome) => ({ brawler: nome, pp: confrontoEntre(brawler, nome, contexto.modeId) })),
+    sinergias: unicos(contexto.aliados).map((nome) => ({ brawler: nome, pp: sinergiaEntre(brawler, nome, contexto.modeId) })),
+    // Regra pública do PL: só antes de conhecer a equipa inimiga completa.
+    countersBanidos: inimigosPorRevelar > 0
+      ? bans.filter((nome) => confrontoEntre(brawler, nome, contexto.modeId) < 0)
+      : [],
+    // Perspetiva do candidato: perdas face à SUA vitória habitual. A vitória
+    // extra do adversário tem outra base e não é necessariamente o inverso.
+    riscos: !contexto.incluirRiscos || inimigosPorRevelar === 0 ? [] : unicos(contexto.roster)
+      .filter((nome) => !indisponiveis.has(chave(nome)))
+      .map((nome) => ({ brawler: nome, pp: -confrontoEntre(brawler, nome, contexto.modeId) }))
+      .filter((relacao) => relacao.pp > 0)
+      .sort((a, b) => b.pp - a.pp || a.brawler.localeCompare(b.brawler))
+      .slice(0, inimigosPorRevelar),
+    inimigosPorRevelar,
+  };
+}
+
 const soma = (valores: readonly number[]) => valores.reduce((total, valor) => total + valor, 0);
 
 /** Põe uma parte de 0 a 100 entre os candidatos; sem diferenças, todos ficam a 50. */
@@ -111,6 +122,11 @@ function normalizar(valores: ReadonlyArray<number | null>) {
   });
 }
 
+/** Sem confrontos/sinergias/bans ativos, a parte não dá um bónus fictício de 50. */
+const normalizarContexto = (valores: readonly number[]) => valores.every((valor) => valor === 0)
+  ? valores.map(() => 0)
+  : normalizar(valores);
+
 export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato[], pesos: PesosPLProdigy = PESOS_PL_PRODIGY): PontuacaoDoMotor[] {
   // Mapas só com o Score publicado (sem vitória nem uso): o Score do mapa faz as vezes dos dois.
   const semVitoria = candidatos.every((c) => c.vitoria === null);
@@ -118,17 +134,17 @@ export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato
   const partes = {
     uso: normalizar(candidatos.map((c) => (semUso ? c.base : c.uso))),
     vitoria: normalizar(candidatos.map((c) => (semVitoria ? c.base : c.vitoria))),
-    counter: normalizar(candidatos.map((c) => soma(c.counters))),
+    counter: normalizarContexto(candidatos.map((c) => soma(c.counters))),
     encaixe: normalizar(candidatos.map((c) => c.encaixe)),
-    sinergia: normalizar(candidatos.map((c) => soma(c.sinergias))),
-    ban: normalizar(candidatos.map((c) => c.countersBanidos)),
+    sinergia: normalizarContexto(candidatos.map((c) => soma(c.sinergias))),
+    ban: normalizarContexto(candidatos.map((c) => c.countersBanidos)),
   };
   const nomes: Record<keyof PesosPLProdigy, string> = { uso: "Uso", vitoria: "Vitória", counter: "Counter", encaixe: "Encaixe", sinergia: "Sinergia", ban: "Ban" };
   const chaves = Object.keys(nomes) as Array<keyof PesosPLProdigy>;
   const totalDosPesos = soma(chaves.map((chave) => Math.max(0, pesos[chave]))) || 1;
   return candidatos.map((candidato, i) => {
     const contribuicoes = chaves.map((chave) => ({ nome: nomes[chave], valor: (Math.max(0, pesos[chave]) * partes[chave][i]) / totalDosPesos }));
-    // As partes somam o «rawScore» (em %); os pontos mostrados passam pela escala do site.
+    // As partes somam o valor bruto local (em %), antes da escala estimada.
     return { brawler: candidato.brawler, pontos: escalaDoPLProdigy(soma(contribuicoes.map((parte) => parte.valor)) / 100), partes: contribuicoes };
   });
 }
@@ -158,7 +174,7 @@ export function pontuarComoMetaPick(candidatos: readonly ComponentesDoCandidato[
       { nome: "Base", valor: candidato.base },
       { nome: "Counter", valor: 10 * ajustes.counter * counter },
       { nome: "Sinergia", valor: 10 * ajustes.sinergia * sinergia },
-      { nome: "Ban", valor: -10 * ajustes.penalizacaoBan * risco },
+      { nome: "Risco", valor: -10 * ajustes.penalizacaoBan * risco },
     ];
     return { brawler: candidato.brawler, pontos: soma(partes.map((parte) => parte.valor)), partes };
   });

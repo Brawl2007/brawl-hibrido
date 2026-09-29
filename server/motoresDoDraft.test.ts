@@ -27,25 +27,24 @@ const candidato = (brawler: string, extra: Partial<ComponentesDoCandidato> = {})
 
 describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
   it("usa os pesos das definições deles por omissão", () => {
-    expect(PESOS_PL_PRODIGY).toEqual({ uso: 5, vitoria: 23, counter: 36, encaixe: 12, sinergia: 12, ban: 12 });
+    expect(PESOS_PL_PRODIGY).toEqual({ uso: 4, vitoria: 20, counter: 40, encaixe: 13, sinergia: 10, ban: 13 });
   });
 
   /** O «rawScore» em %: a soma das partes, antes da escala do PL. */
   const bruto = (p: { partes: Array<{ valor: number }> }) => p.partes.reduce((soma, parte) => soma + parte.valor, 0);
 
-  it("um bom counter passa à frente de quem só é forte no mapa (o counter pesa 36%, a vitória 23%)", () => {
+  it("um bom counter passa à frente de quem só é forte no mapa (counter 40%, vitória 20%)", () => {
     const [forte, counter] = pontuarComoPLProdigy([
       candidato("Forte", { vitoria: 60, uso: 20, counters: [0] }),
       candidato("Counter", { vitoria: 50, uso: 10, counters: [15] }),
     ]);
-    // Forte: uso 100×5 + vitória 100×23 + counter 0×36 + (encaixe, sinergia, ban iguais → 50) × 36 = 46.
-    expect(bruto(forte)).toBeCloseTo(46, 6);
-    // Counter: 0 + 0 + 100×36 + 50×36 = 54.
-    expect(bruto(counter)).toBeCloseTo(54, 6);
+    // Uso 4 + vitória 20 + encaixe 6,5. Sem aliado/ban, essas partes dão zero.
+    expect(bruto(forte)).toBeCloseTo(30.5, 6);
+    expect(bruto(counter)).toBeCloseTo(46.5, 6);
     expect(counter.pontos).toBeGreaterThan(forte.pontos);
-    expect(forte.pontos).toBeCloseTo(escalaDoPLProdigy(0.46), 6);
-    expect(counter.pontos).toBeCloseTo(escalaDoPLProdigy(0.54), 6);
-    expect(counter.partes.find((parte) => parte.nome === "Counter")?.valor).toBeCloseTo(36, 6);
+    expect(forte.pontos).toBeCloseTo(escalaDoPLProdigy(0.305), 6);
+    expect(counter.pontos).toBeCloseTo(escalaDoPLProdigy(0.465), 6);
+    expect(counter.partes.find((parte) => parte.nome === "Counter")?.valor).toBeCloseTo(40, 6);
   });
 
   it("pesos que não somam 100 são repartidos na mesma proporção; tudo a zero não dá NaN", () => {
@@ -63,20 +62,20 @@ describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
       candidato("Fraco", { base: 40, vitoria: null, uso: null }),
       candidato("Forte", { base: 90, vitoria: null, uso: null }),
     ]);
-    expect(bruto(forte) - bruto(fraco)).toBeCloseTo(28, 6); // (5 + 23) × 100 / 100
+    expect(bruto(forte) - bruto(fraco)).toBeCloseTo(24, 6);
   });
 
   it("os counters dele banidos contam na parte «Ban»", () => {
     const [semBan, comBan] = pontuarComoPLProdigy([candidato("SemBan"), candidato("ComBan", { countersBanidos: 2 })]);
-    expect(bruto(comBan) - bruto(semBan)).toBeCloseTo(12, 6);
+    expect(bruto(comBan) - bruto(semBan)).toBeCloseTo(13, 6);
   });
 
-  it("a escala dos pontos reproduz os dez pares rawScore → totalScore publicados pelo PL", () => {
+  it("a escala estimada continua próxima dos dez exemplos da investigação anterior", () => {
     const pares: Array<[number, number]> = [[0.9938, 97], [0.5782, 81], [0.4531, 69], [0.4437, 68], [0.4388, 67], [0.4345, 67], [0.4156, 65], [0.4015, 63], [0.3435, 56], [0.3341, 54]];
     for (const [raw, total] of pares) expect(Math.abs(escalaDoPLProdigy(raw) - total)).toBeLessThan(0.6);
   });
 
-  it("como no PL, banir os melhores sobe os pontos dos que ficam (são relativos aos candidatos)", () => {
+  it("a normalização local é relativa aos candidatos disponíveis", () => {
     const todos = [
       candidato("Top", { vitoria: 64, uso: 30 }),
       candidato("Bom", { vitoria: 56, uso: 18 }),
@@ -92,6 +91,15 @@ describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
   it("presets: Masters+ (definições do site) e Diamante e abaixo (pedido que o site enviou)", () => {
     expect(PRESETS_PL_PRODIGY.mestre.pesos).toEqual(PESOS_PL_PRODIGY);
     expect(PRESETS_PL_PRODIGY.diamanteOuAbaixo.pesos).toEqual({ uso: 9, vitoria: 27, counter: 32, encaixe: 9, sinergia: 14, ban: 9 });
+  });
+
+  it("não mostra contribuições de counter, sinergia e ban quando não há sinal", () => {
+    const pontos = pontuarComoPLProdigy([candidato("A"), candidato("B")]);
+    for (const pontuacao of pontos) {
+      for (const nome of ["Counter", "Sinergia", "Ban"]) {
+        expect(pontuacao.partes.find((parte) => parte.nome === nome)?.valor).toBe(0);
+      }
+    }
   });
 });
 
