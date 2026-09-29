@@ -1,0 +1,26 @@
+# Recolha de partidas Ranked, de hora a hora.
+#
+# A Vercel gratuita só deixa correr o cron uma vez por dia, e a recolha precisa
+# de ler os jogadores muitas vezes: a API mostra só as últimas 25 partidas de
+# cada um. Este workflow chama o endereço público do site; o próprio site
+# recusa pedidos a menos de 45 minutos do anterior, por isso não há segredos.
+name: Recolher partidas Ranked
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recolher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pedir a recolha ao site
+        run: |
+          resposta=$(curl -sS --max-time 240 https://brawl-hibrido.vercel.app/api/partidas/recolher)
+          echo "$resposta"
+          echo "$resposta" | grep -q '"ok":true\|"saltada":true'

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createMatchupDeltas, normalizeObservedBattle, normalizeObservedMode, resolveObservedMapId } from "./observedMatchCollection";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { INTERVALO_MINIMO_ENTRE_RECOLHAS_MS, JOGADORES_POR_RECOLHA, PAISES_DA_RECOLHA, createMatchupDeltas, jogadoresDaVolta, normalizeObservedBattle, normalizeObservedMode, paisesDaVolta, podeRecolherAgora, resolveObservedMapId } from "./observedMatchCollection";
 
 const rankedBattle = {
   battleTime: "20260816T184500.000Z",
   event: { id: 15000025, mode: "brawlBall", map: "Triple Dribble" },
   battle: {
-    type: "ranked",
+    type: "soloRanked",
     result: "victory",
     teams: [
       [
@@ -63,7 +65,9 @@ describe("observed Ranked battle collection", () => {
   });
 
   it("rejects non-Ranked, tied or source-less entries instead of inventing a winner", () => {
-    expect(normalizeObservedBattle({ ...rankedBattle, battle: { ...rankedBattle.battle, type: "soloRanked" } }, "#SOURCE")).toBeNull();
+    // Na API, "ranked" são os jogos de troféus — não o modo Ranked.
+    expect(normalizeObservedBattle({ ...rankedBattle, battle: { ...rankedBattle.battle, type: "ranked" } }, "#SOURCE")).toBeNull();
+    expect(normalizeObservedBattle({ ...rankedBattle, battle: { ...rankedBattle.battle, type: "friendly" } }, "#SOURCE")).toBeNull();
     expect(normalizeObservedBattle({ ...rankedBattle, battle: { ...rankedBattle.battle, result: "draw" } }, "#SOURCE")).toBeNull();
     expect(normalizeObservedBattle(rankedBattle, "#MISSING")).toBeNull();
   });
@@ -79,5 +83,69 @@ describe("observed Ranked battle collection", () => {
     expect(normalizeObservedMode("brawlBall")).toBe("brawlball");
     expect(resolveObservedMapId("Triple Dribble")).toBe("15000025");
     expect(resolveObservedMapId("Mapa fora da rotação")).toBeNull();
+  });
+});
+
+describe("recolha de partidas Ranked a sério (v155)", () => {
+  it("aceita o Ranked a solo e em equipa", () => {
+    expect(normalizeObservedBattle(rankedBattle, "#SOURCE")).not.toBeNull();
+    expect(normalizeObservedBattle({ ...rankedBattle, battle: { ...rankedBattle.battle, type: "teamRanked" } }, "#SOURCE")).not.toBeNull();
+  });
+
+  it("roda países e jogadores de volta para volta, sem repetir", () => {
+    expect(paisesDaVolta(0)).toEqual(PAISES_DA_RECOLHA.slice(0, 3));
+    expect(paisesDaVolta(1)).toEqual(PAISES_DA_RECOLHA.slice(3, 6));
+    const tags = Array.from({ length: 500 }, (_, i) => `#P${i}`);
+    const a = jogadoresDaVolta(tags, 0);
+    const b = jogadoresDaVolta(tags, 1);
+    expect(a).toHaveLength(JOGADORES_POR_RECOLHA);
+    expect(new Set(a).size).toBe(JOGADORES_POR_RECOLHA);
+    expect(a.filter((tag) => b.includes(tag))).toEqual([]);
+    expect(jogadoresDaVolta(["#a", "#A", "#b"], 3)).toEqual(["#A", "#B"]);
+  });
+
+  it("recusa uma recolha antes de passarem 45 minutos, e deixa depois", () => {
+    const agora = new Date("2026-09-29T12:00:00Z");
+    const ha = (min: number) => new Date(agora.getTime() - min * 60_000);
+    expect(INTERVALO_MINIMO_ENTRE_RECOLHAS_MS).toBe(45 * 60_000);
+    expect(podeRecolherAgora(undefined, agora).pode).toBe(true);
+    expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(10) }, agora).pode).toBe(false);
+    expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(50) }, agora).pode).toBe(true);
+    expect(podeRecolherAgora({ lastStatus: "running", lastStartedAt: ha(5) }, agora)).toMatchObject({ pode: false, motivo: "Já há uma recolha a correr." });
+    // Uma recolha que morreu a meio não bloqueia para sempre.
+    expect(podeRecolherAgora({ lastStatus: "running", lastStartedAt: ha(60) }, agora).pode).toBe(true);
+  });
+
+  it("grava tudo em lote e alguém chama a recolha na Vercel", () => {
+    const ler = (caminho: string) => readFileSync(resolve(process.cwd(), caminho), "utf8");
+    expect(ler("server/observedMatchCollection.ts")).toContain("recordObservedBattlesBatch(");
+    expect(ler("server/_core/index.vercel.ts")).toContain('app.get("/api/partidas/recolher"');
+    expect(JSON.parse(ler("vercel.json")).crons.map((cron: { path: string }) => cron.path)).toContain("/api/partidas/recolher");
+    const workflow = ler(".github/workflows/recolher-partidas.yml");
+    expect(workflow).toContain('cron: "7 * * * *"');
+    expect(workflow).toContain("https://brawl-hibrido.vercel.app/api/partidas/recolher");
+  });
+});
+
+describe("soma dos pares em lote", () => {
+  it("junta o mesmo par de partidas diferentes numa só linha, sem mexer nas originais", async () => {
+    const { somarParesDoLote } = await import("./db");
+    const a = createMatchupDeltas("m", "hotzone", ["Lumi"], ["Surge"]);
+    const b = createMatchupDeltas("m", "hotzone", ["Surge"], ["Lumi"]);
+    const pares = somarParesDoLote([{ deltas: a }, { deltas: b }, { deltas: a }]);
+    expect(pares).toHaveLength(2);
+    expect(pares).toContainEqual(expect.objectContaining({ brawler: "Lumi", opponent: "Surge", wins: 2, losses: 1 }));
+    expect(pares).toContainEqual(expect.objectContaining({ brawler: "Surge", opponent: "Lumi", wins: 1, losses: 2 }));
+    expect(a[0].wins).toBe(1);
+  });
+});
+
+describe("recolha sem chave", () => {
+  it("diz que falta a chave em vez de dizer que a API não tem jogadores", async () => {
+    delete process.env.BRAWL_STARS_API_KEY;
+    const { collectObservedRankedMatches } = await import("./observedMatchCollection");
+    const resultado = await collectObservedRankedMatches("manual");
+    expect(resultado).toMatchObject({ ok: false });
+    expect((resultado as { error: string }).error).toMatch(/Sem chave da API oficial/);
   });
 });
