@@ -710,3 +710,17 @@
 @media (max-width: 520px) {
   .motor-grelha { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── v163 · Matriz 1v1: todos os brawlers sempre à vista ── */
+.matriz-escolher { display: grid; gap: 10px; min-width: 0; }
+.matriz-escolher-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.matriz-faixa { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: thin; }
+.matriz-faixa button { display: grid; flex: 0 0 76px; justify-items: center; gap: 4px; padding: 8px 4px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.matriz-faixa button span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.matriz-faixa button.is-active { border-color: var(--bh-gold); background: color-mix(in srgb, var(--bh-gold) 12%, var(--bh-surface)); color: var(--bh-text); }
+.matriz-faixa .matriz-vazio { flex: 1; }
+
+/* ── v164 · presets do PL Prodigy ── */
+.motor-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.motor-presets button { min-height: 34px; padding: 0 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.motor-presets button.is-active { border-color: var(--bh-gold); color: var(--bh-text); background: color-mix(in srgb, var(--bh-gold) 12%, var(--bh-surface)); }

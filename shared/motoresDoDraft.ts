@@ -9,13 +9,20 @@
  * por countrar. O PL Prodigy e o MetaPick SOMAM, com o counter a pesar muito —
  * e é por isso que recomendam coisas que o Brawl Híbrido deixa em 60.º.
  *
- * Nenhum dos dois publica a fórmula. Estes motores seguem o que as definições
- * deles mostram (os nomes e os valores por omissão das barras), com os dados
- * do site — as fontes, ou as partidas da API com «API oficial» ligado:
+ * Nenhum dos dois publica a fórmula: as contas são feitas no servidor deles.
+ * A investigação de 29/09/2026 (pedidos que as próprias páginas fazem)
+ * confirmou os dados de entrada (mapa, picks de cada lado, bans e os pesos),
+ * os valores por omissão, os limites das barras do MetaPick, o preset
+ * «Diamante e abaixo» do PL Prodigy e a escala dos pontos do PL (ver
+ * `escalaDoPLProdigy`). Confirmou também que, no PL, banir os melhores sobe
+ * os pontos dos outros — os pontos são relativos aos candidatos que sobram,
+ * como a normalização abaixo. O resto segue os nomes das barras, com os dados
+ * deste site — as fontes, ou as partidas da API com «API oficial» ligado:
  *
  * PL Prodigy — soma pesada de seis partes, cada uma posta de 0 a 100 entre os
  * candidatos do mapa: Uso 5%, Vitória 23%, Counter 36%, Encaixe 12%,
- * Sinergia 12%, Ban 12%. Resultado de 0 a 100.
+ * Sinergia 12%, Ban 12% (preset Masters+; há o de Diamante e abaixo). A soma
+ * pesada é o «rawScore» e os pontos passam pela escala do PL.
  *   - Counter: soma do confronto contra cada pick inimigo.
  *   - Sinergia: soma da sinergia com cada aliado já escolhido.
  *   - Encaixe: a função dele no modo do mapa e na equipa (o «fit» do Draft).
@@ -37,8 +44,31 @@ import { getBrawlScopeSynergyTeammates } from "./counterSourceRelations";
 export type MotorDoDraft = "hibrido" | "plprodigy" | "metapick";
 
 export type PesosPLProdigy = { uso: number; vitoria: number; counter: number; encaixe: number; sinergia: number; ban: number };
-/** Os valores por omissão do PL Prodigy (definições «PL Prodigy Settings»). */
+/** Os valores por omissão do PL Prodigy (definições «PL Prodigy Settings», rank Masters+). */
 export const PESOS_PL_PRODIGY: PesosPLProdigy = { uso: 5, vitoria: 23, counter: 36, encaixe: 12, sinergia: 12, ban: 12 };
+
+/**
+ * Os presets do PL Prodigy, por rank. O de Masters+ vem das definições do
+ * site; o «diamond_below» é o que o próprio site enviou no pedido ao servidor
+ * durante a investigação de 29/09/2026 (useRate 9, winRate 27, counterRate 32,
+ * fitRate 9, synergyRate 14, banRate 9).
+ */
+export const PRESETS_PL_PRODIGY: Record<"mestre" | "diamanteOuAbaixo", { nome: string; pesos: PesosPLProdigy }> = {
+  mestre: { nome: "Masters+", pesos: PESOS_PL_PRODIGY },
+  diamanteOuAbaixo: { nome: "Diamante e abaixo", pesos: { uso: 9, vitoria: 27, counter: 32, encaixe: 9, sinergia: 14, ban: 9 } },
+};
+
+/**
+ * A escala dos pontos do PL Prodigy: o servidor devolve um `rawScore` (0 a 1)
+ * e um `totalScore` (0 a 100) que não é 100 × raw. Os dez pares publicados na
+ * investigação (97 ← 0,9938; 81 ← 0,5782; … 54 ← 0,3341) batem todos, a menos
+ * de 0,5 pontos (arredondamento), com uma logística:
+ *   total = 100 / (1 + e^(−5,22 × (raw − 0,30)))
+ * Deduzida dos números, não publicada — mas não muda a ordem, só a escala.
+ */
+export function escalaDoPLProdigy(raw: number) {
+  return 100 / (1 + Math.exp(-5.22 * (raw - 0.3)));
+}
 
 export type AjustesMetaPick = { sinergia: number; counter: number; minSinergia: number; minCounter: number; penalizacaoBan: number; topCounters: number };
 /** Os valores por omissão do MetaPick («Draft Tool Settings»). */
@@ -98,7 +128,8 @@ export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato
   const totalDosPesos = soma(chaves.map((chave) => Math.max(0, pesos[chave]))) || 1;
   return candidatos.map((candidato, i) => {
     const contribuicoes = chaves.map((chave) => ({ nome: nomes[chave], valor: (Math.max(0, pesos[chave]) * partes[chave][i]) / totalDosPesos }));
-    return { brawler: candidato.brawler, pontos: soma(contribuicoes.map((parte) => parte.valor)), partes: contribuicoes };
+    // As partes somam o «rawScore» (em %); os pontos mostrados passam pela escala do site.
+    return { brawler: candidato.brawler, pontos: escalaDoPLProdigy(soma(contribuicoes.map((parte) => parte.valor)) / 100), partes: contribuicoes };
   });
 }
 
@@ -156,15 +187,15 @@ export function confrontoEntre(candidato: string, inimigo: string, modeId?: stri
   return valor.base === null ? 0 : valor.total;
 }
 
-/** Limites de cada barra (os mesmos das definições deles). */
+/** Limites de cada barra: os do MetaPick são os do código público do site (investigação de 29/09/2026). */
 export const LIMITES_PL_PRODIGY = { min: 0, max: 100, passo: 1 } as const;
 export const LIMITES_METAPICK: Record<keyof AjustesMetaPick, { min: number; max: number; passo: number }> = {
   sinergia: { min: 0, max: 3, passo: 0.05 },
-  counter: { min: 0, max: 5, passo: 0.05 },
+  counter: { min: 0, max: 4, passo: 0.05 },
   minSinergia: { min: 0, max: 1, passo: 0.05 },
   minCounter: { min: 0, max: 1, passo: 0.05 },
-  penalizacaoBan: { min: 0, max: 2, passo: 0.05 },
-  topCounters: { min: 1, max: 10, passo: 1 },
+  penalizacaoBan: { min: 0, max: 1, passo: 0.05 },
+  topCounters: { min: 1, max: 7, passo: 1 },
 };
 
 const limitar = (valor: unknown, min: number, max: number, omissao: number) =>

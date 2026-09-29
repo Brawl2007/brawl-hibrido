@@ -162,7 +162,7 @@ function lerEscolhaDaIA(): EscolhaDaIA {
   return { principal: "gemini", soEssa: false, modelos: {}, rapido: true, automatico: true };
 }
 
-type Fornecedor = { id: string; nome: string; ondeCriar: string; exemplo: string; reconheceSozinha: boolean };
+type Fornecedor = { id: string; nome: string; ondeCriar: string; exemplo: string; reconheceSozinha: boolean; pago?: boolean };
 type EstadoDaIA = {
   configured: boolean;
   origin: string;
@@ -610,7 +610,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
               </details>
             )}
             <details className="quadro-general-reserva">
-              <summary>{reservas.length ? `IAs de reserva: ${reservas.map((r) => r.nome).join(", ")}` : "IAs de reserva (quando a Google chegar ao limite)"}</summary>
+              <summary>{reservas.length ? `IAs de reserva: ${reservas.map((r) => r.nome).join(", ")}` : "Outras IAs: ChatGPT, Groq… (quando a Google chegar ao limite)"}</summary>
               {reservas.length > 0 && (
                 <ul className="quadro-general-reservas">
                   {reservas.map((r) => (
@@ -624,14 +624,14 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                 </ul>
               )}
               <form className="quadro-general-chave" onSubmit={(e) => { e.preventDefault(); if (novaChaveDeReserva.trim()) guardarChaveDeReserva.mutate({ fornecedor: fornecedorDaNovaChave as never, key: novaChaveDeReserva }); }}>
-                <label htmlFor="chave-reserva">Juntar a chave gratuita de outra IA</label>
+                <label htmlFor="chave-reserva">Juntar a chave de outra IA</label>
                 <div>
                   <select aria-label="De que IA é a chave" value={fornecedorDaNovaChave} onChange={(e) => setFornecedorDaNovaChave(e.target.value)}>
                     <option value="auto">Reconhecer pela chave</option>
-                    {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                    {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}{f.pago ? " — paga" : ""}</option>)}
                   </select>
                   <input id="chave-reserva" type="password" autoComplete="off" value={novaChaveDeReserva} onChange={(e) => setNovaChaveDeReserva(e.target.value)}
-                    placeholder={fornecedores.find((f) => f.id === fornecedorDaNovaChave)?.exemplo ?? "gsk_…, sk-or-…, github_pat_…, hf_…, csk-…"} />
+                    placeholder={fornecedores.find((f) => f.id === fornecedorDaNovaChave)?.exemplo ?? "sk-proj-…, gsk_…, sk-or-…, github_pat_…, hf_…, csk-…"} />
                   <button type="submit" disabled={guardarChaveDeReserva.isPending || novaChaveDeReserva.trim().length < 20}>Guardar</button>
                 </div>
                 <small>
@@ -643,6 +643,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
                     </span>
                   ))}
                   . A Mistral e a Requesty não se reconhecem pela chave: escolhe-as na lista. Fica no servidor e nunca volta ao navegador.
+                  {fornecedores.some((f) => f.pago) ? " A OpenAI (ChatGPT) é a única paga: cada plano gasta do saldo da API, que é à parte da assinatura do ChatGPT." : ""}
                 </small>
               </form>
             </details>
@@ -860,7 +861,7 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
           ) : (
             <p className="quadro-general-vazio">
               {ehDono
-                ? estado?.configured ? "Pede o plano ao general: ele analisa o mapa, prevê o adversário e preenche o quadro." : "Cola a chave gratuita da Gemini para o general poder analisar o mapa."
+                ? temAlgumaIA ? "Pede o plano ao general: ele analisa o mapa, prevê o adversário e preenche o quadro." : "Cola a chave de uma IA (a Gemini é gratuita; o ChatGPT também serve) para o general poder analisar o mapa."
                 : "Monta o teu plano: move os brawlers, desenha setas e põe símbolos. Fica guardado neste navegador."}
             </p>
           )}
