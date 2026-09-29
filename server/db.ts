@@ -1,5 +1,5 @@
 import { OWNER_LOGIN_OPEN_ID } from "@shared/ownerLogin";
-import { and, between, count, desc, eq, gte, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
+import { and, asc, between, count, desc, eq, gte, inArray, isNull, lt, lte, or, sql, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import {
@@ -25,6 +25,7 @@ import {
   InsertRankedMapCapture,
   observedBattles,
   observedBattleRanks,
+  observedPlayers,
   observedMatchCollectionConfig,
   observedMatchCollectionRuns,
   observedMatchupAggregates,
@@ -982,6 +983,105 @@ export async function recordObservedBattlesBatch(
     battlesInserted: novas.length,
     pairObservations: novas.reduce((total, entrada) => total + entrada.deltas.length, 0),
   };
+}
+
+/** Os jogadores da bola de neve que já estão na altura de ser lidos. */
+export async function listarJogadoresNaAltura(agora: Date, limite: number) {
+  const db = await getDb();
+  if (!db || limite <= 0) return [] as string[];
+  const linhas = await db
+    .select({ tag: observedPlayers.tag })
+    .from(observedPlayers)
+    .where(lte(observedPlayers.nextReadAt, agora))
+    // Primeiro quem jogou Ranked na última leitura, depois os acabados de
+    // descobrir (vistos numa partida Ranked, ainda por ler), por fim quem parou.
+    .orderBy(
+      sql`case when ${observedPlayers.lastReadAt} is null then 1 when ${observedPlayers.emptyReads} = 0 then 0 else 1 + ${observedPlayers.emptyReads} end`,
+      asc(observedPlayers.nextReadAt),
+    )
+    .limit(limite);
+  return linhas.map((linha) => linha.tag);
+}
+
+/** O estado de leitura dos jogadores pedidos que estão na lista. */
+export async function lerEstadoDosJogadores(tags: readonly string[]) {
+  const db = await getDb();
+  const estado = new Map<string, { ultimaLeitura: Date | null; ultimaRanked: Date | null; leiturasVazias: number }>();
+  if (!db || !tags.length) return estado;
+  for (let i = 0; i < tags.length; i += 500) {
+    const linhas = await db
+      .select({
+        tag: observedPlayers.tag,
+        lastReadAt: observedPlayers.lastReadAt,
+        lastRankedAt: observedPlayers.lastRankedAt,
+        emptyReads: observedPlayers.emptyReads,
+      })
+      .from(observedPlayers)
+      .where(inArray(observedPlayers.tag, tags.slice(i, i + 500)));
+    for (const linha of linhas) {
+      estado.set(linha.tag, { ultimaLeitura: linha.lastReadAt, ultimaRanked: linha.lastRankedAt, leiturasVazias: linha.emptyReads });
+    }
+  }
+  return estado;
+}
+
+/** Grava o resultado das leituras: quando foi, quando voltar, e se jogou Ranked. */
+export async function gravarLeiturasDosJogadores(
+  leituras: ReadonlyArray<{ tag: string; ultimaLeitura: Date; proxima: Date; ultimaRanked: Date | null; leiturasVazias: number }>,
+) {
+  const db = await getDb();
+  if (!db || !leituras.length) return;
+  for (let i = 0; i < leituras.length; i += 400) {
+    await db
+      .insert(observedPlayers)
+      .values(leituras.slice(i, i + 400).map((leitura) => ({
+        tag: leitura.tag,
+        lastReadAt: leitura.ultimaLeitura,
+        nextReadAt: leitura.proxima,
+        lastRankedAt: leitura.ultimaRanked,
+        emptyReads: leitura.leiturasVazias,
+      })))
+      .onDuplicateKeyUpdate({
+        set: {
+          lastReadAt: sql.raw("values(`last_read_at`)"),
+          nextReadAt: sql.raw("values(`next_read_at`)"),
+          lastRankedAt: sql.raw("values(`last_ranked_at`)"),
+          emptyReads: sql.raw("values(`empty_reads`)"),
+        },
+      });
+  }
+}
+
+/**
+ * Junta à lista os jogadores vistos em partidas Ranked, até ao teto.
+ * Os que já lá estão ficam como estão. Devolve o tamanho da lista.
+ */
+export async function acrescentarJogadoresALista(tags: readonly string[], limite: number) {
+  const db = await getDb();
+  if (!db) return { acrescentados: 0, naLista: 0 };
+  const [{ total }] = await db.select({ total: count() }).from(observedPlayers);
+  const cabem = Math.max(0, limite - Number(total));
+  const novos = Array.from(new Set(tags)).slice(0, cabem);
+  for (let i = 0; i < novos.length; i += 500) {
+    await db
+      .insert(observedPlayers)
+      .values(novos.slice(i, i + 500).map((tag) => ({ tag })))
+      .onDuplicateKeyUpdate({ set: { tag: sql`tag` } });
+  }
+  const [{ depois }] = await db.select({ depois: count() }).from(observedPlayers);
+  return { acrescentados: Number(depois) - Number(total), naLista: Number(depois) };
+}
+
+/** Tira da lista quem não joga Ranked há demasiado tempo (ou nunca jogou, desde que entrou). */
+export async function tirarJogadoresParados(antesDe: Date) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .delete(observedPlayers)
+    .where(or(
+      lt(observedPlayers.lastRankedAt, antesDe),
+      and(isNull(observedPlayers.lastRankedAt), lt(observedPlayers.firstSeenAt, antesDe)),
+    ));
 }
 
 /**

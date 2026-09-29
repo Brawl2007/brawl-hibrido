@@ -153,6 +153,17 @@ CREATE TABLE IF NOT EXISTS `observed_battle_ranks` (
 	CONSTRAINT `observed_battle_ranks_fingerprint` PRIMARY KEY(`fingerprint`)
 );
 
+CREATE TABLE IF NOT EXISTS `observed_players` (
+	`tag` varchar(20) NOT NULL,
+	`first_seen_at` timestamp NOT NULL DEFAULT (now()),
+	`last_read_at` timestamp,
+	`next_read_at` timestamp NOT NULL DEFAULT (now()),
+	`last_ranked_at` timestamp,
+	`empty_reads` int NOT NULL DEFAULT 0,
+	CONSTRAINT `observed_players_tag` PRIMARY KEY(`tag`),
+	INDEX `observed_players_next_read_idx` (`next_read_at`)
+);
+
 CREATE TABLE IF NOT EXISTS `observed_matchup_aggregates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`map_id` varchar(128) NOT NULL,

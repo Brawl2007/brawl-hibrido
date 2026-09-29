@@ -6,13 +6,27 @@ import {
   type OfficialBattleLogEntry,
 } from "./brawlStarsApi";
 import {
+  acrescentarJogadoresALista,
   createObservedMatchCollectionRun,
   getObservedMatchCollectionConfig,
+  gravarLeiturasDosJogadores,
+  lerEstadoDosJogadores,
+  listarJogadoresNaAltura,
   recordObservedBattlesBatch,
+  tirarJogadoresParados,
   updateObservedMatchCollectionConfig,
   updateObservedMatchCollectionRun,
   type ObservedMatchupDelta,
 } from "./db";
+import {
+  LIMITE_DA_LISTA,
+  LUGARES_DA_BOLA_DE_NEVE,
+  TEMPO_SEM_RANKED_PARA_SAIR_MS,
+  escolherLeituras,
+  normalizarTag,
+  proximaLeitura,
+  type PartidaDoHistorico,
+} from "./bolaDeNeve";
 import { RANKED_MAP_SOURCES } from "./rankedSync";
 import { getSetting, setSetting } from "./appSettings";
 import { rankDaPartida } from "@shared/ranksDoRanked";
@@ -45,7 +59,8 @@ export const TIPOS_DO_RANKED = new Set(["soloranked", "teamranked"]);
 /**
  * Onde ir buscar jogadores. Os melhores de cada país jogam o Ranked de topo;
  * cada recolha usa o global mais três países, em rotação, para não ler sempre
- * os mesmos.
+ * os mesmos. Desde a v160, metade dos lugares vai para a bola de neve
+ * (`bolaDeNeve.ts`): os jogadores vistos nas partidas Ranked lidas.
  */
 export const PAISES_DA_RECOLHA = ["BR", "US", "MX", "FR", "DE", "ES", "IT", "PT", "TR", "KR", "JP", "PL", "AR", "CL", "CO", "PE", "GB", "UA", "ID", "PH", "VN", "TH", "SA", "EG", "MA", "CA"] as const;
 
@@ -170,6 +185,49 @@ export function normalizeObservedBattle(
   };
 }
 
+/** O histórico de um jogador como a bola de neve o lê: quando foi cada partida e se era Ranked. */
+export function partidasDoHistorico(entries: readonly OfficialBattleLogEntry[]): PartidaDoHistorico[] {
+  return entries.flatMap((entry) => {
+    const quando = parseBattleTime(entry.battleTime);
+    return quando ? [{ quando, ranked: TIPOS_DO_RANKED.has(entry.battle?.type?.toLowerCase() ?? "") }] : [];
+  });
+}
+
+/** Os códigos dos jogadores das partidas Ranked de um histórico — os candidatos à lista. */
+export function tagsDasPartidasRanked(entries: readonly OfficialBattleLogEntry[]) {
+  const tags = new Set<string>();
+  for (const entry of entries) {
+    if (!TIPOS_DO_RANKED.has(entry.battle?.type?.toLowerCase() ?? "")) continue;
+    for (const jogador of entry.battle?.teams?.flat() ?? []) {
+      const tag = normalizarTag(jogador.tag);
+      if (tag) tags.add(tag);
+    }
+  }
+  return Array.from(tags);
+}
+
+/**
+ * Depois de ler: marca quando voltar a ler cada um, tira quem parou e junta à
+ * lista os jogadores novos das partidas Ranked.
+ */
+async function atualizarBolaDeNeve(logs: ReadonlyArray<{ tag: string; entries: OfficialBattleLogEntry[] }>, agora: Date) {
+  const lidos = logs.map(({ tag }) => normalizarTag(tag)).filter((tag): tag is string => Boolean(tag));
+  const estado = await lerEstadoDosJogadores(lidos);
+  const leituras = logs.flatMap(({ tag, entries }) => {
+    const normal = normalizarTag(tag);
+    if (!normal) return [];
+    const anterior = estado.get(normal);
+    const leitura = proximaLeitura(partidasDoHistorico(entries), anterior, agora);
+    // Quem veio dos rankings só entra na lista se joga mesmo Ranked.
+    return anterior || leitura.rankedNovas > 0 ? [{ tag: normal, ...leitura }] : [];
+  });
+  await gravarLeiturasDosJogadores(leituras);
+  await tirarJogadoresParados(new Date(agora.getTime() - TEMPO_SEM_RANKED_PARA_SAIR_MS));
+  const jaLidos = new Set(lidos);
+  const vistos = logs.flatMap(({ entries }) => tagsDasPartidasRanked(entries)).filter((tag) => !jaLidos.has(tag));
+  return acrescentarJogadoresALista(vistos, LIMITE_DA_LISTA);
+}
+
 async function mapWithConcurrency<T, R>(items: readonly T[], task: (item: T) => Promise<R>, prazo = Number.POSITIVE_INFINITY) {
   const results: R[] = [];
   let cursor = 0;
@@ -193,11 +251,19 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     // Sem chave, a API devolve listas vazias em silêncio; dizê-lo evita procurar o problema no sítio errado.
     if (!isOfficialApiConfigured()) throw new Error("Sem chave da API oficial neste ambiente: guarda-a no painel do Draft (as versões de teste da Vercel não usam a base de dados de produção).");
     const volta = voltaDaRecolha(startedAt);
+    // A bola de neve (ver `bolaDeNeve.ts`). Se a lista falhar, a recolha segue só com os rankings.
+    const naAltura = await listarJogadoresNaAltura(startedAt, JOGADORES_POR_RECOLHA).catch((erro: unknown) => {
+      console.warn("[Partidas] Lista da bola de neve não lida:", erro instanceof Error ? erro.message : erro);
+      return [] as string[];
+    });
     const listas = await Promise.all(["global", ...paisesDaVolta(volta)].map((pais) => fetchOfficialRankedPlayers(pais)));
-    const players = jogadoresDaVolta(
+    const dosRankings = jogadoresDaVolta(
       listas.flat().map(player => player.tag?.trim()).filter((tag): tag is string => Boolean(tag)),
       volta,
+      JOGADORES_POR_RECOLHA - Math.min(naAltura.length, LUGARES_DA_BOLA_DE_NEVE),
     );
+    const escolha = escolherLeituras(dosRankings, naAltura, JOGADORES_POR_RECOLHA);
+    const players = escolha.tags;
     if (!players.length) throw new Error("A API oficial não devolveu jogadores para a amostra.");
 
     const prazo = Date.now() + TEMPO_MAXIMO_A_LER_MS;
@@ -234,6 +300,10 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
         rank: candidate.rank,
       })),
     );
+    const bolaDeNeve = await atualizarBolaDeNeve(logs, startedAt).catch((erro: unknown) => {
+      console.warn("[Partidas] Bola de neve não atualizada:", erro instanceof Error ? erro.message : erro);
+      return { acrescentados: 0, naLista: null as number | null };
+    });
     /** Os níveis de rank vistos, para confirmar a correspondência com os ranks no ar. */
     const niveisVistos: Record<string, number> = {};
     for (const candidate of candidates) {
@@ -251,8 +321,9 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
       completedAt,
     });
     await updateObservedMatchCollectionConfig({ lastStatus: "success", lastCompletedAt: completedAt, lastError: null });
-    console.log(`[Partidas] ${logs.length} jogadores lidos · ${candidates.length} partidas Ranked · ${battlesInserted} novas · tipos: ${JSON.stringify(tiposVistos)}`);
-    return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos, niveisVistos };
+    const resumoDaBola = { lidosDaLista: escolha.daLista, lidosDosRankings: escolha.dosRankings, ...bolaDeNeve };
+    console.log(`[Partidas] ${logs.length} jogadores lidos · ${candidates.length} partidas Ranked · ${battlesInserted} novas · bola de neve: ${JSON.stringify(resumoDaBola)} · tipos: ${JSON.stringify(tiposVistos)}`);
+    return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos, niveisVistos, bolaDeNeve: resumoDaBola };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido na coleta observada";
     const completedAt = new Date();
