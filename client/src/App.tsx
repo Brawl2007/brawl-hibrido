@@ -22,6 +22,7 @@ const Draft = lazy(() => import("./pages/Draft"));
 const Brawlers = lazy(() => import("./pages/Brawlers"));
 const BrawlerDetail = lazy(() => import("./pages/BrawlerDetail"));
 const MatchupMatrix = lazy(() => import("./pages/MatchupMatrix"));
+const Partidas = lazy(() => import("./pages/Partidas"));
 const Entrar = lazy(() => import("./pages/Entrar"));
 
 function Router() {
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/draft" component={Draft} />
         <Route path="/matchups" component={MatchupMatrix} />
+        <Route path="/partidas" component={Partidas} />
         <Route path="/brawlers" component={Brawlers} />
         <Route path="/brawlers/:name" component={BrawlerDetail} />
         <Route path="/entrar" component={Entrar} />

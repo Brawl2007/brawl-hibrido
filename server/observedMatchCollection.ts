@@ -14,6 +14,7 @@ import {
   type ObservedMatchupDelta,
 } from "./db";
 import { RANKED_MAP_SOURCES } from "./rankedSync";
+import { getSetting, setSetting } from "./appSettings";
 
 /**
  * Quantos jogadores cada recolha lê, e quantos de cada vez.
@@ -47,9 +48,9 @@ export const TIPOS_DO_RANKED = new Set(["soloranked", "teamranked"]);
  */
 export const PAISES_DA_RECOLHA = ["BR", "US", "MX", "FR", "DE", "ES", "IT", "PT", "TR", "KR", "JP", "PL", "AR", "CL", "CO", "PE", "GB", "UA", "ID", "PH", "VN", "TH", "SA", "EG", "MA", "CA"] as const;
 
-/** A volta desta recolha: muda de hora a hora, para rodar países e jogadores. */
+/** A volta desta recolha: muda de 15 em 15 minutos, para rodar países e jogadores. */
 export function voltaDaRecolha(agora = new Date()) {
-  return Math.floor(agora.getTime() / 3_600_000);
+  return Math.floor(agora.getTime() / 900_000);
 }
 
 export function paisesDaVolta(volta: number, quantos = 3) {
@@ -208,6 +209,7 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
         tiposVistos[tipo] = (tiposVistos[tipo] ?? 0) + 1;
       }
     }
+    await guardarNomesDosMapas(logs.flatMap(({ entries }) => entries)).catch(() => undefined);
     const candidates = logs.flatMap(({ tag, entries }) =>
       entries.map(entry => normalizeObservedBattle(entry, tag)).filter((battle): battle is NormalizedObservedBattle => Boolean(battle))
     );
@@ -253,10 +255,15 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
  * Quanto tempo entre duas recolhas pedidas de fora.
  *
  * O endereço que dispara a recolha é público — é o que deixa o GitHub Actions
- * chamá-lo de hora a hora sem guardar segredos em lado nenhum. O que impede
- * abusos é isto: pedido antes do tempo, não faz nada e diz quando pode.
+ * chamá-lo de 15 em 15 minutos sem guardar segredos em lado nenhum. O que
+ * impede abusos é isto: pedido antes do tempo, não faz nada e diz quando pode.
+ *
+ * Porquê 15 minutos: a API só mostra as últimas 25 partidas de cada jogador, e
+ * quem joga muito passa das 25 em poucas horas. Uma partida Ranked demora dois
+ * a três minutos — em 15 minutos ninguém faz 25, por isso quem é lido nessa
+ * volta fica sem falhas.
  */
-export const INTERVALO_MINIMO_ENTRE_RECOLHAS_MS = 45 * 60_000;
+export const INTERVALO_MINIMO_ENTRE_RECOLHAS_MS = 12 * 60_000;
 const RECOLHA_PRESA_MS = 10 * 60_000;
 
 export function podeRecolherAgora(
@@ -281,4 +288,36 @@ export async function recolherSeForAltura(trigger: ObservedCollectionTrigger = "
   const altura = podeRecolherAgora(config);
   if (!altura.pode) return { ok: false as const, saltada: true as const, motivo: altura.motivo };
   return collectObservedRankedMatches(trigger);
+}
+
+/**
+ * Nome de cada mapa, pelo número que a API lhe dá.
+ *
+ * A partida guarda só o número do mapa. A lista de mapas do projeto conhece os
+ * da rotação, mas a rotação muda — e um mapa novo aparecia na página como
+ * «Mapa 15000xxx». A API diz o nome em cada partida; guarda-se aqui.
+ */
+export const NOMES_DOS_MAPAS_SETTING = "nomesDosMapasObservados";
+
+export async function lerNomesDosMapas(): Promise<Record<string, string>> {
+  try {
+    const guardado = await getSetting(NOMES_DOS_MAPAS_SETTING);
+    const lido = guardado ? JSON.parse(guardado) : {};
+    return lido && typeof lido === "object" ? lido as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+async function guardarNomesDosMapas(entradas: readonly OfficialBattleLogEntry[]) {
+  const novos: Record<string, string> = {};
+  for (const entrada of entradas) {
+    const id = entrada.event?.id;
+    const nome = entrada.event?.map?.trim();
+    if (id && nome) novos[String(id)] = nome;
+  }
+  if (!Object.keys(novos).length) return;
+  const atuais = await lerNomesDosMapas();
+  if (Object.entries(novos).every(([id, nome]) => atuais[id] === nome)) return;
+  await setSetting(NOMES_DOS_MAPAS_SETTING, JSON.stringify({ ...atuais, ...novos }));
 }

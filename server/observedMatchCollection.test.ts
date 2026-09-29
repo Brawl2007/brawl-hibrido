@@ -104,13 +104,13 @@ describe("recolha de partidas Ranked a sério (v155)", () => {
     expect(jogadoresDaVolta(["#a", "#A", "#b"], 3)).toEqual(["#A", "#B"]);
   });
 
-  it("recusa uma recolha antes de passarem 45 minutos, e deixa depois", () => {
+  it("recusa uma recolha antes de passarem 12 minutos, e deixa depois", () => {
     const agora = new Date("2026-09-29T12:00:00Z");
     const ha = (min: number) => new Date(agora.getTime() - min * 60_000);
-    expect(INTERVALO_MINIMO_ENTRE_RECOLHAS_MS).toBe(45 * 60_000);
+    expect(INTERVALO_MINIMO_ENTRE_RECOLHAS_MS).toBe(12 * 60_000);
     expect(podeRecolherAgora(undefined, agora).pode).toBe(true);
-    expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(10) }, agora).pode).toBe(false);
-    expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(50) }, agora).pode).toBe(true);
+    expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(5) }, agora).pode).toBe(false);
+    expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(15) }, agora).pode).toBe(true);
     expect(podeRecolherAgora({ lastStatus: "running", lastStartedAt: ha(5) }, agora)).toMatchObject({ pode: false, motivo: "Já há uma recolha a correr." });
     // Uma recolha que morreu a meio não bloqueia para sempre.
     expect(podeRecolherAgora({ lastStatus: "running", lastStartedAt: ha(60) }, agora).pode).toBe(true);
@@ -122,7 +122,7 @@ describe("recolha de partidas Ranked a sério (v155)", () => {
     expect(ler("server/_core/index.vercel.ts")).toContain('app.get("/api/partidas/recolher"');
     expect(JSON.parse(ler("vercel.json")).crons.map((cron: { path: string }) => cron.path)).toContain("/api/partidas/recolher");
     const workflow = ler(".github/workflows/recolher-partidas.yml");
-    expect(workflow).toContain('cron: "7 * * * *"');
+    expect(workflow).toContain('cron: "*/15 * * * *"');
     expect(workflow).toContain("https://brawl-hibrido.vercel.app/api/partidas/recolher");
   });
 });

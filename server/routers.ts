@@ -15,7 +15,9 @@ import { COUNTER_SYNC_JOB, RANKED_SYNC_JOB } from "./syncJobNames";
 import { getProcessHealth, listSyncJobStates, startSyncJob, arrancarEEsperar } from "./syncJobs";
 import { rankedPaginasSchema, guardarPaginasRanked } from "./rankedImport";
 import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
+import { resumirPartidas, nomeDoModo } from "@shared/partidasObservadas";
 import { probeAllSources } from "./sourceProbe";
+import { resumoDasPartidas } from "./partidasResumo";
 import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
 import { IP_DO_PROXY_ROYALEAPI, normalizarCaminhoDaApi, probeOfficialApi, setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
@@ -785,6 +787,19 @@ export const appRouter = router({
       }),
   }),
   observedMatches: router({
+    /**
+     * Tudo o que a página «Partidas» mostra: cada brawler, cada confronto,
+     * cada equipa de três e cada par de aliados, contados a partir das partidas
+     * Ranked recolhidas. Filtra por período, modo e mapa. Guardado três minutos
+     * por filtro, porque a recolha só muda de hora a hora.
+     */
+    partidas: publicProcedure
+      .input(z.object({
+        dias: z.union([z.literal(0), z.literal(1), z.literal(7), z.literal(30)]).default(30),
+        mode: z.string().trim().min(1).max(64).optional(),
+        mapId: z.string().trim().min(1).max(128).optional(),
+      }).optional())
+      .query(({ input }) => resumoDasPartidas(input ?? {})),
     status: publicProcedure.query(async () => {
       const [config, coverage, runs] = await Promise.all([
         getObservedMatchCollectionConfig(),
