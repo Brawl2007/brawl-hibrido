@@ -3,6 +3,8 @@ import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
 import { BotaoApiOficial } from "@/components/BotaoApiOficial";
+import { NOMES_DOS_MOTORES, PainelDoMotor } from "@/components/PainelDoMotor";
+import { useMotorDoDraft } from "@/hooks/useMotorDoDraft";
 import { RANKS_DO_FILTRO } from "@shared/ranksDoRanked";
 import { SeletorDeRank } from "@/components/SeletorDeRank";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
@@ -1385,7 +1387,7 @@ function ScrimSetup({ preset, initialTeam, myTeam, steps, onPresetChange, onInit
   );
 }
 
-const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, finalPoints, signal, onSelect, locked, banned, suggestionTeam, rosterNames, activeCounterWindow, expanded }: { expanded: boolean; row: RankedRow; index: number; draftScore: number; basePoints: number; finalPoints: number; signal: DraftSignal; onSelect: (name: string) => void; locked: boolean; banned: boolean; suggestionTeam: TeamId; rosterNames: string[]; activeCounterWindow: readonly string[] }) {
+const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, finalPoints, motor, signal, onSelect, locked, banned, suggestionTeam, rosterNames, activeCounterWindow, expanded }: { expanded: boolean; row: RankedRow; index: number; draftScore: number; basePoints: number; finalPoints: number; motor?: RankedDraftEntry<RankedRow>["motor"]; signal: DraftSignal; onSelect: (name: string) => void; locked: boolean; banned: boolean; suggestionTeam: TeamId; rosterNames: string[]; activeCounterWindow: readonly string[] }) {
   const brawlerImage = brawlerImageFor(row);
   const role = inferDraftRole(row.brawler);
   const roleWinRate = row.winRate;
@@ -1468,9 +1470,11 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
         <small className="recommendation-reason-line"><Brain size={11} /> {signal.reasons[0]}</small>
         <small className="recommendation-build-line">⚡ Gadget: {build.gadget} | Star Power: {build.starPower} | Gears: {build.gears.join(", ")}</small>
         </>}
+        {/* Com o PL Prodigy ou o MetaPick, de onde vieram os pontos. */}
+        {motor ? <small className="recommendation-motor">{motor.partes.filter((parte) => Math.abs(parte.valor) >= 0.05).map((parte) => `${parte.nome} ${parte.valor >= 0 ? "" : "−"}${Math.abs(parte.valor).toFixed(1)}`).join(" · ")}</small> : null}
         {!expanded && <small className="pick-brief">{hasSameClassPenalty ? "⚠ Classe repetida · " : ""}{finalPoints - basePoints >= 0 ? "+" : ""}{(finalPoints - basePoints).toFixed(2)} pts ({signal.scoreBreakdown.contextualAdjustment >= 0 ? "+" : ""}{(signal.scoreBreakdown.hybridPoints ? signal.scoreBreakdown.contextualAdjustment / signal.scoreBreakdown.hybridPoints * 100 : 0).toFixed(1)}%) · {signal.decisionType}</small>}
       </span>
-      <span className="recommendation-metrics"><b>{formatMetric(finalPoints, "")}</b><small>PONTOS FINAIS</small></span>
+      <span className="recommendation-metrics"><b>{formatMetric(finalPoints, "")}</b><small>{motor ? `PONTOS · ${NOMES_DOS_MOTORES[motor.nome].toUpperCase()}` : "PONTOS FINAIS"}</small></span>
       <span className="recommendation-side"><span>BASE {basePoints.toFixed(2)} · SCORE DRAFT {draftScore.toFixed(2)}</span><span>SCORE HÍBRIDO {signal.scoreBreakdown.hybridScore.toFixed(2)} · REGRAS CONTEXTUAIS ATIVAS</span></span>
       <span className="recommendation-action">{locked ? "LOCK" : "ADD"}</span>
     </button>
@@ -2354,6 +2358,7 @@ function DraftRulesPanel({ abertoDeInicio = false, preference, hasCustomRules, o
 
 /** A mini-lista de ajustes: cada um abre num painel ao lado, sem ocupar a página. */
 const PAINEIS_DO_DRAFT = [
+  { id: "motor", label: "Motor do Draft (Híbrido, PL Prodigy, MetaPick)", soDono: false },
   { id: "sequencia", label: "Ordem do draft", soDono: false },
   { id: "regras", label: "Regras %", soDono: false },
   { id: "funcoes", label: "Funções (Mid, Lane, Flex)", soDono: true },
@@ -2478,6 +2483,8 @@ export default function Draft() {
     ? getStarPlayerPickWeight(analysisGlobalPickNumber, draftRuleSettings)
     : 0;
   const fonteApi = useFonteApi(selectedMap?.name);
+  // Motor escolhido nos Ajustes: Brawl Híbrido, PL Prodigy ou MetaPick (ver `motoresDoDraft.ts`).
+  const motorDoDraft = useMotorDoDraft();
   const currentRows = useMemo(() => {
     const doMapaPublicado = liveRows.filter((row) => row.map === selectedMap?.name);
     // «Só API oficial»: vitória e uso das partidas recolhidas, sem as outras fontes; sem Star Player (a API não o dá).
@@ -2526,7 +2533,7 @@ export default function Draft() {
   const suggestionTeam = analysisDraftStep?.team ?? myTeam;
   const activeTeamPicks = suggestionTeam === "red" ? redPicks : bluePicks;
   const enemyPicks = suggestionTeam === "red" ? bluePicks : redPicks;
-  const baseRoleContext = useMemo(() => ({ mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version, fonteApiVersao: fonteApi.versao }), [selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version, fonteApi.versao]);
+  const baseRoleContext = useMemo(() => ({ mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version, fonteApiVersao: fonteApi.versao, motor: motorDoDraft.config }), [motorDoDraft.config, selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version, fonteApi.versao]);
   const counterWindow = useMemo(() => getDraftCounterWindow(currentRows, analysisLockedNames, "", baseRoleContext), [currentRows, analysisLockedNames, baseRoleContext]);
   const topRecommendationNames = counterWindow.topRecommendationNames;
   const activeCounterWindow = useMemo(() => topRecommendationNames.slice(0, Math.max(0, 20 - (analysisCompletedPickCount * 4))), [topRecommendationNames, analysisCompletedPickCount]);
@@ -2870,6 +2877,10 @@ export default function Draft() {
               <button type="button" className={myTeam === "blue" ? "is-active blue" : "blue"} aria-pressed={myTeam === "blue"} onClick={() => setMyTeam("blue")}>Azul</button>
               <button type="button" className={myTeam === "red" ? "is-active red" : "red"} aria-pressed={myTeam === "red"} onClick={() => setMyTeam("red")}>Vermelha</button>
             </div>
+            {/* O motor ativo fica à vista; carregar abre as barras dele. */}
+            <button type="button" className={`mesa-motor ${motorDoDraft.config.motor !== "hibrido" ? "is-outro" : ""}`} onClick={() => setPainelAberto("motor")} title="Escolher o motor do Draft e afinar os pesos">
+              Motor: <b>{NOMES_DOS_MOTORES[motorDoDraft.config.motor]}</b>
+            </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="mesa-ajustes-botao"><Settings2 size={15} /> Ajustes <ChevronDown size={14} /></button>
@@ -2913,7 +2924,7 @@ export default function Draft() {
                       <button type="button" className="pick-details-toggle" aria-pressed={showPickDetails} onClick={() => setShowPickDetails(value => !value)}>{showPickDetails ? "Menos" : "Detalhes"}</button>
                     </div>
                     {sameClassAlerts.length > 0 && <p className="mesa-aviso" role="status"><AlertTriangle size={14} /> Classe repetida na {suggestionTeam === "blue" ? "Azul" : "Vermelha"} ({sameClassAlerts.map((alert) => alert.className).join(", ")}): quem for da mesma classe perde {draftRuleSettings.sameClassPenalty * 100}%.</p>}
-                    <div className={`draft-recommendation-list ${showPickDetails ? "with-details" : "is-compact"}`}>{pagedRankedEntries.map((entry) => <div key={entry.row.brawler}><DraftCard row={entry.row} index={entry.rank - 1} draftScore={entry.draftScore} basePoints={entry.basePoints} finalPoints={entry.finalPoints} signal={entry.signal} onSelect={assignBrawler} locked={lockedNames.has(entry.row.brawler)} banned={banNames.has(entry.row.brawler) && analysisDraftStep?.kind === "pick"} suggestionTeam={suggestionTeam} rosterNames={rosterNames} activeCounterWindow={activeCounterWindow} expanded={showPickDetails} /></div>)}{pagedRankedEntries.length === 0 && <div className="draft-empty"><Search size={22} /><strong>Nada com esse filtro.</strong><span>Limpa a pesquisa ou muda a posição.</span></div>}</div>
+                    <div className={`draft-recommendation-list ${showPickDetails ? "with-details" : "is-compact"}`}>{pagedRankedEntries.map((entry) => <div key={entry.row.brawler}><DraftCard row={entry.row} index={entry.rank - 1} draftScore={entry.draftScore} basePoints={entry.basePoints} finalPoints={entry.finalPoints} motor={entry.motor} signal={entry.signal} onSelect={assignBrawler} locked={lockedNames.has(entry.row.brawler)} banned={banNames.has(entry.row.brawler) && analysisDraftStep?.kind === "pick"} suggestionTeam={suggestionTeam} rosterNames={rosterNames} activeCounterWindow={activeCounterWindow} expanded={showPickDetails} /></div>)}{pagedRankedEntries.length === 0 && <div className="draft-empty"><Search size={22} /><strong>Nada com esse filtro.</strong><span>Limpa a pesquisa ou muda a posição.</span></div>}</div>
                     <div className="roster-pagination" aria-label="Páginas de brawlers"><button onClick={() => setRosterPage((page) => Math.max(1, page - 1))} disabled={rosterPage === 1} aria-label="Página anterior"><ArrowLeft size={14} /></button>{Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => <button key={page} className={rosterPage === page ? "is-active" : ""} onClick={() => setRosterPage(page)}>{page}</button>)}<button onClick={() => setRosterPage((page) => Math.min(pageCount, page + 1))} disabled={rosterPage === pageCount} aria-label="Página seguinte"><ArrowRight size={14} /></button><span>{topRows.length} de {visibleRows.length}</span></div>
                   </section>}
                   {abaDoCentro === "equipas" && <MapTeamBoardPanel mapName={selectedMap?.name} mapTeams={mapTeams} allyNames={myPickNames} />}
@@ -3003,6 +3014,7 @@ export default function Draft() {
             <SheetContent side="right" className="mesa-painel w-full sm:max-w-xl">
               <SheetHeader><SheetTitle>{PAINEIS_DO_DRAFT.find((painel) => painel.id === painelAberto)?.label ?? "Ajustes"}</SheetTitle></SheetHeader>
               <div className="mesa-painel-corpo">
+                {painelAberto === "motor" && <PainelDoMotor config={motorDoDraft.config} onChange={motorDoDraft.mudar} />}
                 {painelAberto === "sequencia" && <ScrimSetup preset={scrimPreset} initialTeam={initialTeam} myTeam={myTeam} steps={draftSequence} onPresetChange={handlePresetChange} onInitialTeamChange={handleInitialTeamChange} onMyTeamChange={setMyTeam} onStepsChange={handleCustomStepsChange} />}
                 {painelAberto === "regras" && <>
                   {hasCustomGlobalWeights && <p className="mesa-painel-nota">Este navegador usa Vitória {experimentalWeights.winRate}% / Uso {experimentalWeights.usageRate}% em todo o site. <a href="/#ranking-laboratory">Mudar</a></p>}

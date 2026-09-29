@@ -1,4 +1,5 @@
 import { versaoDoMotor } from "./versaoDoMotor";
+import { confrontoEntre, pontuarComMotor, sinergiaEntre, type ComponentesDoCandidato, type ConfigDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
 import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
@@ -457,6 +458,11 @@ export type DraftRankingContext<T extends DraftRow = DraftRow> = {
   counterPenaltyEligibleNames?: Iterable<string>;
   /** Scores contextuais da passagem anterior, usados exclusivamente em pares de counter recíprocos. */
   reciprocalCounterScores?: ReadonlyMap<string, number>;
+  /**
+   * Motor que ordena as sugestões: o do Brawl Híbrido (por omissão) ou os que
+   * imitam o PL Prodigy e o MetaPick. Ver `motoresDoDraft.ts`.
+   */
+  motor?: ConfigDoMotor;
 };
 
 /** Referência de Pontos Base e resultado contextual já convertido para a escala visual do Draft. */
@@ -1776,6 +1782,8 @@ export type RankedDraftEntry<T extends DraftRow = DraftRow> = {
   finalPoints: number;
   signal: DraftSignal;
   rank: number;
+  /** Com o motor PL Prodigy ou MetaPick: de onde vieram os pontos finais. */
+  motor?: { nome: MotorDoDraft; partes: Array<{ nome: string; valor: number }> };
 };
 
 function rankEntriesWithCounterWindow<T extends DraftRow>(
@@ -1921,12 +1929,54 @@ export function rankDraftEntries<T extends DraftRow>(rows: T[], lockedNames: Set
   // candidatos da recomendação, mas nunca podem tornar automaticamente o
   // novo líder disponível em 100 pontos.
   const maxHybridScore = getDraftMaximumHybridScore(rows, context.experimentalWeights);
-  return rankEntriesWithCounterWindow(eligibleRows, rankingContext, resolvedWindow.topRecommendationNames, resolvedWindow.counterPenaltyEligibleNames)
+  const doHibrido: RankedDraftEntry<T>[] = rankEntriesWithCounterWindow(eligibleRows, rankingContext, resolvedWindow.topRecommendationNames, resolvedWindow.counterPenaltyEligibleNames)
     .map((entry, index) => ({
       ...entry,
       ...calculateNormalizedDraftPoints(entry.signal.scoreBreakdown.hybridScore, entry.draftScore, maxHybridScore),
       rank: index + 1,
     }));
+  if (!context.motor || context.motor.motor === "hibrido") return doHibrido;
+  return reordenarComMotor(doHibrido, context, lockedNames, context.motor);
+}
+
+/**
+ * Os motores PL Prodigy e MetaPick: as mesmas linhas, os mesmos sinais e a
+ * mesma janela de counters do Draft, mas os pontos finais e a ordem saem das
+ * contas deles (`motoresDoDraft.ts`).
+ */
+function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], context: DraftRankingContext<T>, lockedNames: Set<string>, config: ConfigDoMotor): RankedDraftEntry<T>[] {
+  const inimigos = (context.enemyRows ?? []).map((row) => row.brawler);
+  const aliados = (context.allyRows ?? []).map((row) => row.brawler);
+  const modo = context.mapModeId;
+  // Cada equipa escolhe três; o risco só conta com os picks que faltam ao adversário.
+  const picksQueFaltamAoAdversario = Math.max(0, 3 - inimigos.length);
+  const bloqueados = new Set(Array.from(lockedNames, (nome) => counterKey(nome)));
+  const componentes: ComponentesDoCandidato[] = entries.map((entry) => ({
+    brawler: entry.row.brawler,
+    base: entry.basePoints,
+    vitoria: numeric(entry.row.winRate),
+    uso: getDraftUsageRate(entry.row),
+    counters: inimigos.map((inimigo) => confrontoEntre(entry.row.brawler, inimigo, modo)),
+    sinergias: aliados.map((aliado) => sinergiaEntre(entry.row.brawler, aliado, modo)),
+    encaixe: entry.signal.fit,
+    countersBanidos: entry.signal.bannedCounterCount,
+    riscos: picksQueFaltamAoAdversario === 0 ? [] : getCounterProfile(entry.row.brawler, [], modo).counteredBy
+      .filter((counter) => !bloqueados.has(counterKey(counter)))
+      .map((counter) => confrontoEntre(counter, entry.row.brawler, modo))
+      .filter((valor) => valor > 0)
+      .sort((a, b) => b - a)
+      .slice(0, Math.min(3, picksQueFaltamAoAdversario)),
+  }));
+  const pontuacoes = pontuarComMotor(componentes, config) ?? [];
+  return entries
+    .map((entry, i) => ({
+      ...entry,
+      draftScore: pontuacoes[i].pontos,
+      finalPoints: pontuacoes[i].pontos,
+      motor: { nome: config.motor, partes: pontuacoes[i].partes },
+    }))
+    .sort((a, b) => b.finalPoints - a.finalPoints || b.basePoints - a.basePoints || a.row.brawler.localeCompare(b.row.brawler))
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
 /** Ordering changes presentation only; contextual signals and counter windows stay intact. */
