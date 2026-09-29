@@ -654,7 +654,16 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
    * garante que a pergunta nem chega a ser feita a quem não é o dono.
    */
   const chaveQuery = trpc.syncJobs.apiKeyState.useQuery(undefined, { staleTime: 30_000, retry: false, enabled: ehDono });
-  const chaveEstado = chaveQuery.data as { configured: boolean; origin: string; hint: string | null } | undefined;
+  const chaveEstado = chaveQuery.data as { configured: boolean; origin: string; hint: string | null; via?: "oficial" | "royaleapi"; viaOrigin?: string; proxyIp?: string } | undefined;
+  const mudarCaminho = trpc.syncJobs.setApiVia.useMutation({
+    onSuccess: async (resultado) => {
+      const teste = resultado.test as { ok: boolean; reason: string };
+      if (teste.ok) toast.success(resultado.via === "royaleapi" ? "A passar pelo proxy da RoyaleAPI — a Supercell aceitou." : "A ligar direto à Supercell — aceite.", { description: teste.reason });
+      else toast.error("Caminho mudado, mas a Supercell recusou.", { description: teste.reason });
+      await Promise.all([chaveQuery.refetch(), observedQuery.refetch()]);
+    },
+    onError: (erro) => toast.error(erro.message || "Não foi possível mudar o caminho."),
+  });
   const guardarChave = trpc.syncJobs.setApiKey.useMutation({
     onSuccess: async (resultado) => {
       const teste = resultado.test as { ok: boolean; reason: string };
@@ -839,6 +848,27 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
               {guardarChave.isPending ? "A guardar e testar…" : "Guardar e testar"}
             </button>
           </div>
+          {/*
+            A Vercel não tem IP de saída fixo e a Supercell prende a chave a IPs.
+            O proxy da RoyaleAPI sai sempre do mesmo IP. Escolha do dono, nunca
+            automática: pelo proxy, a chave passa por um serviço de terceiros.
+          */}
+          <label className="api-key-proxy">
+            <input
+              type="checkbox"
+              checked={chaveEstado.via === "royaleapi"}
+              disabled={mudarCaminho.isPending || chaveEstado.viaOrigin === "ambiente"}
+              onChange={(evento) => mudarCaminho.mutate({ via: evento.target.checked ? "royaleapi" : "oficial" })}
+            />
+            <span>
+              Passar pelo proxy da RoyaleAPI
+              <small>
+                Para a Vercel, que muda de IP a cada pedido. Na chave, em developer.brawlstars.com, põe o IP{" "}
+                <code>{chaveEstado.proxyIp ?? "45.79.218.79"}</code>. A chave passa pelo servidor da RoyaleAPI — usa uma chave só para este site.
+                {chaveEstado.viaOrigin === "ambiente" ? " Definido pela variável BRAWL_STARS_API_VIA." : ""}
+              </small>
+            </span>
+          </label>
         </div>
       ) : null}
 
@@ -1824,6 +1854,18 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
         toggle: true,
         label: "Não repetir o bónus de Counter",
         helper: "Ligado: se um aliado já countera o inimigo E o tem no Top 10 dos counters dele, o candidato não recebe bónus por counterar o mesmo inimigo. Excepção: quem responde a dois ou mais inimigos mantém o bónus inteiro. Desligado (padrão): cada par paga o delta publicado dele, haja ou não outra resposta.",
+      },
+    ],
+  },
+  {
+    title: "Leitura do confronto",
+    description: "De que ficha do BrawlScope vem a percentagem de cada par.",
+    fields: [
+      {
+        key: "lerAsDuasFichas",
+        toggle: true,
+        label: "Média das duas fichas",
+        helper: "Ligado (padrão): cada confronto vale a média da ficha do candidato e da ficha do adversário — as duas amostras podem discordar muito (Lumi contra Surge: −5,3% numa, −0,1% na outra). Desligado: vale só a ficha do candidato.",
       },
     ],
   },

@@ -1,4 +1,4 @@
-import { avancarVersaoDoMotor } from "./versaoDoMotor";
+import { aoMudarDeSnapshot, fallbackOfflineAtivo, getActiveCounterSyncSnapshot } from "./counterSyncEstado";
 import { brawlCalculatorCounterData, type BrawlCalculatorCounterRelation } from "./brawlCalculatorCounterData";
 import { brawlPlanetRelationData, type BrawlPlanetRelation } from "./brawlPlanetRelationData";
 import { brawlScopeCounterData } from "./brawlScopeCounterData";
@@ -46,21 +46,7 @@ export type BrawlCalculatorMatchupTip = {
  * `setCounterSyncSnapshot(snapshot, { allowOfflineFallback: true })`; nenhum
  * caminho de produção deve fazer essa chamada.
  */
-let activeCounterSyncSnapshot: CounterSyncSnapshotPayload | undefined;
-let offlineCounterFallbackEnabled = false;
-
-export function setCounterSyncSnapshot(snapshot: CounterSyncSnapshotPayload | undefined, options?: { allowOfflineFallback?: boolean }) {
-  activeCounterSyncSnapshot = snapshot;
-  if (typeof options?.allowOfflineFallback === "boolean") offlineCounterFallbackEnabled = options.allowOfflineFallback;
-  counterSourceProfilesCache.clear();
-  resolvedCounterDirectionCache.clear();
-  reciprocalCounterRelationCache.clear();
-  avancarVersaoDoMotor();
-}
-
-export function getActiveCounterSyncSnapshot() {
-  return activeCounterSyncSnapshot;
-}
+export { getActiveCounterSyncSnapshot, setCounterSyncSnapshot } from "./counterSyncEstado";
 
 function relationKey(value: string) {
   return normalizeCounterBrawlerName(value);
@@ -209,7 +195,7 @@ export function getPLProdigyLiteralCounterRelations(attacker: string, defender: 
  */
 export function getBrawlScopeSynergyTeammates(brawler: string, modeId?: string, allowStatic = false): SourcedCounterRelation[] {
   const normalizedModeId = normalizeBrawlScopeModeId(modeId);
-  const synced = getSnapshotSynergies(activeCounterSyncSnapshot, brawler, "brawlscope", normalizedModeId);
+  const synced = getSnapshotSynergies(getActiveCounterSyncSnapshot(), brawler, "brawlscope", normalizedModeId);
   if (synced.length) {
     return synced.map((entry) => ({
       brawler: entry.teammate,
@@ -232,8 +218,8 @@ export function getBrawlScopeSynergyTeammates(brawler: string, modeId?: string, 
    * catálogo NUNCA cria um perfil sozinho. Se a leitura em direto não sustenta
    * o brawler, não há nada a completar.
    */
-  if (activeCounterSyncSnapshot) return allowStatic ? staticBrawlScopeSynergies(brawler) : [];
-  if (normalizedModeId || !offlineCounterFallbackEnabled) return [];
+  if (getActiveCounterSyncSnapshot()) return allowStatic ? staticBrawlScopeSynergies(brawler) : [];
+  if (normalizedModeId || !fallbackOfflineAtivo()) return [];
   return staticBrawlScopeSynergies(brawler);
 }
 
@@ -254,7 +240,7 @@ function staticBrawlScopeSynergies(brawler: string): SourcedCounterRelation[] {
  * já sustenta (`allowStatic`); nunca cria um perfil sozinho.
  */
 function planetTeammates(brawler: string, allowStatic: boolean): SourcedCounterRelation[] {
-  const synced = getSnapshotSynergies(activeCounterSyncSnapshot, brawler, "planet");
+  const synced = getSnapshotSynergies(getActiveCounterSyncSnapshot(), brawler, "planet");
   if (synced.length) {
     return synced.map((entry) => ({
       brawler: entry.teammate,
@@ -276,7 +262,7 @@ function staticPlanetTeams(brawler: string) {
 }
 
 function getSyncedCounterSourceProfiles(brawler: string, modeId?: string): CounterSourceProfile[] | undefined {
-  const snapshot = activeCounterSyncSnapshot;
+  const snapshot = getActiveCounterSyncSnapshot();
   if (!snapshot) return undefined;
   const owner = relationKey(brawler);
   const normalizedModeId = normalizeBrawlScopeModeId(modeId);
@@ -347,7 +333,7 @@ export function getCounterSourceProfiles(brawler: string, modeId?: string): Coun
   const cached = counterSourceProfilesCache.get(cacheKey);
   if (cached) return cached;
 
-  if (!activeCounterSyncSnapshot && !offlineCounterFallbackEnabled) {
+  if (!getActiveCounterSyncSnapshot() && !fallbackOfflineAtivo()) {
     counterSourceProfilesCache.set(cacheKey, []);
     return [];
   }
@@ -452,6 +438,11 @@ export type ReciprocalCounterRelation = {
 const counterSourceProfilesCache = new Map<string, CounterSourceProfile[]>();
 const resolvedCounterDirectionCache = new Map<string, ResolvedCounterDirection | null>();
 const reciprocalCounterRelationCache = new Map<string, ReciprocalCounterRelation | null>();
+aoMudarDeSnapshot(() => {
+  counterSourceProfilesCache.clear();
+  resolvedCounterDirectionCache.clear();
+  reciprocalCounterRelationCache.clear();
+});
 
 function resolvedDirectionCacheKey(attacker: string, defender: string) {
   return `${relationKey(attacker)}:${relationKey(defender)}`;

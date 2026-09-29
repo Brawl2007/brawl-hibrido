@@ -26,7 +26,7 @@ import { brawlScopeIndexUrl, brawlScopeProfileUrl, DEFAULT_BRAWLSCOPE_RANK } fro
 import { findBrawlScopeSlugsInIndex, knownBrawlScopeSlugs } from "../shared/brawlScopeSlugs";
 import { parseRankedRotationIndex } from "../shared/rankedRotationSource";
 import { parsePLProdigyGuide, plProdigyGuideUrl } from "../shared/plProdigyParser";
-import { probeOfficialApi } from "./brawlStarsApi";
+import { probeOfficialApi, urlDaApi } from "./brawlStarsApi";
 
 export type ProbeStep = {
   label: string;
@@ -252,7 +252,7 @@ async function probeEgressIp(): Promise<SourceProbeResult> {
  * o IP declarado na chave não ser o deste servidor.
  */
 async function probeOfficial(): Promise<SourceProbeResult> {
-  const url = "https://api.brawlstars.com/v1/brawlers";
+  const url = `${urlDaApi()}/brawlers`;
   const resultado = await probeOfficialApi();
   const nivel: ProbeStep["level"] = resultado.ok ? "ok" : resultado.configured ? "fail" : "warn";
   return {

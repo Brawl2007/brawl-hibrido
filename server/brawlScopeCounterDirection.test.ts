@@ -1,9 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, beforeAll, afterAll } from "vitest";
 import { getBrawlScopeCoverage, getMatchupValue, getPublishedMatchupValue, toOwnerPerspective } from "@shared/counterMatchupValue";
 import { getCounterSourceProfiles, setCounterSyncSnapshot } from "@shared/counterSourceRelations";
 import { brawlScopeCounterData } from "@shared/brawlScopeCounterData";
 import { calculateDraftSignal } from "@shared/draft";
 import { counterPickMultiplierOptions, defaultDraftRuleSettings, normalizeDraftRuleSettings } from "@shared/draftRules";
+import { definirLeituraDasDuasFichas as definirFichasDoFicheiro } from "@shared/counterMatchupValue";
+
+// Este ficheiro prova a leitura de uma só ficha (a do candidato), a regra de
+// antes da v153. A média das duas fichas tem os testes em `duasFichas.test.ts`.
+beforeAll(() => definirFichasDoFicheiro(false));
+afterAll(() => definirFichasDoFicheiro(true));
 
 // Auditoria dos catálogos estáticos; produção continua a exigir snapshot live.
 beforeEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: true }));

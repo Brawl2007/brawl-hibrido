@@ -1,5 +1,5 @@
-import { setRuntimeApiKey } from "./brawlStarsApi";
-import { ensureAppSettingsTable, getStoredApiKey } from "./appSettings";
+import { setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
+import { ensureAppSettingsTable, getStoredApiKey, getStoredApiVia } from "./appSettings";
 import { ensureTables } from "./ensureTables";
 
 /**
@@ -27,6 +27,14 @@ let arranque: Promise<void> | undefined;
 /** Só para os testes. */
 export function resetArranqueParaTestes() {
   arranque = undefined;
+}
+
+/**
+ * Só o que passa pela base de dados precisa do arranque: as rotas `/api/`.
+ * A página e os ficheiros do site servem-se sem esperar por ele.
+ */
+export function precisaDoArranque(caminho: string) {
+  return caminho === "/api" || caminho.startsWith("/api/");
 }
 
 export function garantirArranque(): Promise<void> {
@@ -61,5 +69,8 @@ async function executar() {
       setRuntimeApiKey(key || null);
       if (key) console.log(`[Arranque] Chave da API oficial carregada (origem: ${origin}).`);
     })
+    // Por onde a chave sai: direto à Supercell ou pelo proxy da RoyaleAPI.
+    .then(() => getStoredApiVia())
+    .then(({ via }) => setRuntimeApiVia(via))
     .catch(() => undefined);
 }

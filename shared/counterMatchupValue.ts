@@ -161,6 +161,43 @@ export function toOwnerPerspective(publishedDelta: number) {
   return -publishedDelta;
 }
 
+/**
+ * Ler as duas fichas do confronto, e não só a do candidato.
+ *
+ * POR QUE EXISTE
+ *
+ * O BrawlScope publica cada par duas vezes, uma em cada ficha, medido contra a
+ * média de cada um — e as duas amostras podem discordar muito. O caso que o
+ * mostrou: Lumi contra Surge, Emz e Griff valia −12,7% na ficha da Lumi e
+ * −0,2% nas fichas dos três adversários. Lendo só a ficha do candidato, a Lumi
+ * caía para 63.º num draft em que o Metapick (partidas Master+) a punha em 1.º.
+ *
+ * Ligada (por omissão), o valor do par é a média das duas fichas, cada uma na
+ * perspetiva do candidato. Quando só uma ficha publica o par, vale essa.
+ * Desligada, volta a valer só a ficha de quem está a ser avaliado.
+ */
+let duasFichas = true;
+
+export function definirLeituraDasDuasFichas(ligada: boolean) {
+  if (duasFichas === ligada) return;
+  duasFichas = ligada;
+  avancarVersaoDoMotor();
+}
+
+export function leituraDasDuasFichas() {
+  return duasFichas;
+}
+
+/** O delta que a ficha de `titular` publica contra `adversario`, como a fonte o escreve. */
+function deltaDaFicha(titular: string, adversario: string, perfis: CounterSourceProfile[], modeId: string | undefined, reading: BrawlScopeReadingId) {
+  const scope = perfis.find(p => p.source === 'BrawlScope');
+  const relation = [...(scope?.targets ?? []), ...(scope?.counteredBy ?? [])].find(r => key(r.brawler) === key(adversario) && typeof r.delta === 'number');
+  const fromCatalog = publishedDelta(titular, adversario, modeId, reading);
+  const useLiveMatrix = fromCatalog?.live === true;
+  const published = useLiveMatrix ? fromCatalog.value : relation?.delta ?? fromCatalog?.value ?? null;
+  return { scope, relation, fromCatalog, useLiveMatrix, published };
+}
+
 export function getMatchupValue(owner: string, foe: string, modeId?: string, reading = activeReading): MatchupValue {
   if (key(owner) === key(foe)) return calculateMatchupValue(null, 0, 0);
   /**
@@ -175,12 +212,8 @@ export function getMatchupValue(owner: string, foe: string, modeId?: string, rea
   const effectiveMode = reading === "byMode" ? modeId : undefined;
   const own = getCounterSourceProfiles(owner, effectiveMode);
   const other = getCounterSourceProfiles(foe, effectiveMode);
-  const scope = own.find(p => p.source === 'BrawlScope');
-  const relation = [...(scope?.targets ?? []), ...(scope?.counteredBy ?? [])].find(r => key(r.brawler) === key(foe) && typeof r.delta === 'number');
   // Prefer a contextual published percentage; the complete catalog preserves every pair.
-  const fromCatalog = publishedDelta(owner, foe, modeId, reading);
-  const useLiveMatrix = fromCatalog?.live === true;
-  const published = useLiveMatrix ? fromCatalog.value : relation?.delta ?? fromCatalog?.value ?? null;
+  const { scope, relation, fromCatalog, useLiveMatrix, published } = deltaDaFicha(owner, foe, own, modeId, reading);
   /**
    * A ficha do próprio brawler é a evidência primária do confronto. Duas fichas
    * podem contradizer-se — a fonte mede cada par contra a média do adversário, por
@@ -189,7 +222,17 @@ export function getMatchupValue(owner: string, foe: string, modeId?: string, rea
    * que ninguém leva vantagem sobre ela, escolher a Wendy não pode perder pontos
    * só porque a ficha do adversário afirma o contrário.
    */
-  const base = published === null ? null : toOwnerPerspective(published);
+  const daFichaDoCandidato = published === null ? null : toOwnerPerspective(published);
+  /**
+   * Na ficha do adversário o candidato é o adversário: o número já está na
+   * perspetiva do candidato (positivo = o candidato leva vantagem), sem inverter.
+   */
+  const daFichaDoAdversario = duasFichas ? deltaDaFicha(foe, owner, other, modeId, reading).published : null;
+  const base = daFichaDoCandidato === null
+    ? daFichaDoAdversario
+    : daFichaDoAdversario === null
+      ? daFichaDoCandidato
+      : Math.round(((daFichaDoCandidato + daFichaDoAdversario) / 2) * 100) / 100;
   /**
    * De onde veio mesmo o número. Quando a ficha do próprio brawler traz o delta,
    * a origem é o modo dessa ficha — que é o modo pedido quando o snapshot tem

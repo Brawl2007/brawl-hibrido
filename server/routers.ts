@@ -16,8 +16,8 @@ import { getProcessHealth, listSyncJobStates, startSyncJob, arrancarEEsperar } f
 import { rankedPaginasSchema, guardarPaginasRanked } from "./rankedImport";
 import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { probeAllSources } from "./sourceProbe";
-import { BRAWL_STARS_API_KEY_SETTING, getSetting, getStoredApiKey, setSetting } from "./appSettings";
-import { probeOfficialApi, setRuntimeApiKey } from "./brawlStarsApi";
+import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
+import { IP_DO_PROXY_ROYALEAPI, normalizarCaminhoDaApi, probeOfficialApi, setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
 import { ErroDoGeneral, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
 import { guardarCorrecoesDeCasas, guardarRotulosDaIA, obterTerreno } from "./terrenoDoMapa";
 import { obterCatalogo } from "./catalogoDeBuilds";
@@ -463,13 +463,32 @@ export const appRouter = router({
     apiKeyState: protectedProcedure.query(async ({ ctx }) => {
       exigirDono(ctx, "ver o estado da chave");
       const { key, origin } = await getStoredApiKey();
+      const { via, origin: viaOrigin } = await getStoredApiVia();
       return {
         configured: Boolean(key),
         origin,
         // Só os últimos quatro caracteres, para se reconhecer qual é sem a expor.
         hint: key ? `····${key.slice(-4)}` : null,
+        via: normalizarCaminhoDaApi(via),
+        viaOrigin,
+        proxyIp: IP_DO_PROXY_ROYALEAPI,
       };
     }),
+    /**
+     * Liga ou desliga o proxy da RoyaleAPI e testa logo a chave pelo novo caminho.
+     *
+     * Na Vercel o IP de saída muda a cada pedido e a Supercell recusa a chave;
+     * pelo proxy os pedidos saem sempre do mesmo IP. Ver `URL_PROXY_ROYALEAPI`.
+     */
+    setApiVia: protectedProcedure
+      .input(z.object({ via: z.enum(["oficial", "royaleapi"]) }))
+      .mutation(async ({ ctx, input }) => {
+        exigirDono(ctx, "mudar o caminho da API oficial");
+        await setSetting(BRAWL_STARS_API_VIA_SETTING, input.via);
+        setRuntimeApiVia(input.via);
+        const teste = await probeOfficialApi();
+        return { via: input.via, test: teste };
+      }),
     /**
      * Guarda a chave na base de dados e testa-a de imediato.
      *

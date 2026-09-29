@@ -1,4 +1,49 @@
-const BASE_URL = "https://api.brawlstars.com/v1";
+const URL_OFICIAL = "https://api.brawlstars.com/v1";
+
+/**
+ * O proxy público da RoyaleAPI para a API do Brawl Stars.
+ *
+ * POR QUE EXISTE
+ *
+ * A Supercell prende cada chave a uma lista de IPs. A Vercel não tem IP de
+ * saída fixo: cada função pode sair por um endereço diferente, e o IP fixo é
+ * um extra pago que o plano gratuito não tem. Resultado: a chave era recusada
+ * com 403 na maior parte dos pedidos, e a recolha de partidas nunca arrancava.
+ *
+ * A RoyaleAPI mantém este proxy precisamente para isto — servidores sem IP
+ * fixo. Os pedidos saem sempre do mesmo IP (`IP_DO_PROXY_ROYALEAPI`), que se
+ * acrescenta à chave em developer.brawlstars.com. Os caminhos e a autenticação
+ * são os mesmos da API oficial; só muda o domínio.
+ *
+ * É uma escolha do dono, nunca automática: com o proxy, a chave passa por um
+ * serviço de terceiros. Ver https://docs.royaleapi.com/proxy
+ */
+export const URL_PROXY_ROYALEAPI = "https://bsproxy.royaleapi.dev/v1";
+export const IP_DO_PROXY_ROYALEAPI = "45.79.218.79";
+
+export type CaminhoDaApi = "oficial" | "royaleapi";
+
+export function normalizarCaminhoDaApi(valor: unknown): CaminhoDaApi {
+  return typeof valor === "string" && valor.trim().toLowerCase() === "royaleapi" ? "royaleapi" : "oficial";
+}
+
+let caminhoEmCache: CaminhoDaApi = "oficial";
+
+/** Por onde saem os pedidos. O ambiente tem prioridade, como na chave. */
+export function getCaminhoDaApi(): CaminhoDaApi {
+  const doAmbiente = (process.env.BRAWL_STARS_API_VIA ?? "").trim();
+  if (doAmbiente) return normalizarCaminhoDaApi(doAmbiente);
+  return caminhoEmCache;
+}
+
+export function setRuntimeApiVia(via: unknown) {
+  caminhoEmCache = normalizarCaminhoDaApi(via);
+}
+
+/** A base de todos os pedidos à API do Brawl Stars. */
+export function urlDaApi() {
+  return getCaminhoDaApi() === "royaleapi" ? URL_PROXY_ROYALEAPI : URL_OFICIAL;
+}
 
 export type OfficialRankedPlayer = {
   tag?: string;
@@ -75,7 +120,7 @@ export async function probeOfficialApi(): Promise<{
   }
 
   try {
-    const res = await fetch(`${BASE_URL}/brawlers`, { headers: { Authorization: `Bearer ${apiKey}` } });
+    const res = await fetch(`${urlDaApi()}/brawlers`, { headers: { Authorization: `Bearer ${apiKey}` } });
     if (res.ok) {
       const data = (await res.json()) as { items?: unknown[] };
       return { configured: true, ok: true, status: res.status, reason: `${data.items?.length ?? 0} brawlers no catálogo oficial.` };
@@ -99,9 +144,11 @@ export async function probeOfficialApi(): Promise<{
         configured: true,
         ok: false,
         status: 403,
-        reason: ipVisto
-          ? `A chave existe, mas a Supercell recusou: viu o pedido vir de ${ipVisto}, que não está na lista de IPs permitidos da chave. Acrescenta ${ipVisto} em developer.brawlstars.com — a chave aceita vários IPs, não precisas de criar uma nova.`
-          : "A chave existe, mas a Supercell recusou por IP não autorizado. Acrescenta o IP de saída (linha acima) à lista de IPs permitidos da chave.",
+        reason: getCaminhoDaApi() === "royaleapi"
+          ? `A chave existe, mas a Supercell recusou o pedido vindo do proxy da RoyaleAPI. Confirma que ${IP_DO_PROXY_ROYALEAPI} está na lista de IPs permitidos da chave em developer.brawlstars.com.`
+          : ipVisto
+            ? `A chave existe, mas a Supercell recusou: viu o pedido vir de ${ipVisto}, que não está na lista de IPs permitidos da chave. Num servidor de IP fixo, acrescenta ${ipVisto} em developer.brawlstars.com — a chave aceita vários IPs, não precisas de criar uma nova. Na Vercel este IP muda a cada pedido: liga a opção "Passar pelo proxy da RoyaleAPI" e acrescenta ${IP_DO_PROXY_ROYALEAPI} à chave.`
+            : `A chave existe, mas a Supercell recusou por IP não autorizado. Na Vercel o IP muda a cada pedido — liga a opção "Passar pelo proxy da RoyaleAPI" e acrescenta ${IP_DO_PROXY_ROYALEAPI} à chave.`,
         seenIp: ipVisto,
       };
     }
@@ -123,7 +170,7 @@ export async function fetchOfficialBrawlers(): Promise<any[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
   try {
-    const res = await fetch(`${BASE_URL}/brawlers`, {
+    const res = await fetch(`${urlDaApi()}/brawlers`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     if (!res.ok) {
@@ -142,7 +189,7 @@ export async function fetchOfficialRankings(countryCode = "global", type = "braw
   const apiKey = getApiKey();
   if (!apiKey) return [];
   try {
-    const res = await fetch(`${BASE_URL}/rankings/${countryCode}/${type}`, {
+    const res = await fetch(`${urlDaApi()}/rankings/${countryCode}/${type}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     if (!res.ok) {
@@ -169,7 +216,7 @@ export async function fetchOfficialBattleLog(playerTag: string): Promise<Officia
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
     const normalizedTag = playerTag.startsWith("#") ? playerTag : `#${playerTag}`;
-    const res = await fetch(`${BASE_URL}/players/${encodeURIComponent(normalizedTag)}/battlelog`, {
+    const res = await fetch(`${urlDaApi()}/players/${encodeURIComponent(normalizedTag)}/battlelog`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
@@ -191,7 +238,7 @@ export async function fetchOfficialEvents(): Promise<any[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
   try {
-    const res = await fetch(`${BASE_URL}/events/rotation`, {
+    const res = await fetch(`${urlDaApi()}/events/rotation`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     if (!res.ok) {
