@@ -1,5 +1,6 @@
 import { Retrato } from "@/components/Retrato";
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
+import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { idDoMapa, mapImageFor } from "@/lib/imagemDoMapa";
@@ -2464,21 +2465,25 @@ export default function Draft() {
   const pesoDeStarDoPick = starPlayerWeight > 0
     ? getStarPlayerPickWeight(analysisGlobalPickNumber, draftRuleSettings)
     : 0;
+  const fonteApi = useFonteApi(selectedMap?.name);
   const currentRows = useMemo(() => {
-    const doMapa = liveRows.filter((row) => row.map === selectedMap?.name);
+    const doMapaPublicado = liveRows.filter((row) => row.map === selectedMap?.name);
+    // «Só API oficial»: vitória e uso das partidas recolhidas, sem as outras fontes; sem Star Player (a API não o dá).
+    if (fonteApi.ligada && fonteApi.dados) return calculateHybridScoresByMap(linhasDaApi(doMapaPublicado, fonteApi.dados), pesoDeVitoriaDoPick, topBrawlWeight, 0);
+    const doMapa = doMapaPublicado;
     // Sem diferença para os pesos globais não se recalcula nada: além de poupar
     // trabalho, mantém as linhas idênticas por identidade e os memos a jusante
     // não se invalidam à toa. A fatia do Star Player entra nesta comparação —
     // sem isso, uma escada só do Star Player não chegava a ser aplicada.
     if (pesoDeVitoriaDoPick === winRateWeight && pesoDeStarDoPick === starPlayerWeight) return doMapa;
     return calculateHybridScoresByMap(doMapa, pesoDeVitoriaDoPick, topBrawlWeight, pesoDeStarDoPick);
-  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, pesoDeStarDoPick, winRateWeight, starPlayerWeight, topBrawlWeight]);
+  }, [liveRows, selectedMap?.name, roleVersion, pesoDeVitoriaDoPick, pesoDeStarDoPick, winRateWeight, starPlayerWeight, topBrawlWeight, fonteApi.ligada, fonteApi.dados]);
   // Matrizes completas vindas da sincronização: a geral e, na leitura por modo, a do mapa ativo.
   const liveMatchups = useBrawlScopeLiveMatchups(
     brawlScopeReading === "byMode" && selectedMap?.modeId ? [selectedMap.modeId] : [],
     counterSnapshotVersion,
   );
-  const mapTeams = useMemo(() => (rankedSync.snapshot?.mapTeams ?? []).filter((team) => team.map === selectedMap?.name), [rankedSync.snapshot?.mapTeams, selectedMap?.name]);
+  const mapTeams = useMemo(() => fonteApi.ligada ? [] : (rankedSync.snapshot?.mapTeams ?? []).filter((team) => team.map === selectedMap?.name), [rankedSync.snapshot?.mapTeams, selectedMap?.name, fonteApi.ligada]);
   const rosterNames = useMemo(() => currentRows.map((row) => row.brawler), [currentRows]);
   const analysisCompletedPickCount = useMemo(
     () => draftSequence.reduce((count, step, index) => count + (step.kind === "pick" && Boolean(analysisChoices[index]) ? 1 : 0), 0),
@@ -2509,7 +2514,7 @@ export default function Draft() {
   const suggestionTeam = analysisDraftStep?.team ?? myTeam;
   const activeTeamPicks = suggestionTeam === "red" ? redPicks : bluePicks;
   const enemyPicks = suggestionTeam === "red" ? bluePicks : redPicks;
-  const baseRoleContext = useMemo(() => ({ mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version }), [selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version]);
+  const baseRoleContext = useMemo(() => ({ mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version, fonteApiVersao: fonteApi.versao }), [selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version, fonteApi.versao]);
   const counterWindow = useMemo(() => getDraftCounterWindow(currentRows, analysisLockedNames, "", baseRoleContext), [currentRows, analysisLockedNames, baseRoleContext]);
   const topRecommendationNames = counterWindow.topRecommendationNames;
   const activeCounterWindow = useMemo(() => topRecommendationNames.slice(0, Math.max(0, 20 - (analysisCompletedPickCount * 4))), [topRecommendationNames, analysisCompletedPickCount]);
@@ -2830,7 +2835,25 @@ export default function Draft() {
               <select aria-label="Mapa do draft" value={selectedMap?.name ?? ""} onChange={(event) => changeMap(event.target.value)}>{liveMaps.map((map) => <option key={map.name} value={map.name}>{map.name} · {map.mode}</option>)}</select>
               <ChevronDown size={14} />
             </label>
-            <SeletorDeElo mapa={selectedMap?.name} />
+            {fonteApi.ligada ? null : <SeletorDeElo mapa={selectedMap?.name} />}
+            {/* «Só API oficial»: o Draft passa a ler apenas as partidas recolhidas deste mapa. */}
+            <button
+              type="button"
+              className={`mesa-fonte-api ${fonteApi.ligada ? "is-active" : ""}`}
+              aria-pressed={fonteApi.ligada}
+              onClick={fonteApi.alternar}
+              title="Ligado: só as partidas Ranked recolhidas da API da Supercell, neste mapa, nos últimos 30 dias. Desligado: BrawlScope, Brawl Planet, TopBrawl e PL Prodigy."
+            >
+              <span className="mesa-fonte-api-caixa" aria-hidden="true">{fonteApi.ligada ? "✓" : ""}</span>
+              Só API oficial
+            </button>
+            {fonteApi.ligada ? (
+              <span className="mesa-fonte-api-nota" role="status">
+                {fonteApi.aCarregar
+                  ? "A ler as partidas…"
+                  : `${(fonteApi.dados?.partidas ?? 0).toLocaleString("pt-PT")} partidas deste mapa (${fonteApi.dias} dias)${(fonteApi.dados?.partidas ?? 0) < 100 ? " · ainda poucas: os números estão perto de 50%" : ""}`}
+              </span>
+            ) : null}
             <div className="mesa-escolha" role="group" aria-label="Quem escolhe primeiro">
               <span>Começa</span>
               <button type="button" className={initialTeam === "blue" ? "is-active blue" : "blue"} aria-pressed={initialTeam === "blue"} onClick={() => handleInitialTeamChange("blue")}>Azul</button>

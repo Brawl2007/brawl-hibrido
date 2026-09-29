@@ -1,6 +1,6 @@
 import { versaoDoMotor } from "./versaoDoMotor";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
-import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas } from "./counterMatchupValue";
+import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
 export type DraftTeam = "blue" | "red";
 import { getMainAttackRange } from "./brawlerAttackRanges";
@@ -1215,7 +1215,13 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const allyRows = context.allyRows ?? [];
   const enemyRows = context.enemyRows ?? [];
   const fit = clamp((roleObjectiveFit(context.mapModeId, role) * 100 * 0.75) + (roleFit * 100 * 0.25));
-  const sourceProfiles = getCounterSourceProfiles(row.brawler, getBrawlScopeReading() === "byMode" ? context.mapModeId : undefined);
+  /**
+   * «Só API oficial»: os perfis das outras fontes ficam vazios. Sem eles não há
+   * sinergia do BrawlScope/Brawl Planet, nem Worst Teammate, nem counter banido
+   * pelo Top 10 publicado — tudo o que o Draft lê passa a sair das partidas.
+   */
+  const soApi = fonteObservadaAtiva();
+  const sourceProfiles = soApi ? [] : getCounterSourceProfiles(row.brawler, getBrawlScopeReading() === "byMode" ? context.mapModeId : undefined);
   const brawlPlanetProfile = sourceProfiles.find((profile) => profile.source === "Brawl Planet");
   const brawlScopeProfile = sourceProfiles.find((profile) => profile.source === "BrawlScope");
   const bestTeammateKeys = new Set((brawlPlanetProfile?.bestTeammates ?? []).map((relation) => counterKey(relation.brawler)));
@@ -1232,7 +1238,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const activeWorstTeammates = allyRows
     .map((ally) => ally.brawler)
     .filter((ally) => worstTeammateKeys.has(counterKey(ally)));
-  const mapTeamSynergy = findBrawlPlanetMapTeam(row.brawler, allyRows.map((ally) => ally.brawler), context.mapTeams);
+  const mapTeamSynergy = soApi ? null : findBrawlPlanetMapTeam(row.brawler, allyRows.map((ally) => ally.brawler), context.mapTeams);
   // Quadro literal do mapa restrito às composições que incluem o candidato.
   const mapTeamBoard = getBrawlPlanetMapTeamsForBrawler(
     row.brawler,
@@ -1509,8 +1515,20 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     0,
   );
   const hasPublishedSynergyRate = activeSynergyRelations.some(relation => typeof relation.delta === "number" && Number.isFinite(relation.delta));
-  const effectiveSynergyRate = hasPublishedSynergyRate ? publishedSynergyRate : synergyBonusRate;
-  const synergyPoints = hasSynergy ? hybridPoints * effectiveSynergyRate : 0;
+  /**
+   * Em «Só API oficial», a sinergia é a das partidas: quanto o candidato ganha
+   * a mais ao lado de cada aliado já escolhido, neste mapa. Pode ser negativa —
+   * é a anti-sinergia, e aí tira pontos.
+   */
+  const sinergiasDaApi = soApi
+    ? allyRows.map((ally) => ({ aliado: ally.brawler, delta: sinergiaObservada(row.brawler, ally.brawler) }))
+      .filter((par): par is { aliado: string; delta: number } => par.delta !== null && par.delta !== 0)
+    : [];
+  const taxaDeSinergiaDaApi = sinergiasDaApi.reduce((soma, par) => soma + par.delta / 100, 0);
+  const effectiveSynergyRate = soApi ? taxaDeSinergiaDaApi : hasPublishedSynergyRate ? publishedSynergyRate : synergyBonusRate;
+  const synergyPoints = soApi
+    ? hybridPoints * taxaDeSinergiaDaApi
+    : hasSynergy ? hybridPoints * effectiveSynergyRate : 0;
   const mapTeamSynergyPoints = hasMapTeamSynergy ? hybridPoints * mapTeamSynergyRate : 0;
   const enemyCounterDeltaRate = 0;
   const enemyCounterPenaltyPoints = 0;
@@ -1537,13 +1555,13 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ? hybridPoints * ruleSettings.worstTeammatePenalty * activeWorstTeammates.length
     : 0;
 
-  const rawContextualBonusPoints = Math.max(0, counterPoints) + missingMidPoints + missingSidePoints + banPoints + openingLongRangePoints + synergyPoints + mapTeamSynergyPoints;
-  const rawContextualPenaltyPoints = Math.max(0, -counterPoints) + enemyCounterPenaltyPoints + repeatedEnemyCounterPressurePoints + topTwentyCounterPenaltyPoints + sameClassPenaltyPoints + worstTeammatePenaltyPoints;
+  const rawContextualBonusPoints = Math.max(0, counterPoints) + missingMidPoints + missingSidePoints + banPoints + openingLongRangePoints + Math.max(0, synergyPoints) + mapTeamSynergyPoints;
+  const rawContextualPenaltyPoints = Math.max(0, -counterPoints) + Math.max(0, -synergyPoints) + enemyCounterPenaltyPoints + repeatedEnemyCounterPressurePoints + topTwentyCounterPenaltyPoints + sameClassPenaltyPoints + worstTeammatePenaltyPoints;
 	// Sem tecto: o ajuste é a soma dos fatores ativos, tal como o cartão os lista.
 	const contextualAdjustment = rawContextualBonusPoints - rawContextualPenaltyPoints;
 	const draftScore = hybridPoints + contextualAdjustment;
 	const activeBonuses = includePresentation ? [
-    ...(counterPoints ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · delta BrawlScope${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
+    ...(counterPoints ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · ${soApi ? "partidas da API oficial neste mapa" : "delta BrawlScope"}${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
     ...(nonTop30CounterBonusTargets.length ? [`Counter fora do Top 30 · 0% (${row.brawler} não recebe bónus de Counter de Pick neste mapa)`] : []),
     ...(suppressedCounterTargets.length
       ? [`Resposta já coberta · bónus retirado (${fullyCoveredTargets.filter((coverage) => suppressedCounterTargets.includes(coverage.enemy)).map((coverage) => `${coverage.enemy} já respondido por ${coverage.allies.join(", ")}`).join(" · ")})`]
@@ -1555,7 +1573,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ...(nonTop25BannedCounters.length ? [`Counter banido sem bónus · 0% (${nonTop25BannedCounters.join(", ")} está fora do Top 25 do mapa)`] : []),
     ...(openingLongRangePoints ? [`Alcance ≥${openingRangeThreshold} blocos +${ruleSettings.openingLongRange * 100}% (pick ${context.pickNumber})`] : []),
     ...(mapTeamSynergyPoints && mapTeamSynergy ? [`Composição do mapa +${mapTeamSynergyRate * 100}% (pick ${synergyBonusPick} · ${mapTeamSynergy.brawlers.join(" · ")} · ${mapTeamSynergy.winRate.toFixed(1)}% WR)`] : []),
-    ...(synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${activeSynergyAllies.join(", ")})`] : []),
+    ...(soApi && synergyPoints ? [`${synergyPoints > 0 ? "Sinergia" : "Anti-sinergia"} ${synergyPoints > 0 ? "+" : ""}${Number((taxaDeSinergiaDaApi * 100).toFixed(2))}% (partidas da API oficial · ${sinergiasDaApi.map((par) => `${par.aliado} ${par.delta > 0 ? "+" : ""}${par.delta}`).join(", ")})`] : []),
+    ...(!soApi && synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${activeSynergyAllies.join(", ")})`] : []),
     ...(enemyCounterPenaltyPoints ? [`Desbônus Enemy Counter -${enemyCounterPenaltyPercent}% (${activeEnemyCounters.length} counter${activeEnemyCounters.length === 1 ? "" : "s"})`] : []),
     ...(repeatedEnemyCounterPressurePoints ? [`Pressão Enemy Counter -${repeatedEnemyCounterPressurePercent}% (${repeatedEnemyCounterPressures.map((pressure) => `${pressure.enemy}: ${pressure.counteredAllies.join(", ")}`).join(" · ")})`] : []),
     ...(topTwentyCounterPenaltyPoints ? [`Desbônus Counter no Top ${topCounterWindowSize} -${topTwentyCounterPenaltyPercent}% (${topTwentyCounters.length} counter${topTwentyCounters.length === 1 ? "" : "s"}: ${topTwentyCounters.join(", ")})`] : []),

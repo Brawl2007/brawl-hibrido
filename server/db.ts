@@ -1,5 +1,5 @@
 import { OWNER_LOGIN_OPEN_ID } from "@shared/ownerLogin";
-import { and, count, desc, eq, gte, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
+import { and, between, count, desc, eq, gte, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import {
@@ -24,6 +24,7 @@ import {
   rankedMapCaptures,
   InsertRankedMapCapture,
   observedBattles,
+  observedBattleRanks,
   observedMatchCollectionConfig,
   observedMatchCollectionRuns,
   observedMatchupAggregates,
@@ -913,7 +914,7 @@ export function somarParesDoLote(entradas: ReadonlyArray<{ deltas: readonly Obse
  * partidas novas contam para os agregados — repetir uma recolha não duplica.
  */
 export async function recordObservedBattlesBatch(
-  entradas: ReadonlyArray<{ battle: InsertObservedBattle; deltas: readonly ObservedMatchupDelta[] }>,
+  entradas: ReadonlyArray<{ battle: InsertObservedBattle; deltas: readonly ObservedMatchupDelta[]; rank?: { min: number; max: number; medio: number } | null }>,
 ) {
   const db = await getDb();
   if (!db || !entradas.length) return { battlesInserted: 0, pairObservations: 0 };
@@ -941,6 +942,20 @@ export async function recordObservedBattlesBatch(
       .onDuplicateKeyUpdate({ set: { fingerprint: sql`fingerprint` } });
   }
 
+  // O rank vai para a tabela dele; se falhar, a partida já está guardada na mesma.
+  const comRank = novas.filter((entrada) => entrada.rank);
+  for (let i = 0; i < comRank.length; i += 400) {
+    await db
+      .insert(observedBattleRanks)
+      .values(comRank.slice(i, i + 400).map((entrada) => ({
+        fingerprint: entrada.battle.fingerprint,
+        rankMin: entrada.rank!.min,
+        rankMax: entrada.rank!.max,
+        rankMedio: entrada.rank!.medio,
+      })))
+      .onDuplicateKeyUpdate({ set: { fingerprint: sql`fingerprint` } })
+      .catch((erro: unknown) => console.warn("[Partidas] Rank não gravado:", erro instanceof Error ? erro.message : erro));
+  }
   const pares = somarParesDoLote(novas);
   for (let i = 0; i < pares.length; i += 400) {
     await db
@@ -976,35 +991,45 @@ export async function recordObservedBattlesBatch(
  * O limite é uma rede de segurança para a função não rebentar com a memória;
  * se algum dia for atingido, a página diz quantas partidas contou.
  */
-export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode?: string; mapId?: string; limite?: number }) {
+export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode?: string; mapId?: string; rank?: { min: number; max: number }; limite?: number }) {
   const db = await getDb();
   if (!db) return [];
   const condicoes = [
     filtro.desde ? gte(observedBattles.battleTime, filtro.desde) : undefined,
     filtro.mode ? eq(observedBattles.mode, filtro.mode) : undefined,
     filtro.mapId ? eq(observedBattles.mapId, filtro.mapId) : undefined,
+    filtro.rank ? between(observedBattleRanks.rankMedio, filtro.rank.min, filtro.rank.max) : undefined,
   ].filter((condicao): condicao is NonNullable<typeof condicao> => Boolean(condicao));
-  return lerDaBase("listObservedBattlesParaResumo", () => db
-    .select({
-      mapId: observedBattles.mapId,
-      mode: observedBattles.mode,
-      winningTeam: observedBattles.winningTeam,
-      losingTeam: observedBattles.losingTeam,
-    })
-    .from(observedBattles)
+  const colunas = {
+    mapId: observedBattles.mapId,
+    mode: observedBattles.mode,
+    winningTeam: observedBattles.winningTeam,
+    losingTeam: observedBattles.losingTeam,
+  };
+  // Com filtro de rank, só entram as partidas que têm rank guardado.
+  const consulta = filtro.rank
+    ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
+    : db.select(colunas).from(observedBattles);
+  return lerDaBase("listObservedBattlesParaResumo", () => consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
     .orderBy(desc(observedBattles.battleTime))
     .limit(filtro.limite ?? 60_000), []);
 }
 
 /** Quantas partidas há por mapa e modo, para os filtros da página. */
-export async function listObservedMapsParaResumo(desde?: Date) {
+export async function listObservedMapsParaResumo(desde?: Date, rank?: { min: number; max: number }) {
   const db = await getDb();
   if (!db) return [];
-  return lerDaBase("listObservedMapsParaResumo", () => db
-    .select({ mapId: observedBattles.mapId, mode: observedBattles.mode, partidas: count() })
-    .from(observedBattles)
-    .where(desde ? gte(observedBattles.battleTime, desde) : undefined)
+  const condicoes = [
+    desde ? gte(observedBattles.battleTime, desde) : undefined,
+    rank ? between(observedBattleRanks.rankMedio, rank.min, rank.max) : undefined,
+  ].filter((condicao): condicao is NonNullable<typeof condicao> => Boolean(condicao));
+  const colunas = { mapId: observedBattles.mapId, mode: observedBattles.mode, partidas: count() };
+  const consulta = rank
+    ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
+    : db.select(colunas).from(observedBattles);
+  return lerDaBase("listObservedMapsParaResumo", () => consulta
+    .where(condicoes.length ? and(...condicoes) : undefined)
     .groupBy(observedBattles.mapId, observedBattles.mode), []);
 }
 

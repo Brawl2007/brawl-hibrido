@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { allRankedRows } from "@/data/rankedData";
 import { additionalBrawlerAssetIds } from "@/data/additionalRankedData";
 import { JOGOS_MINIMOS_FIAVEIS, taxaDeUso, taxaDeVitoria } from "@shared/partidasObservadas";
+import { RANKS_DO_FILTRO, type IdDoRank } from "@shared/ranksDoRanked";
 
 /**
  * A página «Partidas»: tudo o que o site sabe a partir dos jogos Ranked que
@@ -20,7 +21,7 @@ import { JOGOS_MINIMOS_FIAVEIS, taxaDeUso, taxaDeVitoria } from "@shared/partida
  */
 
 type Separador = "brawlers" | "confrontos" | "equipas" | "sinergias";
-type Ordem = "jogos" | "vitoria";
+type Ordem = "jogos" | "vitoria" | "derrota";
 type Dias = 0 | 1 | 7 | 30;
 
 const SEPARADORES: Array<{ id: Separador; label: string; icon: typeof Users }> = [
@@ -77,6 +78,8 @@ function Jogos({ jogos, vitorias }: { jogos: number; vitorias: number }) {
 function ordenar<T extends { jogos: number; vitorias: number }>(lista: readonly T[], ordem: Ordem) {
   const copia = [...lista];
   if (ordem === "vitoria") copia.sort((a, b) => (taxaDeVitoria(b) ?? 0) - (taxaDeVitoria(a) ?? 0) || b.jogos - a.jogos);
+  // Menos vitória primeiro: nas Sinergias são as anti-sinergias, no 1 contra 1 os piores confrontos.
+  else if (ordem === "derrota") copia.sort((a, b) => (taxaDeVitoria(a) ?? 0) - (taxaDeVitoria(b) ?? 0) || b.jogos - a.jogos);
   else copia.sort((a, b) => b.jogos - a.jogos || b.vitorias - a.vitorias);
   return copia;
 }
@@ -94,6 +97,7 @@ export default function Partidas() {
   const [dias, setDias] = useState<Dias>(30);
   const [mode, setMode] = useState<string>("");
   const [mapId, setMapId] = useState<string>("");
+  const [rank, setRank] = useState<IdDoRank | "">("");
   const [separador, setSeparador] = useState<Separador>("brawlers");
   const [ordem, setOrdem] = useState<Ordem>("jogos");
   const [procura, setProcura] = useState("");
@@ -102,7 +106,7 @@ export default function Partidas() {
   const [escolhido, setEscolhido] = useState<string>("");
 
   const consulta = trpc.observedMatches.partidas.useQuery(
-    { dias, mode: mode || undefined, mapId: mapId || undefined },
+    { dias, mode: mode || undefined, mapId: mapId || undefined, rank: rank || undefined },
     { staleTime: 120_000, placeholderData: (anterior) => anterior },
   );
   const dados = consulta.data;
@@ -149,6 +153,7 @@ export default function Partidas() {
           <div className="partidas-resumo">
             <span><Database size={14} aria-hidden="true" /> <b>{partidas.toLocaleString("pt-PT")}</b> partidas</span>
             <span>{nomeDoFiltro}</span>
+            {rank ? <span>Rank: {RANKS_DO_FILTRO.find((opcao) => opcao.id === rank)?.nome} · só partidas com rank guardado (desde a v157)</span> : null}
             {dados?.limiteAtingido ? <span className="is-aviso">Mostradas as {partidas.toLocaleString("pt-PT")} mais recentes</span> : null}
           </div>
         </header>
@@ -159,6 +164,15 @@ export default function Partidas() {
             {PERIODOS.map((periodo) => (
               <button key={periodo.dias} type="button" role="radio" aria-checked={dias === periodo.dias} className={dias === periodo.dias ? "is-active" : ""} onClick={() => mudar(setDias)(periodo.dias)}>
                 {periodo.label}
+              </button>
+            ))}
+          </div>
+          <div className="partidas-grupo" role="radiogroup" aria-label="Rank">
+            <span>Rank</span>
+            <button type="button" role="radio" aria-checked={rank === ""} className={rank === "" ? "is-active" : ""} onClick={() => mudar(setRank)("")}>Todos</button>
+            {RANKS_DO_FILTRO.map((opcao) => (
+              <button key={opcao.id} type="button" role="radio" aria-checked={rank === opcao.id} className={rank === opcao.id ? "is-active" : ""} onClick={() => mudar(setRank)(opcao.id)}>
+                {opcao.nome}
               </button>
             ))}
           </div>
@@ -195,6 +209,7 @@ export default function Partidas() {
             <span>Ordenar</span>
             <button type="button" role="radio" aria-checked={ordem === "jogos"} className={ordem === "jogos" ? "is-active" : ""} onClick={() => mudar(setOrdem)("jogos")}>Mais jogos</button>
             <button type="button" role="radio" aria-checked={ordem === "vitoria"} className={ordem === "vitoria" ? "is-active" : ""} onClick={() => mudar(setOrdem)("vitoria")}>Mais vitória</button>
+            <button type="button" role="radio" aria-checked={ordem === "derrota"} className={ordem === "derrota" ? "is-active" : ""} onClick={() => mudar(setOrdem)("derrota")}>Menos vitória</button>
           </div>
           <label className="partidas-check">
             <input type="checkbox" checked={soFiaveis} onChange={(evento) => mudar(setSoFiaveis)(evento.target.checked)} />
@@ -264,7 +279,10 @@ export default function Partidas() {
 
         {dados && partidas > 0 && separador === "sinergias" ? (
           <section className="partidas-lista" aria-label="Sinergias">
-            <p className="partidas-nota">Dois brawlers na mesma equipa: quantas vezes jogaram juntos e quanto ganharam.</p>
+            <p className="partidas-nota">
+              Dois brawlers na mesma equipa: quantas vezes jogaram juntos e quanto ganharam. Com «Menos vitória» vês as
+              <b> anti-sinergias</b> — pares que ganham pouco juntos e é melhor não pôr na mesma equipa.
+            </p>
             <div className="partidas-linha is-cabeca"><span>Par</span><span>Vitória</span><span /><span>Jogos</span></div>
             {sinergias.slice(0, mostradas).map((linha) => (
               <div key={`${linha.a}|${linha.b}`} className={`partidas-linha ${linha.jogos < JOGOS_MINIMOS_FIAVEIS ? "is-pequena" : ""}`}>
