@@ -429,7 +429,7 @@
 }
 
 /* v156 — página «Partidas»: tudo o que a recolha de partidas Ranked sabe. */
-.partidas-pagina { min-height: 100vh; background: var(--bh-ground); color: var(--bh-text); }
+.partidas-pagina { --cor-do-modo: var(--bh-gold); min-height: 100vh; background: var(--bh-ground); color: var(--bh-text); }
 .partidas-main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 96px; display: grid; gap: 16px; }
 .partidas-cabeca h1 { margin: 0 0 6px; font-size: clamp(30px, 5vw, 44px); line-height: 1; }
 .partidas-cabeca p { margin: 0; max-width: 680px; color: var(--bh-text-muted); font-size: 14px; line-height: 1.55; }
@@ -492,3 +492,70 @@
 .mesa-fonte-api-caixa { display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--bh-line-strong); border-radius: 4px; color: var(--bh-on-gold); font-size: 11px; line-height: 1; }
 .mesa-fonte-api.is-active .mesa-fonte-api-caixa { border-color: var(--bh-positive); background: var(--bh-positive); }
 .mesa-fonte-api-nota { color: var(--bh-text-muted); font-size: 12.5px; }
+
+/* v158 — período à escolha (24 h, 7, 14, 30 dias, tudo ou os dias que se escreverem). */
+.seletor-periodo-dias { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 7px; color: var(--bh-text-muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.seletor-periodo-dias.is-active { background: var(--bh-gold); color: var(--bh-on-gold); }
+.seletor-periodo-dias input { width: 48px; min-height: 26px; padding: 0 4px; border: 1px solid var(--bh-line); border-radius: 6px; background: var(--bh-surface-2); color: var(--bh-text); font-size: 13px; text-align: center; }
+.seletor-periodo-dias.is-active input { border-color: var(--bh-on-gold); }
+.mesa-fonte-api-periodo { flex: 1 1 100%; }
+@media (max-width: 640px) {
+  /* No telemóvel o período parte em duas linhas: numa só, o campo dos dias ficava cortado à direita. */
+  .seletor-periodo { flex-wrap: wrap; overflow: visible; row-gap: 2px; }
+}
+
+/* v158 — «Partidas» ao jeito do TopBrawl: tabela ao centro, mapas com imagem ao lado, por modo. */
+.partidas-main { max-width: 1280px; grid-template-columns: minmax(0, 1fr); }
+.partidas-corpo > * { min-width: 0; }
+.partidas-corpo { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; align-items: start; }
+.partidas-corpo > .partidas-mapas { order: 2; position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; scrollbar-width: thin; }
+.partidas-painel { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--bh-line); border-radius: 14px; background: var(--bh-surface); }
+.partidas-painel-cabeca h2 { margin: 0 0 4px; font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: clamp(20px, 2.4vw, 26px); line-height: 1.15; letter-spacing: .01em; }
+.partidas-painel-cabeca h2 em { font-style: normal; }
+.partidas-painel-cabeca h2 em.is-mapa { color: var(--bh-gold); }
+.partidas-painel-cabeca p { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; color: var(--bh-text-muted); font-size: 13.5px; }
+.partidas-painel-cabeca b { color: var(--bh-text); }
+.partidas-painel-cabeca .is-aviso { color: var(--bh-warning); }
+.partidas-painel .partidas-lista { gap: 0; }
+.partidas-painel .partidas-linha { min-height: 60px; border: 0; border-bottom: 1px solid var(--bh-line); border-radius: 0; background: transparent; padding: 8px 6px; grid-template-columns: minmax(0, 1fr) 96px 86px 130px; }
+.partidas-painel .partidas-linha:not(.is-cabeca):hover { background: var(--bh-surface-2); }
+.partidas-painel .partidas-linha.is-cabeca { min-height: 36px; padding: 0 6px; border-bottom: 1px solid var(--bh-line-strong); }
+.partidas-ordem { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--bh-text-dim); font: inherit; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.partidas-ordem.is-active { color: var(--bh-text); }
+.partidas-vitoria, .partidas-uso { font-size: 15px; }
+.partidas-cara.is-grande { flex-basis: 44px; width: 44px; height: 44px; border-radius: 10px; }
+.partidas-nome { font-size: 15px; }
+.partidas-modos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.partidas-modos button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--bh-line); border-radius: 999px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.partidas-modos button small { color: var(--bh-text-dim); font-weight: 700; }
+.partidas-modos button.is-active { border-color: var(--cor-do-modo, var(--bh-gold)); background: color-mix(in srgb, var(--cor-do-modo, var(--bh-gold)) 22%, transparent); color: var(--bh-text); }
+.partidas-mapa-todos { width: 100%; min-height: 40px; margin-bottom: 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 14px; font-weight: 800; cursor: pointer; }
+.partidas-mapa-todos.is-active { border-color: var(--bh-gold); color: var(--bh-text); box-shadow: inset 0 0 0 1px var(--bh-gold); }
+.partidas-grupo-de-mapas { margin-bottom: 14px; }
+.partidas-grupo-de-mapas h3 { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--bh-text); font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: 17px; letter-spacing: .04em; text-transform: uppercase; }
+.partidas-grupo-de-mapas h3::before { content: ""; width: 12px; height: 12px; border-radius: 4px; background: var(--cor-do-modo, var(--bh-gold)); box-shadow: 0 0 10px var(--cor-do-modo, var(--bh-gold)); }
+.partidas-grelha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.partidas-mapa { display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; padding: 0; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface-2); color: var(--bh-text); text-align: center; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+.partidas-mapa strong { padding: 6px 6px; border-bottom: 1px solid var(--bh-line); background: var(--bh-surface); font-family: "Lilita One", "Barlow Condensed", sans-serif; font-weight: 400; font-size: 14px; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.partidas-mapa-imagem { display: block; aspect-ratio: 3 / 4; background: linear-gradient(160deg, color-mix(in srgb, var(--cor-do-modo) 38%, var(--bh-ground)), var(--bh-ground) 75%); }
+.partidas-mapa-imagem img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.partidas-mapa small { padding: 4px; color: var(--bh-text-muted); font-size: 12px; font-weight: 700; }
+.partidas-mapa:hover { transform: translateY(-2px); border-color: var(--bh-line-strong); }
+.partidas-mapa.is-active { border-color: var(--cor-do-modo, var(--bh-gold)); box-shadow: 0 0 0 2px var(--cor-do-modo, var(--bh-gold)); }
+@media (max-width: 1000px) {
+  .partidas-corpo { grid-template-columns: minmax(0, 1fr); }
+  /* No telemóvel os mapas ficam por cima, numa faixa que desliza de lado. */
+  .partidas-corpo > .partidas-mapas { order: 0; position: static; max-height: none; overflow: visible; }
+  /* Todos os mapas numa só faixa; a risca de cima diz o modo. */
+  .partidas-grupos-de-mapas { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 2px 6px; }
+  .partidas-grupo-de-mapas, .partidas-grelha { display: contents; }
+  .partidas-grupo-de-mapas h3 { display: none; }
+  .partidas-mapa { flex: 0 0 112px; border-top: 3px solid var(--cor-do-modo); }
+}
+@media (max-width: 640px) {
+  .partidas-painel { padding: 10px; }
+  .partidas-painel .partidas-linha { grid-template-columns: minmax(0, 1fr) 58px 52px 80px; gap: 6px; padding: 8px 2px; }
+  .partidas-cara.is-grande { flex-basis: 34px; width: 34px; height: 34px; }
+  .partidas-nome, .partidas-vitoria, .partidas-uso { font-size: 13px; }
+  .partidas-ordem { font-size: 10.5px; letter-spacing: .02em; }
+}

@@ -1,6 +1,7 @@
 import { Retrato } from "@/components/Retrato";
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
+import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
 import { descreverFrescura, idadeEmPalavras, type LeituraPorFonte } from "@shared/idadeDosDados";
 import { LOGO, TEXTURA, ARENA, fundoCom } from "@/lib/imagens";
 import { idDoMapa, mapImageFor } from "@/lib/imagemDoMapa";
@@ -2851,9 +2852,10 @@ export default function Draft() {
               <span className="mesa-fonte-api-nota" role="status">
                 {fonteApi.aCarregar
                   ? "A ler as partidas…"
-                  : `${(fonteApi.dados?.partidas ?? 0).toLocaleString("pt-PT")} partidas deste mapa (${fonteApi.dias} dias)${(fonteApi.dados?.partidas ?? 0) < 100 ? " · ainda poucas: os números estão perto de 50%" : ""}`}
+                  : `${(fonteApi.dados?.partidas ?? 0).toLocaleString("pt-PT")} partidas deste mapa (${fonteApi.dias === 0 ? "desde sempre" : fonteApi.dias === 1 ? "últimas 24 h" : `últimos ${fonteApi.dias} dias`})${(fonteApi.dados?.partidas ?? 0) < 100 ? " · ainda poucas: os números estão perto de 50%" : ""}`}
               </span>
             ) : null}
+            {fonteApi.ligada ? <SeletorDePeriodo className="mesa-fonte-api-periodo" dias={fonteApi.dias} onChange={fonteApi.setDias} /> : null}
             <div className="mesa-escolha" role="group" aria-label="Quem escolhe primeiro">
               <span>Começa</span>
               <button type="button" className={initialTeam === "blue" ? "is-active blue" : "blue"} aria-pressed={initialTeam === "blue"} onClick={() => handleInitialTeamChange("blue")}>Azul</button>
