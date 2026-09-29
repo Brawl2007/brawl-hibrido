@@ -9,6 +9,7 @@ import {
   PRESETS_PL_PRODIGY,
   escalaDoPLProdigy,
   lerConfigDoMotor,
+  partesAtivasDoPL,
   pontuarComoMetaPick,
   pontuarComoPLProdigy,
   type ComponentesDoCandidato,
@@ -89,6 +90,28 @@ describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
     expect(depois[1].pontos).toBeGreaterThan(antes[2].pontos);
   });
 
+  it("v167 · as partes entram com o draft: no começo só a Vitória (23%) e o Uso (5%)", () => {
+    expect(partesAtivasDoPL({ inimigos: 0, aliados: 0, bans: 0 })).toEqual({ uso: true, vitoria: true, counter: false, encaixe: false, sinergia: false, ban: false });
+    expect(partesAtivasDoPL({ inimigos: 1, aliados: 0, bans: 0 })).toMatchObject({ counter: true, sinergia: false, encaixe: false, ban: false });
+    expect(partesAtivasDoPL({ inimigos: 0, aliados: 1, bans: 0 })).toMatchObject({ counter: false, sinergia: true, encaixe: true, ban: false });
+    expect(partesAtivasDoPL({ inimigos: 0, aliados: 0, bans: 1 })).toMatchObject({ counter: false, ban: true });
+    // Só a base: a média pesada de 23 × vitória e 5 × uso (sobre 28), e só essas duas partes.
+    const base = partesAtivasDoPL({ inimigos: 0, aliados: 0, bans: 0 });
+    const [melhor, meio, pior] = pontuarComoPLProdigy([
+      candidato("Melhor", { vitoria: 60, uso: 20, counters: [15], encaixe: 90, countersBanidos: 2 }),
+      candidato("Meio", { vitoria: 55, uso: 10 }),
+      candidato("Pior", { vitoria: 50, uso: 20 }),
+    ], PESOS_PL_PRODIGY, base);
+    expect(melhor.partes.map((p) => p.nome)).toEqual(["Uso", "Vitória"]);
+    expect(bruto(melhor)).toBeCloseTo(100, 6);
+    expect(bruto(meio)).toBeCloseTo((23 * 50 + 5 * 0) / 28, 6);
+    expect(bruto(pior)).toBeCloseTo((23 * 0 + 5 * 100) / 28, 6);
+    expect(melhor.pontos).toBeCloseTo(escalaDoPLProdigy(1), 6);
+    // O counter, o encaixe e o ban dele não contam enquanto não houver picks nem bans.
+    const [semMais] = pontuarComoPLProdigy([candidato("Melhor", { vitoria: 60, uso: 20 }), candidato("Meio", { vitoria: 55, uso: 10 }), candidato("Pior", { vitoria: 50, uso: 20 })], PESOS_PL_PRODIGY, base);
+    expect(semMais.pontos).toBeCloseTo(melhor.pontos, 6);
+  });
+
   it("presets: Masters+ (definições do site) e Diamante e abaixo (pedido que o site enviou)", () => {
     expect(PRESETS_PL_PRODIGY.mestre.pesos).toEqual(PESOS_PL_PRODIGY);
     expect(PRESETS_PL_PRODIGY.diamanteOuAbaixo.pesos).toEqual({ uso: 9, vitoria: 27, counter: 32, encaixe: 9, sinergia: 14, ban: 9 });
@@ -158,6 +181,15 @@ describe("o Draft com cada motor", () => {
     const hibrido = rankDraftEntries(linhas, bloqueados, "", "Todos", { ...contexto, motor: CONFIG_DO_MOTOR });
     expect(hibrido.map((e) => [e.row.brawler, e.finalPoints])).toEqual(sem.map((e) => [e.row.brawler, e.finalPoints]));
     expect(hibrido.every((e) => e.motor === undefined)).toBe(true);
+  });
+
+  it("v167 · no Draft, o PL começa só com a base e ganha partes com os picks e os bans", () => {
+    const pl = { ...CONFIG_DO_MOTOR, motor: "plprodigy" as const };
+    const nomesDasPartes = (ctx: Parameters<typeof rankDraftEntries>[4]) => new Set(rankDraftEntries(linhas, new Set(), "", "Todos", { ...ctx, motor: pl }).flatMap((e) => e.motor!.partes.map((p) => p.nome)));
+    expect(nomesDasPartes({ enemyRows: [], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 1, completedPickCount: 0 })).toEqual(new Set(["Uso", "Vitória"]));
+    expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 2, completedPickCount: 1 })).toEqual(new Set(["Uso", "Vitória", "Counter"]));
+    expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [linhas[7]], mapModeId: inimigo.modeId, pickNumber: 4, completedPickCount: 3, bannedNames: new Set([linhas[9].brawler]) }))
+      .toEqual(new Set(["Uso", "Vitória", "Counter", "Encaixe", "Sinergia", "Ban"]));
   });
 
   it.each(["plprodigy", "metapick"] as const)("%s reordena pelos pontos dele e diz de onde vieram", (motor) => {

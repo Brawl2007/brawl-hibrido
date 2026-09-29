@@ -22,7 +22,7 @@ export const NOMES_DOS_MOTORES: Record<MotorDoDraft, string> = {
 
 const MOTORES: Array<{ id: MotorDoDraft; resumo: string }> = [
   { id: "hibrido", resumo: "Score do mapa × (1 + bónus). O meta do mapa manda; counters e sinergias afinam a ordem." },
-  { id: "plprodigy", resumo: "Soma pesada de seis partes, cada uma de 0 a 100. O counter pesa mais do que a vitória." },
+  { id: "plprodigy", resumo: "Soma pesada de seis partes, cada uma de 0 a 100. No começo do draft só contam a Vitória e o Uso; o resto entra com os picks e os bans." },
   { id: "metapick", resumo: "Força no mapa + counter × 2,5 + sinergia × 1,2, ignorando o ruído e com os 5 melhores counters." },
 ];
 
@@ -91,6 +91,7 @@ export function PainelDoMotor({ config, onChange }: { config: ConfigDoMotor; onC
             })}
           </div>
           <p className="mesa-painel-nota">Soma dos pesos: <b>{somaDosPesos}%</b>{somaDosPesos !== 100 ? " — o Draft reparte-os na mesma proporção." : "."} Pontos de 0 a 100, na escala do PL.</p>
+          <p className="mesa-painel-nota">Como no PL, as partes entram com o draft: no começo só a <b>Vitória</b> e o <b>Uso</b> (a base); o <b>Counter</b> entra com o primeiro pick do adversário, a <b>Sinergia</b> e o <b>Encaixe</b> com o nosso primeiro pick, e o <b>Ban</b> com o primeiro ban. Os pontos são a média pesada só das partes que já contam.</p>
           <div className="motor-grelha">
             {BARRAS_PL.map((barra) => (
               <Barra key={barra.chave} id={`motor-pl-${barra.chave}`} nome={barra.nome} ajuda={barra.ajuda} valor={config.pl[barra.chave]} min={LIMITES_PL_PRODIGY.min} max={LIMITES_PL_PRODIGY.max} passo={LIMITES_PL_PRODIGY.passo} sufixo="%" onChange={(valor) => onChange({ ...config, pl: { ...config.pl, [barra.chave]: valor } })} />

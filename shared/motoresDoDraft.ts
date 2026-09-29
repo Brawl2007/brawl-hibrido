@@ -23,6 +23,14 @@
  * candidatos do mapa: Uso 5%, Vitória 23%, Counter 36%, Encaixe 12%,
  * Sinergia 12%, Ban 12% (preset Masters+; há o de Diamante e abaixo). A soma
  * pesada é o «rawScore» e os pontos passam pela escala do PL.
+ *
+ * As partes ENTRAM com o draft (ver `partesAtivasDoPL`): no começo só contam
+ * a Vitória e o Uso (a base, 23% e 5%); o Counter entra com o primeiro pick
+ * do adversário, a Sinergia e o Encaixe com o nosso primeiro pick, o Ban com
+ * o primeiro ban. O «rawScore» é a média pesada só das partes que já contam
+ * — no começo, (23 × vitória + 5 × uso) / 28. Bate com o que o PL mostra no
+ * começo (Quick Travel sem picks nem bans: Nita 78, rawScore ≈ 0,54; só com
+ * 28% por dividir por 100, ninguém passava dos 47).
  *   - Counter: soma do confronto contra cada pick inimigo.
  *   - Sinergia: soma da sinergia com cada aliado já escolhido.
  *   - Encaixe: a função dele no modo do mapa e na equipa (o «fit» do Draft).
@@ -111,7 +119,18 @@ function normalizar(valores: ReadonlyArray<number | null>) {
   });
 }
 
-export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato[], pesos: PesosPLProdigy = PESOS_PL_PRODIGY): PontuacaoDoMotor[] {
+export type PartesAtivasDoPL = Record<keyof PesosPLProdigy, boolean>;
+const TODAS_AS_PARTES: PartesAtivasDoPL = { uso: true, vitoria: true, counter: true, encaixe: true, sinergia: true, ban: true };
+
+/**
+ * Que partes do PL já contam neste momento do draft. A base (Vitória e Uso)
+ * conta sempre; as outras entram com os picks e os bans que as alimentam.
+ */
+export function partesAtivasDoPL(draft: { inimigos: number; aliados: number; bans: number }): PartesAtivasDoPL {
+  return { uso: true, vitoria: true, counter: draft.inimigos > 0, encaixe: draft.aliados > 0, sinergia: draft.aliados > 0, ban: draft.bans > 0 };
+}
+
+export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato[], pesos: PesosPLProdigy = PESOS_PL_PRODIGY, ativas: PartesAtivasDoPL = TODAS_AS_PARTES): PontuacaoDoMotor[] {
   // Mapas só com o Score publicado (sem vitória nem uso): o Score do mapa faz as vezes dos dois.
   const semVitoria = candidatos.every((c) => c.vitoria === null);
   const semUso = candidatos.every((c) => c.uso === null);
@@ -124,7 +143,8 @@ export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato
     ban: normalizar(candidatos.map((c) => c.countersBanidos)),
   };
   const nomes: Record<keyof PesosPLProdigy, string> = { uso: "Uso", vitoria: "Vitória", counter: "Counter", encaixe: "Encaixe", sinergia: "Sinergia", ban: "Ban" };
-  const chaves = Object.keys(nomes) as Array<keyof PesosPLProdigy>;
+  // Só as partes que já contam; a média pesada divide pelos pesos delas.
+  const chaves = (Object.keys(nomes) as Array<keyof PesosPLProdigy>).filter((chave) => ativas[chave]);
   const totalDosPesos = soma(chaves.map((chave) => Math.max(0, pesos[chave]))) || 1;
   return candidatos.map((candidato, i) => {
     const contribuicoes = chaves.map((chave) => ({ nome: nomes[chave], valor: (Math.max(0, pesos[chave]) * partes[chave][i]) / totalDosPesos }));
@@ -164,8 +184,8 @@ export function pontuarComoMetaPick(candidatos: readonly ComponentesDoCandidato[
   });
 }
 
-export function pontuarComMotor(candidatos: readonly ComponentesDoCandidato[], config: ConfigDoMotor) {
-  if (config.motor === "plprodigy") return pontuarComoPLProdigy(candidatos, config.pl);
+export function pontuarComMotor(candidatos: readonly ComponentesDoCandidato[], config: ConfigDoMotor, ativasDoPL?: PartesAtivasDoPL) {
+  if (config.motor === "plprodigy") return pontuarComoPLProdigy(candidatos, config.pl, ativasDoPL);
   if (config.motor === "metapick") return pontuarComoMetaPick(candidatos, config.meta);
   return null;
 }

@@ -1,5 +1,5 @@
 import { versaoDoMotor } from "./versaoDoMotor";
-import { confrontoEntre, pontuarComMotor, sinergiaEntre, type ComponentesDoCandidato, type ConfigDoMotor, type MotorDoDraft } from "./motoresDoDraft";
+import { confrontoEntre, partesAtivasDoPL, pontuarComMotor, sinergiaEntre, type ComponentesDoCandidato, type ConfigDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
 import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
@@ -1967,7 +1967,9 @@ function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], c
       .sort((a, b) => b - a)
       .slice(0, Math.min(3, picksQueFaltamAoAdversario)),
   }));
-  const pontuacoes = pontuarComMotor(componentes, config) ?? [];
+  // No PL, as partes entram com o draft: no começo só a base (Vitória e Uso).
+  const ativasDoPL = partesAtivasDoPL({ inimigos: inimigos.length, aliados: aliados.length, bans: Array.from(context.bannedNames ?? []).length });
+  const pontuacoes = pontuarComMotor(componentes, config, ativasDoPL) ?? [];
   return entries
     .map((entry, i) => ({
       ...entry,
