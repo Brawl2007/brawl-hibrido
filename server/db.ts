@@ -790,7 +790,7 @@ export async function ensureObservedMatchCollectionConfig() {
     cronExpression: "0 5 * * * *",
     enabled: 0,
     lastStatus: "idle",
-  });
+  }).onDuplicateKeyUpdate({ set: { id: 1 } });
   return lerDaBase("getObservedMatchCollectionConfig", async () => (await db
     .select()
     .from(observedMatchCollectionConfig)
@@ -816,6 +816,23 @@ export async function getObservedMatchCollectionConfigByTaskUid(taskUid: string)
     .from(observedMatchCollectionConfig)
     .where(eq(observedMatchCollectionConfig.scheduleCronTaskUid, taskUid))
     .limit(1))[0];
+}
+
+/** A atualização condicional é atómica, mesmo entre duas instâncias Vercel. */
+export async function reservarJanelaDasPartidas(inicioDaJanela: Date, agora: Date, presaAntesDe: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Sem base de dados para guardar a recolha de partidas.");
+  await ensureObservedMatchCollectionConfig();
+  const resultado = await db.update(observedMatchCollectionConfig).set({
+    lastStatus: "running", lastStartedAt: agora, lastError: null,
+  }).where(and(
+    eq(observedMatchCollectionConfig.id, 1),
+    or(isNull(observedMatchCollectionConfig.lastStartedAt), lt(observedMatchCollectionConfig.lastStartedAt, inicioDaJanela)),
+    or(sql`${observedMatchCollectionConfig.lastStatus} <> 'running'`,
+      isNull(observedMatchCollectionConfig.lastStartedAt), lte(observedMatchCollectionConfig.lastStartedAt, presaAntesDe)),
+  ));
+  const cabecalho = Array.isArray(resultado) ? resultado[0] : resultado;
+  return Number((cabecalho as { affectedRows?: number }).affectedRows ?? 0) === 1;
 }
 
 export async function updateObservedMatchCollectionConfig(patch: Partial<InsertObservedMatchCollectionConfig>) {

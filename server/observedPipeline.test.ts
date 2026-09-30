@@ -19,18 +19,18 @@ describe("recolha de batalhas Ranked reais", () => {
   const liveSync = readFileSync(resolve(process.cwd(), "server/liveSync.ts"), "utf8");
 
   it("corre no ciclo automático, não só numa tarefa agendada externa", () => {
-    expect(liveSync).toContain("collectObservedRankedMatches");
-    expect(liveSync).toMatch(/collectObservedRankedMatches\(trigger === "bootstrap" \? "bootstrap" : "scheduled"\)/);
+    expect(liveSync).toContain("recolherSeForAltura");
+    expect(liveSync).toMatch(/recolherSeForAltura\(trigger === "bootstrap" \? "bootstrap" : "scheduled"\)/);
   });
 
   it("é a última etapa do ciclo: pode faltar sem estragar o que já está no ecrã", () => {
     const posicaoCounters = liveSync.indexOf("syncCounterData");
-    const posicaoBatalhas = liveSync.indexOf("collectObservedRankedMatches(trigger");
+    const posicaoBatalhas = liveSync.indexOf("recolherSeForAltura(trigger");
     expect(posicaoBatalhas).toBeGreaterThan(posicaoCounters);
   });
 
   it("uma falha na recolha não derruba o ciclo", () => {
-    expect(liveSync).toMatch(/collectObservedRankedMatches[\s\S]*?catch \(error\)[\s\S]*?servidor continua ativo/);
+    expect(liveSync).toMatch(/recolherSeForAltura[\s\S]*?catch \(error\)[\s\S]*?servidor continua ativo/);
   });
 
   it("distingue 'sem chave' de 'sem jogos'", () => {

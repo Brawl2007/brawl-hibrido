@@ -2,7 +2,7 @@ import { startSyncJob } from "./syncJobs";
 import { RANKED_SYNC_JOB } from "./syncJobNames";
 import { restoreBrawlScopeMatchupMatrices, syncCounterData } from "./counterSync";
 import { syncRankedData } from "./rankedSync";
-import { collectObservedRankedMatches } from "./observedMatchCollection";
+import { recolherSeForAltura } from "./observedMatchCollection";
 import { isOfficialApiConfigured } from "./brawlStarsApi";
 import { garantirArranque } from "./arranque";
 
@@ -74,7 +74,7 @@ export function runLiveSyncCycle(trigger: "scheduled" | "bootstrap" = "scheduled
     let observadas: { ok: boolean; error?: string; battlesInserted?: number } = { ok: false, error: "não executado" };
     if (isOfficialApiConfigured()) {
       try {
-        observadas = await collectObservedRankedMatches(trigger === "bootstrap" ? "bootstrap" : "scheduled");
+        observadas = await recolherSeForAltura(trigger === "bootstrap" ? "bootstrap" : "scheduled");
         if (!observadas.ok) console.warn(`[LiveSync] Batalhas observadas não recolhidas: ${observadas.error}`);
       } catch (error) {
         observadas.error = error instanceof Error ? error.message : String(error);

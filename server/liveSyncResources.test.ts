@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 vi.mock("./counterSync", () => ({ restoreBrawlScopeMatchupMatrices: vi.fn(async () => ({ views: 7, pairs: 100 })), syncCounterData: vi.fn() }));
 vi.mock("./rankedSync", () => ({ syncRankedData: vi.fn() }));
-vi.mock("./observedMatchCollection", () => ({ collectObservedRankedMatches: vi.fn() }));
+vi.mock("./observedMatchCollection", () => ({ recolherSeForAltura: vi.fn() }));
 vi.mock("./brawlStarsApi", () => ({ isOfficialApiConfigured: vi.fn(() => false), setRuntimeApiKey: vi.fn() }));
 vi.mock("./ensureTables", () => ({ ensureTables: vi.fn(async () => {}) }));
 vi.mock("./appSettings", () => ({ ensureAppSettingsTable: vi.fn(async () => {}), getStoredApiKey: vi.fn(async () => ({ key: null })) }));

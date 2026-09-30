@@ -4,6 +4,7 @@ import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
 import { BotaoApiOficial } from "@/components/BotaoApiOficial";
 import { NOMES_DOS_MOTORES, PainelDoMotor } from "@/components/PainelDoMotor";
+import { EstadoDaRecolha } from "@/components/EstadoDaRecolha";
 import { DetalhesDoMotor } from "@/components/DetalhesDoMotor";
 import { useMotorDoDraft } from "@/hooks/useMotorDoDraft";
 import { RANKS_DO_FILTRO } from "@shared/ranksDoRanked";
@@ -896,6 +897,8 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
           )}
         </p>
       ) : null}
+
+      <EstadoDaRecolha cadencia={observedQuery.data?.cadencia} />
 
       {db && !db.reachable ? (
         <p className="source-health-db">
