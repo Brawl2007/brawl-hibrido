@@ -13,6 +13,7 @@ import { serveStatic } from "./static";
 import { handleCounterSyncScheduled, handleRankedSyncScheduled } from "../scheduled";
 import { handleCronSync } from "../cronSync";
 import { recolherSeForAltura } from "../observedMatchCollection";
+import { agendarRecolhaDePartidas } from "../recolhaPartidasHttp";
 import { handleObservedMatchCollectionScheduled } from "../observedMatchScheduled";
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
@@ -57,6 +58,8 @@ export function createApp() {
    * primeira abertura de quem apanhasse uma instância acabada de acordar.
    */
   app.use((req, _res, next) => {
+    // O arranque desta rota corre dentro do trabalho protegido por waitUntil.
+    if (req.path === "/api/partidas/agendar" && req.method === "GET") return next();
     if (!precisaDoArranque(req.path)) return next();
     void garantirArranque().finally(() => next());
   });
@@ -77,9 +80,9 @@ export function createApp() {
    * Recolha de partidas Ranked da API oficial, de 15 em 15 minutos.
    *
    * Na Vercel ninguém a chamava: só o servidor antigo, que ficava sempre de pé,
-   * a corria no ciclo dele. Quem a chama agora é o GitHub Actions
-   * (`.github/workflows/recolher-partidas.yml`), de 15 em 15 minutos, e o cron
-   * diário da Vercel como reserva.
+   * a corria no ciclo dele. GitHub Actions pede a recolha a cada 15 minutos,
+   * mas pode atrasar. Um agendador HTTP dedicado usa /api/partidas/agendar;
+   * o cron diário da Vercel continua a ser uma reserva.
    *
    * É público de propósito, para o GitHub Actions não precisar de segredos. O
    * que o protege é o intervalo mínimo entre recolhas (`podeRecolherAgora`):
@@ -89,11 +92,12 @@ export function createApp() {
     try {
       const resultado = await recolherSeForAltura("scheduled");
       res.setHeader("Cache-Control", "no-store");
-      res.status(200).json(resultado);
+      res.status(resultado.ok || "saltada" in resultado ? 200 : 503).json(resultado);
     } catch (erro) {
       res.status(500).json({ ok: false, error: erro instanceof Error ? erro.message : String(erro) });
     }
   });
+  app.get("/api/partidas/agendar", agendarRecolhaDePartidas);
   registarImagensDaBrawlify(app);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);

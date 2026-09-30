@@ -1,19 +1,19 @@
-# Recolha de partidas Ranked, de 15 em 15 minutos.
-#
-# A Vercel gratuita só deixa correr o cron uma vez por dia, e a recolha precisa
-# de ler os jogadores muitas vezes: a API mostra só as últimas 25 partidas de
-# cada um, e quem joga muito passa das 25 em poucas horas. Este workflow chama
-# o endereço público do site; o próprio site recusa pedidos a menos de 12
-# minutos do anterior, por isso não há segredos.
+# Reserva da recolha Ranked. GitHub pode atrasar ou descartar chamadas.
+# O agendador principal deve chamar /api/partidas/agendar nos minutos 00/15/30/45.
+# A base permite uma volta por janela, mesmo se as duas chamadas coincidirem.
 name: Recolher partidas Ranked
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "3,18,33,48 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: recolher-partidas-ranked
+  cancel-in-progress: false
 
 jobs:
   recolher:
@@ -22,6 +22,21 @@ jobs:
     steps:
       - name: Pedir a recolha ao site
         run: |
-          resposta=$(curl -sS --max-time 240 https://brawl-hibrido.vercel.app/api/partidas/recolher)
-          echo "$resposta"
-          echo "$resposta" | grep -q '"ok":true\|"saltada":true'
+          set -euo pipefail
+          ficheiro=$(mktemp)
+          trap 'rm -f "$ficheiro"' EXIT
+          curl --fail-with-body --silent --show-error --max-time 240 \
+            https://brawl-hibrido.vercel.app/api/partidas/recolher --output "$ficheiro"
+          jq -e 'type == "object"' "$ficheiro" > /dev/null
+          cat "$ficheiro"
+          if jq -e '.ok == true' "$ficheiro" > /dev/null; then
+            novas=$(jq -r '.battlesInserted' "$ficheiro")
+            echo "Recolha concluída: $novas partidas novas." >> "$GITHUB_STEP_SUMMARY"
+          elif jq -e '.saltada == true' "$ficheiro" > /dev/null; then
+            motivo=$(jq -r '.motivo' "$ficheiro")
+            echo "::warning::Recolha não executada: $motivo"
+            echo "Recolha não executada: $motivo" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::A recolha falhou."
+            exit 1
+          fi
