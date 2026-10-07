@@ -125,16 +125,17 @@ export type DraftRuleSettings = {
   lerAsDuasFichas: number;
   /**
    * Interruptor (0/1): a sinergia de equipa tripla — a «Composição do mapa», uma
-   * equipa de três publicada pelo Brawl Planet para o mapa. Desligada por
-   * omissão (v168): no Híbrido conta só a sinergia de dupla.
+   * equipa de três publicada pelo Brawl Planet para o mapa. Ligada por omissão,
+   * como antes da v168; desligada, no Híbrido conta só a sinergia de dupla.
+   * Com «API oficial» não há equipa tripla.
    */
   sinergiaDeEquipaTripla: number;
   /**
-   * Interruptor (0/1). Ligado (padrão): a sinergia de dupla só conta quando o
-   * par ganha MAIS do que o brawler sozinho — a percentagem publicada do par é
-   * positiva. Com «API oficial», é a vitória do par neste mapa contra a vitória
-   * dele sozinho neste mapa. Uma dupla sem número publicado, ou abaixo, não
-   * conta (nem tira: para tirar existe o Worst Teammate).
+   * Interruptor (0/1), desligado por omissão (como antes da v168). Ligado, a
+   * sinergia de dupla das fontes só conta quando o par ganha MAIS do que o
+   * brawler sozinho — a percentagem publicada do par é positiva. Uma dupla sem
+   * número publicado, ou abaixo, não conta (nem tira: para tirar existe o
+   * Worst Teammate). Com «API oficial» valem as regras da API.
    */
   sinergiaSoAcimaDaVitoria: number;
   /**
@@ -142,7 +143,8 @@ export type DraftRuleSettings = {
    * É a mesma percentagem que os duelos mostram (50% + a diferença publicada).
    * Vale para os dois lados: o bónus só com 55% ou mais a favor, e o desbónus
    * de counter (e a pressão por aliado) só quando o adversário tem 55% ou mais
-   * contra. Em 50%, qualquer diferença conta (como era antes da v168).
+   * contra. Em 50% (o padrão), qualquer diferença conta, como antes da v168.
+   * Só para as fontes: com «API oficial» vale `apiCounterMinimo`.
    */
   counterMinimo: number;
   /** Interruptores (0/1) para desligar desbónus inteiros, sem perder a percentagem guardada. */
@@ -221,9 +223,11 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   worstTeammatePenalty: 0.03,
   coveredCounterSuppression: 0,
   lerAsDuasFichas: 1,
-  sinergiaDeEquipaTripla: 0,
-  sinergiaSoAcimaDaVitoria: 1,
-  counterMinimo: 0.55,
+  // Com as fontes, o Draft de antes da v168; as regras da v168 ficam como opção
+  // e o que a v168 queria vive nas regras da API (`defaultDraftApiRuleSettings`).
+  sinergiaDeEquipaTripla: 1,
+  sinergiaSoAcimaDaVitoria: 0,
+  counterMinimo: 0.5,
   desbonusMesmaClasse: 1,
   desbonusWorstTeammate: 1,
   desbonusPressaoPorAliado: 1,

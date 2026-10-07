@@ -129,17 +129,18 @@ describe("leitura da sinergia literal BrawlScope", () => {
 const REGRAS_ANTES_DA_V168 = { sinergiaDeEquipaTripla: 1, sinergiaSoAcimaDaVitoria: 0, counterMinimo: 0.5 };
 
 describe("bónus de sinergia BrawlScope no Draft", () => {
-  it("v168 · a dupla só conta quando o par ganha mais do que ele sozinho (percentagem publicada positiva)", () => {
+  it("v168 (opção) · a dupla só conta quando o par ganha mais do que ele sozinho (percentagem publicada positiva)", () => {
+    const SO_ACIMA = { sinergiaSoAcimaDaVitoria: 1 };
     setBrawlScopeReading("overall");
     for (const [delta, conta] of [[4.4, true], [0, false], [-3.2, false]] as const) {
       setCounterSyncSnapshot(snapshot({ synergies: [{ owner: "Nori", teammate: "Gus", delta, rank: 1, source: "brawlscope", sourceUrl: noriUrl }] }));
-      const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+      const signal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], ruleSettings: SO_ACIMA });
       expect(signal.scoreBreakdown.synergyPoints > 0).toBe(conta);
       if (!conta) expect(signal.scoreBreakdown.synergyPoints).toBe(0);
     }
     // Sem percentagem publicada não se sabe se o par ganha mais: não conta.
     setCounterSyncSnapshot(snapshot());
-    const semNumero = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+    const semNumero = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus], ruleSettings: SO_ACIMA });
     expect(semNumero.scoreBreakdown.synergyPoints).toBe(0);
     expect(semNumero.bonusSources.synergyAllies).toEqual([]);
   });

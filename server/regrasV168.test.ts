@@ -10,13 +10,16 @@ import { allRankedRows } from "../client/src/data/rankedData";
 import { defaultDraftRulePreference } from "../client/src/lib/draftRules";
 
 /*
- * v168 — no Draft Híbrido:
- *  - a sinergia de equipa tripla vem desligada;
+ * v168 — no Draft Híbrido, como OPÇÕES (desde a v169, com as fontes, o Draft
+ * volta por omissão ao de antes da v168; o que a v168 queria passou para as
+ * regras da API, ver `draftApi.test.ts`):
+ *  - desligar a sinergia de equipa tripla;
  *  - a dupla só conta quando o par ganha mais do que o brawler sozinho;
  *  - um counter (e o desbónus de counter, e a pressão por aliado) só conta a
  *    partir de 55% no confronto — a mesma percentagem que os duelos mostram;
  *  - Mesma classe, Worst Teammate e Pressão por aliado desligam-se nas regras.
  */
+const A_55 = { counterMinimo: 0.55 };
 
 afterEach(() => {
   setCounterSyncSnapshot(undefined, { allowOfflineFallback: true });
@@ -36,22 +39,27 @@ function acharPar(passa: (delta: number) => boolean) {
   throw new Error("sem par nos dados");
 }
 
-describe("v168 · as regras por omissão", () => {
-  it("tripla desligada, dupla só acima, counter mínimo 55%, e os três desbónus ligados", () => {
-    expect(defaultDraftRuleSettings).toMatchObject({ sinergiaDeEquipaTripla: 0, sinergiaSoAcimaDaVitoria: 1, counterMinimo: 0.55, desbonusMesmaClasse: 1, desbonusWorstTeammate: 1, desbonusPressaoPorAliado: 1 });
-    // No painel, em percentagem: 55% e os interruptores a 0/100.
-    expect(defaultDraftRulePreference).toMatchObject({ counterMinimo: 55, sinergiaDeEquipaTripla: 0, sinergiaSoAcimaDaVitoria: 100, desbonusMesmaClasse: 100 });
-    // Uma preferência gravada antes da v168 (sem as chaves novas) recebe os valores novos.
-    expect(normalizeDraftRuleSettings({ sameClassPenalty: 0.03 })).toMatchObject({ counterMinimo: 0.55, sinergiaDeEquipaTripla: 0 });
+describe("v169 · com as fontes, as regras por omissão são as de antes da v168", () => {
+  it("tripla ligada, dupla como sempre, counter com qualquer diferença, e os três desbónus ligados", () => {
+    expect(defaultDraftRuleSettings).toMatchObject({ sinergiaDeEquipaTripla: 1, sinergiaSoAcimaDaVitoria: 0, counterMinimo: 0.5, desbonusMesmaClasse: 1, desbonusWorstTeammate: 1, desbonusPressaoPorAliado: 1 });
+    // No painel, em percentagem: 50% e os interruptores a 0/100.
+    expect(defaultDraftRulePreference).toMatchObject({ counterMinimo: 50, sinergiaDeEquipaTripla: 100, sinergiaSoAcimaDaVitoria: 0, desbonusMesmaClasse: 100 });
+    // Uma preferência gravada antes da v168 (sem as chaves novas) fica como era.
+    expect(normalizeDraftRuleSettings({ sameClassPenalty: 0.03 })).toMatchObject({ counterMinimo: 0.5, sinergiaDeEquipaTripla: 1, sinergiaSoAcimaDaVitoria: 0 });
+  });
+
+  it("um counter fraco (abaixo de 55%) volta a contar por omissão", () => {
+    const fraco = acharPar((d) => d > 0.5 && d < 4.5);
+    expect(calculateDraftSignal(linha(fraco.a), { enemyRows: [linha(fraco.b)], pickNumber: 2 }).scoreBreakdown.counterPoints).toBeGreaterThan(0);
   });
 });
 
-describe("v168 · counter só a partir de 55% (a percentagem do duelo: 50% + a diferença)", () => {
+describe("v168 · opção: counter só a partir de 55% (a percentagem do duelo: 50% + a diferença)", () => {
   it("a favor: 55% ou mais conta; abaixo de 55% não conta", () => {
     const forte = acharPar((d) => d >= 5.5);
     const fraco = acharPar((d) => d > 0.5 && d < 4.5);
-    const comForte = calculateDraftSignal(linha(forte.a), { enemyRows: [linha(forte.b)], pickNumber: 2 });
-    const comFraco = calculateDraftSignal(linha(fraco.a), { enemyRows: [linha(fraco.b)], pickNumber: 2 });
+    const comForte = calculateDraftSignal(linha(forte.a), { enemyRows: [linha(forte.b)], pickNumber: 2, ruleSettings: A_55 });
+    const comFraco = calculateDraftSignal(linha(fraco.a), { enemyRows: [linha(fraco.b)], pickNumber: 2, ruleSettings: A_55 });
     expect(comForte.scoreBreakdown.counterPoints).toBeGreaterThan(0);
     expect(comFraco.scoreBreakdown.counterPoints).toBe(0);
     // Com o limiar em 50% (a regra de antes), o fraco volta a contar.
@@ -62,8 +70,9 @@ describe("v168 · counter só a partir de 55% (a percentagem do duelo: 50% + a d
   it("contra: o desbónus de counter só quando o adversário tem 55% ou mais", () => {
     const perde = acharPar((d) => d <= -5.5);
     const quase = acharPar((d) => d < -0.5 && d > -4.5);
-    expect(calculateDraftSignal(linha(perde.a), { enemyRows: [linha(perde.b)], pickNumber: 2 }).scoreBreakdown.counterPoints).toBeLessThan(0);
-    expect(calculateDraftSignal(linha(quase.a), { enemyRows: [linha(quase.b)], pickNumber: 2 }).scoreBreakdown.counterPoints).toBe(0);
+    expect(calculateDraftSignal(linha(perde.a), { enemyRows: [linha(perde.b)], pickNumber: 2, ruleSettings: A_55 }).scoreBreakdown.counterPoints).toBeLessThan(0);
+    expect(calculateDraftSignal(linha(quase.a), { enemyRows: [linha(quase.b)], pickNumber: 2, ruleSettings: A_55 }).scoreBreakdown.counterPoints).toBe(0);
+    expect(calculateDraftSignal(linha(quase.a), { enemyRows: [linha(quase.b)], pickNumber: 2 }).scoreBreakdown.counterPoints).toBeLessThan(0);
   });
 
   it("o limiar é configurável: logo acima da diferença do par deixa de contar, logo abaixo conta", () => {

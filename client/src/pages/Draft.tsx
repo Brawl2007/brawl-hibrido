@@ -1913,24 +1913,24 @@ type DraftRuleField = {
 const draftRuleSections: Array<{ title: string; description: string; fields: DraftRuleField[] }> = [
   {
     title: "Sinergia e counters",
-    description: "O que conta como sinergia e como counter no Híbrido.",
+    description: "Com as fontes (BrawlScope, PL, Brawl Planet). Por omissão, como antes da v168; com «API oficial» valem as Regras da API.",
     fields: [
       {
         key: "sinergiaSoAcimaDaVitoria",
         toggle: true,
         label: "Dupla só acima da vitória dele",
-        helper: "Ligado (padrão): a sinergia de dupla só conta quando o par ganha mais do que o brawler sozinho — a percentagem publicada do par é positiva. Com «API oficial», é a vitória do par neste mapa contra a vitória dele sozinho neste mapa. Um par abaixo, ou sem número publicado, não conta.",
+        helper: "Desligado (padrão): a dupla conta como sempre contou. Ligado: só conta quando o par ganha mais do que o brawler sozinho — a percentagem publicada do par é positiva. Um par abaixo, ou sem número publicado, não conta.",
       },
       {
         key: "sinergiaDeEquipaTripla",
         toggle: true,
         label: "Sinergia de equipa tripla",
-        helper: "A «Composição do mapa»: uma equipa de três publicada pelo Brawl Planet para este mapa. Desligada por omissão — no Híbrido conta só a dupla.",
+        helper: "A «Composição do mapa»: uma equipa de três publicada pelo Brawl Planet para este mapa. Ligada por omissão; desligada, conta só a dupla.",
       },
       {
         key: "counterMinimo",
         label: "Counter mínimo",
-        helper: "O confronto só conta a partir desta percentagem, a mesma que os duelos mostram (50% + a diferença publicada). O bónus de counter só com 55% ou mais a favor; o desbónus de counter e a pressão por aliado só quando o adversário tem 55% ou mais contra. Em 50%, qualquer diferença conta.",
+        helper: "O confronto só conta a partir desta percentagem, a mesma que os duelos mostram (50% + a diferença publicada). Em 50% (padrão), qualquer diferença conta. Em 55%, o bónus só com 55% ou mais a favor, e o desbónus e a pressão por aliado só quando o adversário tem 55% ou mais contra.",
       },
     ],
   },
@@ -1992,7 +1992,7 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
         inactive: "O confronto desfavorável já desconta pontos pelo delta publicado, com sinal negativo. Somar aqui outra penalização contava o mesmo matchup duas vezes — usa o ajuste do Counter por Pick para lhe dar mais ou menos peso.",
       },
       { key: "desbonusPressaoPorAliado", toggle: true, label: "Pressão por aliado ligada", helper: "Desliga o desbónus de Pressão por aliado sem perder a percentagem guardada ao lado." },
-      { key: "repeatedEnemyCounterPressure", label: "Pressão por aliado", helper: "Quando um inimigo já escolhido countera um aliado teu além do candidato (com 55% ou mais contra cada um — ver «Counter mínimo»)." },
+      { key: "repeatedEnemyCounterPressure", label: "Pressão por aliado", helper: "Quando um inimigo já escolhido countera um aliado teu além do candidato (a partir do «Counter mínimo» contra cada um)." },
       {
         key: "topCounterPenalty",
         label: "Counter no Top",

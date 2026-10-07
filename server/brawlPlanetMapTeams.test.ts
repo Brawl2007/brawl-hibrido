@@ -46,9 +46,10 @@ describe("sinergia Brawl Planet por mapa", () => {
     expect(findBrawlPlanetMapTeam("Gus", ["Spike"], pitStopTeams)).toBeNull();
   });
 
-  it("v168 · por omissão a equipa tripla não conta no Híbrido", () => {
-    const signal = calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams });
-    expect(defaultDraftRuleSettings.sinergiaDeEquipaTripla).toBe(0);
+  it("v169 · por omissão a equipa tripla conta, como antes da v168; desligada, não conta", () => {
+    expect(defaultDraftRuleSettings.sinergiaDeEquipaTripla).toBe(1);
+    expect(calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams }).scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
+    const signal = calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams, ruleSettings: { sinergiaDeEquipaTripla: 0 } });
     expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBe(0);
     expect(signal.reasons.join(" ")).not.toContain("Composição do mapa");
   });
