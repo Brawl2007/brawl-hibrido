@@ -220,6 +220,13 @@ function diferencaEncolhida(contagem: ContagemObservada | undefined, habitual: n
   return Math.round((encolhida - habitual) * 10000) / 100;
 }
 
+/** A vitória de um brawler neste mapa, nas partidas da API (0–100); null sem API ligada ou sem jogos dele. */
+export function vitoriaObservadaNoMapa(brawler: string) {
+  if (!fonteObservada) return null;
+  const vitoria = fonteObservada.vitoriaNoMapa.get(key(brawler));
+  return typeof vitoria === "number" ? vitoria * 100 : null;
+}
+
 /** Pontos percentuais que `owner` ganha a mais contra `foe` neste mapa; null sem jogos. */
 export function confrontoObservado(owner: string, foe: string) {
   if (!fonteObservada) return null;

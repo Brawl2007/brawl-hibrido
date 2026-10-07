@@ -1,7 +1,7 @@
 import { versaoDoMotor } from "./versaoDoMotor";
 import { confrontoEntre, partesAtivasDoPL, pontuarComMotor, sinergiaEntre, type ComponentesDoCandidato, type ConfigDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
-import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada } from "./counterMatchupValue";
+import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
 export type DraftTeam = "blue" | "red";
 import { getMainAttackRange } from "./brawlerAttackRanges";
@@ -12,6 +12,7 @@ import {
   getResolvedCounterDirection,
   isExcludedCounterDirection,
   type CounterSourceName,
+  type SourcedCounterRelation,
 } from "./counterSourceRelations";
 import { brawlScopeCounterData } from "./brawlScopeCounterData";
 import { brawlScopeMatchupDeltas } from "./brawlScopeMatchupDeltas.generated";
@@ -617,6 +618,12 @@ export type DraftSignal = {
     sameClassPenalties?: string[];
     sameClassClass?: string;
     worstTeammatePenalties?: string[];
+    /** v169: cada confronto com a percentagem do ecrã e se conta (bónus, desbónus ou não conta). */
+    confrontosAvaliados?: Array<{ inimigo: string; delta: number; percentagem: number; conta: AvaliacaoDoConfronto }>;
+    /** v169: cada dupla com o valor (pp acima/abaixo dele) e se conta. */
+    duplasAvaliadas?: Array<{ aliado: string; delta: number | null; fonte: CounterSourceName | "API" | null; conta: boolean }>;
+    /** O mínimo em vigor, em % (55 por omissão). */
+    minimoDoCounterPct?: number;
   };
 };
 
@@ -1207,6 +1214,36 @@ function getDraftUsageRate(row: DraftRow) {
   return sources.length ? sources.reduce((sum, value) => sum + value, 0) / sources.length : null;
 }
 
+/**
+ * A percentagem de um confronto, como o site a mostra.
+ *
+ * Com «API oficial»: a vitória real de `a` contra `b` neste mapa (a vitória
+ * dele no mapa mais a diferença medida contra este adversário) — o mesmo
+ * número da página «Partidas» e da Matriz. Com as fontes: 50% + a diferença
+ * publicada, que é o número dos duelos (as fontes medem a diferença contra a
+ * média de cada um, não publicam a vitória do par).
+ */
+export function percentagemDoConfronto(a: string, b: string, modeId?: string) {
+  const delta = getMatchupValue(a, b, modeId).total;
+  const base = fonteObservadaAtiva() ? vitoriaObservadaNoMapa(a) ?? 50 : 50;
+  return { delta, percentagem: Math.round((base + delta) * 10) / 10 };
+}
+
+export type AvaliacaoDoConfronto = "bonus" | "desbonus" | "nao";
+/**
+ * v168: um confronto só conta a partir do mínimo (55%). O bónus precisa de
+ * 55% ou mais a favor E de uma diferença positiva; o desbónus, de o adversário
+ * ter 55% ou mais contra (45% ou menos para nós) E de uma diferença negativa.
+ * Com o mínimo em 50%, qualquer diferença conta — a regra de antes.
+ */
+export function avaliarConfronto(delta: number, percentagem: number, minimoPct: number): AvaliacaoDoConfronto {
+  if (!delta) return "nao";
+  if (minimoPct <= 50) return delta > 0 ? "bonus" : "desbonus";
+  if (delta > 0 && percentagem >= minimoPct - 1e-9) return "bonus";
+  if (delta < 0 && percentagem <= 100 - minimoPct + 1e-9) return "desbonus";
+  return "nao";
+}
+
 export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftRankingContext<T> = {}, includePresentation = true): DraftSignal {
   const winRate = numeric(row.brawlPlanetWinRate) ?? numeric(row.topBrawlWinRate) ?? numeric(row.winRate) ?? 50;
   const mapScore = numeric(row.score);
@@ -1259,14 +1296,6 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   // Uma única fatia de bónus de sinergia por candidato, atribuída à fonte mais
   // prioritária que publicou o aliado já escolhido: BrawlScope antes de Brawl
   // Planet, a mesma ordem usada na resolução de counters.
-  const synergySource: CounterSourceName | null = activeBrawlScopeSynergyAllies.length
-    ? "BrawlScope"
-    : activeBestTeammates.length
-      ? "Brawl Planet"
-      : null;
-  const activeSynergyAllies = synergySource === "BrawlScope" ? activeBrawlScopeSynergyAllies : activeBestTeammates;
-  // Relações literais correspondentes aos aliados ativos, para ler a percentagem
-  // publicada pela fonte que sustenta o bónus.
   /**
    * v168: a dupla só conta quando o par ganha mais do que o brawler sozinho —
    * a percentagem publicada do par (vitória do par menos a dele) é positiva.
@@ -1274,6 +1303,21 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
    */
   const sinergiaSoAcima = ruleSettings.sinergiaSoAcimaDaVitoria >= 0.5;
   const parAcimaDaVitoria = (relation: { delta?: number }) => typeof relation.delta === "number" && Number.isFinite(relation.delta) && relation.delta > 0;
+  const aliadoNaLista = (lista: readonly SourcedCounterRelation[]) => lista.filter((relation) => allyRows.some((ally) => counterKey(ally.brawler) === counterKey(relation.brawler)));
+  // Com a regra ligada, a fonte é a que tem uma dupla que CONTA: uma dupla abaixo
+  // no BrawlScope já não esconde uma dupla acima no Brawl Planet.
+  const brawlScopeConta = aliadoNaLista(brawlScopeSynergyTeammates).some(parAcimaDaVitoria);
+  const planetConta = aliadoNaLista(brawlPlanetProfile?.bestTeammates ?? []).some(parAcimaDaVitoria);
+  const synergySource: CounterSourceName | null = sinergiaSoAcima && (brawlScopeConta || planetConta)
+    ? (brawlScopeConta ? "BrawlScope" : "Brawl Planet")
+    : activeBrawlScopeSynergyAllies.length
+      ? "BrawlScope"
+      : activeBestTeammates.length
+        ? "Brawl Planet"
+        : null;
+  const activeSynergyAllies = synergySource === "BrawlScope" ? activeBrawlScopeSynergyAllies : activeBestTeammates;
+  // Relações literais correspondentes aos aliados ativos, para ler a percentagem
+  // publicada pela fonte que sustenta o bónus.
   const activeSynergyRelations = (synergySource === "BrawlScope" ? brawlScopeSynergyTeammates : brawlPlanetProfile?.bestTeammates ?? [])
     .filter((relation) => activeSynergyAllies.some((ally) => counterKey(ally) === counterKey(relation.brawler)))
     .filter((relation) => !sinergiaSoAcima || parAcimaDaVitoria(relation));
@@ -1407,10 +1451,11 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       .filter((enemy) => getDraftCounterDirection(row.brawler, enemy, context.reciprocalCounterScores, context.mapModeId) === "counteredBy")
     : [];
   // v168: a pressão por aliado também só conta com o adversário a 55% ou mais contra (ver `counterMinimo`).
-  const limiarDaPressao = Math.max(0, ruleSettings.counterMinimo * 100 - 50);
-  const counteradoPor = (quem: string, inimigo: string) => limiarDaPressao <= 0
-    ? getDraftCounterDirection(quem, inimigo, context.reciprocalCounterScores, context.mapModeId) === "counteredBy"
-    : getMatchupValue(quem, inimigo, context.mapModeId).total <= -limiarDaPressao + 1e-9;
+  const counteradoPor = (quem: string, inimigo: string) => {
+    if (ruleSettings.counterMinimo * 100 <= 50) return getDraftCounterDirection(quem, inimigo, context.reciprocalCounterScores, context.mapModeId) === "counteredBy";
+    const { delta, percentagem } = percentagemDoConfronto(quem, inimigo, context.mapModeId);
+    return avaliarConfronto(delta, percentagem, ruleSettings.counterMinimo * 100) === "desbonus";
+  };
   const repeatedEnemyCounterPressures = isAlreadyChosen
     ? []
     : enemyRows
@@ -1488,13 +1533,17 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
    * o bónus só com 55% ou mais; contra, o desbónus só quando o adversário tem
    * 55% ou mais (o duelo em 45% ou menos). Entre os dois, não conta.
    */
-  const limiarDoCounter = Math.max(0, ruleSettings.counterMinimo * 100 - 50);
-  const confrontoConta = (delta: number) => delta !== 0 && Math.abs(delta) >= limiarDoCounter - 1e-9;
-  const enemyDeltaPairs = !isAlreadyChosen
-    ? enemyRows
-      .map((enemy) => ({ enemy: enemy.brawler, delta: getMatchupValue(row.brawler, enemy.brawler, context.mapModeId).total }))
-      .filter((par) => confrontoConta(par.delta))
+  const minimoDoCounterPct = ruleSettings.counterMinimo * 100;
+  // Cada confronto com a percentagem que o ecrã mostra e se conta — o que a dica do cartão lista.
+  const confrontosAvaliados = !isAlreadyChosen
+    ? enemyRows.map((enemy) => {
+      const { delta, percentagem } = percentagemDoConfronto(row.brawler, enemy.brawler, context.mapModeId);
+      return { inimigo: enemy.brawler, delta, percentagem, conta: avaliarConfronto(delta, percentagem, minimoDoCounterPct) };
+    })
     : [];
+  const enemyDeltaPairs = confrontosAvaliados
+    .filter((confronto) => confronto.conta !== "nao")
+    .map((confronto) => ({ enemy: confronto.inimigo, delta: confronto.delta }));
   /**
    * A regra opcional "resposta já coberta".
    *
@@ -1557,6 +1606,20 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       .filter((par) => !sinergiaSoAcima || par.delta > 0)
     : [];
   const taxaDeSinergiaDaApi = sinergiasDaApi.reduce((soma, par) => soma + par.delta / 100, 0);
+  // Cada dupla com o valor e se conta — o que a dica do cartão lista.
+  const duplasAvaliadas = allyRows.map((ally) => {
+    if (soApi) {
+      const delta = sinergiaObservada(row.brawler, ally.brawler);
+      return { aliado: ally.brawler, delta, fonte: "API" as const, conta: sinergiasDaApi.some((par) => par.aliado === ally.brawler) };
+    }
+    const relacao = [...brawlScopeSynergyTeammates, ...(brawlPlanetProfile?.bestTeammates ?? [])].find((relation) => counterKey(relation.brawler) === counterKey(ally.brawler));
+    return {
+      aliado: ally.brawler,
+      delta: typeof relacao?.delta === "number" ? relacao.delta : null,
+      fonte: relacao?.source ?? null,
+      conta: hasSynergy && aliadosDaSinergia.some((nome) => counterKey(nome) === counterKey(ally.brawler)),
+    };
+  });
   const effectiveSynergyRate = soApi ? taxaDeSinergiaDaApi : hasPublishedSynergyRate ? publishedSynergyRate : synergyBonusRate;
   const synergyPoints = soApi
     ? hybridPoints * taxaDeSinergiaDaApi
@@ -1789,6 +1852,9 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       repeatedEnemyCounterPressures,
       topTwentyCounters,
       sameClassPenalties: sameClassTriggerAllies,
+      confrontosAvaliados,
+      duplasAvaliadas,
+      minimoDoCounterPct,
       sameClassClass: candidateClass,
       worstTeammatePenalties: activeWorstTeammates,
     },

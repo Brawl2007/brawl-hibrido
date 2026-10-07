@@ -775,3 +775,20 @@
   .qg-simulacao { top: 6px; left: 6px; right: 6px; }
   .qg-simulacao-botoes progress { width: 70px; }
 }
+
+/* ── v169 · a dica dos fatores ao passar o rato por um cartão do Draft ── */
+.fatores-dica { z-index: 80; display: grid; gap: 6px; width: min(320px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid var(--bh-line-strong); border-radius: var(--bh-radius-sm); background: var(--bh-surface); color: var(--bh-text); font-size: 12.5px; line-height: 1.4; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
+.fatores-dica-seta { fill: var(--bh-surface); }
+.fatores-dica-titulo { font-size: 14px; }
+.fatores-dica-base, .fatores-dica-vazio { margin: 0; color: var(--bh-text-dim); }
+.fatores-dica ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.fatores-dica li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding-left: 8px; border-left: 3px solid var(--bh-positive); }
+.fatores-dica li.is-desbonus { border-left-color: var(--bh-negative); }
+.fatores-dica li span { min-width: 0; overflow-wrap: anywhere; }
+.fatores-dica li b { color: var(--bh-positive); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fatores-dica li.is-desbonus b { color: var(--bh-negative); }
+.fatores-dica li b em { color: var(--bh-text-dim); font-style: normal; font-weight: 600; }
+.fatores-dica li small { grid-column: 1 / -1; color: var(--bh-text-dim); font-size: 11.5px; overflow-wrap: anywhere; }
+.fatores-dica-total { padding-top: 6px; border-top: 1px solid var(--bh-line); color: var(--bh-text-muted); font-weight: 700; }
+.fatores-dica-total.is-up { color: var(--bh-positive); }
+.fatores-dica-total.is-down { color: var(--bh-negative); }

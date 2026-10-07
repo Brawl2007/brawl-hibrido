@@ -1,4 +1,5 @@
 import { Retrato } from "@/components/Retrato";
+import * as DicaPrimitiva from "@radix-ui/react-tooltip";
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
@@ -1387,6 +1388,31 @@ function ScrimSetup({ preset, initialTeam, myTeam, steps, onPresetChange, onInit
   );
 }
 
+/**
+ * Passar o rato por um cartão mostra os fatores aplicados, como no PL Prodigy.
+ *
+ * Os cartões compactos só dizem o total do ajuste ("+3,20 pts"); de onde vem
+ * esse número estava escondido atrás de «ver detalhes». A dica abre por cima
+ * de tudo (num portal, sem ser cortada pela lista), a seguir ao cartão, e
+ * também com o teclado (foco). No telemóvel não abre ao tocar: tocar escolhe.
+ */
+function DicaDosFatores({ children, conteudo, desligada }: { children: React.ReactElement; conteudo: React.ReactNode; desligada: boolean }) {
+  if (desligada) return children;
+  return (
+    <DicaPrimitiva.Provider delayDuration={200} skipDelayDuration={400}>
+      <DicaPrimitiva.Root>
+        <DicaPrimitiva.Trigger asChild>{children}</DicaPrimitiva.Trigger>
+        <DicaPrimitiva.Portal>
+          <DicaPrimitiva.Content className="fatores-dica" side="right" align="start" sideOffset={8} collisionPadding={12}>
+            {conteudo}
+            <DicaPrimitiva.Arrow className="fatores-dica-seta" width={12} height={6} />
+          </DicaPrimitiva.Content>
+        </DicaPrimitiva.Portal>
+      </DicaPrimitiva.Root>
+    </DicaPrimitiva.Provider>
+  );
+}
+
 const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, finalPoints, motor, signal, onSelect, locked, banned, suggestionTeam, rosterNames, activeCounterWindow, expanded }: { expanded: boolean; row: RankedRow; index: number; draftScore: number; basePoints: number; finalPoints: number; motor?: RankedDraftEntry<RankedRow>["motor"]; signal: DraftSignal; onSelect: (name: string) => void; locked: boolean; banned: boolean; suggestionTeam: TeamId; rosterNames: string[]; activeCounterWindow: readonly string[] }) {
   const brawlerImage = brawlerImageFor(row);
   const role = inferDraftRole(row.brawler);
@@ -1414,7 +1440,38 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
   const repeatedPressureRate = rateFromContextualPoints(signal.scoreBreakdown.repeatedEnemyCounterPressurePoints, signal.scoreBreakdown.hybridPoints);
   const topCounterRate = rateFromContextualPoints(signal.scoreBreakdown.topTwentyCounterPenaltyPoints, signal.scoreBreakdown.hybridPoints);
   const sameClassPenaltyRate = rateFromContextualPoints(signal.scoreBreakdown.sameClassPenaltyPoints, signal.scoreBreakdown.hybridPoints);
+  // A dica: os fatores que mexeram nos pontos deste cartão (os de valor zero ficam de fora).
+  const aplicados = activeBonusItems.filter((bonus) => Math.abs(bonus.points) >= 0.005);
+  const ajuste = finalPoints - basePoints;
+  const dica = (
+    <>
+      <strong className="fatores-dica-titulo">{row.brawler} · {finalPoints.toFixed(2)} pts</strong>
+      <small className="fatores-dica-base">Pontos base {basePoints.toFixed(2)}</small>
+      {motor ? (
+        <ul>
+          {motor.partes.filter((parte) => Math.abs(parte.valor) >= 0.05).map((parte) => (
+            <li key={parte.nome} className={parte.valor < 0 ? "is-desbonus" : ""}><span>{parte.nome}</span><b>{parte.valor >= 0 ? "" : "−"}{Math.abs(parte.valor).toFixed(1)}</b></li>
+          ))}
+        </ul>
+      ) : aplicados.length ? (
+        <ul>
+          {aplicados.map((bonus) => {
+            const pontos = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints);
+            return (
+              <li key={bonus.label} className={bonus.points < 0 ? "is-desbonus" : ""}>
+                <span>{bonus.label}</span>
+                <b>{pontos >= 0 ? "+" : ""}{pontos.toFixed(2)} <em>({bonus.rate >= 0 ? "+" : ""}{formatRulePercentage(bonus.rate)}%)</em></b>
+                {bonus.source && <small>{bonus.source.length > 110 ? `${bonus.source.slice(0, 110)}…` : bonus.source}</small>}
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="fatores-dica-vazio">Nenhum bónus nem desbónus neste momento do draft.</p>}
+      {!motor && <small className={`fatores-dica-total ${ajuste > 0 ? "is-up" : ajuste < 0 ? "is-down" : ""}`}>{ajuste > 0 ? "Subiu" : ajuste < 0 ? "Desceu" : "Sem ajuste"} {ajuste >= 0 ? "+" : ""}{ajuste.toFixed(2)} pts</small>}
+    </>
+  );
   return (
+    <DicaDosFatores conteudo={dica} desligada={expanded}>
     <button className={`draft-recommendation ${locked ? "is-locked" : ""} ${banned ? "is-ban-eligible" : ""} ${hasSameClassPenalty ? "has-class-penalty" : ""}`} onClick={() => onSelect(row.brawler)} disabled={locked} title={banned ? "Ban registado: brawler excluído da pool competitiva" : undefined}>
       <span className="recommendation-rank">{String(index + 1).padStart(2, "0")}</span>
       <span className="recommendation-avatar com-retrato"><Retrato src={brawlerImage} nome={row.brawler} /></span>
@@ -1478,6 +1535,7 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
       <span className="recommendation-side"><span>BASE {basePoints.toFixed(2)} · SCORE DRAFT {draftScore.toFixed(2)}</span><span>SCORE HÍBRIDO {signal.scoreBreakdown.hybridScore.toFixed(2)} · REGRAS CONTEXTUAIS ATIVAS</span></span>
       <span className="recommendation-action">{locked ? "LOCK" : "ADD"}</span>
     </button>
+    </DicaDosFatores>
   );
 });
 
