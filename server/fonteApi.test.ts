@@ -53,14 +53,14 @@ describe("fonte observada (Só API oficial)", () => {
     expect(comPoco.synergyPoints).toBeLessThan(0);
   });
 
-  it("v168 · com a API, a dupla só conta quando o par ganha mais neste mapa do que ele sozinho neste mapa", () => {
+  it("v170 · com a API, a dupla segue as regras da API (a regra da dupla das fontes não manda aqui)", () => {
     definirFonteObservada(montarFonteObservada(resumo));
     const comBull = calculateDraftSignal(row("Lumi"), { allyRows: [row("Bull")], pickNumber: 4, ruleSettings: { sinergiaSoAcimaDaVitoria: 1 } }).scoreBreakdown;
     const comPoco = calculateDraftSignal(row("Lumi"), { allyRows: [row("Poco")], pickNumber: 4, ruleSettings: { sinergiaSoAcimaDaVitoria: 1 } }).scoreBreakdown;
-    // Lumi com o Bull ganha mais do que a Lumi sozinha: conta.
+    // Lumi com o Bull: 67,5% em 40 jogos, acima dos 37,5% dela — soma.
     expect(comBull.synergyPoints).toBeGreaterThan(0);
-    // Lumi com o Poco ganha menos: não conta (nem tira).
-    expect(comPoco.synergyPoints).toBe(0);
+    // Lumi com o Poco: 7,5% em 40 jogos — anti-sinergia, tira (como o counterado).
+    expect(comPoco.synergyPoints).toBeLessThan(0);
   });
 
   it("desligar volta às fontes de sempre", () => {

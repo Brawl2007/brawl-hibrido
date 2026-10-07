@@ -1,7 +1,7 @@
 import { versaoDoMotor } from "./versaoDoMotor";
 import { lerContextoDoMotor, partesAtivasDoPL, pontuarComMotor, type ComponentesDoCandidato, type ConfigDoMotor, type ContextoDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
-import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa } from "./counterMatchupValue";
+import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa, confrontoObservadoComJogos, sinergiaObservadaComJogos, type ParObservado } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
 export type DraftTeam = "blue" | "red";
 import { getMainAttackRange } from "./brawlerAttackRanges";
@@ -22,7 +22,7 @@ import {
   type BrawlPlanetMapTeam,
   type BrawlPlanetMapTeamEntry,
 } from "./brawlPlanetMapTeams";
-import { defaultDraftRuleSettings, getCounterPickMultiplier, regrasDoMotor, type DraftRuleSettings } from "./draftRules";
+import { defaultDraftRuleSettings, getCounterPickMultiplier, regrasDoMotor, regrasDaApiDoMotor, type DraftApiRuleSettings, type DraftRuleSettings } from "./draftRules";
 
 export type DraftKind = "ban" | "pick";
 export type DraftStep = { kind: DraftKind; team: DraftTeam; label: string };
@@ -453,6 +453,14 @@ export type DraftRankingContext<T extends DraftRow = DraftRow> = {
   experimentalWeights?: { winRate: number; usageRate: number };
   /** Regras percentuais locais do Draft. Valores ausentes usam a configuração competitiva padrão. */
   ruleSettings?: Partial<DraftRuleSettings>;
+  /** v170: as regras do Draft com «API oficial» (ver `DraftApiRuleSettings`). Só contam com a API ligada. */
+  apiRuleSettings?: Partial<DraftApiRuleSettings>;
+  /**
+   * O maior Score Híbrido do mapa (o que vale 100 Pontos Base). Os pontos
+   * SOMADOS da API são dados em Pontos Base; isto converte-os para o Score.
+   * Posto por `rankDraftEntries`; sem ele, um ponto vale um ponto do Score.
+   */
+  escalaDosPontos?: number;
   /** Janela única de recomendações contextual, usada pela UI, pelos chips e por todos os desbónus de counter. */
   topRecommendationNames?: Iterable<string>;
   /** Subconjunto estável do Top exibido que pode receber Counter Top e Pressão Enemy Counter. */
@@ -619,9 +627,13 @@ export type DraftSignal = {
     sameClassClass?: string;
     worstTeammatePenalties?: string[];
     /** v169: cada confronto com a percentagem do ecrã e se conta (bónus, desbónus ou não conta). */
-    confrontosAvaliados?: Array<{ inimigo: string; delta: number; percentagem: number; conta: AvaliacaoDoConfronto }>;
-    /** v169: cada dupla com o valor (pp acima/abaixo dele) e se conta. */
-    duplasAvaliadas?: Array<{ aliado: string; delta: number | null; fonte: CounterSourceName | "API" | null; conta: boolean }>;
+    confrontosAvaliados?: Array<{ inimigo: string; delta: number; percentagem: number; conta: AvaliacaoDoConfronto; jogos?: number; motivo?: MotivoDoParDaApi; pontos?: number }>;
+    /** v169: cada dupla com o valor (pp acima/abaixo dele) e se conta. Com a API, também a vitória, os jogos e os pontos. */
+    duplasAvaliadas?: Array<{ aliado: string; delta: number | null; fonte: CounterSourceName | "API" | null; conta: boolean; percentagem?: number; jogos?: number; motivo?: MotivoDoParDaApi; pontos?: number }>;
+    /** v170: com «API oficial», as regras da API em vigor (os pontos de counter, sinergia e ban são somados). */
+    regrasDaApi?: Readonly<DraftApiRuleSettings>;
+    /** v170: com a API, cada counter dele banido e os pontos que deu. */
+    countersBanidosDaApi?: Array<{ brawler: string; delta: number; jogos: number; pontos: number }>;
     /** O mínimo em vigor, em % (55 por omissão). */
     minimoDoCounterPct?: number;
   };
@@ -1244,6 +1256,25 @@ export function avaliarConfronto(delta: number, percentagem: number, minimoPct: 
   return "nao";
 }
 
+export type MotivoDoParDaApi = "conta" | "sem-jogos" | "poucos-jogos" | "fora-do-minimo";
+/**
+ * v170: a regra ÚNICA do Draft da API, para os confrontos (counter e
+ * counterado) e para as duplas (sinergia e anti-sinergia) — a mesma lógica dos
+ * dois lados, como foi pedido.
+ *
+ * Um par conta com pelo menos `jogosMinimos` jogos neste mapa e:
+ *  - bónus: vitória do par ≥ mínimo (55%) E ganha mais do que o normal dele;
+ *  - desbónus: vitória do par ≤ 100 − mínimo (45%) E ganha menos do que o normal.
+ * Entre os dois, não conta. A vitória e a diferença já vêm encolhidas pelos
+ * jogos (`ParObservado`).
+ */
+export function avaliarParDaApi(par: ParObservado | null, minimoPct: number, jogosMinimos: number): { conta: AvaliacaoDoConfronto; motivo: MotivoDoParDaApi } {
+  if (!par || par.jogos <= 0) return { conta: "nao", motivo: "sem-jogos" };
+  if (par.jogos < jogosMinimos) return { conta: "nao", motivo: "poucos-jogos" };
+  const conta = avaliarConfronto(par.delta, par.vitoria, minimoPct);
+  return { conta, motivo: conta === "nao" ? "fora-do-minimo" : "conta" };
+}
+
 export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftRankingContext<T> = {}, includePresentation = true): DraftSignal {
   const winRate = numeric(row.brawlPlanetWinRate) ?? numeric(row.topBrawlWinRate) ?? numeric(row.winRate) ?? 50;
   const mapScore = numeric(row.score);
@@ -1264,6 +1295,14 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
    * pelo Top 10 publicado — tudo o que o Draft lê passa a sair das partidas.
    */
   const soApi = fonteObservadaAtiva();
+  /**
+   * v170: com a API, o Draft tem regras próprias (`DraftApiRuleSettings`): os
+   * pares só contam com jogos suficientes e a 55%/45%, e os pontos de counter,
+   * sinergia e ban são SOMADOS (em Pontos Base), não uma percentagem da base.
+   */
+  const regrasApi = soApi ? regrasDaApiDoMotor(context.apiRuleSettings) : null;
+  // Um Ponto Base em pontos do Score Híbrido (os pontos somados são dados em Pontos Base).
+  const pontoNoScore = typeof context.escalaDosPontos === "number" && context.escalaDosPontos > 0 ? context.escalaDosPontos / 100 : 1;
   const sourceProfiles = soApi ? [] : getCounterSourceProfiles(row.brawler, getBrawlScopeReading() === "byMode" ? context.mapModeId : undefined);
   const brawlPlanetProfile = sourceProfiles.find((profile) => profile.source === "Brawl Planet");
   const brawlScopeProfile = sourceProfiles.find((profile) => profile.source === "BrawlScope");
@@ -1415,14 +1454,29 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       .flatMap(profile => profile.counteredBy.slice(0, 10))
       .map(relation => counterKey(relation.brawler)),
   );
-  const allBannedCounters = uniqueCounterNames(rawBannedNames).filter((banned) => top10PositiveCounterKeys.has(counterKey(banned)));
+  /**
+   * v170: com a API, os counters dele são os das partidas — quem lhe ganha 55%
+   * ou mais neste mapa, com jogos suficientes (a mesma regra do counterado).
+   * Antes, o Top 10 vinha só das fontes e, com a API, o bónus de Ban nunca
+   * dava nada. Como no PL, só conta enquanto o adversário não revelou os três.
+   */
+  const countersBanidosDaApi = regrasApi
+    ? (enemyRows.length >= 3 ? [] : uniqueCounterNames(rawBannedNames)
+      .map((banned) => ({ brawler: banned, par: confrontoObservadoComJogos(row.brawler, banned) }))
+      .filter((entrada) => avaliarParDaApi(entrada.par, regrasApi.apiCounterMinimo * 100, regrasApi.apiJogosMinimos).conta === "desbonus")
+      .map((entrada) => ({ brawler: entrada.brawler, delta: entrada.par!.delta, jogos: entrada.par!.jogos, pontos: Math.abs(entrada.par!.delta) * regrasApi.apiPesoBan })))
+    : [];
+  const allBannedCounters = regrasApi
+    ? countersBanidosDaApi.map((entrada) => entrada.brawler)
+    : uniqueCounterNames(rawBannedNames).filter((banned) => top10PositiveCounterKeys.has(counterKey(banned)));
   const baseHybridTop25Keys = new Set(Array.from(context.baseHybridTop25Names ?? []).map(counterKey));
-  const top25BannedCounters = allBannedCounters.filter((banned) =>
+  // Com a API não há janela Top 25: o counter banido conta pelo confronto.
+  const top25BannedCounters = regrasApi ? allBannedCounters : allBannedCounters.filter((banned) =>
     baseHybridTop25Keys.has(counterKey(banned)) && top10PositiveCounterKeys.has(counterKey(banned)),
   );
   const bannedCounters = isTop30CounterBonusEligible ? top25BannedCounters : [];
   const nonTop30BannedCounters = !isTop30CounterBonusEligible ? top25BannedCounters : [];
-  const nonTop25BannedCounters = allBannedCounters.filter((banned) => !baseHybridTop25Keys.has(counterKey(banned)));
+  const nonTop25BannedCounters = regrasApi ? [] : allBannedCounters.filter((banned) => !baseHybridTop25Keys.has(counterKey(banned)));
   /**
    * Bans registados no draft e bans que não são counter deste candidato.
    *
@@ -1452,6 +1506,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     : [];
   // v168: a pressão por aliado também só conta com o adversário a 55% ou mais contra (ver `counterMinimo`).
   const counteradoPor = (quem: string, inimigo: string) => {
+    // v170: com a API, a mesma regra do counterado (≤ 45% com jogos suficientes).
+    if (regrasApi) return avaliarParDaApi(confrontoObservadoComJogos(quem, inimigo), regrasApi.apiCounterMinimo * 100, regrasApi.apiJogosMinimos).conta === "desbonus";
     if (ruleSettings.counterMinimo * 100 <= 50) return getDraftCounterDirection(quem, inimigo, context.reciprocalCounterScores, context.mapModeId) === "counteredBy";
     const { delta, percentagem } = percentagemDoConfronto(quem, inimigo, context.mapModeId);
     return avaliarConfronto(delta, percentagem, ruleSettings.counterMinimo * 100) === "desbonus";
@@ -1533,10 +1589,15 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
    * o bónus só com 55% ou mais; contra, o desbónus só quando o adversário tem
    * 55% ou mais (o duelo em 45% ou menos). Entre os dois, não conta.
    */
-  const minimoDoCounterPct = ruleSettings.counterMinimo * 100;
+  const minimoDoCounterPct = (regrasApi ? regrasApi.apiCounterMinimo : ruleSettings.counterMinimo) * 100;
   // Cada confronto com a percentagem que o ecrã mostra e se conta — o que a dica do cartão lista.
-  const confrontosAvaliados = !isAlreadyChosen
+  const confrontosAvaliados: NonNullable<DraftSignal["bonusSources"]["confrontosAvaliados"]> = !isAlreadyChosen
     ? enemyRows.map((enemy) => {
+      if (regrasApi) {
+        const par = confrontoObservadoComJogos(row.brawler, enemy.brawler);
+        const { conta, motivo } = avaliarParDaApi(par, minimoDoCounterPct, regrasApi.apiJogosMinimos);
+        return { inimigo: enemy.brawler, delta: par?.delta ?? 0, percentagem: par?.vitoria ?? vitoriaObservadaNoMapa(row.brawler) ?? 50, conta, jogos: par?.jogos ?? 0, motivo };
+      }
       const { delta, percentagem } = percentagemDoConfronto(row.brawler, enemy.brawler, context.mapModeId);
       return { inimigo: enemy.brawler, delta, percentagem, conta: avaliarConfronto(delta, percentagem, minimoDoCounterPct) };
     })
@@ -1578,12 +1639,27 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
    */
   const counterPickMultiplier = getCounterPickMultiplier(counterBonusPick, ruleSettings);
   const counterDeltaRate = brawlScopeEnemyDeltas.reduce((sum, delta) => sum + delta / 100, 0) * counterPickMultiplier;
-  const counterPoints = counterDeltaRate ? hybridPoints * counterDeltaRate : 0;
+  /**
+   * v170: com a API, o counter SOMA pontos — a diferença (pp) × o peso × o
+   * ajuste do pick — em vez de ser uma percentagem da base: o mesmo confronto
+   * vale o mesmo para um brawler de cima e para um de baixo.
+   */
+  const pesoDoCounterDaApi = regrasApi ? regrasApi.apiPesoCounter * counterPickMultiplier : 0;
+  const counterPoints = regrasApi
+    ? brawlScopeEnemyDeltas.reduce((soma, delta) => soma + delta, 0) * pesoDoCounterDaApi * pontoNoScore
+    : counterDeltaRate ? hybridPoints * counterDeltaRate : 0;
+  if (regrasApi) {
+    for (const confronto of confrontosAvaliados) {
+      confronto.pontos = confronto.conta !== "nao" && !suppressedKeys.has(counterKey(confronto.inimigo)) ? confronto.delta * pesoDoCounterDaApi : 0;
+    }
+  }
   const missingMidPoints = hasMissingMid ? hybridPoints * effectiveMissingMidRate : 0;
   const missingSidePoints = hasMissingSide ? hybridPoints * effectiveMissingSideRate : 0;
-  const banPoints = bannedCounters.length
-    ? hybridPoints * banBonusRate * bannedCounters.length
-    : 0;
+  const banPoints = regrasApi
+    ? countersBanidosDaApi.reduce((soma, entrada) => soma + entrada.pontos, 0) * pontoNoScore
+    : bannedCounters.length
+      ? hybridPoints * banBonusRate * bannedCounters.length
+      : 0;
   const openingLongRangePoints = hasOpeningLongRangeBonus ? hybridPoints * ruleSettings.openingLongRange : 0;
   // A fonte publica uma percentagem por par ("Pair with · Shade +11,6"). Quando
   // ela existe, é ela que vale no Score: +11,6 na ficha = +11,6% no Draft, somando
@@ -1599,18 +1675,29 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
    * a mais ao lado de cada aliado já escolhido, neste mapa. Pode ser negativa —
    * é a anti-sinergia, e aí tira pontos.
    */
-  const sinergiasDaApi = soApi
-    ? allyRows.map((ally) => ({ aliado: ally.brawler, delta: sinergiaObservada(row.brawler, ally.brawler) }))
-      .filter((par): par is { aliado: string; delta: number } => par.delta !== null && par.delta !== 0)
-      // v168: só o par que ganha mais neste mapa do que ele sozinho neste mapa.
-      .filter((par) => !sinergiaSoAcima || par.delta > 0)
+  /**
+   * v170: a mesma regra do counter (`avaliarParDaApi`): a dupla dá sinergia
+   * com 55% ou mais e acima da vitória dele sozinho, e tira (anti-sinergia)
+   * com 45% ou menos e abaixo dela; sempre com jogos suficientes. Os pontos
+   * são SOMADOS: a diferença × o peso da sinergia.
+   */
+  const duplasDaApi = regrasApi
+    ? allyRows.map((ally) => {
+      const par = sinergiaObservadaComJogos(row.brawler, ally.brawler);
+      const { conta, motivo } = avaliarParDaApi(par, regrasApi.apiSinergiaMinima * 100, regrasApi.apiJogosMinimos);
+      return { aliado: ally.brawler, par, conta, motivo, pontos: conta !== "nao" && par ? par.delta * regrasApi.apiPesoSinergia : 0 };
+    })
     : [];
+  const sinergiasDaApi = duplasDaApi
+    .filter((dupla) => dupla.conta !== "nao" && dupla.par)
+    .map((dupla) => ({ aliado: dupla.aliado, delta: dupla.par!.delta }));
   const taxaDeSinergiaDaApi = sinergiasDaApi.reduce((soma, par) => soma + par.delta / 100, 0);
+  const pontosDeSinergiaDaApi = duplasDaApi.reduce((soma, dupla) => soma + dupla.pontos, 0);
   // Cada dupla com o valor e se conta — o que a dica do cartão lista.
-  const duplasAvaliadas = allyRows.map((ally) => {
-    if (soApi) {
-      const delta = sinergiaObservada(row.brawler, ally.brawler);
-      return { aliado: ally.brawler, delta, fonte: "API" as const, conta: sinergiasDaApi.some((par) => par.aliado === ally.brawler) };
+  const duplasAvaliadas: NonNullable<DraftSignal["bonusSources"]["duplasAvaliadas"]> = allyRows.map((ally) => {
+    if (regrasApi) {
+      const dupla = duplasDaApi.find((entrada) => entrada.aliado === ally.brawler)!;
+      return { aliado: ally.brawler, delta: dupla.par?.delta ?? null, fonte: "API" as const, conta: dupla.conta !== "nao", percentagem: dupla.par?.vitoria, jogos: dupla.par?.jogos ?? 0, motivo: dupla.motivo, pontos: dupla.pontos };
     }
     const relacao = [...brawlScopeSynergyTeammates, ...(brawlPlanetProfile?.bestTeammates ?? [])].find((relation) => counterKey(relation.brawler) === counterKey(ally.brawler));
     return {
@@ -1621,14 +1708,15 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     };
   });
   const effectiveSynergyRate = soApi ? taxaDeSinergiaDaApi : hasPublishedSynergyRate ? publishedSynergyRate : synergyBonusRate;
-  const synergyPoints = soApi
-    ? hybridPoints * taxaDeSinergiaDaApi
+  const synergyPoints = regrasApi
+    ? pontosDeSinergiaDaApi * pontoNoScore
     : hasSynergy ? hybridPoints * effectiveSynergyRate : 0;
   const mapTeamSynergyPoints = hasMapTeamSynergy ? hybridPoints * mapTeamSynergyRate : 0;
   const enemyCounterDeltaRate = 0;
   const enemyCounterPenaltyPoints = 0;
   const enemyCounterPenaltyPercent = 0;
-  const repeatedEnemyCounterPressurePoints = repeatedEnemyCounterPressures.length && ruleSettings.desbonusPressaoPorAliado >= 0.5
+  const pressaoLigada = regrasApi ? regrasApi.apiPressaoPorAliado >= 0.5 : ruleSettings.desbonusPressaoPorAliado >= 0.5;
+  const repeatedEnemyCounterPressurePoints = repeatedEnemyCounterPressures.length && pressaoLigada
     ? hybridPoints * repeatedEnemyCounterPressures.reduce((sum, pressure) => sum + pressure.rate, 0)
     : 0;
   const repeatedEnemyCounterPressurePercent = Math.round(repeatedEnemyCounterPressures.reduce((sum, pressure) => sum + pressure.rate, 0) * 100);
@@ -1657,19 +1745,21 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
 	const contextualAdjustment = rawContextualBonusPoints - rawContextualPenaltyPoints;
 	const draftScore = hybridPoints + contextualAdjustment;
 	const activeBonuses = includePresentation ? [
-    ...(counterPoints ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · ${soApi ? "partidas da API oficial neste mapa" : "delta BrawlScope"}${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
+    ...(counterPoints && regrasApi ? [`${counterPoints > 0 ? "Counter" : "Counterado"} ${counterPoints > 0 ? "+" : ""}${Number((counterPoints / pontoNoScore).toFixed(2))} pts (partidas da API oficial neste mapa · ${confrontosAvaliados.filter((confronto) => confronto.pontos).map((confronto) => `${confronto.inimigo} ${confronto.percentagem}% em ${confronto.jogos} jogos`).join(", ")}${pesoDoCounterDaApi === 1 ? "" : ` · peso × ${Number(pesoDoCounterDaApi.toFixed(2))}`})`] : []),
+    ...(counterPoints && !regrasApi ? [`Counter ${counterDeltaRate > 0 ? "+" : ""}${Number((counterDeltaRate * 100).toFixed(2))}% (${brawlScopeEnemyDeltas.length} matchup${brawlScopeEnemyDeltas.length === 1 ? "" : "s"} · ${soApi ? "partidas da API oficial neste mapa" : "delta BrawlScope"}${counterPickMultiplier === 1 ? "" : ` × ${counterPickMultiplier}`})`] : []),
     ...(nonTop30CounterBonusTargets.length ? [`Counter fora do Top 30 · 0% (${row.brawler} não recebe bónus de Counter de Pick neste mapa)`] : []),
     ...(suppressedCounterTargets.length
       ? [`Resposta já coberta · bónus retirado (${fullyCoveredTargets.filter((coverage) => suppressedCounterTargets.includes(coverage.enemy)).map((coverage) => `${coverage.enemy} já respondido por ${coverage.allies.join(", ")}`).join(" · ")})`]
       : coveredCounterTargets.length ? [`Resposta já coberta · bónus mantido (${coveredCounterTargets.map((coverage) => `${coverage.enemy} também counterado por ${coverage.allies.join(", ")}`).join(" · ")})`] : []),
     ...(missingMidPoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingMid * 100}%` : `Mid em falta +${ruleSettings.missingMid * 100}%`] : []),
     ...(missingSidePoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingSide * 100}%` : `Lane em falta +${ruleSettings.missingSide * 100}%`] : []),
-    ...(banPoints ? [`Counter banido +${banBonusRate * 100 * bannedCounters.length}% (${bannedCounters.length} counter${bannedCounters.length === 1 ? "" : "s"} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · pick ${banBonusPick}: +${banBonusRate * 100}% por counter)`] : []),
+    ...(banPoints && regrasApi ? [`Counter banido +${Number((banPoints / pontoNoScore).toFixed(2))} pts (partidas da API oficial · ${countersBanidosDaApi.map((entrada) => `${entrada.brawler} ${entrada.delta}`).join(", ")})`] : []),
+    ...(banPoints && !regrasApi ? [`Counter banido +${banBonusRate * 100 * bannedCounters.length}% (${bannedCounters.length} counter${bannedCounters.length === 1 ? "" : "s"} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · pick ${banBonusPick}: +${banBonusRate * 100}% por counter)`] : []),
     ...(nonTop30BannedCounters.length ? [`Counter banido fora do Top 30 · 0% (${row.brawler} não recebe bónus de Counter de Ban neste mapa)`] : []),
     ...(nonTop25BannedCounters.length ? [`Counter banido sem bónus · 0% (${nonTop25BannedCounters.join(", ")} está fora do Top 25 do mapa)`] : []),
     ...(openingLongRangePoints ? [`Alcance ≥${openingRangeThreshold} blocos +${ruleSettings.openingLongRange * 100}% (pick ${context.pickNumber})`] : []),
     ...(mapTeamSynergyPoints && mapTeamSynergy ? [`Composição do mapa +${mapTeamSynergyRate * 100}% (pick ${synergyBonusPick} · ${mapTeamSynergy.brawlers.join(" · ")} · ${mapTeamSynergy.winRate.toFixed(1)}% WR)`] : []),
-    ...(soApi && synergyPoints ? [`${synergyPoints > 0 ? "Sinergia" : "Anti-sinergia"} ${synergyPoints > 0 ? "+" : ""}${Number((taxaDeSinergiaDaApi * 100).toFixed(2))}% (partidas da API oficial · ${sinergiasDaApi.map((par) => `${par.aliado} ${par.delta > 0 ? "+" : ""}${par.delta}`).join(", ")})`] : []),
+    ...(soApi && synergyPoints ? [`${synergyPoints > 0 ? "Sinergia" : "Anti-sinergia"} ${synergyPoints > 0 ? "+" : ""}${Number((synergyPoints / pontoNoScore).toFixed(2))} pts (partidas da API oficial · ${duplasDaApi.filter((dupla) => dupla.pontos).map((dupla) => `${dupla.aliado} ${dupla.par!.vitoria}% em ${dupla.par!.jogos} jogos`).join(", ")})`] : []),
     ...(!soApi && synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${aliadosDaSinergia.join(", ")})`] : []),
     ...(enemyCounterPenaltyPoints ? [`Desbônus Enemy Counter -${enemyCounterPenaltyPercent}% (${activeEnemyCounters.length} counter${activeEnemyCounters.length === 1 ? "" : "s"})`] : []),
     ...(repeatedEnemyCounterPressurePoints ? [`Pressão Enemy Counter -${repeatedEnemyCounterPressurePercent}% (${repeatedEnemyCounterPressures.map((pressure) => `${pressure.enemy}: ${pressure.counteredAllies.join(", ")}`).join(" · ")})`] : []),
@@ -1855,6 +1945,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       confrontosAvaliados,
       duplasAvaliadas,
       minimoDoCounterPct,
+      ...(regrasApi ? { regrasDaApi: regrasApi, countersBanidosDaApi } : {}),
       sameClassClass: candidateClass,
       worstTeammatePenalties: activeWorstTeammates,
     },
@@ -1989,7 +2080,7 @@ export function getDraftCounterWindow<T extends DraftRow>(rows: T[], lockedNames
   void query;
   const eligibleRows = [...rows]
     .filter((row) => !lockedNames.has(row.brawler));
-  return resolveActiveCounterWindow(eligibleRows, { ...context, popularityRows: context.popularityRows ?? rows });
+  return resolveActiveCounterWindow(eligibleRows, { ...context, popularityRows: context.popularityRows ?? rows, escalaDosPontos: context.escalaDosPontos ?? getDraftMaximumHybridScore(rows, context.experimentalWeights) });
 }
 
 export function getDraftTopRecommendationNames<T extends DraftRow>(rows: T[], lockedNames: Set<string>, query = "", context: DraftRankingContext<T> = {}) {
@@ -2011,17 +2102,17 @@ export function rankDraftEntries<T extends DraftRow>(rows: T[], lockedNames: Set
     .filter((row) => !context.role || context.role === "Todas" || inferDraftRole(row.brawler) === context.role || inferDraftRole(row.brawler) === "flex");
   // A UI fornece a mesma resolução para todas as superfícies. Chamadas sem
   // contexto recebem a janela global completa, nunca a lista filtrada por pesquisa.
-  const rankingContext = { ...context, popularityRows: context.popularityRows ?? rows } as DraftRankingContext<T>;
+  // Pontos Base são uma referência imutável do mapa. Bans e picks removem
+  // candidatos da recomendação, mas nunca podem tornar automaticamente o
+  // novo líder disponível em 100 pontos.
+  const maxHybridScore = getDraftMaximumHybridScore(rows, context.experimentalWeights);
+  const rankingContext = { ...context, popularityRows: context.popularityRows ?? rows, escalaDosPontos: context.escalaDosPontos ?? maxHybridScore } as DraftRankingContext<T>;
   const resolvedWindow = rankingContext.topRecommendationNames
     ? {
       topRecommendationNames: Array.from(rankingContext.topRecommendationNames),
       counterPenaltyEligibleNames: Array.from(rankingContext.counterPenaltyEligibleNames ?? rankingContext.topRecommendationNames),
     }
     : resolveActiveCounterWindow(globalEligibleRows, rankingContext);
-  // Pontos Base são uma referência imutável do mapa. Bans e picks removem
-  // candidatos da recomendação, mas nunca podem tornar automaticamente o
-  // novo líder disponível em 100 pontos.
-  const maxHybridScore = getDraftMaximumHybridScore(rows, context.experimentalWeights);
   const doHibrido: RankedDraftEntry<T>[] = rankEntriesWithCounterWindow(eligibleRows, rankingContext, resolvedWindow.topRecommendationNames, resolvedWindow.counterPenaltyEligibleNames)
     .map((entry, index) => ({
       ...entry,

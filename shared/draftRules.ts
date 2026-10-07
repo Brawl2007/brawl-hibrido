@@ -404,3 +404,95 @@ export function regrasDoMotor(value?: Partial<DraftRuleSettings> | null): Readon
   regrasGuardadas.set(value, regras);
   return regras;
 }
+
+/**
+ * Regras do Draft com «API oficial» (v170): o sistema próprio para as
+ * partidas Ranked que o site recolhe da API da Supercell.
+ *
+ * O EQUILÍBRIO, E PORQUÊ
+ *
+ * - 55% e 20 jogos. Um par (confronto ou dupla) só conta com pelo menos
+ *   `apiJogosMinimos` jogos neste mapa e com 55% ou mais (o bónus) ou 45% ou
+ *   menos (o desbónus). Antes, um par com 3 ou 4 jogos já dava +10.
+ * - Pontos SOMADOS, não percentagem da base. O que conta é o que ele ganha a
+ *   mais do que o normal dele no mapa: a Nita a 53% no mapa e a 58% contra o
+ *   Bull vale +5 pontos — tanto para um brawler de base 90 como para um de
+ *   base 40. Com % da base, os de cima ganhavam o dobro pelo mesmo confronto, e
+ *   os de baixo nunca chegavam lá. A força geral dele já está na base, por isso
+ *   não conta duas vezes.
+ * - Os jogos dão confiança: o par é puxado para a vitória habitual dele com
+ *   `JOGOS_DE_PRIOR` (10) jogos imaginários. Com 20 jogos, uma diferença de 5
+ *   vale ≈ 3,3; com 200, ≈ 4,8.
+ * - Counter e sinergia têm a MESMA lógica (counter/counterado, sinergia/
+ *   anti-sinergia): ver `avaliarParDaApi` em `draft.ts`.
+ * - Os pesos multiplicam os pontos: 0,5 × 5 = +2,5; 2 × 5 = +10. O do counter
+ *   multiplica-se ainda pelo ajuste por pick das regras de sempre. O do ban
+ *   começa em 0,5: o counter banido era só uma ameaça possível.
+ *
+ * A Mesma classe, o Fit, o Alcance e a percentagem da Pressão por aliado são
+ * as regras de sempre (% da base): não dependem da fonte.
+ */
+export type DraftApiRuleSettings = {
+  /** Vitória contra o inimigo a partir da qual o counter conta (0,55 = 55%); o desbónus com 45% ou menos. */
+  apiCounterMinimo: number;
+  /** Vitória da dupla a partir da qual a sinergia conta (0,55 = 55%); a anti-sinergia com 45% ou menos. */
+  apiSinergiaMinima: number;
+  /** Jogos do par neste mapa para ele contar (confronto e dupla). */
+  apiJogosMinimos: number;
+  /** Pontos do counter = peso × diferença (× o ajuste por pick). */
+  apiPesoCounter: number;
+  /** Pontos da sinergia = peso × diferença, a somar ou a tirar. */
+  apiPesoSinergia: number;
+  /** Pontos de cada counter dele banido = peso × a diferença desse counter contra ele. */
+  apiPesoBan: number;
+  /** Interruptor (0/1) da Pressão por aliado com os confrontos da API. */
+  apiPressaoPorAliado: number;
+};
+
+export const defaultDraftApiRuleSettings: DraftApiRuleSettings = {
+  apiCounterMinimo: 0.55,
+  apiSinergiaMinima: 0.55,
+  apiJogosMinimos: 20,
+  apiPesoCounter: 1,
+  apiPesoSinergia: 1,
+  // Meio peso: banir um counter tira uma ameaça POSSÍVEL (o adversário podia
+  // nem o escolher); um confronto escolhido é certo. Como o «Ban Penalty» do MetaPick.
+  apiPesoBan: 0.5,
+  apiPressaoPorAliado: 1,
+};
+
+/** Limites de cada regra da API; fora deles, o valor é encostado ao limite. */
+export const LIMITES_DAS_REGRAS_DA_API: Record<keyof DraftApiRuleSettings, { min: number; max: number; passo: number }> = {
+  apiCounterMinimo: { min: 0.5, max: 0.8, passo: 0.01 },
+  apiSinergiaMinima: { min: 0.5, max: 0.8, passo: 0.01 },
+  apiJogosMinimos: { min: 1, max: 500, passo: 1 },
+  apiPesoCounter: { min: 0, max: 3, passo: 0.05 },
+  apiPesoSinergia: { min: 0, max: 3, passo: 0.05 },
+  apiPesoBan: { min: 0, max: 3, passo: 0.05 },
+  apiPressaoPorAliado: { min: 0, max: 1, passo: 1 },
+};
+
+export const draftApiRuleSettingKeys = Object.keys(defaultDraftApiRuleSettings) as (keyof DraftApiRuleSettings)[];
+
+/** Qualquer valor estragado volta ao de omissão; os outros ficam dentro dos limites. */
+export function normalizarRegrasDaApi(value?: Partial<DraftApiRuleSettings> | null): DraftApiRuleSettings {
+  const candidato = value && typeof value === "object" ? value : {};
+  return draftApiRuleSettingKeys.reduce((regras, chave) => {
+    const bruto = candidato[chave];
+    const { min, max } = LIMITES_DAS_REGRAS_DA_API[chave];
+    regras[chave] = typeof bruto === "number" && Number.isFinite(bruto) ? Math.min(max, Math.max(min, bruto)) : defaultDraftApiRuleSettings[chave];
+    return regras;
+  }, {} as DraftApiRuleSettings);
+}
+
+/** O mesmo que `regrasDoMotor`, para as regras da API: normalizadas e guardadas pela identidade do objeto. */
+const regrasDaApiGuardadas = new WeakMap<object, Readonly<DraftApiRuleSettings>>();
+let regrasDaApiPorOmissao: Readonly<DraftApiRuleSettings> | null = null;
+export function regrasDaApiDoMotor(value?: Partial<DraftApiRuleSettings> | null): Readonly<DraftApiRuleSettings> {
+  if (!value || typeof value !== "object") return (regrasDaApiPorOmissao ??= Object.freeze(normalizarRegrasDaApi(undefined)));
+  const guardadas = regrasDaApiGuardadas.get(value);
+  if (guardadas) return guardadas;
+  const regras = Object.freeze(normalizarRegrasDaApi(value));
+  regrasDaApiGuardadas.set(value, regras);
+  return regras;
+}

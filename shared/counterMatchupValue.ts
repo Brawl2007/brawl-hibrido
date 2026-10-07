@@ -243,6 +243,40 @@ export function sinergiaObservada(candidato: string, aliado: string) {
 }
 
 /**
+ * Um par das partidas com tudo o que o Draft da API precisa para o avaliar:
+ * - `vitoria`: a vitória do par (de `owner` contra o inimigo, ou da dupla),
+ *   encolhida para a vitória habitual dele com `JOGOS_DE_PRIOR` jogos, em %;
+ * - `delta`: essa vitória menos a vitória habitual dele no mapa, em pp;
+ * - `jogos`: os jogos reais do par.
+ */
+export type ParObservado = { delta: number; vitoria: number; jogos: number };
+
+function parEncolhido(contagem: ContagemObservada | undefined, habitual: number): ParObservado | null {
+  if (!contagem || contagem.jogos <= 0) return null;
+  const encolhida = (contagem.vitorias + JOGOS_DE_PRIOR * habitual) / (contagem.jogos + JOGOS_DE_PRIOR);
+  return {
+    delta: Math.round((encolhida - habitual) * 10000) / 100,
+    vitoria: Math.round(encolhida * 1000) / 10,
+    jogos: contagem.jogos,
+  };
+}
+
+/** O confronto de `owner` contra `foe` neste mapa, com os jogos; null sem API ligada ou sem jogos. */
+export function confrontoObservadoComJogos(owner: string, foe: string): ParObservado | null {
+  if (!fonteObservada) return null;
+  const habitual = fonteObservada.vitoriaNoMapa.get(key(owner)) ?? 0.5;
+  return parEncolhido(fonteObservada.confrontos.get(`${key(owner)}\u0000${key(foe)}`), habitual);
+}
+
+/** A dupla `candidato` + `aliado` neste mapa, com os jogos, na perspetiva do candidato. */
+export function sinergiaObservadaComJogos(candidato: string, aliado: string): ParObservado | null {
+  if (!fonteObservada) return null;
+  const habitual = fonteObservada.vitoriaNoMapa.get(key(candidato)) ?? 0.5;
+  const [a, b] = [key(candidato), key(aliado)].sort();
+  return parEncolhido(fonteObservada.sinergias.get(`${a}\u0000${b}`), habitual);
+}
+
+/**
  * Ler as duas fichas do confronto, e não só a do candidato.
  *
  * POR QUE EXISTE

@@ -792,3 +792,14 @@
 .fatores-dica-total { padding-top: 6px; border-top: 1px solid var(--bh-line); color: var(--bh-text-muted); font-weight: 700; }
 .fatores-dica-total.is-up { color: var(--bh-positive); }
 .fatores-dica-total.is-down { color: var(--bh-negative); }
+/* v170: cada confronto e cada dupla, com a percentagem e se contam. */
+.fatores-dica-pares { display: grid; gap: 3px; padding-top: 6px; border-top: 1px solid var(--bh-line); }
+.fatores-dica-subtitulo { color: var(--bh-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.fatores-dica-par { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; font-size: 11.5px; color: var(--bh-text-dim); }
+.fatores-dica-par span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fatores-dica-par b { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.fatores-dica-par.is-conta b { color: var(--bh-positive); }
+.fatores-dica-par.is-desbonus b { color: var(--bh-negative); }
+.fatores-dica-par.is-nao b { color: var(--bh-text-dim); font-weight: 600; }
+.regras-da-api-estado { margin: 0 0 6px; padding: 6px 10px; border-left: 3px solid var(--bh-line-strong); color: var(--bh-text-muted); }
+.regras-da-api-estado.is-ativa { border-left-color: var(--bh-positive); color: var(--bh-text); }
