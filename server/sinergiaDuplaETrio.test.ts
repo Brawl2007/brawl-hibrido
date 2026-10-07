@@ -56,6 +56,8 @@ describe("dupla e trio são coisas diferentes", () => {
     const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
     const sinal = calculateDraftSignal(nori, {
       mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl], mapTeams: composicao as never,
+      // v168: a equipa tripla vem desligada; este teste mede-a, por isso liga-a.
+      ruleSettings: { sinergiaDeEquipaTripla: 1 },
     });
 
     expect(sinal.scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);

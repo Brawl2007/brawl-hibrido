@@ -1,4 +1,5 @@
 import { Retrato } from "@/components/Retrato";
+import * as DicaPrimitiva from "@radix-ui/react-tooltip";
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
@@ -76,6 +77,9 @@ import { hybridWeightFractions, hybridWeightsLabel, hybridWeightsSentence, useHy
 import { getStarPlayerPickWeight, getWinRatePickWeight, starPlayerPickKeys, winRatePickKeys } from "@shared/draftRules";
 import { useSourceBalance } from "@/lib/sourceBalance";
 import { fatiasDoPick, pesosDoPickAPartirDasFatias, useDraftRules, type DraftRulePreference } from "@/lib/draftRules";
+import { useRegrasDaApi } from "@/hooks/useRegrasDaApi";
+import { PainelDasRegrasDaApi } from "@/components/PainelDasRegrasDaApi";
+import { paresDaDica, sinal, umaCasa } from "@/lib/paresDaDica";
 import { analyzeDraftComposition, atribuirDuelosPorCounter, leituraDoPLProdigy, posicionarNoMapa, buildScrimSequence, calculateDraftHybridScore, calculateDraftSignal, calculateLaneMatchup, calculateNormalizedDraftPoints, describeDraftStep, draftRoleLabels, draftSteps, estimateDraftWinProbability, estimateRoleWinRate, getBrawlerBuild, getBrawlerClass, getCounterMatchup, getCounterProfile, getDraftCounterWindow, getDraftLockedNames, getDraftMaximumHybridScore, getDraftTopRecommendationNames, getGlobalPickNumber, getLiveCounterSuggestions, getOpeningBonusEligibilityLabel, getTacticalPlan, inferDraftRole, normalizeScrimSequence, openingRangeThreshold, rankDraftEntries, remapDraftProgress, scrimPresetLabels, type CoachComposition, type DraftRoleFilter, type DraftSignal, type DraftStep, type DraftTeam, type LiveCounterSuggestion, type RankedDraftEntry, type ScrimPreset } from "@shared/draft";
 import { getSynergyBonusRate } from "@shared/draft";
 import { getCounterPickMultiplier } from "@shared/draftRules";
@@ -149,7 +153,13 @@ function normalizeContextualPoints(points: number, basePoints: number, hybridPoi
   return hybridPoints > 0 ? points * (basePoints / hybridPoints) : 0;
 }
 
-type ActiveDraftBonus = { label: string; rate: number; points: number; source?: string };
+/**
+ * Um fator do cartão. `nota` substitui a percentagem entre parênteses quando o
+ * fator não é uma percentagem da base (com a API, os pontos são somados).
+ * `soFontes` marca os fatores das fontes, que com a API dão lugar aos da API.
+ */
+type ActiveDraftBonus = { label: string; rate: number; points: number; source?: string; nota?: string; soFontes?: true };
+
 type ExperimentalWeights = { winRate: number; usageRate: number };
 
 /**
@@ -183,14 +193,16 @@ export function getActiveDraftBonuses(signal: DraftSignal, role: ReturnType<type
       : `exceção tática: ${openingEligibility} · Pick ${signal.scoreBreakdown.counterBonusPick}`
     : undefined;
   const counterMultiplier = signal.scoreBreakdown.counterPickMultiplier ?? 1;
-	const bonuses: ActiveDraftBonus[] = [
-		  { label: signal.counterMatchups.length > 1 ? `Counter ×${signal.counterMatchups.length}` : "Counter", rate: signal.counterMatchups.reduce((total, matchup) => total + matchup.counterDelta, 0) * counterMultiplier, points: signal.scoreBreakdown.counterPoints, source: signal.counterMatchups.length ? `${signal.counterMatchups.map((matchup) => `${matchup.defender} ${matchup.counterDelta > 0 ? "+" : ""}${formatRulePercentage(matchup.counterDelta)}% · ${matchup.note}`).join(" · ")}${counterMultiplier === 1 ? "" : ` · ajuste ×${counterMultiplier}`}` : undefined },
+  const daApi = signal.bonusSources.regrasDaApi;
+	const bonuses: ActiveDraftBonus[] = ([
+		  { soFontes: true as const, label: signal.counterMatchups.length > 1 ? `Counter ×${signal.counterMatchups.length}` : "Counter", rate: signal.counterMatchups.reduce((total, matchup) => total + matchup.counterDelta, 0) * counterMultiplier, points: signal.scoreBreakdown.counterPoints, source: signal.counterMatchups.length ? `${signal.counterMatchups.map((matchup) => `${matchup.defender} ${matchup.counterDelta > 0 ? "+" : ""}${formatRulePercentage(matchup.counterDelta)}% · ${matchup.note}`).join(" · ")}${counterMultiplier === 1 ? "" : ` · ajuste ×${counterMultiplier}`}` : undefined },
     { label: role === "flex" ? "Fit Mid/Lane" : "Fit Mid", rate: rateFromContextualPoints(signal.scoreBreakdown.missingMidPoints, signal.scoreBreakdown.hybridPoints), points: signal.scoreBreakdown.missingMidPoints },
     { label: role === "flex" ? "Fit Mid/Lane" : "Fit Lane", rate: rateFromContextualPoints(signal.scoreBreakdown.missingSidePoints, signal.scoreBreakdown.hybridPoints), points: signal.scoreBreakdown.missingSidePoints },
-    { label: signal.bannedCounterCount > 1 ? `Ban ×${signal.bannedCounterCount} · Pick ${signal.scoreBreakdown.banBonusPick}` : `Ban · Pick ${signal.scoreBreakdown.banBonusPick}`, rate: signal.scoreBreakdown.banBonusRate * 100 * signal.bannedCounterCount, points: signal.scoreBreakdown.banPoints, source: signal.bonusSources.bannedCounters.length ? `banido: ${signal.bonusSources.bannedCounters.join(", ")} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · +${formatRulePercentage(signal.scoreBreakdown.banBonusRate * 100)}% por counter` : undefined },
+    { soFontes: true as const, label: signal.bannedCounterCount > 1 ? `Ban ×${signal.bannedCounterCount} · Pick ${signal.scoreBreakdown.banBonusPick}` : `Ban · Pick ${signal.scoreBreakdown.banBonusPick}`, rate: signal.scoreBreakdown.banBonusRate * 100 * signal.bannedCounterCount, points: signal.scoreBreakdown.banPoints, source: signal.bonusSources.bannedCounters.length ? `banido: ${signal.bonusSources.bannedCounters.join(", ")} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · +${formatRulePercentage(signal.scoreBreakdown.banBonusRate * 100)}% por counter` : undefined },
     { label: "Abertura", rate: rateFromContextualPoints(signal.scoreBreakdown.openingLongRangePoints, signal.scoreBreakdown.hybridPoints), points: signal.scoreBreakdown.openingLongRangePoints, source: openingSource },
     { label: `Equipa do mapa · Pick ${signal.scoreBreakdown.synergyBonusPick}`, rate: rateFromContextualPoints(signal.scoreBreakdown.mapTeamSynergyPoints, signal.scoreBreakdown.hybridPoints), points: signal.scoreBreakdown.mapTeamSynergyPoints, source: signal.bonusSources.mapTeamSynergy ? `Brawl Planet · ${signal.bonusSources.mapTeamSynergy.map}: ${signal.bonusSources.mapTeamSynergy.brawlers.join(" · ")} · WR ${signal.bonusSources.mapTeamSynergy.winRate.toFixed(1)}%` : undefined },
     {
+      soFontes: true as const,
       label: signal.scoreBreakdown.hasPublishedSynergyRate ? `Sinergia · ${signal.bonusSources.synergySource ?? "fonte"}` : `Sinergia · Pick ${signal.scoreBreakdown.synergyBonusPick}`,
       rate: signal.scoreBreakdown.synergyBonusRate * 100,
       points: signal.scoreBreakdown.synergyPoints,
@@ -203,9 +215,49 @@ export function getActiveDraftBonuses(signal: DraftSignal, role: ReturnType<type
             .join(" · ")
         : signal.bonusSources.synergyAllies.length ? `com ${signal.bonusSources.synergyAllies.join(", ")}` : undefined,
     },
-	  ].filter((bonus) => bonus.points > 0);
+	  ] as ActiveDraftBonus[]).filter((bonus) => bonus.points > 0 && !(daApi && bonus.soFontes));
 
-  if (signal.scoreBreakdown.counterPoints < 0) {
+  /*
+   * v170 — com a API, counter, sinergia e ban são pontos SOMADOS (a diferença
+   * × o peso): o chip diz «somados» em vez de uma percentagem da base, e lista
+   * só os pares que contam, com a vitória e os jogos.
+   */
+  if (daApi) {
+    const confrontos = (signal.bonusSources.confrontosAvaliados ?? []).filter((confronto) => confronto.pontos);
+    const doPar = (nome: string, percentagem: number | undefined, jogos: number | undefined, pontos: number) => `${nome} ${umaCasa(percentagem ?? 50)}% em ${jogos ?? 0} jogos ${sinal(pontos)}`;
+    if (signal.scoreBreakdown.counterPoints) {
+      const contra = signal.scoreBreakdown.counterPoints < 0;
+      bonuses.push({
+        label: contra ? (confrontos.length > 1 ? `Counterado ×${confrontos.length}` : "Counterado") : confrontos.length > 1 ? `Counter ×${confrontos.length}` : "Counter",
+        rate: 0,
+        nota: "somados",
+        points: signal.scoreBreakdown.counterPoints,
+        source: `API · ${confrontos.map((confronto) => doPar(confronto.inimigo, confronto.percentagem, confronto.jogos, confronto.pontos!)).join(" · ")}`,
+      });
+    }
+    const duplas = (signal.bonusSources.duplasAvaliadas ?? []).filter((dupla) => dupla.pontos);
+    if (signal.scoreBreakdown.synergyPoints) {
+      bonuses.push({
+        label: signal.scoreBreakdown.synergyPoints < 0 ? "Anti-sinergia" : duplas.length > 1 ? `Sinergia ×${duplas.length}` : "Sinergia",
+        rate: 0,
+        nota: "somados",
+        points: signal.scoreBreakdown.synergyPoints,
+        source: `API · ${duplas.map((dupla) => doPar(dupla.aliado, dupla.percentagem, dupla.jogos, dupla.pontos!)).join(" · ")}`,
+      });
+    }
+    const banidos = signal.bonusSources.countersBanidosDaApi ?? [];
+    if (signal.scoreBreakdown.banPoints && banidos.length) {
+      bonuses.push({
+        label: banidos.length > 1 ? `Ban ×${banidos.length}` : "Ban",
+        rate: 0,
+        nota: "somados",
+        points: signal.scoreBreakdown.banPoints,
+        source: `API · banido: ${banidos.map((banido) => `${banido.brawler} (${banido.jogos} jogos) ${sinal(banido.pontos)}`).join(" · ")}`,
+      });
+    }
+  }
+
+  if (!daApi && signal.scoreBreakdown.counterPoints < 0) {
     bonuses.push({
       label: signal.counterMatchups.length > 1 ? `Desbônus Counter ×${signal.counterMatchups.length}` : "Desbônus Counter",
       rate: rateFromContextualPoints(signal.scoreBreakdown.counterPoints, signal.scoreBreakdown.hybridPoints),
@@ -1391,6 +1443,31 @@ function ScrimSetup({ preset, initialTeam, myTeam, steps, onPresetChange, onInit
   );
 }
 
+/**
+ * Passar o rato por um cartão mostra os fatores aplicados, como no PL Prodigy.
+ *
+ * Os cartões compactos só dizem o total do ajuste ("+3,20 pts"); de onde vem
+ * esse número estava escondido atrás de «ver detalhes». A dica abre por cima
+ * de tudo (num portal, sem ser cortada pela lista), a seguir ao cartão, e
+ * também com o teclado (foco). No telemóvel não abre ao tocar: tocar escolhe.
+ */
+function DicaDosFatores({ children, conteudo, desligada }: { children: React.ReactElement; conteudo: React.ReactNode; desligada: boolean }) {
+  if (desligada) return children;
+  return (
+    <DicaPrimitiva.Provider delayDuration={200} skipDelayDuration={400}>
+      <DicaPrimitiva.Root>
+        <DicaPrimitiva.Trigger asChild>{children}</DicaPrimitiva.Trigger>
+        <DicaPrimitiva.Portal>
+          <DicaPrimitiva.Content className="fatores-dica" side="right" align="start" sideOffset={8} collisionPadding={12}>
+            {conteudo}
+            <DicaPrimitiva.Arrow className="fatores-dica-seta" width={12} height={6} />
+          </DicaPrimitiva.Content>
+        </DicaPrimitiva.Portal>
+      </DicaPrimitiva.Root>
+    </DicaPrimitiva.Provider>
+  );
+}
+
 const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, finalPoints, motor, signal, onSelect, locked, banned, suggestionTeam, rosterNames, activeCounterWindow, expanded }: { expanded: boolean; row: RankedRow; index: number; draftScore: number; basePoints: number; finalPoints: number; motor?: RankedDraftEntry<RankedRow>["motor"]; signal: DraftSignal; onSelect: (name: string) => void; locked: boolean; banned: boolean; suggestionTeam: TeamId; rosterNames: string[]; activeCounterWindow: readonly string[] }) {
   const brawlerImage = brawlerImageFor(row);
   const role = inferDraftRole(row.brawler);
@@ -1418,7 +1495,47 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
   const repeatedPressureRate = rateFromContextualPoints(signal.scoreBreakdown.repeatedEnemyCounterPressurePoints, signal.scoreBreakdown.hybridPoints);
   const topCounterRate = rateFromContextualPoints(signal.scoreBreakdown.topTwentyCounterPenaltyPoints, signal.scoreBreakdown.hybridPoints);
   const sameClassPenaltyRate = rateFromContextualPoints(signal.scoreBreakdown.sameClassPenaltyPoints, signal.scoreBreakdown.hybridPoints);
+  // A dica: os fatores que mexeram nos pontos deste cartão (os de valor zero ficam de fora).
+  const aplicados = activeBonusItems.filter((bonus) => Math.abs(bonus.points) >= 0.005);
+  const paresNaDica = paresDaDica(signal);
+  const ajuste = finalPoints - basePoints;
+  const dica = (
+    <>
+      <strong className="fatores-dica-titulo">{row.brawler} · {finalPoints.toFixed(2)} pts</strong>
+      <small className="fatores-dica-base">Pontos base {basePoints.toFixed(2)}</small>
+      {motor ? (
+        <ul>
+          {motor.partes.filter((parte) => Math.abs(parte.valor) >= 0.05).map((parte) => (
+            <li key={parte.nome} className={parte.valor < 0 ? "is-desbonus" : ""}><span>{parte.nome}</span><b>{parte.valor >= 0 ? "" : "−"}{Math.abs(parte.valor).toFixed(1)}</b></li>
+          ))}
+        </ul>
+      ) : aplicados.length ? (
+        <ul>
+          {aplicados.map((bonus) => {
+            const pontos = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints);
+            return (
+              <li key={bonus.label} className={bonus.points < 0 ? "is-desbonus" : ""}>
+                <span>{bonus.label}</span>
+                <b>{pontos >= 0 ? "+" : ""}{pontos.toFixed(2)} <em>({bonus.nota ?? `${bonus.rate >= 0 ? "+" : ""}${formatRulePercentage(bonus.rate)}%`})</em></b>
+                {bonus.source && <small>{bonus.source.length > 110 ? `${bonus.source.slice(0, 110)}…` : bonus.source}</small>}
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="fatores-dica-vazio">Nenhum bónus nem desbónus neste momento do draft.</p>}
+      {!motor && (paresNaDica.confrontos.length > 0 || paresNaDica.duplas.length > 0) && (
+        <div className="fatores-dica-pares">
+          {paresNaDica.confrontos.length > 0 && <small className="fatores-dica-subtitulo">Confrontos{signal.bonusSources.regrasDaApi ? ` · API (≥${Math.round(signal.bonusSources.regrasDaApi.apiCounterMinimo * 100)}%, ≥${signal.bonusSources.regrasDaApi.apiJogosMinimos} jogos)` : ""}</small>}
+          {paresNaDica.confrontos.map((par) => <small key={`c-${par.nome}`} className={`fatores-dica-par ${par.conta ? (par.desbonus ? "is-desbonus" : "is-conta") : "is-nao"}`}><span>vs {par.nome} {par.texto}</span><b>{par.efeito}</b></small>)}
+          {paresNaDica.duplas.length > 0 && <small className="fatores-dica-subtitulo">Duplas{signal.bonusSources.regrasDaApi ? ` · API (≥${Math.round(signal.bonusSources.regrasDaApi.apiSinergiaMinima * 100)}%, ≥${signal.bonusSources.regrasDaApi.apiJogosMinimos} jogos)` : ""}</small>}
+          {paresNaDica.duplas.map((par) => <small key={`d-${par.nome}`} className={`fatores-dica-par ${par.conta ? (par.desbonus ? "is-desbonus" : "is-conta") : "is-nao"}`}><span>com {par.nome} {par.texto}</span><b>{par.efeito}</b></small>)}
+        </div>
+      )}
+      {!motor && <small className={`fatores-dica-total ${ajuste > 0 ? "is-up" : ajuste < 0 ? "is-down" : ""}`}>{ajuste > 0 ? "Subiu" : ajuste < 0 ? "Desceu" : "Sem ajuste"} {ajuste >= 0 ? "+" : ""}{ajuste.toFixed(2)} pts</small>}
+    </>
+  );
   return (
+    <DicaDosFatores conteudo={dica} desligada={expanded}>
     <button className={`draft-recommendation ${locked ? "is-locked" : ""} ${banned ? "is-ban-eligible" : ""} ${hasSameClassPenalty ? "has-class-penalty" : ""}`} onClick={() => onSelect(row.brawler)} disabled={locked} title={banned ? "Ban registado: brawler excluído da pool competitiva" : undefined}>
       <span className="recommendation-rank">{String(index + 1).padStart(2, "0")}</span>
       <span className="recommendation-avatar com-retrato"><Retrato src={brawlerImage} nome={row.brawler} /></span>
@@ -1438,7 +1555,7 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
         </span>}
         <span className="recommendation-bonus-breakdown" aria-label={`Fatores ativos: ${activeBonusItems.length ? activeBonusItems.map((bonus) => `${bonus.label} ${bonus.points >= 0 ? "mais" : "menos"} ${Math.abs(bonus.points).toFixed(2)} pontos${bonus.source ? `, ${bonus.source}` : ""}`).join(", ") : "nenhum"}`}>
           <small className="recommendation-bonus-heading">FATORES ATIVOS</small>
-          {activeBonusItems.length ? activeBonusItems.map((bonus) => { const normalizedPoints = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints); return <small className={`recommendation-bonus-chip ${bonus.points < 0 ? "is-penalty" : ""}`} key={bonus.label}><span className="recommendation-bonus-label">{bonus.label}</span> <b>{normalizedPoints >= 0 ? `+${normalizedPoints.toFixed(2)}` : normalizedPoints.toFixed(2)} pts</b> <em>({bonus.rate >= 0 ? `+${formatRulePercentage(bonus.rate)}%` : `${formatRulePercentage(bonus.rate)}%`})</em>{bonus.source && <span className="recommendation-bonus-source">{bonus.source}</span>}</small>; }) : <small className="recommendation-bonus-empty">Nenhum neste cenário</small>}
+          {activeBonusItems.length ? activeBonusItems.map((bonus) => { const normalizedPoints = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints); return <small className={`recommendation-bonus-chip ${bonus.points < 0 ? "is-penalty" : ""}`} key={bonus.label}><span className="recommendation-bonus-label">{bonus.label}</span> <b>{normalizedPoints >= 0 ? `+${normalizedPoints.toFixed(2)}` : normalizedPoints.toFixed(2)} pts</b> <em>({bonus.nota ?? (bonus.rate >= 0 ? `+${formatRulePercentage(bonus.rate)}%` : `${formatRulePercentage(bonus.rate)}%`)})</em>{bonus.source && <span className="recommendation-bonus-source">{bonus.source}</span>}</small>; }) : <small className="recommendation-bonus-empty">Nenhum neste cenário</small>}
         </span>
         <span className="recommendation-counter-audit" aria-label={`Auditoria de counters de ${row.brawler}. Janela Counter Top: Top ${topCounterWindowSize}. Enemy Counter direto: menos ${directEnemyCounterRate} por cento. Pressão Enemy Counter: menos ${repeatedPressureRate} por cento. Counter Top: menos ${topCounterRate} por cento.`}>
           <small className="recommendation-counter-audit-heading"><Shield size={10} /> AUDITORIA DE COUNTERS</small>
@@ -1485,6 +1602,7 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
         : <><span>BASE {basePoints.toFixed(2)} · SCORE DRAFT {draftScore.toFixed(2)}</span><span>SCORE HÍBRIDO {signal.scoreBreakdown.hybridScore.toFixed(2)} · REGRAS CONTEXTUAIS ATIVAS</span></>}</span>
       <span className="recommendation-action">{locked ? "LOCK" : "ADD"}</span>
     </button>
+    </DicaDosFatores>
   );
 });
 
@@ -1516,7 +1634,7 @@ function ScoreRiseSummary({ label, row, signal, basePoints, finalPoints }: { lab
       <div className="matchup-score-rise-values"><b>{finalPoints.toFixed(2)} <small>PTS FINAIS</small></b><span>base {basePoints.toFixed(2)} · <strong>{normalizedAdjustment >= 0 ? "+" : ""}{normalizedAdjustment.toFixed(2)} pts</strong></span></div>
       {bonuses.length ? (
         <div className="matchup-score-rise-bonuses" aria-label={`Fatores em ${row.brawler}: ${bonuses.map((bonus) => `${bonus.label}, ${bonus.rate >= 0 ? "mais" : "menos"} ${Math.abs(bonus.rate)} por cento e ${normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints).toFixed(2)} pontos`).join(", ")}`}>
-          {bonuses.map((bonus) => { const normalizedPoints = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints); return <span className={bonus.points < 0 ? "is-penalty-chip" : ""} key={bonus.label}>{bonus.label} <b>{bonus.rate >= 0 ? `+${bonus.rate}%` : `${bonus.rate}%`}</b> <em>{normalizedPoints >= 0 ? `+${normalizedPoints.toFixed(2)}` : normalizedPoints.toFixed(2)} pts</em>{bonus.source && <small className="matchup-score-rise-bonus-source">{bonus.source}</small>}</span>; })}
+          {bonuses.map((bonus) => { const normalizedPoints = normalizeContextualPoints(bonus.points, basePoints, signal.scoreBreakdown.hybridPoints); return <span className={bonus.points < 0 ? "is-penalty-chip" : ""} key={bonus.label}>{bonus.label} <b>{bonus.nota ?? (bonus.rate >= 0 ? `+${bonus.rate}%` : `${bonus.rate}%`)}</b> <em>{normalizedPoints >= 0 ? `+${normalizedPoints.toFixed(2)}` : normalizedPoints.toFixed(2)} pts</em>{bonus.source && <small className="matchup-score-rise-bonus-source">{bonus.source}</small>}</span>; })}
         </div>
       ) : <small className="matchup-score-rise-empty">Sem ajuste ativo: mantém a base híbrida.</small>}
       <small className="matchup-score-rise-total">AJUSTE TÉCNICO: <b>{normalizedAdjustment >= 0 ? `+${normalizedAdjustment.toFixed(2)}` : normalizedAdjustment.toFixed(2)} pts</b> ({signal.scoreBreakdown.contextualAdjustment >= 0 ? "+" : ""}{relativeIncrease.toFixed(0)}%) · Híbrido real {signal.scoreBreakdown.hybridScore.toFixed(2)}</small>
@@ -1854,8 +1972,31 @@ type DraftRuleField = {
 
 const draftRuleSections: Array<{ title: string; description: string; fields: DraftRuleField[] }> = [
   {
+    title: "Sinergia e counters",
+    description: "Com as fontes (BrawlScope, PL, Brawl Planet). Por omissão, como antes da v168; com «API oficial» valem as Regras da API.",
+    fields: [
+      {
+        key: "sinergiaSoAcimaDaVitoria",
+        toggle: true,
+        label: "Dupla só acima da vitória dele",
+        helper: "Desligado (padrão): a dupla conta como sempre contou. Ligado: só conta quando o par ganha mais do que o brawler sozinho — a percentagem publicada do par é positiva. Um par abaixo, ou sem número publicado, não conta.",
+      },
+      {
+        key: "sinergiaDeEquipaTripla",
+        toggle: true,
+        label: "Sinergia de equipa tripla",
+        helper: "A «Composição do mapa»: uma equipa de três publicada pelo Brawl Planet para este mapa. Ligada por omissão; desligada, conta só a dupla.",
+      },
+      {
+        key: "counterMinimo",
+        label: "Counter mínimo",
+        helper: "O confronto só conta a partir desta percentagem, a mesma que os duelos mostram (50% + a diferença publicada). Em 50% (padrão), qualquer diferença conta. Em 55%, o bónus só com 55% ou mais a favor, e o desbónus e a pressão por aliado só quando o adversário tem 55% ou mais contra.",
+      },
+    ],
+  },
+  {
     title: "Sinergia por Pick",
-    description: "Cada Pick global tem uma percentagem própria. A mesma taxa vale para sinergia literal e composição Brawl Planet do mapa.",
+    description: "Cada Pick global tem uma percentagem própria, para a sinergia de dupla sem percentagem publicada (e para a equipa tripla, se estiver ligada).",
     fields: [
       { key: "synergyPick1", label: "Pick 1" }, { key: "synergyPick2", label: "Pick 2" }, { key: "synergyPick3", label: "Pick 3" },
       { key: "synergyPick4", label: "Pick 4" }, { key: "synergyPick5", label: "Pick 5" }, { key: "synergyPick6", label: "Pick 6" },
@@ -1910,13 +2051,16 @@ const draftRuleSections: Array<{ title: string; description: string; fields: Dra
         // Um campo que aceita um valor e não faz nada é pior do que não existir.
         inactive: "O confronto desfavorável já desconta pontos pelo delta publicado, com sinal negativo. Somar aqui outra penalização contava o mesmo matchup duas vezes — usa o ajuste do Counter por Pick para lhe dar mais ou menos peso.",
       },
-      { key: "repeatedEnemyCounterPressure", label: "Pressão por aliado", helper: "Quando um inimigo já escolhido countera um aliado teu além do candidato." },
+      { key: "desbonusPressaoPorAliado", toggle: true, label: "Pressão por aliado ligada", helper: "Desliga o desbónus de Pressão por aliado sem perder a percentagem guardada ao lado." },
+      { key: "repeatedEnemyCounterPressure", label: "Pressão por aliado", helper: "Quando um inimigo já escolhido countera um aliado teu além do candidato (a partir do «Counter mínimo» contra cada um)." },
       {
         key: "topCounterPenalty",
         label: "Counter no Top",
         inactive: "Counter no Top é risco possível, não confronto real: penalizá-lo antes de haver picks inimigos reordenava o ranking base. Continua visível na auditoria, sem mexer no Score.",
       },
+      { key: "desbonusMesmaClasse", toggle: true, label: "Mesma classe ligada", helper: "Desliga o desbónus de Mesma classe sem perder a percentagem guardada ao lado." },
       { key: "sameClassPenalty", label: "Mesma classe", helper: "Por cada aliado já escolhido da mesma classe oficial do candidato." },
+      { key: "desbonusWorstTeammate", toggle: true, label: "Worst Teammate ligado", helper: "Desliga o desbónus de Worst Teammate sem perder a percentagem guardada ao lado." },
       { key: "worstTeammatePenalty", label: "Worst Teammate", helper: "Quando a fonte publica o aliado escolhido como mau parceiro deste brawler." },
     ],
   },
@@ -2426,6 +2570,8 @@ export default function Draft() {
   const { topBrawlWeight } = useSourceBalance();
   const { reading: brawlScopeReading, setReading: setBrawlScopeReadingPreference } = useBrawlScopeReading();
   const { preference: draftRulePreference, rules: draftRuleSettings, hasCustomRules, updatePreference: updateDraftRulePreference, resetPreference: resetDraftRulePreference } = useDraftRules();
+  // v170: as regras do Draft com «API oficial», à parte das regras das fontes.
+  const regrasDaApi = useRegrasDaApi();
   const experimentalWeights = useMemo<ExperimentalWeights>(() => ({
     winRate: hybridWeights.winRate,
     usageRate: hybridWeights.usageRate,
@@ -2522,6 +2668,7 @@ export default function Draft() {
     [analysisChoices, draftSequence],
   );
   const banNames = useMemo(() => new Set(draftSequence.map((step, index) => step.kind === "ban" ? analysisChoices[index] : null).filter(Boolean) as string[]), [analysisChoices, draftSequence]);
+  const bansDoQuadro = useMemo(() => [...banNames], [banNames]);
   const pickNames = useMemo(() => new Set(draftSequence.map((step, index) => step.kind === "pick" ? analysisChoices[index] : null).filter(Boolean) as string[]), [analysisChoices, draftSequence]);
   // Ranked rule: any resolved ban or pick locks the brawler for the rest of the sequence.
   const lockedNames = useMemo(() => getDraftLockedNames(draftSequence, choices, activeStepIndex), [draftSequence, choices, activeStepIndex]);
@@ -2546,7 +2693,7 @@ export default function Draft() {
   const suggestionTeam = analysisDraftStep?.team ?? myTeam;
   const activeTeamPicks = suggestionTeam === "red" ? redPicks : bluePicks;
   const enemyPicks = suggestionTeam === "red" ? bluePicks : redPicks;
-  const baseRoleContext = useMemo(() => ({ mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version, fonteApiVersao: fonteApi.versao, motor: motorDoDraft.config }), [motorDoDraft.config, selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version, fonteApi.versao]);
+  const baseRoleContext = useMemo(() => ({ mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, apiRuleSettings: regrasDaApi.regras, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version, fonteApiVersao: fonteApi.versao, motor: motorDoDraft.config }), [motorDoDraft.config, regrasDaApi.regras, selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version, fonteApi.versao]);
   const counterWindow = useMemo(() => getDraftCounterWindow(currentRows, analysisLockedNames, "", baseRoleContext), [currentRows, analysisLockedNames, baseRoleContext]);
   const topRecommendationNames = counterWindow.topRecommendationNames;
   const activeCounterWindow = useMemo(() => topRecommendationNames.slice(0, Math.max(0, 20 - (analysisCompletedPickCount * 4))), [topRecommendationNames, analysisCompletedPickCount]);
@@ -3012,6 +3159,7 @@ export default function Draft() {
                   nossos={allyPickRows}
                   deles={myTeam === "blue" ? redPicks : bluePicks}
                   retratoDe={retratoNoQuadro}
+                  bans={bansDoQuadro}
                 />
                 </Suspense>
                 <LaneMatchupDesk myTeam={myTeam} semMapa mapImage={selectedMap ? mapImageFor(selectedMap) : null} blueRows={bluePicks} redRows={redPicks} mapName={selectedMap?.name} mapModeId={selectedMap?.modeId} mapTeams={mapTeams} bannedNames={banNames} baseHybridTop25Names={baseHybridTop25Names} baseHybridTop30Names={baseHybridTop30Names} pickNumber={analysisGlobalPickNumber} completedPickCount={analysisCompletedPickCount} topRecommendationNames={topRecommendationNames} counterPenaltyEligibleNames={counterWindow.counterPenaltyEligibleNames} experimentalWeights={experimentalWeights} maxHybridScore={availableHybridReference || mapHybridReference} ruleSettings={draftRuleSettings} />
@@ -3031,6 +3179,7 @@ export default function Draft() {
                 {painelAberto === "sequencia" && <ScrimSetup preset={scrimPreset} initialTeam={initialTeam} myTeam={myTeam} steps={draftSequence} onPresetChange={handlePresetChange} onInitialTeamChange={handleInitialTeamChange} onMyTeamChange={setMyTeam} onStepsChange={handleCustomStepsChange} />}
                 {painelAberto === "regras" && <>
                   {hasCustomGlobalWeights && <p className="mesa-painel-nota">Este navegador usa Vitória {experimentalWeights.winRate}% / Uso {experimentalWeights.usageRate}% em todo o site. <a href="/#ranking-laboratory">Mudar</a></p>}
+                  <PainelDasRegrasDaApi regras={regrasDaApi.regras} ligada={fonteApi.ligada} personalizadas={regrasDaApi.personalizadas} onChange={regrasDaApi.mudar} onReset={regrasDaApi.repor} />
                   <DraftRulesPanel abertoDeInicio preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />
                 </>}
                 {painelAberto === "funcoes" && <DraftRoleEditor noPainel names={liveRows.map(row => row.brawler)} />}

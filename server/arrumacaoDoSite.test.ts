@@ -143,8 +143,10 @@ describe("as outras páginas também sem rolar tanto (v144)", () => {
 describe("o plano da IA chega antes da partida", () => {
   const quadro = ler("client/src/components/QuadroDoGeneral.tsx");
   it("pede-se sozinho quando o draft fecha, uma vez por draft", () => {
-    expect(quadro).toContain("if (temPlanoDaIA || pedirPlano.isPending || jaPediuSozinho.current === chave) return;");
+    // v166: com o Jev configurado decide ele primeiro; sem ele, o plano da IA padrão como sempre — uma vez por draft.
+    expect(quadro).toContain("if (pedirPlano.isPending || pedirEstrategia.isPending || jaPediuSozinho.current === chave) return;");
     expect(quadro).toContain("jaPediuSozinho.current = chave;");
+    expect(quadro).toContain("if (!jevConfigurado && temAlgumaIA && !temPlanoDaIA) pedir();");
   });
   it("rápido e automático vêm ligados de origem, e o servidor recebe o rápido", () => {
     expect(quadro).toContain('return { principal: "gemini", soEssa: false, modelos: {}, rapido: true, automatico: true };');

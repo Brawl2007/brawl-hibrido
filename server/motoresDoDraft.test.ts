@@ -9,6 +9,7 @@ import {
   PRESETS_PL_PRODIGY,
   escalaDoPLProdigy,
   lerConfigDoMotor,
+  partesAtivasDoPL,
   pontuarComoMetaPick,
   pontuarComoPLProdigy,
   type ComponentesDoCandidato,
@@ -27,24 +28,24 @@ const candidato = (brawler: string, extra: Partial<ComponentesDoCandidato> = {})
 
 describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
   it("usa os pesos das definições deles por omissão", () => {
-    expect(PESOS_PL_PRODIGY).toEqual({ uso: 4, vitoria: 20, counter: 40, encaixe: 13, sinergia: 10, ban: 13 });
+    expect(PESOS_PL_PRODIGY).toEqual({ uso: 5, vitoria: 23, counter: 36, encaixe: 12, sinergia: 12, ban: 12 });
   });
 
   /** O «rawScore» em %: a soma das partes, antes da escala do PL. */
   const bruto = (p: { partes: Array<{ valor: number }> }) => p.partes.reduce((soma, parte) => soma + parte.valor, 0);
 
-  it("um bom counter passa à frente de quem só é forte no mapa (counter 40%, vitória 20%)", () => {
+  it("um bom counter passa à frente de quem só é forte no mapa (counter 36%, vitória 23%)", () => {
     const [forte, counter] = pontuarComoPLProdigy([
       candidato("Forte", { vitoria: 60, uso: 20, counters: [0] }),
       candidato("Counter", { vitoria: 50, uso: 10, counters: [15] }),
     ]);
-    // Uso 4 + vitória 20 + encaixe 6,5. Sem aliado/ban, essas partes dão zero.
-    expect(bruto(forte)).toBeCloseTo(30.5, 6);
-    expect(bruto(counter)).toBeCloseTo(46.5, 6);
+    // Uso 5 + vitória 23 + encaixe 6. Sem aliado/ban, essas partes dão zero.
+    expect(bruto(forte)).toBeCloseTo(34, 6);
+    expect(bruto(counter)).toBeCloseTo(42, 6);
     expect(counter.pontos).toBeGreaterThan(forte.pontos);
-    expect(forte.pontos).toBeCloseTo(escalaDoPLProdigy(0.305), 6);
-    expect(counter.pontos).toBeCloseTo(escalaDoPLProdigy(0.465), 6);
-    expect(counter.partes.find((parte) => parte.nome === "Counter")?.valor).toBeCloseTo(40, 6);
+    expect(forte.pontos).toBeCloseTo(escalaDoPLProdigy(0.34), 6);
+    expect(counter.pontos).toBeCloseTo(escalaDoPLProdigy(0.42), 6);
+    expect(counter.partes.find((parte) => parte.nome === "Counter")?.valor).toBeCloseTo(36, 6);
   });
 
   it("pesos que não somam 100 são repartidos na mesma proporção; tudo a zero não dá NaN", () => {
@@ -62,12 +63,12 @@ describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
       candidato("Fraco", { base: 40, vitoria: null, uso: null }),
       candidato("Forte", { base: 90, vitoria: null, uso: null }),
     ]);
-    expect(bruto(forte) - bruto(fraco)).toBeCloseTo(24, 6);
+    expect(bruto(forte) - bruto(fraco)).toBeCloseTo(28, 6);
   });
 
   it("os counters dele banidos contam na parte «Ban»", () => {
     const [semBan, comBan] = pontuarComoPLProdigy([candidato("SemBan"), candidato("ComBan", { countersBanidos: 2 })]);
-    expect(bruto(comBan) - bruto(semBan)).toBeCloseTo(13, 6);
+    expect(bruto(comBan) - bruto(semBan)).toBeCloseTo(12, 6);
   });
 
   it("a escala estimada continua próxima dos dez exemplos da investigação anterior", () => {
@@ -86,6 +87,28 @@ describe("motor PL Prodigy: soma pesada de partes de 0 a 100", () => {
     const depois = pontuarComoPLProdigy(todos.slice(1));
     expect(depois[0].pontos).toBeGreaterThan(antes[1].pontos);
     expect(depois[1].pontos).toBeGreaterThan(antes[2].pontos);
+  });
+
+  it("v167 · as partes entram com o draft: no começo só a Vitória (23%) e o Uso (5%)", () => {
+    expect(partesAtivasDoPL({ inimigos: 0, aliados: 0, bans: 0 })).toEqual({ uso: true, vitoria: true, counter: false, encaixe: false, sinergia: false, ban: false });
+    expect(partesAtivasDoPL({ inimigos: 1, aliados: 0, bans: 0 })).toMatchObject({ counter: true, sinergia: false, encaixe: false, ban: false });
+    expect(partesAtivasDoPL({ inimigos: 0, aliados: 1, bans: 0 })).toMatchObject({ counter: false, sinergia: true, encaixe: true, ban: false });
+    expect(partesAtivasDoPL({ inimigos: 0, aliados: 0, bans: 1 })).toMatchObject({ counter: false, ban: true });
+    // Só a base: a média pesada de 23 × vitória e 5 × uso (sobre 28), e só essas duas partes.
+    const base = partesAtivasDoPL({ inimigos: 0, aliados: 0, bans: 0 });
+    const [melhor, meio, pior] = pontuarComoPLProdigy([
+      candidato("Melhor", { vitoria: 60, uso: 20, counters: [15], encaixe: 90, countersBanidos: 2 }),
+      candidato("Meio", { vitoria: 55, uso: 10 }),
+      candidato("Pior", { vitoria: 50, uso: 20 }),
+    ], PESOS_PL_PRODIGY, base);
+    expect(melhor.partes.map((p) => p.nome)).toEqual(["Uso", "Vitória"]);
+    expect(bruto(melhor)).toBeCloseTo(100, 6);
+    expect(bruto(meio)).toBeCloseTo((23 * 50 + 5 * 0) / 28, 6);
+    expect(bruto(pior)).toBeCloseTo((23 * 0 + 5 * 100) / 28, 6);
+    expect(melhor.pontos).toBeCloseTo(escalaDoPLProdigy(1), 6);
+    // O counter, o encaixe e o ban dele não contam enquanto não houver picks nem bans.
+    const [semMais] = pontuarComoPLProdigy([candidato("Melhor", { vitoria: 60, uso: 20 }), candidato("Meio", { vitoria: 55, uso: 10 }), candidato("Pior", { vitoria: 50, uso: 20 })], PESOS_PL_PRODIGY, base);
+    expect(semMais.pontos).toBeCloseTo(melhor.pontos, 6);
   });
 
   it("presets: Masters+ (definições do site) e Diamante e abaixo (pedido que o site enviou)", () => {
@@ -166,6 +189,15 @@ describe("o Draft com cada motor", () => {
     const hibrido = rankDraftEntries(linhas, bloqueados, "", "Todos", { ...contexto, motor: CONFIG_DO_MOTOR });
     expect(hibrido.map((e) => [e.row.brawler, e.finalPoints])).toEqual(sem.map((e) => [e.row.brawler, e.finalPoints]));
     expect(hibrido.every((e) => e.motor === undefined)).toBe(true);
+  });
+
+  it("v167 · no Draft, o PL começa só com a base e ganha partes com os picks e os bans", () => {
+    const pl = { ...CONFIG_DO_MOTOR, motor: "plprodigy" as const };
+    const nomesDasPartes = (ctx: Parameters<typeof rankDraftEntries>[4]) => new Set(rankDraftEntries(linhas, new Set(), "", "Todos", { ...ctx, motor: pl }).flatMap((e) => e.motor!.partes.map((p) => p.nome)));
+    expect(nomesDasPartes({ enemyRows: [], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 1, completedPickCount: 0 })).toEqual(new Set(["Uso", "Vitória"]));
+    expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 2, completedPickCount: 1 })).toEqual(new Set(["Uso", "Vitória", "Counter"]));
+    expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [linhas[7]], mapModeId: inimigo.modeId, pickNumber: 4, completedPickCount: 3, bannedNames: new Set([linhas[9].brawler]) }))
+      .toEqual(new Set(["Uso", "Vitória", "Counter", "Encaixe", "Sinergia", "Ban"]));
   });
 
   it.each(["plprodigy", "metapick"] as const)("%s reordena pelos pontos dele e diz de onde vieram", (motor) => {

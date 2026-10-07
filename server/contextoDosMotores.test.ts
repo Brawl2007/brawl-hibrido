@@ -93,7 +93,8 @@ describe("contexto dos motores locais com a API oficial", () => {
     const completo = rankDraftEntries(linhas, new Set(["Doug", "Bull", "Rico", "Jacky"]), "", "Todos", {
       ...base, enemyRows: linhas.filter((row) => ["Bull", "Rico", "Jacky"].includes(row.brawler)),
     });
-    expect(completo[0].motor?.partes.find((parte) => parte.nome === "Ban")?.valor).toBe(0);
+    // Com os três revelados, o Ban sai da média (não pesa zero a todos).
+    expect(completo[0].motor?.partes.some((parte) => parte.nome === "Ban")).toBe(false);
     expect(orderDraftEntries(incompleto, "context").map((entry) => entry.finalPoints)).toEqual(incompleto.map((entry) => entry.finalPoints));
   });
 });

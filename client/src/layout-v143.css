@@ -724,3 +724,82 @@
 .motor-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .motor-presets button { min-height: 34px; padding: 0 12px; border: 1px solid var(--bh-line); border-radius: 10px; background: var(--bh-surface); color: var(--bh-text-muted); font-size: 12.5px; font-weight: 800; cursor: pointer; }
 .motor-presets button.is-active { border-color: var(--bh-gold); color: var(--bh-text); background: color-mix(in srgb, var(--bh-gold) 12%, var(--bh-surface)); }
+
+/* ── v166 · General tático (Jev) e simulação da estratégia ── */
+.qg-tatico { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--bh-line-strong); border-radius: 12px; background: var(--bh-surface); }
+.qg-tatico-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.qg-tatico-topo button, .qg-tatico-explicacao button { min-height: 30px; padding: 0 10px; border: 1px solid var(--bh-line-strong); border-radius: 8px; background: rgba(0, 0, 0, .2); color: var(--bh-text); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.qg-tatico-topo button:disabled { opacity: .6; cursor: progress; }
+.qg-tatico-vazio { margin: 0; color: var(--bh-text-dim); font-size: 13px; line-height: 1.45; }
+.qg-tatico-aviso { display: grid; gap: 2px; margin: 0; padding: 8px 10px; border-left: 3px solid var(--bh-gold); border-radius: 8px; background: rgba(0, 0, 0, .25); color: var(--bh-text); font-size: 13px; }
+.qg-tatico-aviso small { color: var(--bh-text-dim); font-size: 12px; overflow-wrap: anywhere; }
+.qg-tatico-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.qg-tatico-resumo div { min-width: 0; padding: 6px 8px; border: 1px solid var(--bh-line); border-radius: 8px; }
+.qg-tatico-resumo dt { color: var(--bh-text-dim); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.qg-tatico-resumo dd { margin: 2px 0 0; color: var(--bh-text); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+.qg-tatico-origem { margin: 0; color: var(--bh-text-muted); font-size: 12px; font-weight: 700; }
+.qg-tatico-origem.is-jev { color: var(--bh-gold); }
+.qg-tatico-lanes, .qg-tatico-condicoes { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.qg-tatico-lanes li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.qg-tatico-lanes li > img, .qg-tatico-lanes li > .retrato-iniciais { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+.qg-tatico-lanes div { display: grid; min-width: 0; }
+.qg-tatico-lanes b { color: var(--bh-text); font-size: 14px; }
+.qg-tatico-lanes small, .qg-tatico-condicoes li { color: var(--bh-text-muted); font-size: 12.5px; line-height: 1.4; }
+.qg-tatico-condicoes b { color: var(--bh-text); }
+.qg-tatico-alvos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.qg-tatico-alvos div { display: grid; gap: 2px; min-width: 0; padding: 6px 8px; border: 1px solid var(--bh-line); border-radius: 8px; }
+.qg-tatico-alvos b { color: var(--bh-text); font-size: 14px; overflow-wrap: anywhere; }
+.qg-tatico-vitoria { display: grid; gap: 2px; margin: 0; color: var(--bh-text); font-size: 13.5px; font-weight: 700; line-height: 1.4; }
+.qg-tatico-simular { min-height: 42px; border: 1px solid var(--bh-gold); border-radius: 10px; background: color-mix(in srgb, var(--bh-gold) 18%, var(--bh-surface)); color: var(--bh-text); font-family: "Lilita One", sans-serif; font-size: 16px; letter-spacing: .02em; cursor: pointer; }
+.qg-tatico-explicacao { display: grid; gap: 6px; padding: 10px; border: 1px dashed var(--bh-line-strong); border-radius: 10px; color: var(--bh-text-muted); font-size: 13px; line-height: 1.45; }
+.qg-tatico-explicacao header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.qg-tatico-explicacao header small { color: var(--bh-text-dim); font-size: 11.5px; }
+.qg-tatico-explicacao p, .qg-tatico-explicacao ul, .qg-tatico-explicacao ol { margin: 0; }
+.qg-tatico-explicacao ul, .qg-tatico-explicacao ol { display: grid; gap: 4px; padding-left: 18px; }
+.qg-tatico-explicacao b, .qg-tatico-explicacao strong { color: var(--bh-text); }
+.qg-tatico-corrigida { color: var(--bh-text-dim); }
+.qg-tatico-porque { color: var(--bh-text-dim); }
+.qg-reproduzir--tatico { border-color: var(--bh-gold); background: color-mix(in srgb, var(--bh-gold) 14%, transparent); color: var(--bh-text); }
+
+/* A simulação: a legenda do passo em cima, os controlos por baixo dela (os botões da câmara ficam livres, em baixo à direita). */
+.qg-simulacao { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 5; display: grid; gap: 6px; justify-items: center; pointer-events: none; }
+.qg-simulacao .qg-simulacao-legenda { position: static; transform: none; max-width: min(760px, 100%); font-size: clamp(14px, 1.8vw, 20px); animation: none; }
+.qg-simulacao .qg-simulacao-legenda b { color: var(--bh-gold); }
+.qg-simulacao-botoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; max-width: 100%; padding: 6px 8px; border: 1px solid var(--bh-line-strong); border-radius: 10px; background: rgba(6, 9, 16, .82); pointer-events: auto; }
+.qg-simulacao-botoes button, .qg-simulacao-botoes select { min-height: 32px; padding: 0 10px; border: 1px solid var(--bh-line); border-radius: 8px; background: rgba(255, 255, 255, .06); color: var(--bh-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.qg-simulacao-botoes select option { background: var(--bh-surface); }
+.qg-simulacao-botoes progress { width: 120px; height: 8px; accent-color: var(--bh-gold); }
+.qg-simulacao-botoes small { color: var(--bh-text-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .qg-tatico-resumo { grid-template-columns: minmax(0, 1fr); }
+  .qg-simulacao { top: 6px; left: 6px; right: 6px; }
+  .qg-simulacao-botoes progress { width: 70px; }
+}
+
+/* ── v169 · a dica dos fatores ao passar o rato por um cartão do Draft ── */
+.fatores-dica { z-index: 80; display: grid; gap: 6px; width: min(320px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid var(--bh-line-strong); border-radius: var(--bh-radius-sm); background: var(--bh-surface); color: var(--bh-text); font-size: 12.5px; line-height: 1.4; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
+.fatores-dica-seta { fill: var(--bh-surface); }
+.fatores-dica-titulo { font-size: 14px; }
+.fatores-dica-base, .fatores-dica-vazio { margin: 0; color: var(--bh-text-dim); }
+.fatores-dica ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.fatores-dica li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding-left: 8px; border-left: 3px solid var(--bh-positive); }
+.fatores-dica li.is-desbonus { border-left-color: var(--bh-negative); }
+.fatores-dica li span { min-width: 0; overflow-wrap: anywhere; }
+.fatores-dica li b { color: var(--bh-positive); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fatores-dica li.is-desbonus b { color: var(--bh-negative); }
+.fatores-dica li b em { color: var(--bh-text-dim); font-style: normal; font-weight: 600; }
+.fatores-dica li small { grid-column: 1 / -1; color: var(--bh-text-dim); font-size: 11.5px; overflow-wrap: anywhere; }
+.fatores-dica-total { padding-top: 6px; border-top: 1px solid var(--bh-line); color: var(--bh-text-muted); font-weight: 700; }
+.fatores-dica-total.is-up { color: var(--bh-positive); }
+.fatores-dica-total.is-down { color: var(--bh-negative); }
+/* v170: cada confronto e cada dupla, com a percentagem e se contam. */
+.fatores-dica-pares { display: grid; gap: 3px; padding-top: 6px; border-top: 1px solid var(--bh-line); }
+.fatores-dica-subtitulo { color: var(--bh-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.fatores-dica-par { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; font-size: 11.5px; color: var(--bh-text-dim); }
+.fatores-dica-par span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fatores-dica-par b { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.fatores-dica-par.is-conta b { color: var(--bh-positive); }
+.fatores-dica-par.is-desbonus b { color: var(--bh-negative); }
+.fatores-dica-par.is-nao b { color: var(--bh-text-dim); font-weight: 600; }
+.regras-da-api-estado { margin: 0 0 6px; padding: 6px 10px; border-left: 3px solid var(--bh-line-strong); color: var(--bh-text-muted); }
+.regras-da-api-estado.is-ativa { border-left-color: var(--bh-positive); color: var(--bh-text); }

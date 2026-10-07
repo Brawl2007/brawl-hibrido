@@ -63,6 +63,9 @@ function pontosDosChipsVisiveis(breakdown: ReturnType<typeof calculateDraftSigna
     + breakdown.mapTeamSynergyPoints;
 }
 
+// v168: a equipa tripla vem desligada; os testes que cruzam dupla e trio ligam-na.
+const TRIPLA_LIGADA = { sinergiaDeEquipaTripla: 1 };
+
 describe("regras do Draft a interagir", () => {
   afterEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: true }));
 
@@ -81,6 +84,7 @@ describe("regras do Draft a interagir", () => {
       allyRows: [gus, pearl],
       mapTeams: composicaoDoMapa as never,
       pickNumber: 3,
+      ruleSettings: TRIPLA_LIGADA,
     });
 
     expect(sinal.scoreBreakdown.synergyPoints).toBeGreaterThan(0);
@@ -156,7 +160,7 @@ describe("regras do Draft a interagir", () => {
    */
   it("o trio não faz a dupla voltar a contar duas vezes", () => {
     setCounterSyncSnapshot(snapshotComDupla());
-    const base = { mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl], pickNumber: 3 as const };
+    const base = { mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl], pickNumber: 3 as const, ruleSettings: TRIPLA_LIGADA };
     const soDupla = calculateDraftSignal(nori, base);
     const comTrio = calculateDraftSignal(nori, { ...base, mapTeams: composicaoDoMapa as never });
 

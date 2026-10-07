@@ -1,8 +1,51 @@
 /**
- * Brawl Híbrido e dois modelos locais inspirados nas definições públicas do
- * PL Prodigy e do MetaPick. As fórmulas completas dos sites não estão
- * confirmadas. Os pesos Masters+ abaixo e a regra de ban com inimigos ainda
- * por revelar foram verificados na interface do PL em 29/09/2026.
+ * Os motores do Draft: o do Brawl Híbrido, e dois modelos locais inspirados
+ * nas definições públicas do PL Prodigy e do MetaPick, escolhidos nos Ajustes.
+ * As fórmulas completas dos sites não estão confirmadas.
+ *
+ * POR QUE EXISTE
+ *
+ * O Brawl Híbrido MULTIPLICA: Score do mapa × (1 + bónus). O counter vale uma
+ * percentagem da base, e um brawler fraco no mapa quase nunca sobe ao topo só
+ * por countrar. O PL Prodigy e o MetaPick SOMAM, com o counter a pesar muito —
+ * e é por isso que recomendam coisas que o Brawl Híbrido deixa em 60.º.
+ *
+ * Nenhum dos dois publica a fórmula: as contas são feitas no servidor deles.
+ * A investigação de 29/09/2026 (pedidos que as próprias páginas fazem)
+ * confirmou os dados de entrada (mapa, picks de cada lado, bans e os pesos),
+ * os valores por omissão, os limites das barras do MetaPick, o preset
+ * «Diamante e abaixo» do PL Prodigy e a escala dos pontos do PL (ver
+ * `escalaDoPLProdigy`). Confirmou também que, no PL, banir os melhores sobe
+ * os pontos dos outros — os pontos são relativos aos candidatos que sobram,
+ * como a normalização abaixo. O resto segue os nomes das barras, com os dados
+ * deste site — as fontes, ou as partidas da API com «API oficial» ligado:
+ *
+ * PL Prodigy — soma pesada de seis partes, cada uma posta de 0 a 100 entre os
+ * candidatos do mapa: Uso 5%, Vitória 23%, Counter 36%, Encaixe 12%,
+ * Sinergia 12%, Ban 12% (preset Masters+; há o de Diamante e abaixo). A soma
+ * pesada é o «rawScore» e os pontos passam pela escala do PL.
+ *
+ * As partes ENTRAM com o draft (ver `partesAtivasDoPL`): no começo só contam
+ * a Vitória e o Uso (a base, 23% e 5%); o Counter entra com o primeiro pick
+ * do adversário, a Sinergia e o Encaixe com o nosso primeiro pick, o Ban com
+ * o primeiro ban (e sai quando o adversário revela os três). O «rawScore» é a média pesada só das partes que já contam
+ * — no começo, (23 × vitória + 5 × uso) / 28. Bate com o que o PL mostra no
+ * começo (Quick Travel sem picks nem bans: Nita 78, rawScore ≈ 0,54; só com
+ * 28% por dividir por 100, ninguém passava dos 47).
+ *   - Counter: soma do confronto contra cada pick inimigo.
+ *   - Sinergia: soma da sinergia com cada aliado já escolhido.
+ *   - Encaixe: a função dele no modo do mapa e na equipa (o «fit» do Draft).
+ *   - Ban: quantos dos counters dele estão banidos. As fontes não publicam a
+ *     taxa de ban de cada brawler; isto é o que o draft em curso diz.
+ *
+ * MetaPick — força no mapa + bónus somados, com limites de ruído:
+ *   pontos = base + 10 × (Counter × C + Sinergia × S − Ban × R)
+ *   - C: confrontos contra os picks inimigos, em dezenas de pontos
+ *     percentuais (+10 pp = 1,0). Só conta |valor| ≥ Mín. Counter, e o bónus
+ *     só vale para os «Top Counter Limit» melhores counters de cada inimigo.
+ *   - S: sinergia com os aliados, na mesma unidade, com Mín. Sinergia.
+ *   - R: risco — os counters dele que o adversário ainda pode escolher (os
+ *     mais fortes, até ao número de picks que lhe faltam).
  *
  * A normalização por candidatos, a logística e a conversão de pp do MetaPick
  * são escolhas/estimativas deste projeto, não fórmulas oficiais. Conservam-se
@@ -15,7 +58,7 @@ export type MotorDoDraft = "hibrido" | "plprodigy" | "metapick";
 
 export type PesosPLProdigy = { uso: number; vitoria: number; counter: number; encaixe: number; sinergia: number; ban: number };
 /** Os valores por omissão do PL Prodigy (definições «PL Prodigy Settings», rank Masters+). */
-export const PESOS_PL_PRODIGY: PesosPLProdigy = { uso: 4, vitoria: 20, counter: 40, encaixe: 13, sinergia: 10, ban: 13 };
+export const PESOS_PL_PRODIGY: PesosPLProdigy = { uso: 5, vitoria: 23, counter: 36, encaixe: 12, sinergia: 12, ban: 12 };
 
 /**
  * Presets lidos nas definições públicas do PL Prodigy em 29/09/2026.
@@ -127,7 +170,20 @@ const normalizarContexto = (valores: readonly number[]) => valores.every((valor)
   ? valores.map(() => 0)
   : normalizar(valores);
 
-export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato[], pesos: PesosPLProdigy = PESOS_PL_PRODIGY): PontuacaoDoMotor[] {
+export type PartesAtivasDoPL = Record<keyof PesosPLProdigy, boolean>;
+const TODAS_AS_PARTES: PartesAtivasDoPL = { uso: true, vitoria: true, counter: true, encaixe: true, sinergia: true, ban: true };
+
+/**
+ * Que partes do PL já contam neste momento do draft. A base (Vitória e Uso)
+ * conta sempre; as outras entram com os picks e os bans que as alimentam. O
+ * Ban só conta enquanto o adversário não revelou os três (a regra do PL, ver
+ * `lerContextoDoMotor`): depois sai da média, em vez de pesar zero a todos.
+ */
+export function partesAtivasDoPL(draft: { inimigos: number; aliados: number; bans: number }): PartesAtivasDoPL {
+  return { uso: true, vitoria: true, counter: draft.inimigos > 0, encaixe: draft.aliados > 0, sinergia: draft.aliados > 0, ban: draft.bans > 0 && draft.inimigos < 3 };
+}
+
+export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato[], pesos: PesosPLProdigy = PESOS_PL_PRODIGY, ativas: PartesAtivasDoPL = TODAS_AS_PARTES): PontuacaoDoMotor[] {
   // Mapas só com o Score publicado (sem vitória nem uso): o Score do mapa faz as vezes dos dois.
   const semVitoria = candidatos.every((c) => c.vitoria === null);
   const semUso = candidatos.every((c) => c.uso === null);
@@ -140,7 +196,8 @@ export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato
     ban: normalizarContexto(candidatos.map((c) => c.countersBanidos)),
   };
   const nomes: Record<keyof PesosPLProdigy, string> = { uso: "Uso", vitoria: "Vitória", counter: "Counter", encaixe: "Encaixe", sinergia: "Sinergia", ban: "Ban" };
-  const chaves = Object.keys(nomes) as Array<keyof PesosPLProdigy>;
+  // Só as partes que já contam; a média pesada divide pelos pesos delas.
+  const chaves = (Object.keys(nomes) as Array<keyof PesosPLProdigy>).filter((chave) => ativas[chave]);
   const totalDosPesos = soma(chaves.map((chave) => Math.max(0, pesos[chave]))) || 1;
   return candidatos.map((candidato, i) => {
     const contribuicoes = chaves.map((chave) => ({ nome: nomes[chave], valor: (Math.max(0, pesos[chave]) * partes[chave][i]) / totalDosPesos }));
@@ -180,8 +237,8 @@ export function pontuarComoMetaPick(candidatos: readonly ComponentesDoCandidato[
   });
 }
 
-export function pontuarComMotor(candidatos: readonly ComponentesDoCandidato[], config: ConfigDoMotor) {
-  if (config.motor === "plprodigy") return pontuarComoPLProdigy(candidatos, config.pl);
+export function pontuarComMotor(candidatos: readonly ComponentesDoCandidato[], config: ConfigDoMotor, ativasDoPL?: PartesAtivasDoPL) {
+  if (config.motor === "plprodigy") return pontuarComoPLProdigy(candidatos, config.pl, ativasDoPL);
   if (config.motor === "metapick") return pontuarComoMetaPick(candidatos, config.meta);
   return null;
 }

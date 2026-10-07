@@ -27,7 +27,18 @@ import { ALTURA_DA_CARA, criarCorpo } from "./bonecos3D";
 import { habilidadeDe } from "./habilidades3D";
 import { criarBonecoOriginal, temModelo, type Acao, type BonecoOriginal } from "./modelosDosBrawlers";
 
-export type FichaNo3D = { chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string; /** A classe (Lançador, Tank…): decide como ataca na cena. */ classe?: string };
+export type FichaNo3D = {
+  chave: string; nome: string; lado: "nos" | "eles"; retrato: string | null; ponto: PontoNoMapa; funcao?: string;
+  /** A classe (Lançador, Tank…): decide como ataca na cena. */ classe?: string;
+  /** O brawler ativo na simulação: base maior e um anel dourado no chão. */ destaque?: boolean;
+  /** Quanto demora a chegar ao sítio novo (ms). Um dash é rápido; 0 é sem animação (movimento reduzido). */ deslizeMs?: number;
+};
+/**
+ * Um ataque da simulação, entre duas fichas (chaves): representação tática
+ * genérica — um tiro, um super (maior, dourado, com uma área no alvo) ou um
+ * dash (um rasto rápido). Não imita as habilidades de cada brawler.
+ */
+export type EfeitoNo3D = { id: string; tipo: "ataque" | "super" | "dash"; de: string; para: string };
 /** Um duelo 1v1: a linha entre as duas fichas, com a vantagem da tua equipa. */
 export type DueloNo3D = { nosso: string; deles: string; vantagem: number };
 /** `casa`: só para o dono — clicar numa casa corrige o tipo dela. */
@@ -83,6 +94,12 @@ type Props = {
   onApagar: (tipo: "seta" | "marcador", id: string) => void;
   onCursor: (alvo: AlvoDoCursor) => void;
   onErro: (mensagem: string) => void;
+  /** A simulação da estratégia: a câmara enquadra estes pontos (vazio = visão geral). Muda `n` para pedir. O dono continua a poder mexer na câmara. */
+  enquadrar?: { pontos: PontoNoMapa[]; n: number } | null;
+  /** Os ataques do passo da simulação que está no ecrã. */
+  efeitos?: EfeitoNo3D[];
+  /** prefers-reduced-motion: a câmara salta em vez de voar e os tiros ficam parados. */
+  movimentoReduzido?: boolean;
 };
 
 const LARGURA = 21;
@@ -390,8 +407,10 @@ export default function Quadro3D(props: Props) {
     voarPara: (vista: Vista) => void;
     comandar: (acao: ComandoDeCamara) => void;
     olharComo: (ponto: PontoNoMapa, para: PontoNoMapa) => void;
-    deslizar: (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3) => void;
+    deslizar: (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3, ms?: number) => void;
     comecarFilme: (duracaoMs: number, focos?: Array<{ chave: string; lento: boolean }>, camara?: CamaraDaCena) => void;
+    enquadrar: (pontos: PontoNoMapa[], instantaneo: boolean) => void;
+    mostrarEfeitos: (efeitos: EfeitoNo3D[]) => void;
     realismo: Realismo | null;
     pararFilme: () => void;
     grupoDoTerreno: THREE.Group;
@@ -468,13 +487,22 @@ export default function Quadro3D(props: Props) {
     // Os tiros e os clarões da cena de cinema.
     const grupoDoFilme = new THREE.Group();
     scene.add(grupoDoFilme);
+    // Os ataques da simulação da estratégia (tiro, super, dash).
+    const grupoDosEfeitos = new THREE.Group();
+    scene.add(grupoDosEfeitos);
 
     let sujo = true;
     // Deslizes: um brawler que muda de sítio (de um momento da partida para outro) anda até lá.
-    const deslizes = new Map<THREE.Object3D, { de: THREE.Vector3; para: THREE.Vector3; inicio: number }>();
-    const deslizar = (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3) => {
-      objeto.position.copy(de);
-      deslizes.set(objeto, { de, para, inicio: performance.now() });
+    const deslizes = new Map<THREE.Object3D, { de: THREE.Vector3; para: THREE.Vector3; inicio: number; ms: number }>();
+    const deslizar = (objeto: THREE.Object3D, de: THREE.Vector3, para: THREE.Vector3, ms = 900) => {
+      // Sem animação (movimento reduzido): chega logo.
+      if (ms <= 0) {
+        objeto.position.copy(para);
+        deslizes.delete(objeto);
+      } else {
+        objeto.position.copy(de);
+        deslizes.set(objeto, { de, para, inicio: performance.now(), ms });
+      }
       sujo = true;
     };
     let voo: { de: THREE.Vector3; para: THREE.Vector3; alvoDe: THREE.Vector3; alvoPara: THREE.Vector3; inicio: number } | null = null;
@@ -996,6 +1024,84 @@ export default function Quadro3D(props: Props) {
       sujo = true;
     };
 
+    /*
+     * A simulação da estratégia: a câmara enquadra o que importa em cada passo
+     * (a partir do nosso lado, sem cortes), e os ataques são tiros genéricos
+     * entre as fichas, que as seguem enquanto elas andam.
+     */
+    const enquadrar = (pontos: PontoNoMapa[], instantaneo: boolean) => {
+      if (filme) return;
+      let para: THREE.Vector3, alvo: THREE.Vector3;
+      if (!pontos.length) {
+        para = new THREE.Vector3(...POSICAO_DA_VISTA.nossa);
+        alvo = new THREE.Vector3(...ALVO_DA_VISTA.nossa);
+      } else {
+        const mundo = pontos.map(paraMundo);
+        const centro = mundo.reduce((soma, p) => soma.add(p), new THREE.Vector3()).multiplyScalar(1 / mundo.length);
+        const raio = Math.max(3, ...mundo.map((p) => p.distanceTo(centro)));
+        const distancia = Math.min(38, 8 + raio * 2.2);
+        alvo = centro.clone().setY(0.4);
+        para = centro.clone().add(new THREE.Vector3(0, distancia * 0.8, distancia * 0.6));
+      }
+      if (instantaneo) {
+        voo = null;
+        camera.position.copy(para);
+        controls.target.copy(alvo);
+        controls.update();
+        pedirDesenho();
+      } else voar(para, alvo);
+    };
+    const mostrarEfeitos = (efeitos: EfeitoNo3D[]) => {
+      for (const filho of [...grupoDosEfeitos.children]) {
+        filho.removeFromParent();
+        (filho as THREE.Mesh).geometry?.dispose();
+        ((filho as THREE.Mesh).material as THREE.Material)?.dispose();
+      }
+      efeitos.forEach((efeito, i) => {
+        const deNos = efeito.de.startsWith("a:");
+        const cor = efeito.tipo === "super" ? "#ffc93c" : deNos ? COR_DO_LADO.nos : COR_DO_LADO.eles;
+        const bala = new THREE.Sprite(new THREE.SpriteMaterial({ map: brilho, color: cor, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+        bala.scale.setScalar(efeito.tipo === "super" ? 1.7 : efeito.tipo === "dash" ? 1.3 : 0.9);
+        bala.renderOrder = 30;
+        bala.userData = { efeito, fase: i * 0.29, papel: "bala" };
+        grupoDosEfeitos.add(bala);
+        if (efeito.tipo === "super") {
+          // O super deixa uma área dourada no alvo.
+          const area = new THREE.Mesh(new THREE.RingGeometry(0.7, 1, 40), new THREE.MeshBasicMaterial({ color: "#ffc93c", transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+          area.rotation.x = -Math.PI / 2;
+          area.renderOrder = 29;
+          area.userData = { efeito, fase: i * 0.29, papel: "area" };
+          grupoDosEfeitos.add(area);
+        }
+      });
+      sujo = true;
+    };
+    const animarEfeitos = (agora: number) => {
+      if (!grupoDosEfeitos.children.length) return;
+      grupoDosEfeitos.visible = !filme;
+      if (filme) return;
+      const parado = atual.current.movimentoReduzido === true;
+      for (const objeto of grupoDosEfeitos.children) {
+        const { efeito, fase, papel } = objeto.userData as { efeito: EfeitoNo3D; fase: number; papel: "bala" | "area" };
+        const a = fichaNoMundo(efeito.de)?.position, b = fichaNoMundo(efeito.para)?.position;
+        objeto.visible = Boolean(a && b);
+        if (!a || !b) continue;
+        const periodo = efeito.tipo === "dash" ? 520 : 900;
+        // Parado (movimento reduzido): o tiro fica a meio do caminho, a mostrar quem ataca quem.
+        const u = parado ? 0.5 : ((agora / periodo) + fase) % 1;
+        if (papel === "bala") {
+          const altura = efeito.tipo === "super" ? 1 + Math.sin(u * Math.PI) * 1.4 : 1;
+          objeto.position.lerpVectors(a, b, u).setY(altura);
+          ((objeto as THREE.Sprite).material as THREE.SpriteMaterial).opacity = parado ? 1 : Math.min(1, (1 - u) * 3);
+        } else {
+          objeto.position.copy(b).setY(0.12);
+          objeto.scale.setScalar(parado ? 1.6 : 0.6 + u * 2);
+          ((objeto as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = parado ? 0.7 : (1 - u) * 0.85;
+        }
+      }
+      if (!parado) sujo = true;
+    };
+
     // No modo Cinema o mapa está vivo (vento no mato, água, poeira): desenha-se
     // a ~30 imagens por segundo, mas só enquanto está à vista.
     let aVista = true;
@@ -1030,6 +1136,7 @@ export default function Quadro3D(props: Props) {
         sujo = true;
       }
       filmar(agora);
+      animarEfeitos(agora);
       if (voo) {
         const t = Math.min(1, (performance.now() - voo.inicio) / 600);
         const suave = 1 - Math.pow(1 - t, 3);
@@ -1040,7 +1147,7 @@ export default function Quadro3D(props: Props) {
         sujo = true;
       }
       for (const [objeto, d] of deslizes) {
-        const t = Math.min(1, (performance.now() - d.inicio) / 900);
+        const t = Math.min(1, (performance.now() - d.inicio) / d.ms);
         const suave = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         objeto.position.lerpVectors(d.de, d.para, suave);
         // A andar até ao sítio novo (com o modelo original, a animação de andar).
@@ -1068,7 +1175,7 @@ export default function Quadro3D(props: Props) {
       voar(p.clone().addScaledVector(direcao, -2.2).setY(3.2), p.clone().addScaledVector(direcao, 8).setY(0.3));
     };
 
-    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, olharComo, deslizar, comecarFilme, pararFilme: () => pararFilme(), realismo, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, grupoDasAmeacas, texturaDoMapa: { url: null, textura: null } };
+    cena.current = { scene, camera, renderer, controls, pedirDesenho, voarPara, comandar, olharComo, deslizar, comecarFilme, enquadrar, mostrarEfeitos, pararFilme: () => pararFilme(), realismo, grupoDoTerreno, grupoDasFichas, grupoDasSetas, grupoDosMarcadores, grupoDosDuelos, grupoDosTrilhos, grupoDasAmeacas, texturaDoMapa: { url: null, textura: null } };
 
     return () => {
       cancelAnimationFrame(quadro);
@@ -1341,9 +1448,10 @@ export default function Quadro3D(props: Props) {
         grupo.userData = { id: ficha.chave, tipo: "ficha" };
         const base = new THREE.Mesh(
           new THREE.CylinderGeometry(0.62, 0.7, 0.16, 32),
-          new THREE.MeshLambertMaterial({ color: COR_DO_LADO[ficha.lado], emissive: COR_DO_LADO[ficha.lado], emissiveIntensity: 0.35 }),
+          new THREE.MeshLambertMaterial({ color: COR_DO_LADO[ficha.lado], emissive: COR_DO_LADO[ficha.lado], emissiveIntensity: ficha.destaque ? 1 : 0.35 }),
         );
         base.position.y = 0.08;
+        if (ficha.destaque) base.scale.set(1.3, 1, 1.3);
         base.castShadow = true;
         // O corpo do boneco (a forma vem da classe), virado para a base adversária.
         // Fica dentro de um suporte: se houver o modelo original, troca-se lá dentro.
@@ -1359,6 +1467,14 @@ export default function Quadro3D(props: Props) {
         retrato.position.y = ALTURA_DO_RETRATO;
         retrato.renderOrder = 20;
         grupo.add(base, haste, retrato);
+        // O brawler ativo da simulação: um anel dourado no chão (depois dos três de sempre, que a cena conta pela ordem).
+        if (ficha.destaque) {
+          const anel = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.2, 40), new THREE.MeshBasicMaterial({ color: "#ffd23f", transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+          anel.rotation.x = -Math.PI / 2;
+          anel.position.y = 0.04;
+          anel.renderOrder = 3;
+          grupo.add(anel);
+        }
         // O modelo original do brawler, se estiver na pasta: o corpo e a cara
         // passam a ser dele; do retrato fica só o nome, por cima da cabeça.
         if (temModelo(ficha.nome)) {
@@ -1385,7 +1501,7 @@ export default function Quadro3D(props: Props) {
         const mundo = paraMundo(ficha.ponto);
         const antes = ultimaPosicao.current.get(ficha.chave);
         c.grupoDasFichas.add(grupo);
-        if (antes && antes.distanceTo(mundo) > 0.05) c.deslizar(grupo, antes.clone(), mundo);
+        if (antes && antes.distanceTo(mundo) > 0.05) c.deslizar(grupo, antes.clone(), mundo, ficha.deslizeMs ?? 900);
         else grupo.position.copy(mundo);
         ultimaPosicao.current.set(ficha.chave, mundo);
       }
@@ -1569,6 +1685,15 @@ export default function Quadro3D(props: Props) {
     }
     c.pedirDesenho();
   }, [props.trilhos]);
+
+  /* ---- A simulação da estratégia: câmara e ataques. ---- */
+  useEffect(() => {
+    if (props.enquadrar) cena.current?.enquadrar(props.enquadrar.pontos, props.movimentoReduzido === true);
+    // Só quando se pede outro enquadramento (`n`): entre passos, a câmara é de quem a mexer.
+  }, [props.enquadrar?.n]);
+  useEffect(() => {
+    cena.current?.mostrarEfeitos(props.efeitos ?? []);
+  }, [props.efeitos]);
 
   /* ---- A cena de cinema. ---- */
   useEffect(() => {
