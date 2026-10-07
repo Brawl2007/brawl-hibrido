@@ -50,6 +50,7 @@ import { brawlScopeCaptureSchema } from "@shared/brawlScopeCapture";
 import { importBrawlScopeCapture, getWreqStatus } from "./counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot, syncRankedData } from "./rankedSync";
 import { AGENDAMENTO_DA_RECOLHA } from "@shared/agendamento";
+import { AGENDAMENTO_DAS_PARTIDAS, estadoDaCadenciaDasPartidas } from "@shared/agendamentoPartidas";
 import { ROTACAO_GUARDADA_SETTING, lerRotacaoGuardada } from "@shared/rotacaoGuardada";
 import { RECOLHA_AUTOMATICA_SETTING, lerRecolhaAutomatica } from "@shared/recolhaAutomatica";
 import { getBrawlPlanetMapTeamBoard } from "@shared/brawlPlanetMapTeams";
@@ -862,8 +863,10 @@ export const appRouter = router({
          * `shared/agendamento.ts`: o que está na base sobrou da plataforma
          * anterior e não manda em nada.
          */
-        agendamento: AGENDAMENTO_DA_RECOLHA,
+        agendamento: AGENDAMENTO_DAS_PARTIDAS,
+        cadencia: estadoDaCadenciaDasPartidas(config, isOfficialApiConfigured()),
         lastStatus: config?.lastStatus ?? "idle",
+        lastStartedAt: config?.lastStartedAt ?? null,
         lastCompletedAt: config?.lastCompletedAt ?? null,
         lastError: config?.lastError ?? null,
         coverage,

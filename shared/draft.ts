@@ -1,5 +1,5 @@
 import { versaoDoMotor } from "./versaoDoMotor";
-import { confrontoEntre, partesAtivasDoPL, pontuarComMotor, sinergiaEntre, type ComponentesDoCandidato, type ConfigDoMotor, type MotorDoDraft } from "./motoresDoDraft";
+import { lerContextoDoMotor, partesAtivasDoPL, pontuarComMotor, type ComponentesDoCandidato, type ConfigDoMotor, type ContextoDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
 import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
@@ -826,7 +826,7 @@ export function calcularPerfilDeCounter(brawler: string, candidateNames: string[
     "Brawl Planet": 2,
     "PL Prodigy": 3,
   };
-  const sourceProfiles = [...getCounterSourceProfiles(brawler, modeId)]
+  const sourceProfiles = (fonteObservadaAtiva() ? [] : [...getCounterSourceProfiles(brawler, modeId)])
     .sort((left, right) => (sourcePriority[left.source] ?? 99) - (sourcePriority[right.source] ?? 99));
   const mentionedNames = [
     ...Object.keys(explicitCounterNotes),
@@ -1876,7 +1876,7 @@ export type RankedDraftEntry<T extends DraftRow = DraftRow> = {
   signal: DraftSignal;
   rank: number;
   /** Com o motor PL Prodigy ou MetaPick: de onde vieram os pontos finais. */
-  motor?: { nome: MotorDoDraft; partes: Array<{ nome: string; valor: number }> };
+  motor?: { nome: MotorDoDraft; partes: Array<{ nome: string; valor: number }>; contexto?: ContextoDoMotor };
 };
 
 function rankEntriesWithCounterWindow<T extends DraftRow>(
@@ -2033,32 +2033,29 @@ export function rankDraftEntries<T extends DraftRow>(rows: T[], lockedNames: Set
 }
 
 /**
- * Os motores PL Prodigy e MetaPick: as mesmas linhas, os mesmos sinais e a
- * mesma janela de counters do Draft, mas os pontos finais e a ordem saem das
- * contas deles (`motoresDoDraft.ts`).
+ * Modelos locais PL/Meta: os confrontos, sinergias, bans e riscos vêm da
+ * fonte ativa. As restrições de bónus do Híbrido não se aplicam a estes modelos.
  */
 function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], context: DraftRankingContext<T>, lockedNames: Set<string>, config: ConfigDoMotor): RankedDraftEntry<T>[] {
   const inimigos = (context.enemyRows ?? []).map((row) => row.brawler);
   const aliados = (context.allyRows ?? []).map((row) => row.brawler);
-  const modo = context.mapModeId;
-  // Cada equipa escolhe três; o risco só conta com os picks que faltam ao adversário.
-  const picksQueFaltamAoAdversario = Math.max(0, 3 - inimigos.length);
-  const bloqueados = new Set(Array.from(lockedNames, (nome) => counterKey(nome)));
-  const componentes: ComponentesDoCandidato[] = entries.map((entry) => ({
+  const contextoComum = {
+    inimigos, aliados, bans: Array.from(context.bannedNames ?? []),
+    roster: (context.popularityRows ?? entries.map((entry) => entry.row)).map((row) => row.brawler),
+    bloqueados: lockedNames, modeId: context.mapModeId,
+    incluirRiscos: config.motor === "metapick",
+  };
+  const contextos = entries.map((entry) => lerContextoDoMotor(entry.row.brawler, contextoComum));
+  const componentes: ComponentesDoCandidato[] = entries.map((entry, i) => ({
     brawler: entry.row.brawler,
     base: entry.basePoints,
     vitoria: numeric(entry.row.winRate),
     uso: getDraftUsageRate(entry.row),
-    counters: inimigos.map((inimigo) => confrontoEntre(entry.row.brawler, inimigo, modo)),
-    sinergias: aliados.map((aliado) => sinergiaEntre(entry.row.brawler, aliado, modo)),
+    counters: contextos[i].counters.map((relacao) => relacao.pp),
+    sinergias: contextos[i].sinergias.map((relacao) => relacao.pp),
     encaixe: entry.signal.fit,
-    countersBanidos: entry.signal.bannedCounterCount,
-    riscos: picksQueFaltamAoAdversario === 0 ? [] : getCounterProfile(entry.row.brawler, [], modo).counteredBy
-      .filter((counter) => !bloqueados.has(counterKey(counter)))
-      .map((counter) => confrontoEntre(counter, entry.row.brawler, modo))
-      .filter((valor) => valor > 0)
-      .sort((a, b) => b - a)
-      .slice(0, Math.min(3, picksQueFaltamAoAdversario)),
+    countersBanidos: contextos[i].countersBanidos.length,
+    riscos: contextos[i].riscos.map((relacao) => relacao.pp),
   }));
   // No PL, as partes entram com o draft: no começo só a base (Vitória e Uso).
   const ativasDoPL = partesAtivasDoPL({ inimigos: inimigos.length, aliados: aliados.length, bans: Array.from(context.bannedNames ?? []).length });
@@ -2068,7 +2065,7 @@ function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], c
       ...entry,
       draftScore: pontuacoes[i].pontos,
       finalPoints: pontuacoes[i].pontos,
-      motor: { nome: config.motor, partes: pontuacoes[i].partes },
+      motor: { nome: config.motor, partes: pontuacoes[i].partes, contexto: contextos[i] },
     }))
     .sort((a, b) => b.finalPoints - a.finalPoints || b.basePoints - a.basePoints || a.row.brawler.localeCompare(b.row.brawler))
     .map((entry, index) => ({ ...entry, rank: index + 1 }));

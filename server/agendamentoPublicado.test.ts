@@ -30,9 +30,9 @@ describe("agendamento publicado", () => {
     expect(routers).not.toMatch(/enabled: Boolean\(config\?\.enabled\)/);
   });
 
-  it("os três painéis dizem todos a mesma coisa", () => {
-    // Ranked, counters e batalhas observadas partilham o mesmo agendador real.
+  it("separa o agendamento das partidas do cron diário dos mapas e counters", () => {
     const ocorrencias = routers.match(/agendamento: AGENDAMENTO_DA_RECOLHA/g) ?? [];
-    expect(ocorrencias).toHaveLength(3);
+    expect(ocorrencias).toHaveLength(2);
+    expect(routers.match(/agendamento: AGENDAMENTO_DAS_PARTIDAS/g)).toHaveLength(1);
   });
 });

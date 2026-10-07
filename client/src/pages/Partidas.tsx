@@ -11,6 +11,7 @@ import { JOGOS_MINIMOS_FIAVEIS, taxaDeUso, taxaDeVitoria } from "@shared/partida
 import { SeletorDeRank } from "@/components/SeletorDeRank";
 import { RANKS_DO_FILTRO } from "@shared/ranksDoRanked";
 import { useApiOficial } from "@/hooks/useApiOficial";
+import { EstadoDaRecolha } from "@/components/EstadoDaRecolha";
 
 /**
  * A página «Partidas»: tudo o que o site sabe a partir dos jogos Ranked que
@@ -108,6 +109,9 @@ export default function Partidas() {
     { staleTime: 120_000, placeholderData: (anterior) => anterior },
   );
   const dados = consulta.data;
+  const recolha = trpc.observedMatches.status.useQuery(undefined, {
+    staleTime: 30_000, refetchInterval: 60_000, refetchIntervalInBackground: false,
+  });
 
   const termo = procura.trim().toLowerCase();
   const passa = (nomes: readonly string[]) => !termo || nomes.some((nome) => nome.toLowerCase().includes(termo));
@@ -172,10 +176,12 @@ export default function Partidas() {
         <header className="partidas-cabeca">
           <h1 className="bh-display">Partidas Ranked</h1>
           <p>
-            Jogos Ranked reais, lidos da API oficial de 15 em 15 minutos e guardados para sempre. Cada brawler, cada
+            Jogos Ranked reais da API oficial. Recolha programada a cada 15 minutos; o estado abaixo confirma as voltas. Cada brawler, cada
             confronto, cada equipa e cada par de aliados — sem cortes.
           </p>
         </header>
+
+        <EstadoDaRecolha cadencia={recolha.data?.cadencia} />
 
         <section className="partidas-filtros" aria-label="Filtros">
           <SeletorDePeriodo dias={dias} onChange={mudar(setDias)} />
@@ -257,7 +263,7 @@ export default function Partidas() {
             {consulta.isError ? <p className="partidas-vazio">Não foi possível ler as partidas agora. Tenta daqui a pouco.</p> : null}
             {dados && partidas === 0 ? (
               <p className="partidas-vazio">
-                Ainda não há partidas neste filtro. A recolha corre de 15 em 15 minutos e guarda tudo — volta mais tarde, ou escolhe «Tudo» no período.
+                Ainda não há partidas neste filtro. Consulta o estado da recolha acima, ou escolhe «Tudo» no período.
               </p>
             ) : null}
 

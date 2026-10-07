@@ -5,6 +5,8 @@ import { linhasDaApi, useFonteApi } from "@/hooks/useFonteApi";
 import { SeletorDePeriodo } from "@/components/SeletorDePeriodo";
 import { BotaoApiOficial } from "@/components/BotaoApiOficial";
 import { NOMES_DOS_MOTORES, PainelDoMotor } from "@/components/PainelDoMotor";
+import { EstadoDaRecolha } from "@/components/EstadoDaRecolha";
+import { DetalhesDoMotor } from "@/components/DetalhesDoMotor";
 import { useMotorDoDraft } from "@/hooks/useMotorDoDraft";
 import { RANKS_DO_FILTRO } from "@shared/ranksDoRanked";
 import { SeletorDeRank } from "@/components/SeletorDeRank";
@@ -897,6 +899,8 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
         </p>
       ) : null}
 
+      <EstadoDaRecolha cadencia={observedQuery.data?.cadencia} />
+
       {db && !db.reachable ? (
         <p className="source-health-db">
           <b>Base de dados inacessível.</b> O site está a funcionar com o catálogo do projeto, mas nada do que for
@@ -1426,7 +1430,7 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
   const sameClassTriggers = signal.bonusSources.sameClassPenalties ?? [];
   const sameClassClass = signal.bonusSources.sameClassClass ?? getBrawlerClass(row.brawler);
   const sameClassPenaltyCount = sameClassTriggers.length || 1;
-  const hasSameClassPenalty = signal.scoreBreakdown.sameClassPenaltyPoints > 0;
+  const hasSameClassPenalty = !motor && signal.scoreBreakdown.sameClassPenaltyPoints > 0;
   const topCounterWindowSize = signal.scoreBreakdown.topCounterWindowSize;
   const enemyCounters = signal.bonusSources.enemyCounters ?? [];
   const repeatedPressures = signal.bonusSources.repeatedEnemyCounterPressures ?? [];
@@ -1483,7 +1487,7 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
           * para 50% com poucos jogos — ver `linhasDaApi`.
           */}
         <small>{role === "side" ? "LANE" : role.toUpperCase()} · Vitória {formatMetric(daApi ? daApi.vitoria : roleWinRate)} · Uso {formatMetric(row.usage)}{daApi ? ` · ${daApi.jogos} jogos` : ""}</small>
-        {expanded && <>
+        {expanded && !motor && <>
         <small className="recommendation-factor-line">PONTOS BASE {basePoints.toFixed(2)} · SCORE HÍBRIDO REAL {signal.scoreBreakdown.hybridPoints.toFixed(2)}</small>
         {hasSameClassPenalty && <span className={`recommendation-class-penalty team-${suggestionTeam}`} aria-label={`Desbónus de mesma classe em ${row.brawler}: menos ${formatRulePercentage(sameClassPenaltyRate)} por cento, ativado pelos Picks da equipa ${suggestionTeam === "blue" ? "Azul" : "Vermelha"}: ${sameClassTriggers.join(", ") || "aliado da mesma classe"}`}>
           <AlertTriangle size={13} aria-hidden="true" />
@@ -1528,11 +1532,14 @@ const DraftCard = memo(function DraftCard({ row, index, draftScore, basePoints, 
         <small className="recommendation-build-line">⚡ Gadget: {build.gadget} | Star Power: {build.starPower} | Gears: {build.gears.join(", ")}</small>
         </>}
         {/* Com o PL Prodigy ou o MetaPick, de onde vieram os pontos. */}
-        {motor ? <small className="recommendation-motor">{motor.partes.filter((parte) => Math.abs(parte.valor) >= 0.05).map((parte) => `${parte.nome} ${parte.valor >= 0 ? "" : "−"}${Math.abs(parte.valor).toFixed(1)}`).join(" · ")}</small> : null}
-        {!expanded && <small className="pick-brief">{hasSameClassPenalty ? "⚠ Classe repetida · " : ""}{finalPoints - basePoints >= 0 ? "+" : ""}{(finalPoints - basePoints).toFixed(2)} pts ({signal.scoreBreakdown.contextualAdjustment >= 0 ? "+" : ""}{(signal.scoreBreakdown.hybridPoints ? signal.scoreBreakdown.contextualAdjustment / signal.scoreBreakdown.hybridPoints * 100 : 0).toFixed(1)}%) · {signal.decisionType}</small>}
+        {motor ? <DetalhesDoMotor motor={motor} pontos={finalPoints} expanded={expanded} /> : null}
+        {expanded && motor && <small className="recommendation-build-line">⚡ Gadget: {build.gadget} | Star Power: {build.starPower} | Gears: {build.gears.join(", ")}</small>}
+        {!expanded && !motor && <small className="pick-brief">{hasSameClassPenalty ? "⚠ Classe repetida · " : ""}{finalPoints - basePoints >= 0 ? "+" : ""}{(finalPoints - basePoints).toFixed(2)} pts ({signal.scoreBreakdown.contextualAdjustment >= 0 ? "+" : ""}{(signal.scoreBreakdown.hybridPoints ? signal.scoreBreakdown.contextualAdjustment / signal.scoreBreakdown.hybridPoints * 100 : 0).toFixed(1)}%) · {signal.decisionType}</small>}
       </span>
       <span className="recommendation-metrics"><b>{formatMetric(finalPoints, "")}</b><small>{motor ? `PONTOS · ${NOMES_DOS_MOTORES[motor.nome].toUpperCase()}` : "PONTOS FINAIS"}</small></span>
-      <span className="recommendation-side"><span>BASE {basePoints.toFixed(2)} · SCORE DRAFT {draftScore.toFixed(2)}</span><span>SCORE HÍBRIDO {signal.scoreBreakdown.hybridScore.toFixed(2)} · REGRAS CONTEXTUAIS ATIVAS</span></span>
+      <span className="recommendation-side">{motor
+        ? <span>MODELO LOCAL · {NOMES_DOS_MOTORES[motor.nome].toUpperCase()}</span>
+        : <><span>BASE {basePoints.toFixed(2)} · SCORE DRAFT {draftScore.toFixed(2)}</span><span>SCORE HÍBRIDO {signal.scoreBreakdown.hybridScore.toFixed(2)} · REGRAS CONTEXTUAIS ATIVAS</span></>}</span>
       <span className="recommendation-action">{locked ? "LOCK" : "ADD"}</span>
     </button>
     </DicaDosFatores>
@@ -2569,10 +2576,16 @@ export default function Draft() {
   const fonteApi = useFonteApi(selectedMap?.name);
   // Motor escolhido nos Ajustes: Brawl Híbrido, PL Prodigy ou MetaPick (ver `motoresDoDraft.ts`).
   const motorDoDraft = useMotorDoDraft();
+  // A seleção de outro motor deve mostrar a ordem dos pontos dele, inclusive
+  // ao reabrir o Draft com essa escolha guardada. Depois o utilizador pode
+  // escolher a ordem base manualmente; alterações dos pesos não a repõem.
+  useEffect(() => {
+    if (motorDoDraft.config.motor !== "hibrido") setRankingOrder("context");
+  }, [motorDoDraft.config.motor]);
   const currentRows = useMemo(() => {
     const doMapaPublicado = liveRows.filter((row) => row.map === selectedMap?.name);
     // «Só API oficial»: vitória e uso das partidas recolhidas, sem as outras fontes; sem Star Player (a API não o dá).
-    if (fonteApi.ligada && fonteApi.dados) return calculateHybridScoresByMap(linhasDaApi(doMapaPublicado, fonteApi.dados), pesoDeVitoriaDoPick, topBrawlWeight, 0);
+    if (fonteApi.ligada) return calculateHybridScoresByMap(linhasDaApi(doMapaPublicado, fonteApi.dados), pesoDeVitoriaDoPick, topBrawlWeight, 0);
     const doMapa = doMapaPublicado;
     // Sem diferença para os pesos globais não se recalcula nada: além de poupar
     // trabalho, mantém as linhas idênticas por identidade e os memos a jusante

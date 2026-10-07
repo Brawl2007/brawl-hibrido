@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { getObservedMatchCollectionConfigByTaskUid } from "./db";
 import { sdk } from "./_core/sdk";
-import { collectObservedRankedMatches } from "./observedMatchCollection";
+import { recolherSeForAltura } from "./observedMatchCollection";
 
 export async function handleObservedMatchCollectionScheduled(req: Request, res: Response) {
   try {
@@ -11,7 +11,8 @@ export async function handleObservedMatchCollectionScheduled(req: Request, res: 
     const config = await getObservedMatchCollectionConfigByTaskUid(user.taskUid);
     if (!config || !config.enabled) return res.json({ ok: true, skipped: "orphan-or-disabled" });
 
-    const result = await collectObservedRankedMatches("scheduled");
+    const result = await recolherSeForAltura("scheduled");
+    if ("saltada" in result) return res.json(result);
     if (!result.ok) {
       return res.status(500).json({
         error: result.error,

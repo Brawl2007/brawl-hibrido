@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Brawl Hibrido - partidas Ranked a cada 15 minutos",
+    "enabled": true,
+    "url": "https://brawl-hibrido.vercel.app/api/partidas/agendar",
+    "requestMethod": 0,
+    "requestTimeout": 30,
+    "saveResponses": true,
+    "schedule": {
+      "timezone": "UTC",
+      "expiresAt": 0,
+      "hours": [-1],
+      "mdays": [-1],
+      "minutes": [0, 15, 30, 45],
+      "months": [-1],
+      "wdays": [-1]
+    }
+  }
+}

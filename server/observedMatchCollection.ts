@@ -13,6 +13,7 @@ import {
   lerEstadoDosJogadores,
   listarJogadoresNaAltura,
   recordObservedBattlesBatch,
+  reservarJanelaDasPartidas,
   tirarJogadoresParados,
   updateObservedMatchCollectionConfig,
   updateObservedMatchCollectionRun,
@@ -30,12 +31,14 @@ import {
 import { RANKED_MAP_SOURCES } from "./rankedSync";
 import { getSetting, setSetting } from "./appSettings";
 import { rankDaPartida } from "@shared/ranksDoRanked";
+import { inicioDaJanelaDasPartidas, podeRecolherAgora, RECOLHA_PRESA_MS } from "@shared/agendamentoPartidas";
+export { podeRecolherAgora } from "@shared/agendamentoPartidas";
 
 /**
  * Quantos jogadores cada recolha lê, e quantos de cada vez.
  *
  * Eram 12, três a três: umas dezenas de partidas por dia, e nem essas eram do
- * modo certo (ver `TIPOS_DO_RANKED`). Com a recolha de hora a hora, 120
+ * modo certo (ver `TIPOS_DO_RANKED`). Com a recolha a cada 15 minutos, 120
  * jogadores por volta dão milhares de partidas por semana. O limite de tempo
  * garante que a função da Vercel acaba sempre a tempo de gravar.
  */
@@ -242,12 +245,12 @@ async function mapWithConcurrency<T, R>(items: readonly T[], task: (item: T) => 
   return results;
 }
 
-export async function collectObservedRankedMatches(trigger: ObservedCollectionTrigger) {
-  const runId = await createObservedMatchCollectionRun(trigger);
-  const startedAt = new Date();
-  await updateObservedMatchCollectionConfig({ lastStatus: "running", lastStartedAt: startedAt, lastError: null });
-
+export async function collectObservedRankedMatches(trigger: ObservedCollectionTrigger, reserva?: { startedAt: Date }) {
+  let runId: number | undefined;
+  const startedAt = reserva?.startedAt ?? new Date();
   try {
+    runId = await createObservedMatchCollectionRun(trigger);
+    if (!reserva) await updateObservedMatchCollectionConfig({ lastStatus: "running", lastStartedAt: startedAt, lastError: null });
     // Sem chave, a API devolve listas vazias em silêncio; dizê-lo evita procurar o problema no sítio errado.
     if (!isOfficialApiConfigured()) throw new Error("Sem chave da API oficial neste ambiente: guarda-a no painel do Draft (as versões de teste da Vercel não usam a base de dados de produção).");
     const volta = voltaDaRecolha(startedAt);
@@ -333,43 +336,19 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
   }
 }
 
-/**
- * Quanto tempo entre duas recolhas pedidas de fora.
- *
- * O endereço que dispara a recolha é público — é o que deixa o GitHub Actions
- * chamá-lo de 15 em 15 minutos sem guardar segredos em lado nenhum. O que
- * impede abusos é isto: pedido antes do tempo, não faz nada e diz quando pode.
- *
- * Porquê 15 minutos: a API só mostra as últimas 25 partidas de cada jogador, e
- * quem joga muito passa das 25 em poucas horas. Uma partida Ranked demora dois
- * a três minutos — em 15 minutos ninguém faz 25, por isso quem é lido nessa
- * volta fica sem falhas.
- */
-export const INTERVALO_MINIMO_ENTRE_RECOLHAS_MS = 12 * 60_000;
-const RECOLHA_PRESA_MS = 10 * 60_000;
-
-export function podeRecolherAgora(
-  config: { lastStatus?: string | null; lastStartedAt?: Date | string | null } | undefined,
-  agora = new Date(),
-) {
-  const inicio = config?.lastStartedAt ? new Date(config.lastStartedAt).getTime() : 0;
-  const passou = agora.getTime() - inicio;
-  if (config?.lastStatus === "running" && passou < RECOLHA_PRESA_MS) {
-    return { pode: false as const, motivo: "Já há uma recolha a correr." };
-  }
-  if (inicio && passou < INTERVALO_MINIMO_ENTRE_RECOLHAS_MS) {
-    const faltam = Math.ceil((INTERVALO_MINIMO_ENTRE_RECOLHAS_MS - passou) / 60_000);
-    return { pode: false as const, motivo: `A última recolha foi há ${Math.floor(passou / 60_000)} min. A próxima pode ser daqui a ${faltam} min.` };
-  }
-  return { pode: true as const };
-}
-
-/** A recolha pedida de fora (GitHub Actions ou cron), com o intervalo mínimo. */
+/** Uma volta por janela de 15 minutos. A base arbitra chamadas concorrentes. */
 export async function recolherSeForAltura(trigger: ObservedCollectionTrigger = "scheduled") {
-  const config = await getObservedMatchCollectionConfig();
-  const altura = podeRecolherAgora(config);
-  if (!altura.pode) return { ok: false as const, saltada: true as const, motivo: altura.motivo };
-  return collectObservedRankedMatches(trigger);
+  if (!isOfficialApiConfigured()) return { ok: false as const, error: "Sem chave da API oficial para recolher partidas." };
+  const startedAt = new Date();
+  const reservada = await reservarJanelaDasPartidas(inicioDaJanelaDasPartidas(startedAt), startedAt, new Date(startedAt.getTime() - RECOLHA_PRESA_MS));
+  if (!reservada) {
+    const config = await getObservedMatchCollectionConfig();
+    const altura = podeRecolherAgora(config, startedAt);
+    return { ok: false as const, saltada: true as const,
+      motivo: altura.pode ? "Outra chamada reservou esta janela de 15 minutos." : altura.motivo,
+      proximaPrevista: altura.proximaPrevista };
+  }
+  return collectObservedRankedMatches(trigger, { startedAt });
 }
 
 /**

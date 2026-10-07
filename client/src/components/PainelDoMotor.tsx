@@ -32,16 +32,16 @@ const BARRAS_PL: Array<{ chave: keyof PesosPLProdigy; nome: string; ajuda: strin
   { chave: "vitoria", nome: "Vitória", ajuda: "Taxa de vitória neste mapa." },
   { chave: "sinergia", nome: "Sinergia", ajuda: "Com os aliados já escolhidos." },
   { chave: "counter", nome: "Counter", ajuda: "Contra os picks inimigos." },
-  { chave: "ban", nome: "Ban", ajuda: "Counters dele que foram banidos. As fontes não publicam a taxa de ban de cada brawler." },
+  { chave: "ban", nome: "Ban", ajuda: "Counters dele que foram banidos, apenas enquanto faltam picks inimigos. Não exige Top 25/30 no modelo local." },
 ];
 
 const BARRAS_META: Array<{ chave: keyof AjustesMetaPick; nome: string; ajuda: string }> = [
   { chave: "sinergia", nome: "Peso da sinergia", ajuda: "Multiplica a sinergia com os aliados." },
   { chave: "counter", nome: "Peso do counter", ajuda: "Multiplica os confrontos contra os picks inimigos." },
-  { chave: "minSinergia", nome: "Sinergia mínima", ajuda: "Abaixo disto (em dezenas de pontos: 0,2 = 2 pp) a sinergia não conta." },
-  { chave: "minCounter", nome: "Counter mínimo", ajuda: "Abaixo disto (0,2 = 2 pp) o confronto não conta." },
-  { chave: "penalizacaoBan", nome: "Penalização de ban", ajuda: "Tira pontos pelos counters dele que o adversário ainda pode escolher." },
-  { chave: "topCounters", nome: "Limite de top counters", ajuda: "Só os N melhores counters de cada inimigo recebem o bónus." },
+  { chave: "minSinergia", nome: "Sinergia mínima", ajuda: "Neste modelo local, 0,2 equivale a 2 pp. A unidade interna do MetaPick não foi confirmada." },
+  { chave: "minCounter", nome: "Counter mínimo", ajuda: "Neste modelo local, 0,2 equivale a 2 pp. Abaixo disso o confronto não conta." },
+  { chave: "penalizacaoBan", nome: "Peso do risco disponível", ajuda: "Adaptação local: tira pontos pelos counters ainda disponíveis para o adversário." },
+  { chave: "topCounters", nome: "Counters que recebem bónus", ajuda: "Adaptação local: só os N melhores de cada inimigo recebem bónus. A ajuda pública do MetaPick descreve um limite de apresentação." },
 ];
 
 function Barra({ id, nome, ajuda, valor, min, max, passo, sufixo, onChange }: { id: string; nome: string; ajuda: string; valor: number; min: number; max: number; passo: number; sufixo: string; onChange: (valor: number) => void }) {
@@ -90,8 +90,8 @@ export function PainelDoMotor({ config, onChange }: { config: ConfigDoMotor; onC
               );
             })}
           </div>
-          <p className="mesa-painel-nota">Soma dos pesos: <b>{somaDosPesos}%</b>{somaDosPesos !== 100 ? " — o Draft reparte-os na mesma proporção." : "."} Pontos de 0 a 100, na escala do PL.</p>
-          <p className="mesa-painel-nota">Como no PL, as partes entram com o draft: no começo só a <b>Vitória</b> e o <b>Uso</b> (a base); o <b>Counter</b> entra com o primeiro pick do adversário, a <b>Sinergia</b> e o <b>Encaixe</b> com o nosso primeiro pick, e o <b>Ban</b> com o primeiro ban. Os pontos são a média pesada só das partes que já contam.</p>
+          <p className="mesa-painel-nota">Soma dos pesos: <b>{somaDosPesos}%</b>{somaDosPesos !== 100 ? " — o Draft reparte-os na mesma proporção." : "."} A soma pesada passa por uma escala estimada de 0 a 100. Partes sem sinal dão zero; pesos personalizados guardados são mantidos.</p>
+          <p className="mesa-painel-nota">Como no PL, as partes entram com o draft: no começo só a <b>Vitória</b> e o <b>Uso</b> (a base); o <b>Counter</b> entra com o primeiro pick do adversário, a <b>Sinergia</b> e o <b>Encaixe</b> com o nosso primeiro pick, e o <b>Ban</b> com o primeiro ban (até o adversário revelar os três). Os pontos são a média pesada só das partes que já contam.</p>
           <div className="motor-grelha">
             {BARRAS_PL.map((barra) => (
               <Barra key={barra.chave} id={`motor-pl-${barra.chave}`} nome={barra.nome} ajuda={barra.ajuda} valor={config.pl[barra.chave]} min={LIMITES_PL_PRODIGY.min} max={LIMITES_PL_PRODIGY.max} passo={LIMITES_PL_PRODIGY.passo} sufixo="%" onChange={(valor) => onChange({ ...config, pl: { ...config.pl, [barra.chave]: valor } })} />
@@ -102,7 +102,7 @@ export function PainelDoMotor({ config, onChange }: { config: ConfigDoMotor; onC
 
       {config.motor === "metapick" ? (
         <section className="motor-barras" aria-label="Ajustes do MetaPick">
-          <p className="mesa-painel-nota">Pontos = força no mapa (0–100) + 10 × (counter × peso + sinergia × peso − risco × penalização). Os valores contam em dezenas de pontos percentuais: +10 pp = 1,0.</p>
+          <p className="mesa-painel-nota">Modelo local: pontos = força no mapa (0–100) + 10 × (counter × peso + sinergia × peso − risco × penalização). Aqui +10 pp = 1,0; essa conversão não foi confirmada no MetaPick.</p>
           <div className="motor-grelha">
             {BARRAS_META.map((barra) => (
               <Barra key={barra.chave} id={`motor-meta-${barra.chave}`} nome={barra.nome} ajuda={barra.ajuda} valor={config.meta[barra.chave]} min={LIMITES_METAPICK[barra.chave].min} max={LIMITES_METAPICK[barra.chave].max} passo={LIMITES_METAPICK[barra.chave].passo} sufixo="" onChange={(valor) => onChange({ ...config, meta: { ...config.meta, [barra.chave]: valor } })} />
@@ -113,10 +113,10 @@ export function PainelDoMotor({ config, onChange }: { config: ConfigDoMotor; onC
       ) : null}
 
       <p className="mesa-painel-nota">
-        O PL Prodigy e o MetaPick fazem as contas no servidor e não publicam a fórmula. Confirmado por investigação: os dados que usam
-        (mapa, picks de cada lado, bans e os pesos), os valores por omissão, os limites das barras e a escala dos pontos do PL. O resto
-        segue os nomes das barras, com os dados deste site — as fontes, ou as partidas da API com «API oficial» ligado. Os dados deles
-        são outros (o PL usa Masters+, o MetaPick Master I+, cerca de 1 milhão de partidas), por isso a ordem pode não bater.
+        Estes são modelos locais inspirados nos dois sites. Os presets e os controlos visíveis podem ser comparados; a fórmula
+        completa, a normalização interna e os modelos deles não foram confirmados. A escala logística do PL é uma estimativa.
+        Usa os dados deste site — as fontes ou, com «API oficial» ligada, as partidas recolhidas. Pesos iguais não garantem pontos
+        nem recomendações iguais.
       </p>
     </div>
   );

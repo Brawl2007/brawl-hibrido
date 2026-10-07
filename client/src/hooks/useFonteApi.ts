@@ -41,8 +41,9 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
   const mapa = lista.data?.mapas.find((entrada) => normalizarNome(entrada.nome) === normalizarNome(nomeDoMapa));
   const doMapa = trpc.observedMatches.partidas.useQuery(
     { dias, rank: doRank, mapId: mapa?.mapId },
-    // Ao mudar o período, os números anteriores ficam até chegarem os novos — sem saltar para as outras fontes.
-    { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000, placeholderData: (anterior) => anterior },
+    // A chave inclui o mapa, período e rank. Durante uma mudança não se usam
+    // números da chave anterior como se pertencessem ao novo mapa.
+    { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000 },
   );
   const dados: DadosDoMapaDaApi | undefined = ligada
     ? mapa ? doMapa.data : lista.data ? SEM_PARTIDAS : undefined
@@ -81,7 +82,7 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
  * página «Partidas». O uso é a percentagem de partidas em que o brawler
  * apareceu.
  */
-export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[], dados: DadosDoMapaDaApi): T[] {
+export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[], dados: DadosDoMapaDaApi = SEM_PARTIDAS): T[] {
   const porNome = new Map(dados.brawlers.map((linha) => [normalizarNome(linha.brawler), linha]));
   return linhas.map((linha) => {
     const contagem = porNome.get(normalizarNome(linha.brawler));
