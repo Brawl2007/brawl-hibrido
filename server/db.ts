@@ -1113,6 +1113,18 @@ export async function tirarJogadoresParados(antesDe: Date) {
  * O limite é uma rede de segurança para a função não rebentar com a memória;
  * se algum dia for atingido, a página diz quantas partidas contou.
  */
+/**
+ * O hint tem de ficar imediatamente depois de SELECT (primeira coluna).
+ * Na TiDB, o hash join das 750 mil classificações ultrapassa a memória da
+ * consulta. O index hash join consulta a chave primária em lotes limitados;
+ * mantém os mesmos filtros e resultados, sem aumentar quotas nem apagar dados.
+ */
+function colunaDoMapaDasPartidas(comRank: boolean) {
+  return comRank && fornecedorDaBase(process.env.DATABASE_URL) === "tidb"
+    ? sql<string>`/*+ INL_HASH_JOIN(observed_battle_ranks) */ ${observedBattles.mapId}`.as("map_id")
+    : observedBattles.mapId;
+}
+
 export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode?: string; mapId?: string; rank?: { min: number; max: number }; limite?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Base de dados das partidas não configurada.");
@@ -1123,7 +1135,7 @@ export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode
     filtro.rank ? between(observedBattleRanks.rankMedio, filtro.rank.min, filtro.rank.max) : undefined,
   ].filter((condicao): condicao is NonNullable<typeof condicao> => Boolean(condicao));
   const colunas = {
-    mapId: observedBattles.mapId,
+    mapId: colunaDoMapaDasPartidas(Boolean(filtro.rank)),
     mode: observedBattles.mode,
     winningTeam: observedBattles.winningTeam,
     losingTeam: observedBattles.losingTeam,
@@ -1146,7 +1158,7 @@ export async function listObservedMapsParaResumo(desde?: Date, rank?: { min: num
     desde ? gte(observedBattles.battleTime, desde) : undefined,
     rank ? between(observedBattleRanks.rankMedio, rank.min, rank.max) : undefined,
   ].filter((condicao): condicao is NonNullable<typeof condicao> => Boolean(condicao));
-  const colunas = { mapId: observedBattles.mapId, mode: observedBattles.mode, partidas: count() };
+  const colunas = { mapId: colunaDoMapaDasPartidas(Boolean(rank)), mode: observedBattles.mode, partidas: count() };
   const consulta = rank
     ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
     : db.select(colunas).from(observedBattles);
