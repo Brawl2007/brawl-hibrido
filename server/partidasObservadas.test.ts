@@ -69,7 +69,7 @@ describe("a página e o pedido", () => {
   it("o pedido lê as partidas guardadas e devolve tudo, com os nomes dos mapas", () => {
     expect(ler("server/routers.ts")).toContain("partidas: publicProcedure");
     const resumo = ler("server/partidasResumo.ts");
-    expect(resumo).toContain("listObservedBattlesParaResumo(");
+    expect(resumo).toContain("percorrerPartidasParaResumo(");
     expect(resumo).toContain("lerNomesDosMapas()");
     expect(ler("server/observedMatchCollection.ts")).toContain("guardarNomesDosMapas(");
   });
@@ -104,3 +104,4 @@ describe("período à escolha (v158)", () => {
     expect(ler("client/src/hooks/useFonteApi.ts")).toContain("{ dias, rank: doRank, mapId: mapa?.mapId }");
   });
 });
+
