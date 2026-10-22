@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { diagnosticoDasPartidas, lerPartidasSemOcultarErro } from "./erroDasPartidas";
+import { diagnosticoDasPartidas, lerPartidasSemOcultarErro, metadadosDoErroDasPartidas } from "./erroDasPartidas";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -34,4 +34,14 @@ describe("diagnóstico das partidas sem expor consultas ou segredos", () => {
     await expect(lerPartidasSemOcultarErro(() => Promise.reject({ code: "ETIMEDOUT" }))).rejects.toThrow("Não foi possível comunicar");
     await expect(lerPartidasSemOcultarErro(() => Promise.resolve([]))).resolves.toEqual([]);
   });
+});
+
+it("regista só códigos e categorias, sem mensagens nem parâmetros privados", () => {
+  const resultado = metadadosDoErroDasPartidas(new Error("Failed query segredo", {
+    cause: Object.assign(new Error("mysql://password@private SQL collation"), { code: "ER_CANT_AGGREGATE_2COLLATIONS", errno: 1267 }),
+  }));
+  expect(resultado).toEqual({ codigo: "ER_CANT_AGGREGATE_2COLLATIONS", numero: 1267, categoria: "collation" });
+  expect(JSON.stringify(resultado)).not.toMatch(/password|private|SQL|mysql:|segredo/);
+  expect(metadadosDoErroDasPartidas({code: "mysql://segredo", errno: "123"})).toEqual({});
+  expect(metadadosDoErroDasPartidas({cause:{code:"ER_UNKNOWN_ERROR",errno:1105,sqlMessage:"memory quota exceeded segredo"}}).categoria).toBe("memoria");
 });

@@ -1,3 +1,25 @@
+/** Só metadados do driver: nunca mensagem, SQL, parâmetros ou ligações. */
+export function metadadosDoErroDasPartidas(erro: unknown) {
+  const vistos = new Set<unknown>();
+  let atual: unknown = erro;
+  let metadados: { codigo?: string; numero?: number; categoria?: string } = {};
+  for (let nivel = 0; nivel < 8 && atual && !vistos.has(atual); nivel++) {
+    vistos.add(atual);
+    if (typeof atual !== "object") break;
+    const detalhe = atual as { code?: unknown; errno?: unknown; message?: unknown; sqlMessage?: unknown; cause?: unknown };
+    if (typeof detalhe.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(detalhe.code)) metadados.codigo = detalhe.code;
+    if (typeof detalhe.errno === "number" && Number.isInteger(detalhe.errno)) metadados.numero = detalhe.errno;
+    // A mensagem é apenas classificada em memória; o seu texto nunca sai.
+    const mensagem = typeof detalhe.sqlMessage === "string" ? detalhe.sqlMessage : typeof detalhe.message === "string" ? detalhe.message : "";
+    if (/collation/i.test(mensagem)) metadados.categoria = "collation";
+    else if (/memory|quota/i.test(mensagem)) metadados.categoria = "memoria";
+    else if (/execution.*time|timeout/i.test(mensagem)) metadados.categoria = "tempo";
+    else if (/unsupported|not supported/i.test(mensagem)) metadados.categoria = "incompativel";
+    atual = detalhe.cause;
+  }
+  return metadados;
+}
+
 /** Diagnóstico público: nunca inclui SQL, parâmetros, endereços ou credenciais. */
 export function diagnosticoDasPartidas(erro: unknown) {
   const vistos = new Set<unknown>();
@@ -40,7 +62,7 @@ export async function lerPartidasSemOcultarErro<T>(ler: () => PromiseLike<T>): P
     return await ler();
   } catch (erro) {
     const diagnostico = diagnosticoDasPartidas(erro);
-    console.error("[Partidas] Leitura falhou:", diagnostico.errorCode);
+    console.error("[Partidas] Leitura falhou:", diagnostico.errorCode, JSON.stringify(metadadosDoErroDasPartidas(erro)));
     throw new Error(diagnostico.error);
   }
 }
