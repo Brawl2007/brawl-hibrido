@@ -1176,6 +1176,102 @@ export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode
     .limit(filtro.limite ?? 60_000));
 }
 
+/** Percorre todas as partidas elegíveis, com memória limitada a um lote.
+ * O teto de ID fixa o conjunto inicial; novas recolhas entram no próximo resumo.
+ * O join só recebe até 10 mil IDs, nunca o histórico inteiro com os textos.
+ */
+export async function percorrerPartidasParaResumo(
+  filtro: { desde: Date; mode?: string; mapId?: string; rank?: { min: number; max: number } },
+  consumir: (linhas: { mapId: string; mode: string; winningTeam: string; losingTeam: string }[]) => void,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Base de dados das partidas não configurada.");
+  return lerPartidasSemOcultarErro(async () => {
+    const [topo] = await db.select({ id: observedBattles.id }).from(observedBattles)
+      .orderBy(desc(observedBattles.id)).limit(1);
+    if (!topo) return;
+    let cursor = 0;
+    const loteMaximo = 10_000;
+    while (cursor < topo.id) {
+      const ids = await db.select({ id: observedBattles.id }).from(observedBattles)
+        .where(and(sql`${observedBattles.id} > ${cursor}`, lte(observedBattles.id, topo.id),
+          gte(observedBattles.battleTime, filtro.desde),
+          filtro.mode ? eq(observedBattles.mode, filtro.mode) : undefined,
+          filtro.mapId ? eq(observedBattles.mapId, filtro.mapId) : undefined))
+        .orderBy(asc(observedBattles.id)).limit(loteMaximo);
+      if (!ids.length) break;
+      const tidb = fornecedorDaBase(process.env.DATABASE_URL) === "tidb";
+      const colunas = {
+        mapId: tidb ? sql<string>`/*+ SET_VAR(tidb_executor_concurrency=1) INL_JOIN(observed_battle_ranks) */ ${observedBattles.mapId}`.as("map_id") : observedBattles.mapId,
+        mode: observedBattles.mode, winningTeam: observedBattles.winningTeam, losingTeam: observedBattles.losingTeam,
+      };
+      const consulta = filtro.rank
+        ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
+        : db.select({ ...colunas, mapId: observedBattles.mapId }).from(observedBattles);
+      const linhas = await consulta.where(and(inArray(observedBattles.id, ids.map(linha => linha.id)),
+        filtro.rank ? between(observedBattleRanks.rankMedio, filtro.rank.min, filtro.rank.max) : undefined));
+      if (!filtro.rank && linhas.length !== ids.length) throw new Error("Leitura incompleta das partidas selecionadas.");
+      consumir(linhas);
+      cursor = ids[ids.length - 1].id;
+      if (ids.length < loteMaximo) break;
+    }
+  });
+}
+
+/** Expira apenas partidas com mais de 30 dias, em transações pequenas.
+ * Desconta os pares antes de apagar rank e partida; qualquer inconsistência
+ * aborta o lote inteiro. Não toca em jogadores, configurações ou capturas.
+ */
+export async function expirarPartidasAntigas(agora = new Date()) {
+  const db = await getDb();
+  if (!db) throw new Error("Base de dados das partidas não configurada.");
+  const corte = new Date(agora.getTime() - 30 * 86_400_000);
+  let removidas = 0;
+  // Até 3 mil por recolha: capacidade de limpeza maior do que a entrada diária.
+  for (let lote = 0; lote < 3; lote++) {
+    const quantidade = await db.transaction(async tx => {
+      const antigas = await tx.select().from(observedBattles)
+        .where(lt(observedBattles.battleTime, corte)).orderBy(asc(observedBattles.id)).limit(1000).for("update");
+      if (!antigas.length) return 0;
+      const entradas = antigas.map(partida => {
+        const vencedores: unknown = JSON.parse(partida.winningTeam);
+        const derrotados: unknown = JSON.parse(partida.losingTeam);
+        if (!Array.isArray(vencedores) || !Array.isArray(derrotados) ||
+          ![...vencedores, ...derrotados].every(nome => typeof nome === "string")) throw new Error("Equipas inválidas na retenção das partidas.");
+        const deltas: ObservedMatchupDelta[] = [];
+        for (const brawler of vencedores as string[]) for (const opponent of derrotados as string[]) {
+          deltas.push({ mapId: partida.mapId, mode: partida.mode, brawler, opponent, wins: 1, losses: 0 },
+            { mapId: partida.mapId, mode: partida.mode, brawler: opponent, opponent: brawler, wins: 0, losses: 1 });
+        }
+        return { deltas };
+      });
+      const pares = somarParesDoLote(entradas);
+      for (let inicio = 0; inicio < pares.length; inicio += 200) {
+        const grupo = pares.slice(inicio, inicio + 200);
+        const condicao = (par: ObservedMatchupDelta) => and(eq(observedMatchupAggregates.mapId, par.mapId),
+          eq(observedMatchupAggregates.mode, par.mode), eq(observedMatchupAggregates.brawler, par.brawler),
+          eq(observedMatchupAggregates.opponent, par.opponent))!;
+        const subtrair = (campo: "wins" | "losses" | "samples") => sql`${observedMatchupAggregates[campo]} - case ${sql.join(grupo.map(par =>
+          sql`when ${condicao(par)} then ${campo === "samples" ? par.wins + par.losses : par[campo]}`), sql` `)} else 0 end`;
+        const resultado = await tx.update(observedMatchupAggregates).set({
+          wins: subtrair("wins"), losses: subtrair("losses"), samples: subtrair("samples"),
+        }).where(or(...grupo.map(par => and(condicao(par), gte(observedMatchupAggregates.wins, par.wins),
+          gte(observedMatchupAggregates.losses, par.losses), gte(observedMatchupAggregates.samples, par.wins + par.losses)))));
+        const cabecalho = Array.isArray(resultado) ? resultado[0] : resultado;
+        if (Number((cabecalho as { affectedRows?: number }).affectedRows) !== grupo.length)
+          throw new Error("Agregados inconsistentes: limpeza cancelada sem apagar o lote.");
+      }
+      const fingerprints = antigas.map(partida => partida.fingerprint);
+      await tx.delete(observedBattleRanks).where(inArray(observedBattleRanks.fingerprint, fingerprints));
+      await tx.delete(observedBattles).where(and(inArray(observedBattles.id, antigas.map(partida => partida.id)), lt(observedBattles.battleTime, corte)));
+      return antigas.length;
+    });
+    removidas += quantidade;
+    if (quantidade < 1000) break;
+  }
+  return { removidas, corte: corte.toISOString() };
+}
+
 /** Quantas partidas há por mapa e modo, para os filtros da página. */
 export async function listObservedMapsParaResumo(desde?: Date, rank?: { min: number; max: number }) {
   const db = await getDb();

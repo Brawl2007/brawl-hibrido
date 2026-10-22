@@ -234,7 +234,7 @@ export default function Partidas() {
             <div className="partidas-painel-cabeca">
               <h2>{titulo}</h2>
               <p>
-                <Database size={13} aria-hidden="true" /> Estatísticas com base em <b>{dados ? partidas.toLocaleString("pt-PT") : "—"}</b> partidas
+                <Database size={13} aria-hidden="true" /> Estatísticas com base em <b>{dados ? partidas.toLocaleString("pt-PT") : "—"}</b> partidas{dados ? ` dos últimos ${dados.dias} dias` : ""}
                 {rank ? <> · {RANKS_DO_FILTRO.find((opcao) => opcao.id === rank)?.nome}</> : null}
                 {atualizado ? <>. Atualizado a {atualizado}.</> : "."}
                 {dados?.limiteAtingido ? <span className="is-aviso"> Mostradas as mais recentes.</span> : null}

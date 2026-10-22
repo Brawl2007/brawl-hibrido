@@ -8,6 +8,7 @@ import {
 } from "./brawlStarsApi";
 import {
   acrescentarJogadoresALista,
+  expirarPartidasAntigas,
   createObservedMatchCollectionRun,
   getObservedMatchCollectionConfig,
   gravarLeiturasDosJogadores,
@@ -29,7 +30,7 @@ import {
   proximaLeitura,
   type PartidaDoHistorico,
 } from "./bolaDeNeve";
-import { RANKED_MAP_SOURCES } from "./rankedSync";
+import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { getSetting, setSetting } from "./appSettings";
 import { rankDaPartida } from "@shared/ranksDoRanked";
 import { inicioDaJanelaDasPartidas, podeRecolherAgora, RECOLHA_PRESA_MS } from "@shared/agendamentoPartidas";
@@ -284,8 +285,9 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
       }
     }
     await guardarNomesDosMapas(logs.flatMap(({ entries }) => entries)).catch(() => undefined);
+    const corte = new Date(startedAt.getTime() - 30 * 86_400_000);
     const candidates = logs.flatMap(({ tag, entries }) =>
-      entries.map(entry => normalizeObservedBattle(entry, tag)).filter((battle): battle is NormalizedObservedBattle => Boolean(battle))
+      entries.map(entry => normalizeObservedBattle(entry, tag)).filter((battle): battle is NormalizedObservedBattle => Boolean(battle) && battle!.battleTime >= corte)
     );
 
     const { battlesInserted, pairObservations } = await recordObservedBattlesBatch(
@@ -315,6 +317,21 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
       niveisVistos[chave] = (niveisVistos[chave] ?? 0) + 1;
     }
 
+    // Falhar a manutenção não transforma uma recolha já gravada numa falha.
+    const retencao = await (async () => {
+      const chave = "ultimaLimpezaCompletaDasPartidas";
+      const ultima = Number(await getSetting(chave));
+      // Sem índice global por data, não varrer a tabela 96 vezes por dia
+      // quando não há nada expirado. Com backlog, continuar em cada recolha.
+      if (ultima > 0 && startedAt.getTime() - ultima < 86_400_000) return { adiada: true };
+      const resultado = await expirarPartidasAntigas(startedAt);
+      if (resultado.removidas < 3000) await setSetting(chave, String(startedAt.getTime()));
+      return resultado;
+    })().catch((erro: unknown) => {
+      console.error("[Partidas] Retenção de 30 dias falhou:", diagnosticoDasPartidas(erro).errorCode);
+      return { removidas: 0, erro: "Limpeza pendente; será tentada na próxima recolha." };
+    });
+    console.log("[Partidas] Retenção:", JSON.stringify(retencao));
     const completedAt = new Date();
     await updateObservedMatchCollectionRun(runId ?? 0, {
       status: "success",

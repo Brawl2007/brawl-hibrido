@@ -52,7 +52,8 @@ function somar<T extends { jogos: number; vitorias: number }>(mapa: Map<string, 
   if (ganhou) atual.vitorias += 1;
 }
 
-export function resumirPartidas(partidas: readonly PartidaObservada[]): ResumoDasPartidas {
+export function criarResumoDasPartidas() {
+  let total = 0;
   const brawlers = new Map<string, ContagemDeBrawler>();
   const confrontos = new Map<string, ContagemDeConfronto>();
   const equipas = new Map<string, ContagemDeEquipa>();
@@ -68,43 +69,56 @@ export function resumirPartidas(partidas: readonly PartidaObservada[]): ResumoDa
     return lista;
   };
 
-  for (const partida of partidas) {
-    const doModo = grupo(porModo, partida.mode);
-    const doMapa = grupo(porMapa, partida.mapId);
-    for (const [equipa, adversarios, ganhou] of [
-      [partida.vencedores, partida.derrotados, true],
-      [partida.derrotados, partida.vencedores, false],
-    ] as const) {
-      const membros = Array.from(new Set(equipa)).sort();
-      for (const brawler of membros) {
-        somar(brawlers, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
-        somar(doModo, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
-        somar(doMapa, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
-        for (const adversario of new Set(adversarios)) {
-          if (adversario === brawler) continue;
-          somar(confrontos, `${brawler}\u0000${adversario}`, () => ({ a: brawler, b: adversario, jogos: 0, vitorias: 0 }), ganhou);
+  function acrescentar(partidas: readonly PartidaObservada[]) {
+    for (const partida of partidas) {
+      total += 1;
+      const doModo = grupo(porModo, partida.mode);
+      const doMapa = grupo(porMapa, partida.mapId);
+      for (const [equipa, adversarios, ganhou] of [
+        [partida.vencedores, partida.derrotados, true],
+        [partida.derrotados, partida.vencedores, false],
+      ] as const) {
+        const membros = Array.from(new Set(equipa)).sort();
+        for (const brawler of membros) {
+          somar(brawlers, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
+          somar(doModo, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
+          somar(doMapa, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou);
+          for (const adversario of new Set(adversarios)) {
+            if (adversario === brawler) continue;
+            somar(confrontos, `${brawler}\u0000${adversario}`, () => ({ a: brawler, b: adversario, jogos: 0, vitorias: 0 }), ganhou);
+          }
         }
-      }
-      for (let i = 0; i < membros.length; i += 1) {
-        for (let j = i + 1; j < membros.length; j += 1) {
-          somar(sinergias, `${membros[i]}\u0000${membros[j]}`, () => ({ a: membros[i], b: membros[j], jogos: 0, vitorias: 0 }), ganhou);
+        for (let i = 0; i < membros.length; i += 1) {
+          for (let j = i + 1; j < membros.length; j += 1) {
+            somar(sinergias, `${membros[i]}\u0000${membros[j]}`, () => ({ a: membros[i], b: membros[j], jogos: 0, vitorias: 0 }), ganhou);
+          }
         }
+        if (membros.length) somar(equipas, membros.join("\u0000"), () => ({ membros, jogos: 0, vitorias: 0 }), ganhou);
       }
-      if (membros.length) somar(equipas, membros.join("\u0000"), () => ({ membros, jogos: 0, vitorias: 0 }), ganhou);
     }
+
   }
 
-  const porJogos = <T extends { jogos: number; vitorias: number }>(lista: T[]) =>
-    lista.sort((x, y) => y.jogos - x.jogos || y.vitorias - x.vitorias);
-  return {
-    partidas: partidas.length,
-    brawlers: porJogos(Array.from(brawlers.values())),
-    brawlersPorModo: Object.fromEntries(Array.from(porModo, ([modo, lista]) => [modo, porJogos(Array.from(lista.values()))])),
-    brawlersPorMapa: Object.fromEntries(Array.from(porMapa, ([mapa, lista]) => [mapa, porJogos(Array.from(lista.values()))])),
-    confrontos: porJogos(Array.from(confrontos.values())),
-    equipas: porJogos(Array.from(equipas.values())),
-    sinergias: porJogos(Array.from(sinergias.values())),
-  };
+  function terminar(): ResumoDasPartidas {
+    const porJogos = <T extends { jogos: number; vitorias: number }>(lista: T[]) =>
+      lista.sort((x, y) => y.jogos - x.jogos || y.vitorias - x.vitorias);
+    return {
+      partidas: total,
+      brawlers: porJogos(Array.from(brawlers.values())),
+      brawlersPorModo: Object.fromEntries(Array.from(porModo, ([modo, lista]) => [modo, porJogos(Array.from(lista.values()))])),
+      brawlersPorMapa: Object.fromEntries(Array.from(porMapa, ([mapa, lista]) => [mapa, porJogos(Array.from(lista.values()))])),
+      confrontos: porJogos(Array.from(confrontos.values())),
+      equipas: porJogos(Array.from(equipas.values())),
+      sinergias: porJogos(Array.from(sinergias.values())),
+    };
+  }
+  return { acrescentar, terminar };
+}
+
+export function resumirPartidas(partidas: readonly PartidaObservada[]): ResumoDasPartidas {
+  const resumo = criarResumoDasPartidas();
+  resumo.acrescentar(partidas);
+  return resumo.terminar();
 }
 
 /** Taxa de vitória em percentagem, ou null sem jogos. */
@@ -136,3 +150,4 @@ export const NOMES_DOS_MODOS: Record<string, string> = {
 export function nomeDoModo(mode: string) {
   return NOMES_DOS_MODOS[mode] ?? mode;
 }
+
