@@ -82,6 +82,7 @@ describe("reserva da recolha entre chamadas concorrentes", () => {
   it("sem chave da API não reserva nem lê jogadores", async () => {
     mocks.configurada.mockReturnValue(false);
     expect(await recolherSeForAltura()).toMatchObject({ ok: false, error: expect.stringContaining("Sem chave") });
+    expect(await collectObservedRankedMatches("manual")).toMatchObject({ ok: false, errorCode: "OFFICIAL_API_NOT_CONFIGURED", error: expect.stringContaining("Sem chave da API oficial") });
     expect(mocks.reservar).not.toHaveBeenCalled();
     expect(mocks.log).not.toHaveBeenCalled();
   });

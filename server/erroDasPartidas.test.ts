@@ -11,6 +11,8 @@ describe("diagnóstico das partidas sem expor consultas ou segredos", () => {
     ["ER_ACCESS_DENIED_ERROR", "DATABASE_PERMISSION_DENIED"],
     ["ER_NO_SUCH_TABLE", "DATABASE_TABLE_MISSING"],
     ["ETIMEDOUT", "DATABASE_UNAVAILABLE"],
+    ["OFFICIAL_API_NOT_CONFIGURED", "OFFICIAL_API_NOT_CONFIGURED"],
+    ["OFFICIAL_API_NO_PLAYERS", "OFFICIAL_API_NO_PLAYERS"],
   ])("lê a causa %s por dentro do erro do Drizzle", (code, esperado) => {
     const erro = new Error("Failed query: segredo-SQL params: chave-privada", {
       cause: Object.assign(new Error("mysql://user:password@private-host/database"), { code }),

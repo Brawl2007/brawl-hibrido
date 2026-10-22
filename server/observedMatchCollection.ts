@@ -253,7 +253,7 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     runId = await createObservedMatchCollectionRun(trigger);
     if (!reserva) await updateObservedMatchCollectionConfig({ lastStatus: "running", lastStartedAt: startedAt, lastError: null });
     // Sem chave, a API devolve listas vazias em silêncio; dizê-lo evita procurar o problema no sítio errado.
-    if (!isOfficialApiConfigured()) throw new Error("Sem chave da API oficial neste ambiente: guarda-a no painel do Draft (as versões de teste da Vercel não usam a base de dados de produção).");
+    if (!isOfficialApiConfigured()) throw Object.assign(new Error("Sem chave da API oficial neste ambiente: guarda-a no painel do Draft (as versões de teste da Vercel não usam a base de dados de produção)."), { code: "OFFICIAL_API_NOT_CONFIGURED" });
     const volta = voltaDaRecolha(startedAt);
     // A bola de neve (ver `bolaDeNeve.ts`). Se a lista falhar, a recolha segue só com os rankings.
     const naAltura = await listarJogadoresNaAltura(startedAt, JOGADORES_POR_RECOLHA).catch((erro: unknown) => {
@@ -268,7 +268,7 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     );
     const escolha = escolherLeituras(dosRankings, naAltura, JOGADORES_POR_RECOLHA);
     const players = escolha.tags;
-    if (!players.length) throw new Error("A API oficial não devolveu jogadores para a amostra.");
+    if (!players.length) throw Object.assign(new Error("A API oficial não devolveu jogadores para a amostra."), { code: "OFFICIAL_API_NO_PLAYERS" });
 
     const prazo = Date.now() + TEMPO_MAXIMO_A_LER_MS;
     const logs = await mapWithConcurrency(players, async tag => ({ tag, entries: await fetchOfficialBattleLog(tag) }), prazo);

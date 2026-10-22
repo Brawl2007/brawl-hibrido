@@ -8,6 +8,12 @@ export function diagnosticoDasPartidas(erro: unknown) {
     const detalhe = atual as { code?: unknown; errno?: unknown; cause?: unknown };
     const codigo = typeof detalhe.code === "string" ? detalhe.code : "";
     const numero = detalhe.errno;
+    if (codigo === "OFFICIAL_API_NOT_CONFIGURED") {
+      return { errorCode: codigo, error: "Sem chave da API oficial para recolher partidas. Configura a chave no painel do site ou no alojamento." };
+    }
+    if (codigo === "OFFICIAL_API_NO_PLAYERS") {
+      return { errorCode: codigo, error: "A API oficial não devolveu jogadores para a amostra. Verifica a chave, o acesso à API e a disponibilidade do serviço." };
+    }
     if (["ER_DISK_FULL", "ER_RECORD_FILE_FULL"].includes(codigo) || numero === 1021 || numero === 1114) {
       return { errorCode: "DATABASE_STORAGE_FULL", error: "A base de dados atingiu o limite de armazenamento. A recolha está bloqueada; verifica o espaço no alojamento, preservando as partidas guardadas." };
     }

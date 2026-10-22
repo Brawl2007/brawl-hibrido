@@ -27,7 +27,7 @@
 
 ## Validação local
 
-- 45 testes dirigidos passaram em 9 ficheiros: diagnóstico e proteção de dados, leituras da base, reserva concorrente, erro de escrita secundário, workflow bash com respostas simuladas, renderização do painel, agendamento, ID MySQL, configuração TLS e handler assíncrono existente.
+- 47 testes dirigidos passaram em 9 ficheiros: diagnóstico e proteção de dados, leituras da base, reserva concorrente, erro de escrita secundário, workflow bash com respostas simuladas, renderização do painel, agendamento, ID MySQL, configuração TLS e handler assíncrono existente.
 - TypeScript estrito passou para `db.ts`, diagnóstico e os testes da base/diagnóstico/workflow, com as dependências locais de verificação.
 - Transpilação esbuild passou nos quatro módulos de entrada/recolha/interface alterados.
 - `git diff --check` passou.
