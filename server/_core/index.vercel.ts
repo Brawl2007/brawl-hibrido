@@ -1,3 +1,4 @@
+import { diagnosticoDasPartidas } from "../erroDasPartidas";
 import { VERSAO_DO_SITE } from "@shared/version";
 import { INTERVALO_DE_RELIGACAO_MS } from "@shared/realtimeStream";
 import "dotenv/config";
@@ -94,7 +95,9 @@ export function createApp() {
       res.setHeader("Cache-Control", "no-store");
       res.status(resultado.ok || "saltada" in resultado ? 200 : 503).json(resultado);
     } catch (erro) {
-      res.status(500).json({ ok: false, error: erro instanceof Error ? erro.message : String(erro) });
+      const diagnostico = diagnosticoDasPartidas(erro);
+      console.error("[Partidas] Pedido falhou:", diagnostico.errorCode);
+      res.status(500).json({ ok: false, ...diagnostico });
     }
   });
   app.get("/api/partidas/agendar", agendarRecolhaDePartidas);
@@ -182,3 +185,4 @@ process.on("uncaughtException", (erro) => console.error("[Processo] Exceção n�
 
 export default app;
 void VERSAO_DO_SITE;
+

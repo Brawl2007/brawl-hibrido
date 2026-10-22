@@ -106,9 +106,9 @@ export default function Partidas() {
 
   const consulta = trpc.observedMatches.partidas.useQuery(
     { dias, mode: mode || undefined, mapId: mapId || undefined, rank: rank || undefined },
-    { staleTime: 120_000, placeholderData: (anterior) => anterior },
+    { staleTime: 120_000, refetchInterval: 180_000, refetchIntervalInBackground: false },
   );
-  const dados = consulta.data;
+  const dados = consulta.isError ? undefined : consulta.data;
   const recolha = trpc.observedMatches.status.useQuery(undefined, {
     staleTime: 30_000, refetchInterval: 60_000, refetchIntervalInBackground: false,
   });
@@ -182,6 +182,7 @@ export default function Partidas() {
         </header>
 
         <EstadoDaRecolha cadencia={recolha.data?.cadencia} />
+        {recolha.isError ? <p role="alert">Não foi possível consultar o estado da recolha. Os totais guardados estão indisponíveis.</p> : null}
 
         <section className="partidas-filtros" aria-label="Filtros">
           <SeletorDePeriodo dias={dias} onChange={mudar(setDias)} />
@@ -233,7 +234,7 @@ export default function Partidas() {
             <div className="partidas-painel-cabeca">
               <h2>{titulo}</h2>
               <p>
-                <Database size={13} aria-hidden="true" /> Estatísticas com base em <b>{partidas.toLocaleString("pt-PT")}</b> partidas
+                <Database size={13} aria-hidden="true" /> Estatísticas com base em <b>{dados ? partidas.toLocaleString("pt-PT") : "—"}</b> partidas
                 {rank ? <> · {RANKS_DO_FILTRO.find((opcao) => opcao.id === rank)?.nome}</> : null}
                 {atualizado ? <>. Atualizado a {atualizado}.</> : "."}
                 {dados?.limiteAtingido ? <span className="is-aviso"> Mostradas as mais recentes.</span> : null}
@@ -260,11 +261,19 @@ export default function Partidas() {
             </div>
 
             {consulta.isLoading ? <p className="partidas-vazio">A contar as partidas…</p> : null}
-            {consulta.isError ? <p className="partidas-vazio">Não foi possível ler as partidas agora. Tenta daqui a pouco.</p> : null}
+            {consulta.isError ? (
+              <div className="partidas-vazio" role="alert">
+                <p>Não foi possível ler as partidas. Isto não significa que existam zero partidas.</p>
+                <button type="button" onClick={() => void consulta.refetch()} disabled={consulta.isFetching}>Tentar novamente</button>
+              </div>
+            ) : null}
             {dados && partidas === 0 ? (
-              <p className="partidas-vazio">
-                Ainda não há partidas neste filtro. Consulta o estado da recolha acima, ou escolhe «Tudo» no período.
-              </p>
+              <div className="partidas-vazio">
+                <p>{recolha.data && recolha.data.coverage.battles > 0
+                  ? `Há ${recolha.data.coverage.battles.toLocaleString("pt-PT")} partidas guardadas no total, mas nenhuma corresponde a este filtro.`
+                  : "Ainda não há partidas neste filtro. Consulta o estado da recolha acima."}</p>
+                <button type="button" onClick={() => { setDias(0); setRank(""); setMode(""); setMapId(""); setMostradas(DE_CADA_VEZ); }}>Ver todos os dados guardados</button>
+              </div>
             ) : null}
 
             {dados && partidas > 0 && separador === "brawlers" ? (
@@ -364,3 +373,4 @@ export default function Partidas() {
     </div>
   );
 }
+

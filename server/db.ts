@@ -37,6 +37,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { parseDatabaseUrl } from "./databaseUrl";
+import { lerPartidasSemOcultarErro } from "./erroDasPartidas";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: ReturnType<typeof createPool> | null = null;
@@ -1110,7 +1111,7 @@ export async function tirarJogadoresParados(antesDe: Date) {
  */
 export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode?: string; mapId?: string; rank?: { min: number; max: number }; limite?: number }) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Base de dados das partidas não configurada.");
   const condicoes = [
     filtro.desde ? gte(observedBattles.battleTime, filtro.desde) : undefined,
     filtro.mode ? eq(observedBattles.mode, filtro.mode) : undefined,
@@ -1127,16 +1128,16 @@ export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode
   const consulta = filtro.rank
     ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
     : db.select(colunas).from(observedBattles);
-  return lerDaBase("listObservedBattlesParaResumo", () => consulta
+  return lerPartidasSemOcultarErro(() => consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
     .orderBy(desc(observedBattles.battleTime))
-    .limit(filtro.limite ?? 60_000), []);
+    .limit(filtro.limite ?? 60_000));
 }
 
 /** Quantas partidas há por mapa e modo, para os filtros da página. */
 export async function listObservedMapsParaResumo(desde?: Date, rank?: { min: number; max: number }) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Base de dados das partidas não configurada.");
   const condicoes = [
     desde ? gte(observedBattles.battleTime, desde) : undefined,
     rank ? between(observedBattleRanks.rankMedio, rank.min, rank.max) : undefined,
@@ -1145,9 +1146,9 @@ export async function listObservedMapsParaResumo(desde?: Date, rank?: { min: num
   const consulta = rank
     ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
     : db.select(colunas).from(observedBattles);
-  return lerDaBase("listObservedMapsParaResumo", () => consulta
+  return lerPartidasSemOcultarErro(() => consulta
     .where(condicoes.length ? and(...condicoes) : undefined)
-    .groupBy(observedBattles.mapId, observedBattles.mode), []);
+    .groupBy(observedBattles.mapId, observedBattles.mode));
 }
 
 export async function listObservedMatchCollectionRuns(limit = 8) {
@@ -1178,13 +1179,14 @@ export async function getObservedMatchupAggregate(input: {
 
 export async function getObservedMatchCollectionCoverage() {
   const db = await getDb();
-  if (!db) return { battles: 0, pairSamples: 0 };
-  return lerDaBase("getObservedMatchCollectionCoverage", async () => {
+  if (!db) throw new Error("Base de dados das partidas não configurada.");
+  return lerPartidasSemOcultarErro(async () => {
     const [battles] = await db.select({ value: count() }).from(observedBattles);
     const [pairs] = await db.select({ value: sum(observedMatchupAggregates.samples) }).from(observedMatchupAggregates);
     return {
       battles: Number(battles?.value ?? 0),
       pairSamples: Number(pairs?.value ?? 0),
     };
-  }, { battles: 0, pairSamples: 0 });
+  });
 }
+
