@@ -1,3 +1,4 @@
+import { diagnosticoDasPartidas } from "./erroDasPartidas";
 import { createHash } from "node:crypto";
 import {
   fetchOfficialBattleLog,
@@ -328,19 +329,32 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     console.log(`[Partidas] ${logs.length} jogadores lidos · ${candidates.length} partidas Ranked · ${battlesInserted} novas · bola de neve: ${JSON.stringify(resumoDaBola)} · tipos: ${JSON.stringify(tiposVistos)}`);
     return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos, niveisVistos, bolaDeNeve: resumoDaBola };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido na coleta observada";
+    const diagnostico = diagnosticoDasPartidas(error);
     const completedAt = new Date();
-    await updateObservedMatchCollectionRun(runId ?? 0, { status: "failed", completedAt, error: message });
-    await updateObservedMatchCollectionConfig({ lastStatus: "failed", lastCompletedAt: completedAt, lastError: message });
-    return { ok: false as const, error: message };
+    // Se a base recusa escritas, registar a falha também pode falhar. Não perde
+    // o diagnóstico original nem deixa a promessa rejeitada por esse motivo.
+    const registos = await Promise.allSettled([
+      updateObservedMatchCollectionRun(runId ?? 0, { status: "failed", completedAt, error: diagnostico.error }),
+      updateObservedMatchCollectionConfig({ lastStatus: "failed", lastCompletedAt: completedAt, lastError: diagnostico.error }),
+    ]);
+    console.error("[Partidas] Recolha falhou:", diagnostico.errorCode,
+      registos.some((resultado) => resultado.status === "rejected") ? "Não foi possível guardar o estado da falha." : "Estado da falha guardado.");
+    return { ok: false as const, ...diagnostico };
   }
 }
 
 /** Uma volta por janela de 15 minutos. A base arbitra chamadas concorrentes. */
 export async function recolherSeForAltura(trigger: ObservedCollectionTrigger = "scheduled") {
-  if (!isOfficialApiConfigured()) return { ok: false as const, error: "Sem chave da API oficial para recolher partidas." };
+  if (!isOfficialApiConfigured()) return { ok: false as const, errorCode: "OFFICIAL_API_NOT_CONFIGURED", error: "Sem chave da API oficial para recolher partidas." };
   const startedAt = new Date();
-  const reservada = await reservarJanelaDasPartidas(inicioDaJanelaDasPartidas(startedAt), startedAt, new Date(startedAt.getTime() - RECOLHA_PRESA_MS));
+  let reservada: boolean;
+  try {
+    reservada = await reservarJanelaDasPartidas(inicioDaJanelaDasPartidas(startedAt), startedAt, new Date(startedAt.getTime() - RECOLHA_PRESA_MS));
+  } catch (erro) {
+    const diagnostico = diagnosticoDasPartidas(erro);
+    console.error("[Partidas] Reserva falhou:", diagnostico.errorCode);
+    return { ok: false as const, etapa: "reserva" as const, ...diagnostico };
+  }
   if (!reservada) {
     const config = await getObservedMatchCollectionConfig();
     const altura = podeRecolherAgora(config, startedAt);
@@ -382,3 +396,4 @@ async function guardarNomesDosMapas(entradas: readonly OfficialBattleLogEntry[])
   if (Object.entries(novos).every(([id, nome]) => atuais[id] === nome)) return;
   await setSetting(NOMES_DOS_MAPAS_SETTING, JSON.stringify({ ...atuais, ...novos }));
 }
+

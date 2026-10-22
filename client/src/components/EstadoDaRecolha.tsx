@@ -25,10 +25,11 @@ export function EstadoDaRecolha({ cadencia }: { cadencia: Cadencia | undefined }
       <span className="mt-1 block">
         {cadencia.ultimaTentativa ? <>Último início: <time dateTime={cadencia.ultimaTentativa}>{hora(cadencia.ultimaTentativa)}</time>. </> : null}
         {cadencia.ultimaConclusao ? <>Guardada: <time dateTime={cadencia.ultimaConclusao}>{hora(cadencia.ultimaConclusao)}</time>. </> : null}
-        {cadencia.estado === "atrasada" ? "O agendador não cumpriu a próxima volta. " : null}
+        {cadencia.estado === "atrasada" ? "Não há uma nova recolha concluída no horário previsto. O agendador ou o servidor podem ter falhado. " : null}
         {cadencia.estado !== "sem_chave" ? <>Próxima prevista: <time dateTime={cadencia.proximaPrevista}>{hora(cadencia.proximaPrevista)}</time>.</> : null}
         {cadencia.erro ? <> {cadencia.erro}</> : null}
       </span>
     </aside>
   );
 }
+

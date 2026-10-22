@@ -25,8 +25,15 @@ jobs:
           set -euo pipefail
           ficheiro=$(mktemp)
           trap 'rm -f "$ficheiro"' EXIT
+          codigo=0
           curl --fail-with-body --silent --show-error --max-time 240 \
-            https://brawl-hibrido.vercel.app/api/partidas/recolher --output "$ficheiro"
+            https://brawl-hibrido.vercel.app/api/partidas/recolher --output "$ficheiro" || codigo=$?
+          if [ "$codigo" -ne 0 ]; then
+            # Só imprime o diagnóstico público sanitizado, nunca SQL ou HTML.
+            jq -c '{ok, errorCode, etapa, error: (if .errorCode then .error else "O servidor não forneceu um diagnóstico sanitizado." end)}' "$ficheiro" 2>/dev/null || true
+            echo "::error::O pedido de recolha falhou (curl $codigo). Consulta o diagnóstico acima."
+            exit "$codigo"
+          fi
           jq -e 'type == "object"' "$ficheiro" > /dev/null
           cat "$ficheiro"
           if jq -e '.ok == true' "$ficheiro" > /dev/null; then
@@ -40,3 +47,4 @@ jobs:
             echo "::error::A recolha falhou."
             exit 1
           fi
+
