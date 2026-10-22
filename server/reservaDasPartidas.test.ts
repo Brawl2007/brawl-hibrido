@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ reservar: vi.fn(), log: vi.fn(), gravar: vi.fn(), config: vi.fn(), configurada: vi.fn(), criar: vi.fn(), atualizarRun: vi.fn(), atualizarConfig: vi.fn() }));
 vi.mock("./db", () => ({
+  expirarPartidasAntigas: vi.fn(async () => ({ removidas: 0 })),
   reservarJanelaDasPartidas: mocks.reservar,
   getObservedMatchCollectionConfig: mocks.config,
   createObservedMatchCollectionRun: mocks.criar,
@@ -87,4 +88,5 @@ describe("reserva da recolha entre chamadas concorrentes", () => {
     expect(mocks.log).not.toHaveBeenCalled();
   });
 });
+
 

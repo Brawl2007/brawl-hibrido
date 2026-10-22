@@ -31,6 +31,7 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("./db", () => ({
+  expirarPartidasAntigas: vi.fn(async () => ({ removidas: 0 })),
   createObservedMatchCollectionRun: vi.fn(async () => 1),
   updateObservedMatchCollectionRun: vi.fn(async () => undefined),
   updateObservedMatchCollectionConfig: vi.fn(async () => undefined),
@@ -223,6 +224,17 @@ describe("a recolha com a bola de neve", () => {
     expect(bd.tiradosAntesDe).toEqual(new Date(agora.getTime() - TEMPO_SEM_RANKED_PARA_SAIR_MS));
   });
 
+  it("não volta a inserir partidas expiradas e conserva a fronteira de 30 dias", async () => {
+    api.rankings = ["#2PP"];
+    const equipas = [["#2PP", "#8PP"], ["#8RR", "#8GG"]];
+    api.historicos.set("#2PP", [
+      partida(new Date(agora.getTime() - 31 * 86400000), "soloRanked", equipas),
+      partida(new Date(agora.getTime() - 30 * 86400000), "soloRanked", equipas),
+      partida(minutosAntes(5), "soloRanked", equipas),
+    ]);
+    expect(await collectObservedRankedMatches("scheduled")).toMatchObject({ ok: true, rankedFound: 2, battlesInserted: 2 });
+  });
+
   it("se a tabela da lista falhar, a recolha segue só com os rankings", async () => {
     bd.falhaNaLista = true;
     api.rankings = ["#2PP"];
@@ -233,3 +245,4 @@ describe("a recolha com a bola de neve", () => {
     expect(resultado).toMatchObject({ ok: true, rankedFound: 1, bolaDeNeve: { lidosDaLista: 0, lidosDosRankings: 1 } });
   });
 });
+
