@@ -1114,14 +1114,14 @@ export async function tirarJogadoresParados(antesDe: Date) {
  * se algum dia for atingido, a página diz quantas partidas contou.
  */
 /**
- * O hint tem de ficar imediatamente depois de SELECT (primeira coluna).
- * Na TiDB, o hash join das 750 mil classificações ultrapassa a memória da
- * consulta. O index hash join consulta a chave primária em lotes limitados;
- * mantém os mesmos filtros e resultados, sem aumentar quotas nem apagar dados.
+ * A ordenação do resumo só precisa de IDs. Transportar também os textos das
+ * equipas pelo join e pelo TopN faz a TiDB exceder a memória da instância.
+ * Selecionamos os mesmos IDs com os mesmos filtros; depois lemos as equipas
+ * pela chave primária em lotes pequenos e repomos a ordem selecionada.
  */
 function colunaDoMapaDasPartidas(comRank: boolean) {
   return comRank && fornecedorDaBase(process.env.DATABASE_URL) === "tidb"
-    ? sql<string>`/*+ INL_HASH_JOIN(observed_battle_ranks) */ ${observedBattles.mapId}`.as("map_id")
+    ? sql<string>`/*+ SET_VAR(tidb_executor_concurrency=1) */ ${observedBattles.mapId}`.as("map_id")
     : observedBattles.mapId;
 }
 
@@ -1135,12 +1135,38 @@ export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode
     filtro.rank ? between(observedBattleRanks.rankMedio, filtro.rank.min, filtro.rank.max) : undefined,
   ].filter((condicao): condicao is NonNullable<typeof condicao> => Boolean(condicao));
   const colunas = {
-    mapId: colunaDoMapaDasPartidas(Boolean(filtro.rank)),
+    mapId: observedBattles.mapId,
     mode: observedBattles.mode,
     winningTeam: observedBattles.winningTeam,
     losingTeam: observedBattles.losingTeam,
   };
-  // Com filtro de rank, só entram as partidas que têm rank guardado.
+  if (filtro.rank && fornecedorDaBase(process.env.DATABASE_URL) === "tidb") {
+    return lerPartidasSemOcultarErro(async () => {
+      // O hint fica imediatamente depois de SELECT e só reduz concorrência
+      // desta leitura; não aumenta limites nem altera variáveis globais.
+      const ids = await db.select({
+        id: sql<number>`/*+ SET_VAR(tidb_executor_concurrency=1) */ ${observedBattles.id}`.as("id"),
+      }).from(observedBattles)
+        .innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
+        .where(condicoes.length ? and(...condicoes) : undefined)
+        .orderBy(desc(observedBattles.battleTime), desc(observedBattles.id))
+        .limit(filtro.limite ?? 60_000);
+      type Partida = { mapId: string; mode: string; winningTeam: string; losingTeam: string };
+      const porId = new Map<number, Partida>();
+      for (let inicio = 0; inicio < ids.length; inicio += 1000) {
+        const lote = ids.slice(inicio, inicio + 1000).map((linha) => linha.id);
+        const linhas = await db.select({ id: observedBattles.id, ...colunas })
+          .from(observedBattles).where(inArray(observedBattles.id, lote));
+        for (const { id, ...partida } of linhas) porId.set(id, partida);
+      }
+      return ids.map(({ id }) => {
+        const partida = porId.get(id);
+        // Não fabricar um total menor se uma leitura ficar incompleta.
+        if (!partida) throw new Error("Leitura incompleta das partidas selecionadas.");
+        return partida;
+      });
+    });
+  }
   const consulta = filtro.rank
     ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
     : db.select(colunas).from(observedBattles);
