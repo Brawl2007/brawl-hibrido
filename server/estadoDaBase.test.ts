@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { consultarModoDeLeitura, fornecedorDaBase } from "./estadoDaBase";
+import { consultarEspacoDasTabelas, consultarModoDeLeitura, fornecedorDaBase } from "./estadoDaBase";
 
 describe("diagnóstico da base sem expor segredos nem alterar o servidor", () => {
   it("identifica o fornecedor sem devolver o host, a conta ou a palavra-passe", () => {
@@ -20,5 +20,17 @@ describe("diagnóstico da base sem expor segredos nem alterar o servidor", () =>
     await expect(consultarModoDeLeitura(async () => [[{ Variable_name: "read_only", Value: "OFF" }], []])).resolves.toBe(false);
     await expect(consultarModoDeLeitura(async () => [[], []])).resolves.toBeNull();
     await expect(consultarModoDeLeitura(async () => { throw new Error("negado"); })).resolves.toBeNull();
+  });
+
+  it("mede dados, índices e espaço livre por tabela sem ler o conteúdo", async () => {
+    const executar = vi.fn(async () => [[{ tabela: "observed_battles", dados: "200", indices: "100", livre: "50", linhas: "752266" }], []]);
+    await expect(consultarEspacoDasTabelas(executar)).resolves.toEqual([
+      { tabela: "observed_battles", dados: 200, indices: 100, livre: 50, linhas: 752266 },
+    ]);
+    expect(executar).toHaveBeenCalledTimes(1);
+  });
+
+  it("não inventa tamanhos quando a consulta não está disponível", async () => {
+    await expect(consultarEspacoDasTabelas(async () => { throw new Error("negado"); })).resolves.toBeNull();
   });
 });

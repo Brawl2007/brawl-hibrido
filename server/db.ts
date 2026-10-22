@@ -38,7 +38,7 @@ import {
 import { ENV } from "./_core/env";
 import { parseDatabaseUrl } from "./databaseUrl";
 import { lerPartidasSemOcultarErro } from "./erroDasPartidas";
-import { consultarModoDeLeitura, fornecedorDaBase } from "./estadoDaBase";
+import { consultarEspacoDasTabelas, consultarModoDeLeitura, fornecedorDaBase } from "./estadoDaBase";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: ReturnType<typeof createPool> | null = null;
@@ -113,8 +113,9 @@ export async function checkDatabase() {
   try {
     await db.select().from(rankedSyncConfig).where(eq(rankedSyncConfig.id, 1)).limit(1);
     const readOnly = await consultarModoDeLeitura((consulta) => db.execute(consulta));
+    const storage = readOnly ? await consultarEspacoDasTabelas((consulta) => db.execute(consulta)) : null;
     return { configured: true, reachable: true, error: null as string | null,
-      provider: fornecedorDaBase(process.env.DATABASE_URL), readOnly };
+      provider: fornecedorDaBase(process.env.DATABASE_URL), readOnly, storage };
   } catch (error) {
     return {
       configured: true,
