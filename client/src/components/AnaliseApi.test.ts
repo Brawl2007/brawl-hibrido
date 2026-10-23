@@ -16,7 +16,7 @@ const neutro = () =>
     aliadosIds: [],
     inimigosIds: [],
     modoDeJogo: "heist",
-    estatisticasMapa: {},
+    estatisticasMapa: Object.fromEntries(["Colt", "Bull"].map(brawlerId => [brawlerId, { brawlerId, jogosMapa: 1000, vitoriasMapa: 500, jogosModo: 1000, vitoriasModo: 500, taxaUsoMapa: .1 }])),
     obterConfronto: () => undefined,
     obterSinergia: () => undefined,
     perfisTaticos: {},

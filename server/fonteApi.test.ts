@@ -76,10 +76,10 @@ describe("fonte observada (Só API oficial)", () => {
     const [lumi, wendy] = linhasDaApi([{ brawler: "Lumi", brawlPlanetWinRate: 60, topBrawlWinRate: 58 }, { brawler: "Wendy", brawlPlanetWinRate: 70 }], resumo);
     expect(lumi.brawlPlanetWinRate).toBeNull();
     expect(lumi.topBrawlWinRate).toBeNull();
-    expect(lumi.winRate).toBeCloseTo(((30 + 30 * .5 + 20 * .5) / (80 + 50)) * 100, 5);
+    expect(lumi.winRate).toBeCloseTo(((30 + 30 * .59) / (80 + 30)) * 100, 5);
     expect(lumi.usage).toBe(100);
-    // Sem partidas neste mapa: 50%, uso 0 — não sabemos, não inventamos.
-    expect(wendy.winRate).toBe(50);
+    // Sem presença no mapa, o prior conservador impede uma recomendação gratuita.
+    expect(wendy.winRate).toBe(40);
     expect(wendy.usage).toBe(0);
   });
 

@@ -1,3 +1,6 @@
+import { criarReferenciasDoMapa } from "./adequacaoAoMapa";
+import type { TerrenoDoMapa } from "./terrenoDoMapa";
+import { aplicarReferenciasDoMapa } from "./observedMatchupMatrix";
 import { ranquearCandidatosApiPerfeito, recomendarBansApi, type ResultadoRecomendacaoApi, type PerfilTaticoBrawler } from "./motorApiPerfeito";
 import type { DadosDoMotorApi } from "./observedMatchupMatrix";
 import { calcularWinRateBayesiano } from "./amostraPequena";
@@ -405,6 +408,7 @@ export function getDraftLockedNames(steps: DraftStep[], choices: (string | null)
 }
 
 type DraftRow = {
+  map?: string;
   brawler: string;
   modeId?: string;
   score: number | null;
@@ -476,6 +480,9 @@ export type DraftRankingContext<T extends DraftRow = DraftRow> = {
    */
   motor?: ConfigDoMotor;
   dadosApi?: DadosDoMotorApi;
+  /** Linhas publicadas antes de substituir as taxas pelos resultados da API. */
+  mapReferenceRows?: readonly T[];
+  terrenoMapa?: TerrenoDoMapa | null;
   ordemTimeApi?: "first_pick" | "second_pick";
   draftKind?: "ban" | "pick";
   brawlerPretendido?: string;
@@ -2078,7 +2085,7 @@ export type DraftCounterWindow = {
 function resolveActiveCounterWindow<T extends DraftRow>(eligibleRows: T[], context: DraftRankingContext<T>): DraftCounterWindow {
   const topCounterWindowSize = getTopCounterWindowSize(context.pickNumber, context.completedPickCount);
   if (context.dadosApi) {
-    const nomes = rankApiEntries(eligibleRows, new Set(), "", { ...context, role: "Todas" }).slice(0, topCounterWindowSize).map((e) => e.row.brawler);
+    const nomes = rankApiEntries(eligibleRows, new Set(), "", { ...context, role: "Todas" }).filter(e => !e.api?.bloqueado).slice(0, topCounterWindowSize).map((e) => e.row.brawler);
     return { topRecommendationNames: nomes, counterPenaltyEligibleNames: nomes };
   }
   if (topCounterWindowSize <= 0 || eligibleRows.length === 0) {
@@ -2164,7 +2171,9 @@ export function perfisTaticosDoDraft(nomes: readonly string[]): Record<string, P
 }
 
 function rankApiEntries<T extends DraftRow>(rows: T[], locked: Set<string>, query: string, context: DraftRankingContext<T>): RankedDraftEntry<T>[] {
-  const dados = { ...fontesDeApoioDaApi(context.mapModeId), ...context.dadosApi! };
+  let dados = { ...fontesDeApoioDaApi(context.mapModeId), ...context.dadosApi! };
+  const referencias = context.mapReferenceRows ?? (context.mapName && !Object.values(dados.estatisticasMapa).some(s => s.referenciaMapa) ? context.popularityRows ?? rows : undefined);
+  if (referencias) dados = aplicarReferenciasDoMapa(dados, criarReferenciasDoMapa(referencias, perfisTaticosDoDraft(referencias.map(r => r.brawler)), context.mapName, context.terrenoMapa));
   const disponiveisIds = rows.filter((r) => !locked.has(r.brawler)).map((r) => r.brawler);
   const nomes = Object.keys(dados.estatisticasMapa);
   const resultados = ranquearCandidatosApiPerfeito({ ...dados, disponiveisIds,

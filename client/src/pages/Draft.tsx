@@ -2643,7 +2643,7 @@ export default function Draft() {
   const pesoDeStarDoPick = starPlayerWeight > 0
     ? getStarPlayerPickWeight(analysisGlobalPickNumber, draftRuleSettings, selectedMap?.modeId)
     : 0;
-  const fonteApi = useFonteApi(selectedMap?.name);
+  const fonteApi = useFonteApi(selectedMap?.name, liveRows);
   // Motor escolhido nos Ajustes: Brawl Híbrido, PL Prodigy ou MetaPick (ver `motoresDoDraft.ts`).
   const motorDoDraft = useMotorDoDraft();
   // A seleção de outro motor deve mostrar a ordem dos pontos dele, inclusive
@@ -2746,7 +2746,7 @@ export default function Draft() {
       const matchesQuery = !normalizedQuery || entry.row.brawler.toLowerCase().includes(normalizedQuery);
       const candidateRole = inferDraftRole(entry.row.brawler);
       const matchesRole = roleFilter === "Todas" || candidateRole === roleFilter || candidateRole === "flex";
-      return matchesQuery && matchesRole;
+      return matchesQuery && matchesRole && (!entry.api?.bloqueado || Boolean(normalizedQuery));
     });
   }, [query, orderedDraftEntries, roleFilter]);
   const visibleRows = useMemo(() => visibleRankedEntries.map((entry) => entry.row), [visibleRankedEntries]);
@@ -3116,7 +3116,7 @@ export default function Draft() {
                       <button type="button" className="pick-details-toggle" aria-pressed={showPickDetails} onClick={() => setShowPickDetails(value => !value)}>{showPickDetails ? "Menos" : "Detalhes"}</button>
                     </div>
                     {!fonteApi.ligada && sameClassAlerts.length > 0 && <p className="mesa-aviso" role="status"><AlertTriangle size={14} /> Classe repetida na {suggestionTeam === "blue" ? "Azul" : "Vermelha"} ({sameClassAlerts.map((alert) => alert.className).join(", ")}): quem for da mesma classe perde {draftRuleSettings.sameClassPenalty * 100}%.</p>}
-                    <div className={`draft-recommendation-list ${showPickDetails ? "with-details" : "is-compact"}`}>{pagedRankedEntries.map((entry) => <div key={entry.row.brawler}><DraftCard row={entry.row} index={entry.rank - 1} draftScore={entry.draftScore} basePoints={entry.basePoints} finalPoints={entry.finalPoints} api={entry.api} apiBan={entry.apiBan} motor={entry.motor} signal={entry.signal} onSelect={assignBrawler} locked={lockedNames.has(entry.row.brawler)} banned={banNames.has(entry.row.brawler) && analysisDraftStep?.kind === "pick"} suggestionTeam={suggestionTeam} rosterNames={rosterNames} activeCounterWindow={activeCounterWindow} expanded={showPickDetails} /></div>)}{pagedRankedEntries.length === 0 && <div className="draft-empty"><Search size={22} /><strong>Nada com esse filtro.</strong><span>Limpa a pesquisa ou muda a posição.</span></div>}</div>
+                    <div className={`draft-recommendation-list ${showPickDetails ? "with-details" : "is-compact"}`}>{pagedRankedEntries.map((entry) => <div key={entry.row.brawler}><DraftCard row={entry.row} index={entry.rank - 1} draftScore={entry.draftScore} basePoints={entry.basePoints} finalPoints={entry.finalPoints} api={entry.api} apiBan={entry.apiBan} motor={entry.motor} signal={entry.signal} onSelect={assignBrawler} locked={lockedNames.has(entry.row.brawler)} banned={banNames.has(entry.row.brawler) && analysisDraftStep?.kind === "pick"} suggestionTeam={suggestionTeam} rosterNames={rosterNames} activeCounterWindow={activeCounterWindow} expanded={showPickDetails} /></div>)}{pagedRankedEntries.length === 0 && <div className="draft-empty"><Search size={22} /><strong>{fonteApi.ligada ? "Sem recomendação segura neste mapa e turno." : "Nada com esse filtro."}</strong><span>Limpa a pesquisa ou muda a posição.</span></div>}</div>
                     <div className="roster-pagination" aria-label="Páginas de brawlers"><button onClick={() => setRosterPage((page) => Math.max(1, page - 1))} disabled={rosterPage === 1} aria-label="Página anterior"><ArrowLeft size={14} /></button>{Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => <button key={page} className={rosterPage === page ? "is-active" : ""} onClick={() => setRosterPage(page)}>{page}</button>)}<button onClick={() => setRosterPage((page) => Math.min(pageCount, page + 1))} disabled={rosterPage === pageCount} aria-label="Página seguinte"><ArrowRight size={14} /></button><span>{topRows.length} de {visibleRows.length}</span></div>
                   </section>}
                   {abaDoCentro === "equipas" && <MapTeamBoardPanel mapName={selectedMap?.name} mapTeams={mapTeams} allyNames={myPickNames} />}

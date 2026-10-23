@@ -1,5 +1,7 @@
 # Motor da API — v177
 
+Histórico da calibração anterior. A viabilidade por mapa está em [MOTOR_API_V178.md](MOTOR_API_V178.md).
+
 A v177 corrige a atenuação excessiva dos confrontos e das sinergias da v176. A ingestão continua a ponderar elo, Poder 11 e meia-vida de 14 dias. A força individual mantém o prior hierárquico de modo e mapa. Os motores Híbrido, PL Prodigy e MetaPick mantêm as regras e os pesos da v176.
 
 ## Uma suavização por interação

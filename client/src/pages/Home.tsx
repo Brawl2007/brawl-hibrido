@@ -927,7 +927,7 @@ export default function Home() {
    * e o uso de cada brawler, em cada mapa, saem das partidas Ranked recolhidas
    * e as fontes deixam de contar. Sem Star Player, que a API não dá.
    */
-  const fonteApi = useFonteApi(selectedMap?.name);
+  const fonteApi = useFonteApi(selectedMap?.name, liveRows);
   const linhasDosMapas = useMemo(
     () => fonteApi.ligada && fonteApi.geral
       ? calculateHybridScoresByMap(linhasDosMapasDaApi(mapDisplayRows, fonteApi.geral), winRateWeight, topBrawlWeight, 0)

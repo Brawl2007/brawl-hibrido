@@ -107,8 +107,21 @@ export function explicarConfianca(confianca: ConfiancaDaLinha): string | null {
   return partes.length ? partes.join(" ") : null;
 }
 
-/** Prior por modo (40 jogos) e por mapa (30 do modo + 20 neutros). */
-export function calcularWinRateBayesiano(stats: { vitoriasModo: number; jogosModo: number; vitoriasMapa: number; jogosMapa: number }): number {
-  const pModo = (stats.vitoriasModo + 20) / (stats.jogosModo + 40);
-  return Math.min(0.98, Math.max(0.02, (stats.vitoriasMapa + 30 * pModo + 10) / (stats.jogosMapa + 50)));
+/** Força do mapa: o modo não transfere desempenho entre terrenos diferentes. */
+export function calcularWinRateBayesiano(stats: {
+  vitoriasMapa: number; jogosMapa: number; vitoriasModo?: number; jogosModo?: number;
+  razaoUsoMapa?: number;
+  referenciaMapa?: import("./adequacaoAoMapa").ReferenciaMapaApi;
+}): number {
+  const n = Math.max(0, stats.jogosMapa);
+  const w = Math.min(n, Math.max(0, stats.vitoriasMapa));
+  const ref = stats.referenciaMapa;
+  const uso = stats.razaoUsoMapa ?? 1;
+  // Sem referência, só uma amostra própria suficiente pode sustentar o prior.
+  let prior = ref?.vitoria ?? (ref?.score != null ? .40 + .24 * ref.score : n >= 30 ? w / n : .43);
+  if (n < 12 && ref && ref.uso == null && ref.score == null) prior = Math.min(prior, .43);
+  if (uso < .35) prior = Math.min(prior, .40 + .03 * Math.max(0, uso) / .35);
+  if (ref && ref.adequacaoTerreno < .6) prior = Math.min(prior, .40 + .03 * ref.adequacaoTerreno);
+  const k = 30;
+  return Math.min(.98, Math.max(.02, (w + k * prior) / (n + k)));
 }

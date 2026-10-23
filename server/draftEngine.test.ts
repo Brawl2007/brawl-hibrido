@@ -2201,3 +2201,16 @@ describe("penalty totals for Draft cards", () => {
     expect(signal.bonusSources.worstTeammatePenalties).toEqual(["Charlie", "Hank"]);
   });
 });
+
+describe("v178: integração da força original do mapa na API", () => {
+  it.each(["Bridge Too Far", "Shooting Star", "Out in the Open"])("%s preserva o terreno mesmo com prior de modo favorável a tanques", async mapName => {
+    const { mapaApiDoCatalogo } = await import("./fixtures/mapaApi");
+    const { rows, dados } = mapaApiDoCatalogo(mapName);
+    // Simula o modelo anterior, sem referência, para provar a ligação no shared/draft.
+    const semReferencia={...dados,estatisticasMapa:Object.fromEntries(Object.entries(dados.estatisticasMapa).map(([n,s])=>[n,{...s,referenciaMapa:undefined,jogosModo:10000,vitoriasModo:9900}]))};
+    const lista=rankDraftEntries(rows,new Set(),"","Todos",{dadosApi:semReferencia,mapName,mapModeId:rows[0].modeId,mapReferenceRows:rows,pickNumber:1});
+    const top=lista.filter(e=>!e.api?.bloqueado).slice(0,8);
+    expect(top).toHaveLength(8);
+    for (const r of top) expect(["Tank","Lançador","Assassino"]).not.toContain(getBrawlerClass(r.row.brawler));
+  });
+});

@@ -1,3 +1,4 @@
+import { razoesDeUso, type ReferenciasMapaApi } from "./adequacaoAoMapa";
 import type { ApoioDoMotorApi } from "./motorApiPerfeito";
 export type ObservedMatchupRow = {
   map: string;
@@ -99,6 +100,7 @@ export function listObservedModes(rows: readonly ObservedMatchupRow[]) {
 /** Entrada única do Draft, fichas e mapas: contagens brutas ficam disponíveis para auditoria. */
 export type DadosApiParaMotor = {
   partidas: number;
+  referenciasMapa?: ReferenciasMapaApi;
   partidasPonderadas?: number;
   brawlers: readonly import("./partidasObservadas").ContagemDeBrawler[];
   confrontos: readonly import("./partidasObservadas").ContagemDeConfronto[];
@@ -120,17 +122,20 @@ export const vitoriasPonderadas = (linha?: { vitorias: number; vitoriasPonderada
 export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiParaMotor, apoio: ApoioDoMotorApi = {}) {
   const brawlers = new Map(dados.brawlers.map((linha) => [chaveApi(linha.brawler), linha]));
   const modo = new Map((dados.priorModo?.brawlers ?? []).map((linha) => [chaveApi(linha.brawler), linha]));
+  const referencias = new Map(Object.entries(dados.referenciasMapa ?? {}).map(([nome, r]) => [chaveApi(nome), r]));
   const estatisticasMapa: Record<string, import("./motorApiPerfeito").EstatisticasApiMapa> = {};
   for (const nome of nomes) {
     const mapa = brawlers.get(chaveApi(nome));
     const doModo = modo.get(chaveApi(nome));
     estatisticasMapa[nome] = {
-      brawlerId: nome, jogosMapa: jogosPonderados(mapa), vitoriasMapa: vitoriasPonderadas(mapa),
+      brawlerId: nome, referenciaMapa: referencias.get(chaveApi(nome)), jogosMapa: jogosPonderados(mapa), vitoriasMapa: vitoriasPonderadas(mapa),
       jogosModo: jogosPonderados(doModo), vitoriasModo: vitoriasPonderadas(doModo),
       taxaUsoMapa: (dados.partidasPonderadas ?? dados.partidas) > 0
         ? Math.min(1, jogosPonderados(mapa) / (dados.partidasPonderadas ?? dados.partidas)) : 0,
     };
   }
+  const razoes = razoesDeUso(estatisticasMapa);
+  for (const [nome, stats] of Object.entries(estatisticasMapa)) stats.razaoUsoMapa = razoes[nome];
   const indexar = (lista: readonly { a: string; b: string; jogos: number; vitorias: number; jogosPonderados?: number; vitoriasPonderadas?: number }[], simetrico: boolean) => {
     const mapa = new Map<string, (typeof lista)[number]>();
     for (const linha of lista) {
@@ -164,3 +169,12 @@ export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiP
   };
 }
 export type DadosDoMotorApi = ReturnType<typeof montarDadosDoMotorApi>;
+
+/** Anexa a referência original sem alterar o modelo partilhado nem a pool do mapa. */
+export function aplicarReferenciasDoMapa(dados: DadosDoMotorApi, referencias: ReferenciasMapaApi): DadosDoMotorApi {
+  const porChave = new Map(Object.entries(referencias).map(([n,r]) => [chaveApi(n),r]));
+  const estatisticasMapa = Object.fromEntries(Object.entries(dados.estatisticasMapa).map(([n,s]) => [n, { ...s, referenciaMapa: porChave.get(chaveApi(n)) ?? s.referenciaMapa }]));
+  const razoes = razoesDeUso(estatisticasMapa);
+  for (const [n,s] of Object.entries(estatisticasMapa)) s.razaoUsoMapa = razoes[n];
+  return { ...dados, estatisticasMapa };
+}

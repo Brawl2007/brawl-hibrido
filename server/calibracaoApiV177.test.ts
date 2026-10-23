@@ -164,7 +164,7 @@ describe("calibração V177", () => {
     ).toBeLessThan(0);
     expect(
       comRisco.find(r => r.brawlerId === "C")!.fatores.riscoMinimaxLogit
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     const melhores = ranquearCandidatosApiPerfeito(contexto());
     expect(melhores[0].winProbability).toBeGreaterThan(54);
     expect(melhores[0].winProbability).toBeLessThanOrEqual(72);
@@ -183,6 +183,8 @@ describe("calibração V177", () => {
   });
   it("troca recomendações imediatamente perante counters e sinergias com poucos jogos", () => {
     const p = contexto();
+    p.estatisticasMapa.B = stats("B", .1, .59);
+    p.estatisticasMapa.C = stats("C", .1, .59);
     p.disponiveisIds.push("D");
     p.estatisticasMapa.D = stats("D", 0.1, 0.5);
     p.perfisTaticos.D = perfil("D");
@@ -220,8 +222,8 @@ describe("calibração V177", () => {
     const tarde = ranquearCandidatosApiPerfeito({
       ...p,
       turno: 6,
-      inimigosIds: ["D"],
-      obterCounterDeReserva: (a, b) => (a === "A" && b === "D" ? 0.6 : 0),
+      inimigosIds: ["B", "D"],
+      obterCounterDeReserva: (a, b) => (a === "A" && ["B", "D"].includes(b) ? 0.6 : 0),
     });
     expect(tarde.find(r => r.brawlerId === "A")!.bloqueado).toBeUndefined();
     const hard = ranquearCandidatosApiPerfeito({

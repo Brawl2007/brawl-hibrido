@@ -79,7 +79,7 @@ describe("contexto dos motores locais com a API oficial", () => {
     expect(lido.riscos).toEqual([]);
     expect(lido.countersBanidos).toEqual([]);
     const [linha] = linhasDaApi([{ brawler: "Nori", winRate: 95, topBrawlWinRate: 98 }]);
-    expect(linha.winRate).toBe(50);
+    expect(linha.winRate).toBe(43);
     expect(linha.topBrawlWinRate).toBeNull();
   });
 

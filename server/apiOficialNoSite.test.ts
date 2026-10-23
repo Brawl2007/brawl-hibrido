@@ -51,7 +51,7 @@ describe("o Draft mostra a vitória medida (a mesma das Partidas)", () => {
     expect(brock.vitoriaNaApi).toBeCloseTo((20 / 33) * 100, 6); // 60,61% — o número da página Partidas
     expect(brock.jogosNaApi).toBe(33);
     expect(brock.usage).toBeCloseTo((33 / 67) * 100, 6); // 49,25%
-    expect(brock.winRate).toBeLessThan(brock.vitoriaNaApi!); // a que ordena fica puxada para 50%
+    expect(brock.winRate).toBeCloseTo(brock.vitoriaNaApi!, 6); // a amostra do próprio mapa sustenta a força; não se importa o neutro do modo
   });
 
   it("o cartão do Draft escreve a medida e os jogos quando a API está ligada", () => {

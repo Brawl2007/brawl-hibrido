@@ -1,3 +1,4 @@
+import type { ReferenciasMapaApi } from "./adequacaoAoMapa";
 import { montarDadosDoMotorApi, type DadosApiParaMotor } from "./observedMatchupMatrix";
 import { calcularWinRateBayesiano, calcularDeltaCounterPuro, calcularDeltaSinergiaPura, calcularDeltaSinergiaTripla, logit, sigmoid } from "./motorApiPerfeito";
 /**
@@ -98,9 +99,12 @@ export function fichaDoBrawler(
   porModo: ResumoDasPartidas["brawlersPorModo"] = {},
   priorModo?: DadosApiParaMotor["priorModo"],
   modeId?: string,
+  referenciasMapa?: ReferenciasMapaApi,
 ): FichaDaApi {
-  const modelo = resumo.partidasPonderadas !== undefined ? montarDadosDoMotorApi(resumo.brawlers.map((l) => l.brawler), { ...resumo, priorModo }, fontesDeApoioDaApi(modeId)) : undefined;
-  const beta = (n: string) => modelo?.estatisticasMapa[n] ? logit(calcularWinRateBayesiano(modelo.estatisticasMapa[n])) : 0;
+  const chave = (n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const nomes = [...new Set([...resumo.brawlers.map(l => chave(l.brawler)), ...Object.keys(referenciasMapa ?? {}).map(chave)])];
+  const modelo = resumo.partidasPonderadas !== undefined ? montarDadosDoMotorApi(nomes, { ...resumo, priorModo, referenciasMapa }, fontesDeApoioDaApi(modeId)) : undefined;
+  const beta = (n: string) => modelo?.estatisticasMapa[chave(n)] ? logit(calcularWinRateBayesiano(modelo.estatisticasMapa[chave(n)])) : logit(.43);
   const proprio = resumo.brawlers.find((linha) => mesmoNome(linha.brawler, nome));
   const brawler = proprio?.brawler ?? nome;
   const habitual = new Map(resumo.brawlers.map((linha) => [linha.brawler, percentagem(linha.vitorias, linha.jogos)]));

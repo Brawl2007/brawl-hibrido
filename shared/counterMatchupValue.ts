@@ -196,11 +196,11 @@ export function fonteObservadaAtiva() {
 
 /** Monta a fonte a partir das contagens da página «Partidas» de um mapa. */
 export function montarFonteObservada(dados: Omit<DadosApiParaMotor, "partidas"> & { partidas?: number; modeId?: string }): FonteObservada {
-  const nomes = [...new Set(dados.brawlers.map((r) => key(r.brawler)))];
+  const nomes = [...new Set([...dados.brawlers.map((r) => key(r.brawler)), ...Object.keys(dados.referenciasMapa ?? {}).map(key)])];
   const modelo = dados.partidasPonderadas !== undefined ? montarDadosDoMotorApi(nomes, { ...dados, partidas: dados.partidas ?? 0 }, fontesDeApoioDaApi(dados.modeId)) : undefined;
   return {
     modelo,
-    vitoriaNoMapa: new Map(dados.brawlers.map((linha) => [key(linha.brawler), modelo ? calcularWinRateBayesiano(modelo.estatisticasMapa[key(linha.brawler)]) : linha.jogos ? linha.vitorias / linha.jogos : 0.5])),
+    vitoriaNoMapa: modelo ? new Map(Object.entries(modelo.estatisticasMapa).map(([nome,s]) => [nome, calcularWinRateBayesiano(s)])) : new Map(dados.brawlers.map(l => [key(l.brawler), l.jogos ? l.vitorias / l.jogos : .43])),
     confrontos: new Map(dados.confrontos.map((linha) => [`${key(linha.a)}\u0000${key(linha.b)}`, { jogos: linha.jogos, vitorias: linha.vitorias }])),
     sinergias: new Map(dados.sinergias.map((linha) => {
       const [a, b] = [key(linha.a), key(linha.b)].sort();
@@ -212,7 +212,7 @@ export function montarFonteObservada(dados: Omit<DadosApiParaMotor, "partidas"> 
 function parDoModelo(a: string, b: string, sinergia: boolean): ParObservado | null {
   const modelo = fonteObservada?.modelo;
   if (!modelo) return null;
-  const beta = (nome: string) => logit(fonteObservada?.vitoriaNoMapa.get(key(nome)) ?? .5);
+  const beta = (nome: string) => logit(fonteObservada?.vitoriaNoMapa.get(key(nome)) ?? .43);
   const ba = beta(a), bb = beta(b);
   const par = sinergia ? modelo.obterSinergia(a, b) : modelo.obterConfronto(a, b);
   const reserva = (sinergia ? modelo.obterSinergiaDeReserva?.(a, b) : modelo.obterCounterDeReserva?.(a, b)) ?? 0;
@@ -388,14 +388,14 @@ export function fontesDeApoioDaApi(modeId?: string): ApoioDoMotorApi {
   const transformar = (pp: number) => logit(.5 + Math.max(-30, Math.min(30, pp)) / 100);
   const sinergias = new Map(Object.values(brawlScopeSynergyData).map(p => [key(p.brawler), p.teammates]));
   return {
-    obterCounterDeReserva: (a, b) => transformar(getMatchupDasFontes(a, b, modeId).total),
+    obterCounterDeReserva: (a, b) => { const par = getMatchupDasFontes(a, b, modeId); return par.base === null ? undefined : transformar(par.total); },
     obterSinergiaDeReserva: (a, b) => {
       const lista = (dono: string) => {
         const viva = getBrawlScopeSynergyTeammates(dono, modeId, true);
         return viva.length ? viva : sinergias.get(key(dono)) ?? [];
       };
       const valores = [lista(a).find(r => key(r.brawler) === key(b))?.delta, lista(b).find(r => key(r.brawler) === key(a))?.delta].filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-      return transformar(valores.length ? valores.reduce((x, y) => x + y, 0) / valores.length : 0);
+      return valores.length ? transformar(valores.reduce((x, y) => x + y, 0) / valores.length) : undefined;
     },
   };
 }

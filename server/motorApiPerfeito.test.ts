@@ -95,7 +95,7 @@ describe("motor oficial bayesiano V1–V3", () => {
       calcularPesoPartidaObservada({ ...p, battleTimeIso: "inválida" }, agora)
     ).toBe(0);
   });
-  it("suaviza em três níveis e mantém probabilidades finitas", () => {
+  it("ancora a força no mapa e mantém probabilidades finitas", () => {
     expect(
       calcularWinRateBayesiano({
         ...stats("A"),
@@ -104,7 +104,7 @@ describe("motor oficial bayesiano V1–V3", () => {
         jogosModo: 0,
         vitoriasModo: 0,
       })
-    ).toBe(0.5);
+    ).toBe(0.43);
     const s = {
       ...stats("A"),
       jogosModo: 100,
@@ -113,7 +113,7 @@ describe("motor oficial bayesiano V1–V3", () => {
       vitoriasMapa: 5,
     };
     expect(calcularWinRateBayesiano(s)).toBeCloseTo(
-      (5 + 30 * (90 / 140) + 10) / 55
+      (5 + 30 * .43) / 35
     );
     expect(logit(0)).toBeCloseTo(Math.log(0.02 / 0.98));
     expect(sigmoid(logit(0.6))).toBeCloseTo(0.6);
@@ -182,9 +182,9 @@ describe("motor oficial bayesiano V1–V3", () => {
       ranquearCandidatosApiPerfeito({
         ...p,
         turno,
-        inimigosIds: ["C"],
+        inimigosIds: ["B", "C"],
         obterConfronto: (a, b) =>
-          counter && a === "A" && b === "C" ? par(0.8) : undefined,
+          counter && a === "A" && ["B", "C"].includes(b) ? par(0.8) : undefined,
       }).find(r => r.brawlerId === "A")!;
     expect(r(6, true).bloqueado).toBeUndefined();
     expect(r(6, false).bloqueado).toBe("nicho");
@@ -362,4 +362,26 @@ it("o Híbrido aplica o piso de 12% sem duplicar o delta e trava dois inimigos d
     expect(um.draftScore).toBeCloseTo(75 * .88);
     expect(dois.draftScore).toBeCloseTo(75 * (1 - .24 - .15));
   } finally { setCounterSyncSnapshot(undefined, { allowOfflineFallback: false }); }
+});
+
+describe("v178: cenários de terreno com o catálogo real", () => {
+  it.each(["Bridge Too Far", "Shooting Star", "Out in the Open"])("%s abre só com longo alcance viável", async nome => {
+    const { mapaApiDoCatalogo } = await import("./fixtures/mapaApi");
+    const { parametros, referenciasMapa } = mapaApiDoCatalogo(nome);
+    const top = ranquearCandidatosApiPerfeito(parametros).filter(r=>!r.bloqueado).slice(0,8);
+    expect(top).toHaveLength(8);
+    for (const r of top) {
+      expect(referenciasMapa[r.brawlerId].adequacaoTerreno).toBeGreaterThanOrEqual(.6);
+      expect(["tank","thrower","assassin"]).not.toContain(parametros.perfisTaticos[r.brawlerId].classe);
+    }
+  });
+  it.each(["Hot Potato", "Belle's Rock", "Center Stage", "Sneaky Fields"])("%s conserva escolhas viáveis na abertura e no último pick", async nome => {
+    const { mapaApiDoCatalogo } = await import("./fixtures/mapaApi");
+    const { parametros, referenciasMapa } = mapaApiDoCatalogo(nome);
+    const inicio=ranquearCandidatosApiPerfeito(parametros).filter(r=>!r.bloqueado).slice(0,8);
+    expect(inicio).toHaveLength(8);
+    const fim=ranquearCandidatosApiPerfeito({...parametros,turno:6,aliadosIds:["Gus","Colette"],inimigosIds:["Piper","Brock","Colt"]}).filter(r=>!r.bloqueado).slice(0,8);
+    expect(fim.length).toBeGreaterThan(0);
+    for (const r of [...inicio,...fim]) expect(referenciasMapa[r.brawlerId].adequacaoTerreno).toBeGreaterThanOrEqual(.6);
+  });
 });

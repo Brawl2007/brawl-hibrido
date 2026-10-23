@@ -1,3 +1,7 @@
+import { criarReferenciasDoMapa } from "@shared/adequacaoAoMapa";
+import { perfisTaticosDoDraft } from "@shared/draft";
+import { getPublicRankedSnapshot } from "./rankedSync";
+import { obterTerreno } from "./terrenoDoMapa";
 import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
 import { nomeDoModo, criarResumoDasPartidas } from "@shared/partidasObservadas";
 import { percorrerPartidasParaResumo, listObservedMapsParaResumo } from "./db";
@@ -90,6 +94,10 @@ export async function fichaDaMatriz(filtro: FiltroDasPartidas & { brawler: strin
     resumoDasPartidas({ dias: filtro.dias, rank: filtro.rank }),
   ]);
   const modo = filtro.mode ?? geral.mapas.find((m) => m.mapId === filtro.mapId)?.mode;
+  const nomeMapa = geral.mapas.find(m => m.mapId === filtro.mapId)?.nome ?? RANKED_MAP_SOURCES.find(([,id]) => id === filtro.mapId)?.[0];
+  const [snapshot, terreno] = filtro.mapId ? await Promise.all([getPublicRankedSnapshot(), obterTerreno(filtro.mapId)]) : [null, null];
+  const rows = nomeMapa ? (snapshot?.payload.rows ?? []).filter(r => r.map === nomeMapa) : [];
+  const referenciasMapa = criarReferenciasDoMapa(rows, perfisTaticosDoDraft(rows.map(r => r.brawler)), nomeMapa, terreno);
   const priorModo = modo ? { brawlers: geral.brawlersPorModo[modo] ?? [], confrontos: geral.confrontosPorModo?.[modo] ?? [], sinergias: geral.sinergiasPorModo?.[modo] ?? [], equipas: geral.equipasPorModo?.[modo] ?? [] } : undefined;
   return {
     geradoEm: resumo.geradoEm,
@@ -99,7 +107,7 @@ export async function fichaDaMatriz(filtro: FiltroDasPartidas & { brawler: strin
     modos: geral.modos,
     mapas: geral.mapas,
     brawlers: resumo.brawlers.map((linha) => ({ brawler: linha.brawler, jogos: linha.jogos })),
-    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo, priorModo, modo),
+    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo, priorModo, modo, referenciasMapa),
   };
 }
 

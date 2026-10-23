@@ -1,3 +1,6 @@
+import { criarReferenciasDoMapa } from "@shared/adequacaoAoMapa";
+import { perfisTaticosDoDraft } from "@shared/draft";
+import type { UsageWinMetricRow } from "@shared/hybridScore";
 import { montarDadosDoMotorApi, type DadosApiParaMotor } from "@shared/observedMatchupMatrix";
 import { calcularWinRateBayesiano } from "@shared/amostraPequena";
 import { useEffect, useMemo, useState } from "react";
@@ -19,7 +22,8 @@ export type DadosDoMapaDaApi = DadosApiParaMotor & { modeId?: string };
 /** Um só objeto vazio: criado a cada desenho, o efeito abaixo correria sem parar. */
 const SEM_PARTIDAS: DadosDoMapaDaApi = { partidas: 0, partidasPonderadas: 0, brawlers: [], confrontos: [], sinergias: [] };
 
-export function useFonteApi(nomeDoMapa: string | undefined) {
+const SEM_REFERENCIAS: readonly (UsageWinMetricRow & { brawler: string })[] = [];
+export function useFonteApi(nomeDoMapa: string | undefined, linhasOriginais: readonly (UsageWinMetricRow & { brawler: string })[] = SEM_REFERENCIAS) {
   // O mesmo interruptor do site todo (Draft, Mapas, Matriz): ver `useApiOficial`.
   const { ligada, alternar, dias, setDias, rank, setRank } = useApiOficial();
   const doRank = rank || undefined;
@@ -32,17 +36,19 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     // números da chave anterior como se pertencessem ao novo mapa.
     { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000 },
   );
+  const terreno = trpc.general.terreno.useQuery({ mapaId: mapa?.mapId ?? "" }, { enabled: ligada && Boolean(mapa?.mapId), staleTime: 10 * 60_000, retry: 1 });
+  const referenciasMapa = useMemo(() => criarReferenciasDoMapa(linhasOriginais, perfisTaticosDoDraft(linhasOriginais.map(r => r.brawler)), nomeDoMapa, terreno.data), [linhasOriginais, nomeDoMapa, terreno.data]);
   const dados = useMemo<DadosDoMapaDaApi | undefined>(() => {
     if (!ligada) return undefined;
-    if (!mapa) return lista.data ? SEM_PARTIDAS : undefined;
-    if (!doMapa.data) return undefined;
-    return { ...doMapa.data, modeId: mapa.mode, priorModo: {
+    if (!mapa) return lista.data ? { ...SEM_PARTIDAS, referenciasMapa } : undefined;
+    if (!doMapa.data || terreno.isLoading) return undefined;
+    return { ...doMapa.data, referenciasMapa, modeId: mapa.mode, priorModo: {
       brawlers: lista.data?.brawlersPorModo[mapa.mode] ?? [],
       confrontos: lista.data?.confrontosPorModo?.[mapa.mode] ?? [],
       sinergias: lista.data?.sinergiasPorModo?.[mapa.mode] ?? [],
       equipas: lista.data?.equipasPorModo?.[mapa.mode] ?? [],
     } };
-  }, [ligada, mapa, lista.data, doMapa.data]);
+  }, [ligada, mapa, lista.data, doMapa.data, referenciasMapa, terreno.isLoading]);
 
   const [versao, setVersao] = useState(0);
   useEffect(() => {
@@ -56,12 +62,13 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     ligada,
     alternar,
     dados,
+    terreno: terreno.data,
     dias,
     setDias,
     rank,
     setRank,
     erro: ligada ? lista.error?.message ?? doMapa.error?.message ?? null : null,
-    aCarregar: ligada && (lista.isLoading || (Boolean(mapa?.mapId) && doMapa.isLoading)),
+    aCarregar: ligada && (lista.isLoading || (Boolean(mapa?.mapId) && (doMapa.isLoading || terreno.isLoading))),
     /** Muda sempre que a fonte do motor muda — entra nas dependências do ranking. */
     versao,
     /** Todas as partidas do período (com a contagem de cada mapa), para a secção Mapas. */
@@ -70,16 +77,14 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
 }
 
 /**
- * As linhas do mapa com a vitória e o uso das partidas recolhidas, e sem as
- * outras fontes. Para ORDENAR, a vitória é puxada para 50% com poucos jogos
- * (os mesmos `JOGOS_DE_PRIOR` jogos imaginários dos confrontos): três jogos a
- * 100% não passam à frente de trezentos a 60%. Para MOSTRAR, fica também a
- * vitória medida (`vitoriaNaApi`) e os jogos (`jogosNaApi`), que batem com a
- * página «Partidas». O uso é a percentagem de partidas em que o brawler
- * apareceu.
+ * Preserva a taxa medida e os jogos para auditoria. A força ajustada recebe a
+ * referência original deste mapa e um prior conservador sem evidência de
+ * presença, sem importar resultados de terrenos distintos pelo modo.
  */
 export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[], dados: DadosDoMapaDaApi = SEM_PARTIDAS): T[] {
-  const modelo = montarDadosDoMotorApi(linhas.map((l) => l.brawler), dados);
+  const nomeMapa = (linhas[0] as { map?: string } | undefined)?.map;
+  const referenciasMapa = dados.referenciasMapa ?? criarReferenciasDoMapa(linhas, perfisTaticosDoDraft(linhas.map(l => l.brawler)), nomeMapa);
+  const modelo = montarDadosDoMotorApi(linhas.map((l) => l.brawler), { ...dados, referenciasMapa });
   const porNome = new Map(dados.brawlers.map((linha) => [normalizarNome(linha.brawler), linha]));
   return linhas.map((linha) => {
     const contagem = porNome.get(normalizarNome(linha.brawler));
@@ -113,7 +118,7 @@ export type PartidasDeTodosOsMapas = {
 /**
  * `linhasDaApi` para todos os mapas de uma vez (a secção Mapas da página
  * inicial): cada mapa recebe as partidas dele. Um mapa sem partidas fica com
- * toda a gente a 50% e uso 0 — «não sabemos», como no Draft.
+ * um prior conservador e uso observado 0, apoiados nas referências próprias do mapa.
  */
 export function linhasDosMapasDaApi<T extends { brawler: string; map: string }>(linhas: readonly T[], geral: PartidasDeTodosOsMapas): T[] {
   const porNome = new Map(geral.mapas.map((mapa) => [normalizarNome(mapa.nome), mapa]));

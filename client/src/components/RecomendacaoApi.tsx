@@ -89,7 +89,12 @@ export function RecomendacaoApi({
           )}
           {resultado?.bloqueado === "nicho" && (
             <small className="api-tag api-risco">
-              Especialista de pouco uso: falta uma resposta favorável comprovada
+              Pouco uso neste mapa: só no fechamento, com dois counters fortes comprovados
+            </small>
+          )}
+          {resultado?.bloqueado === "mapa" && (
+            <small className="api-tag api-veto">
+              Fora do grupo viável deste mapa para este turno
             </small>
           )}
           {!!resultado?.falhasDeComposicao?.length && (
