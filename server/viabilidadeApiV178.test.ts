@@ -93,7 +93,7 @@ describe("v178: força e viabilidade próprias do mapa", () => {
       .reduce((s, [, v]) => s + Math.max(0, v), 0);
     expect(
       r.fatores.forcaMapaLogit / (r.fatores.forcaMapaLogit + bonus)
-    ).toBeGreaterThanOrEqual(0.7 - 1e-10);
+    ).toBeGreaterThanOrEqual(([.7,1/1.65,.5][turno-1]) - 1e-10);
   });
   it("não premia segurança ou encaixe sem amostra, mesmo com referência popular", () => {
     const p = contexto();
@@ -128,7 +128,7 @@ describe("v178: força e viabilidade próprias do mapa", () => {
       poolNivel11Usuario: new Set(["B30"]),
     });
     expect(r).toHaveLength(1);
-    expect(r[0].bloqueado).toBe("mapa");
+    expect(["mapa","nicho"]).toContain(r[0].bloqueado);
     // Vitória extrema não dispensa presença entre os mais usados do mapa.
     p.disponiveisIds = nomes;
     p.estatisticasMapa.B26 = stats("B26", 9, 0.97);

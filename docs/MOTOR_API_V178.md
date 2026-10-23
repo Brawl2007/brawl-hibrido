@@ -1,5 +1,7 @@
 # Recomendações da API por mapa — v178
 
+Histórico da v178. A calibração por pick e os efeitos dos bans estão em [MOTOR_API_V179.md](MOTOR_API_V179.md).
+
 A v178 impede que resultados de outro terreno, falta de confrontos ou bônus de composição promovam escolhas incompatíveis com o mapa. A ingestão e a suavização única dos pares da v177 continuam ativas.
 
 ## Referência e força do mapa

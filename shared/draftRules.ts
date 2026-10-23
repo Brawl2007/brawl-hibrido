@@ -161,12 +161,12 @@ export const defaultDraftRuleSettings: DraftRuleSettings = {
   counterPickMultiplier4: 1.45,
   counterPickMultiplier5: 1.65,
   counterPickMultiplier6: 2,
-  winRatePick1: 0.9,
-  winRatePick2: 0.85,
+  winRatePick1: 0.7,
+  winRatePick2: 0.75,
   winRatePick3: 0.8,
-  winRatePick4: 0.72,
-  winRatePick5: 0.65,
-  winRatePick6: 0.55,
+  winRatePick4: 0.85,
+  winRatePick5: 0.9,
+  winRatePick6: 0.95,
   starPlayerPick1: 0.12,
   starPlayerPick2: 0.12,
   starPlayerPick3: 0.12,
@@ -471,4 +471,16 @@ export function regrasDaApiDoMotor(value?: Partial<DraftApiRuleSettings> | null)
   const regras = Object.freeze(normalizarRegrasDaApi(value));
   regrasDaApiGuardadas.set(value, regras);
   return regras;
+}
+
+/** Mistura Vitória/Uso e participação global são controles distintos. */
+export function pesosDoPickApi(turno = 1, regras?: Partial<DraftRuleSettings>) {
+  const n = Math.max(1, Math.min(6, Math.trunc(Number.isFinite(turno) ? turno : 1)));
+  const cfg = regrasDoMotor(regras);
+  const vitoria = getWinRatePickWeight(n, cfg);
+  const counter = cfg[`counterPick${n}` as keyof DraftRuleSettings];
+  const sinergia = cfg[`synergyPick${n}` as keyof DraftRuleSettings];
+  const base = [1, .92, .84, .76, .68, .60][n-1];
+  const total = base + counter + sinergia;
+  return { vitoria, uso: 1-vitoria, mapa: base/total, counter: counter/total, sinergia: sinergia/total };
 }

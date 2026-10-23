@@ -160,3 +160,20 @@ export function razoesDeUso(estatisticas: Record<string, UsoNoMapa>) {
     })
   );
 }
+
+/** Sinais comparáveis, com uso médio neutro e frequência acima da média positiva. */
+export function combinarVitoriaEUso(
+  betaVitoria: number,
+  razaoUso: number,
+  pesoVitoria: number
+) {
+  const sinalUso = Math.max(
+    -2,
+    Math.min(2, Math.log(Math.max(0.02, razaoUso)))
+  );
+  return {
+    sinalVitoria: betaVitoria,
+    sinalUso,
+    combinado: pesoVitoria * betaVitoria + (1 - pesoVitoria) * sinalUso,
+  };
+}

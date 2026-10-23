@@ -92,7 +92,7 @@ describe("calibração V177", () => {
       ).amostraEfetiva
     ).toBe(13.5);
   });
-  it("ajusta o prior ao volume do mapa em vez de somar cinquenta jogos e outro amortecedor", () => {
+  it("usa quinze jogos de confiança para counter sem outro amortecedor", () => {
     const modelo = montarDadosDoMotorApi(["A", "B"], {
       partidas: 10,
       brawlers: [],
@@ -100,9 +100,9 @@ describe("calibração V177", () => {
       confrontos: [{ a: "A", b: "B", jogos: 3, vitorias: 2 }],
     });
     expect(modelo.obterConfronto("A", "B")?.jogosPrior).toBeCloseTo(
-      Math.sqrt(3) * 3
+      15
     );
-    expect(modelo.obterConfronto("A", "B")!.jogosPrior).toBeLessThan(10);
+    expect(modelo.obterConfronto("A", "B")!.jogosPrior).toBe(15);
   });
   it("usa o catálogo por modo mesmo com a fonte da API ativa, sem recursão", () => {
     const antes = getMatchupDasFontes("Brock", "Barley", "knockout").total;
@@ -181,7 +181,7 @@ describe("calibração V177", () => {
       ).toBeCloseTo(100 * sigmoid(r.logOddsFinal));
     }
   });
-  it("troca recomendações imediatamente perante counters e sinergias com poucos jogos", () => {
+  it("reage a counters e exige mais volume para a sinergia mudar o líder", () => {
     const p = contexto();
     p.estatisticasMapa.B = stats("B", .1, .59);
     p.estatisticasMapa.C = stats("C", .1, .59);
@@ -202,8 +202,11 @@ describe("calibração V177", () => {
       aliadosIds: ["D"],
       obterSinergia: (a, b) => (a === "C" && b === "D" ? par(0.95) : undefined),
     });
-    expect(comAliado[0].brawlerId).toBe("C");
-    expect(comAliado[0].melhorAliado).toBe("D");
+    expect(comAliado[0].brawlerId).toBe("A");
+    expect(comAliado.find(r=>r.brawlerId === "C")!.fatores.sinergiaRealLogit).toBeGreaterThan(0);
+    const comVolume = ranquearCandidatosApiPerfeito({ ...p, turno: 6, aliadosIds: ["D"], obterSinergia: (a,b)=>a==="C"&&b==="D"?par(.95,80):undefined });
+    expect(comVolume[0].brawlerId).toBe("C");
+    expect(comVolume[0].melhorAliado).toBe("D");
   });
   it("nicho e hard-counter não furam o veto mesmo com vitória alta e sinergia extrema", () => {
     const p = contexto();

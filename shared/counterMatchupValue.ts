@@ -217,8 +217,8 @@ function parDoModelo(a: string, b: string, sinergia: boolean): ParObservado | nu
   const par = sinergia ? modelo.obterSinergia(a, b) : modelo.obterConfronto(a, b);
   const reserva = (sinergia ? modelo.obterSinergiaDeReserva?.(a, b) : modelo.obterCounterDeReserva?.(a, b)) ?? 0;
   const delta = sinergia ? calcularDeltaSinergiaPura(ba, bb, par, reserva) : calcularDeltaCounterPuro(ba, bb, par, reserva);
-  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(par, sigmoid((sinergia ? ba + bb : ba - bb) + reserva));
-  return { delta: (sigmoid(delta) - .5) * 100, jogos: amostraEfetiva, vitoria: pSuavizado * 100 };
+  const { amostraEfetiva } = calcularProbabilidadeParBayesiana(par, sigmoid((sinergia ? ba + bb : ba - bb) + reserva));
+  return { delta: (sigmoid(delta) - .5) * 100, jogos: amostraEfetiva, vitoria: sigmoid((sinergia ? ba + bb : ba - bb) + delta) * 100 };
 }
 
 function diferencaEncolhida(contagem: ContagemObservada | undefined, habitual: number) {

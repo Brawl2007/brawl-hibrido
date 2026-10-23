@@ -8,9 +8,9 @@ import {
 import { calculateHybridScoresByMap } from "@shared/hybridScore";
 
 describe("repartição vitória/uso por pick", () => {
-  it("reduz a força do mapa de 90% para 55% ao revelar as equipas", () => {
+  it("aumenta a fatia da vitória de 70% para 95% sem confundir o peso global do mapa", () => {
     const pesos = [1, 2, 3, 4, 5, 6].map((pick) => getWinRatePickWeight(pick, defaultDraftRuleSettings));
-    expect(pesos).toEqual([0.9, 0.85, 0.8, 0.72, 0.65, 0.55]);
+    expect(pesos).toEqual([0.7, 0.75, 0.8, 0.85, 0.9, 0.95]);
   });
 
   it("fora do intervalo vale o primeiro pick", () => {
@@ -44,8 +44,8 @@ describe("repartição vitória/uso por pick", () => {
    *
    * Com um piso e um teto a fixar a escala, os dois do meio ficam onde
    * interessa: o "Equilibrado" ganha um pouco menos mas é bastante mais usado.
-   * No primeiro pick o uso vale 10%; no sexto vale 45%, libertando escolhas
-   * de counter da predominância da vitória no mapa.
+   * No primeiro pick o uso vale 30%; no sexto vale 5%, dando mais espaço
+   * à vitória própria no mapa dentro da base.
    */
   it("muda a ordem entre o primeiro e o último pick", () => {
     const linhas = [
@@ -64,7 +64,7 @@ describe("repartição vitória/uso por pick", () => {
     const primeiro = pontuar(1);
     const ultimo = pontuar(6);
 
-    expect(primeiro.Vencedor).toBeGreaterThan(primeiro.Equilibrado);
-    expect(ultimo.Equilibrado).toBeGreaterThan(ultimo.Vencedor);
+    expect(primeiro.Equilibrado).toBeGreaterThan(primeiro.Vencedor);
+    expect(ultimo.Vencedor).toBeGreaterThan(ultimo.Equilibrado);
   });
 });

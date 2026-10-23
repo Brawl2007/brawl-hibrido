@@ -2515,6 +2515,28 @@ function DraftRulesPanel({ abertoDeInicio = false, preference, hasCustomRules, o
   );
 }
 
+/** Controles que alimentam o motor da API em cada pick. */
+function PesosPorPickDaApi({ preference, onChange, pesoBan, onPesoBan }: {
+  preference: DraftRulePreference; onChange: (p: DraftRulePreference) => void;
+  pesoBan: number; onPesoBan: (p: number) => void;
+}) {
+  return <section className="api-analise"><h3>Pesos por pick</h3>
+    <p>Vitória e uso dividem a força no mapa. Counter e sinergia ganham espaço conforme o draft avança.</p>
+    <div className="api-pesos-scroll"><table className="api-pesos"><thead><tr><th>Pick</th><th>Vitória %</th><th>Uso %</th><th>Counter %</th><th>Sinergia %</th></tr></thead><tbody>
+      {[1,2,3,4,5,6].map(n => {
+        const vitoria = `winRatePick${n}` as keyof DraftRulePreference;
+        return <tr key={n}><th>{n}</th><td><CampoDePercentagem ariaLabel={`Vitória da API no pick ${n}`} value={preference[vitoria]} onCommit={v=>onChange({...preference,[vitoria]:v})} /></td><td>{Number((100-preference[vitoria]).toFixed(1))}</td>
+          {(["counterPick","synergyPick"] as const).map(prefixo=>{
+            const chave=`${prefixo}${n}` as keyof DraftRulePreference;
+            return <td key={chave}><CampoDePercentagem ariaLabel={`${prefixo==="counterPick"?"Counter":"Sinergia"} da API no pick ${n}`} value={preference[chave]} onCommit={v=>onChange({...preference,[chave]:v})} /></td>;
+          })}</tr>;
+      })}
+    </tbody></table></div>
+    <label className="draft-rule-input">Influência dos bans % <CampoDePercentagem ariaLabel="Influência dos bans na API" maximo={300} value={pesoBan*100} onCommit={v=>onPesoBan(v/100)} /></label>
+    <p>A influência dos bans cai para dois terços, um terço e zero conforme os inimigos são definidos. Os limites de mapa e composição continuam ativos.</p>
+  </section>;
+}
+
 /** A mini-lista de ajustes: cada um abre num painel ao lado, sem ocupar a página. */
 const PAINEIS_DO_DRAFT = [
   { id: "motor", label: "Motor do Draft (Híbrido, PL Prodigy, MetaPick)", soDono: false },
@@ -2710,8 +2732,8 @@ export default function Draft() {
   const escolhasInimigasApi = useMemo(() => dadosMotorApi && visaoInimigaApi && enemyPicks.length < 3 ? ranquearCandidatosApiPerfeito({ ...dadosMotorApi,
     disponiveisIds: currentRows.filter((r) => !analysisLockedNames.has(r.brawler)).map((r) => r.brawler),
     aliadosIds: enemyPicks.map((r) => r.brawler), inimigosIds: activeTeamPicks.map((r) => r.brawler), modoDeJogo: selectedMap?.modeId ?? "",
-    turno: proximoTurnoDaEquipa(analysisCompletedPickCount, suggestionTeam === initialTeam ? "second_pick" : "first_pick"), perfisTaticos: perfisApi, modificadorRanked: modificadorApi, ordemTime: suggestionTeam === initialTeam ? "second_pick" : "first_pick",
-  }) : [], [dadosMotorApi, visaoInimigaApi, currentRows, analysisLockedNames, enemyPicks, activeTeamPicks, selectedMap?.modeId, perfisApi, modificadorApi, suggestionTeam, initialTeam, analysisCompletedPickCount]);
+    banidosIds: bansDoQuadro, regras: draftRuleSettings, pesoBan: regrasDaApi.regras.apiPesoBan, turno: proximoTurnoDaEquipa(analysisCompletedPickCount, suggestionTeam === initialTeam ? "second_pick" : "first_pick"), perfisTaticos: perfisApi, modificadorRanked: modificadorApi, ordemTime: suggestionTeam === initialTeam ? "second_pick" : "first_pick",
+  }) : [], [dadosMotorApi, visaoInimigaApi, currentRows, analysisLockedNames, enemyPicks, activeTeamPicks, selectedMap?.modeId, perfisApi, modificadorApi, suggestionTeam, initialTeam, analysisCompletedPickCount, bansDoQuadro, draftRuleSettings, regrasDaApi.regras.apiPesoBan]);
   const baseRoleContext = useMemo(() => ({ dadosApi: dadosMotorApi, draftKind: analysisDraftStep?.kind, brawlerPretendido: pretendidoApi || undefined, modificadorRanked: modificadorApi, ordemTimeApi: suggestionTeam === initialTeam ? "first_pick" as const : "second_pick" as const, mapModeId: selectedMap?.modeId, mapTeams, mapName: selectedMap?.name, popularityRows: currentRows, allyRows: activeTeamPicks, enemyRows: enemyPicks, bannedNames: banNames, baseHybridTop25Names, baseHybridTop30Names, pickNumber: analysisGlobalPickNumber, completedPickCount: analysisCompletedPickCount, experimentalWeights, ruleSettings: draftRuleSettings, apiRuleSettings: regrasDaApi.regras, counterSnapshotVersion, brawlScopeReading, liveMatchupsVersion: liveMatchups.version, fonteApiVersao: fonteApi.versao, motor: motorDoDraft.config }), [dadosMotorApi, analysisDraftStep?.kind, pretendidoApi, modificadorApi, suggestionTeam, initialTeam, motorDoDraft.config, regrasDaApi.regras, selectedMap?.modeId, selectedMap?.name, mapTeams, currentRows, activeTeamPicks, enemyPicks, banNames, baseHybridTop25Names, baseHybridTop30Names, analysisGlobalPickNumber, analysisCompletedPickCount, experimentalWeights, draftRuleSettings, counterSnapshotVersion, brawlScopeReading, liveMatchups.version, fonteApi.versao]);
   const counterWindow = useMemo(() => getDraftCounterWindow(currentRows, analysisLockedNames, "", baseRoleContext), [currentRows, analysisLockedNames, baseRoleContext]);
   const topRecommendationNames = counterWindow.topRecommendationNames;
@@ -3213,8 +3235,8 @@ export default function Draft() {
                 {painelAberto === "sequencia" && <ScrimSetup preset={scrimPreset} initialTeam={initialTeam} myTeam={myTeam} steps={draftSequence} onPresetChange={handlePresetChange} onInitialTeamChange={handleInitialTeamChange} onMyTeamChange={setMyTeam} onStepsChange={handleCustomStepsChange} />}
                 {painelAberto === "regras" && <>
                   {hasCustomGlobalWeights && <p className="mesa-painel-nota">Este navegador usa Vitória {experimentalWeights.winRate}% / Uso {experimentalWeights.usageRate}% em todo o site. <a href="/#ranking-laboratory">Mudar</a></p>}
-                  {fonteApi.ligada ? <section className="api-analise"><h3>Partidas oficiais e dados de apoio</h3><p>A força no mapa vem das partidas oficiais recentes. Com poucos jogos de um confronto ou dupla, as matrizes do projeto ajudam a recomendação; conforme a amostra cresce, a API assume o resultado. Os cartões mostram o impacto de cada fator na chance estimada.</p></section> : <PainelDasRegrasDaApi regras={regrasDaApi.regras} ligada={false} personalizadas={regrasDaApi.personalizadas} onChange={regrasDaApi.mudar} onReset={regrasDaApi.repor} />}
-                  <DraftRulesPanel abertoDeInicio preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />
+                  {fonteApi.ligada ? <section className="api-analise"><h3>Partidas oficiais e dados de apoio</h3><p>A força no mapa vem das partidas oficiais recentes. Com poucos jogos de um confronto ou dupla, as matrizes do projeto ajudam a recomendação; conforme a amostra cresce, a API assume o resultado. A divisão começa em 70% vitória e 30% uso e chega a 95% e 5% no último pick. Bans podem liberar caminhos e tornar uma função escassa; esse efeito termina quando os três inimigos estão definidos. Os cartões mostram o impacto de cada fator na chance estimada.</p></section> : <PainelDasRegrasDaApi regras={regrasDaApi.regras} ligada={false} personalizadas={regrasDaApi.personalizadas} onChange={regrasDaApi.mudar} onReset={regrasDaApi.repor} />}
+                  {fonteApi.ligada ? <PesosPorPickDaApi preference={draftRulePreference} onChange={updateDraftRulePreference} pesoBan={regrasDaApi.regras.apiPesoBan} onPesoBan={v=>regrasDaApi.mudar({apiPesoBan:v})} /> : <DraftRulesPanel abertoDeInicio preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />}
                 </>}
                 {painelAberto === "funcoes" && <DraftRoleEditor noPainel names={liveRows.map(row => row.brawler)} />}
                 {painelAberto === "pontuacao" && <div className="draft-arena-reference">

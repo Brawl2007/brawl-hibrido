@@ -122,7 +122,7 @@ describe("motor oficial bayesiano V1–V3", () => {
     expect(
       ajustarForcaMapaPorUsoETurno(0.8, 0.003, 1).betaAjustado
     ).toBeLessThan(ajustarForcaMapaPorUsoETurno(0.8, 0.003, 6).betaAjustado);
-    expect(ajustarForcaMapaPorUsoETurno(-0.3, 0, 1).betaAjustado).toBe(-0.3);
+    expect(ajustarForcaMapaPorUsoETurno(-0.3, 0, 1).betaAjustado).toBeLessThan(-0.3);
   });
   it("preserva o sinal de pares pequenos e tira a força individual do confronto", () => {
     expect(calcularDeltaCounterPuro(0, 0, undefined)).toBe(0);
@@ -145,10 +145,10 @@ describe("motor oficial bayesiano V1–V3", () => {
     ).toBe(0);
     const forte = calcularDeltaSinergiaPura(0, 0, par(0.8));
     const fraco = calcularDeltaSinergiaPura(-0.2, 0.2, par(0.8));
-    expect(fraco).toBeCloseTo(forte * 0.3);
+    expect(fraco).toBeCloseTo(forte * 0.2);
     expect(calcularDeltaSinergiaTripla([0, 0, 0], [0, 0, 0], par(1, 2))).toBeGreaterThan(0);
   });
-  it("veta o hard-counter revelado, exclui picks, respeita pool e soma os sete fatores", () => {
+  it("veta o hard-counter revelado, exclui picks, respeita pool e soma todos os fatores", () => {
     const p = parametros();
     const r = ranquearCandidatosApiPerfeito({
       ...p,

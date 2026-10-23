@@ -13,6 +13,8 @@ const NOMES: Record<keyof ResultadoRecomendacaoApi["fatores"], string> = {
   riscoMinimaxLogit: "Segurança da escolha",
   penalidadeTaticaLogit: "Equilíbrio da equipa",
   ajustePoucoUsoLogit: "Confiança pelo uso",
+  alivioBanLogit: "Caminho livre pelos bans",
+  escassezFuncaoLogit: "Prioridade de função após bans",
 };
 const percentagem = (valor: number) =>
   `${valor > 0 ? "+" : "−"}${Math.abs(valor).toFixed(1)}%`;
@@ -66,6 +68,22 @@ export function RecomendacaoApi({
           <small>
             {ban ? ban.motivo : "Partidas oficiais + apoio de confrontos"}
           </small>
+          {resultado?.pesosDoPick && (
+            <small>
+              Mapa: {Math.round(resultado.pesosDoPick.vitoria * 100)}% vitória ·{" "}
+              {Math.round(resultado.pesosDoPick.uso * 100)}% uso
+            </small>
+          )}
+          {!!resultado?.bansQueLiberam?.length && (
+            <small className="api-tag api-alvo">
+              Caminho livre: {resultado.bansQueLiberam.join(", ")} banidos
+            </small>
+          )}
+          {resultado?.funcaoEscassa && (
+            <small className="api-tag api-sinergia">
+              Poucas opções de {resultado.funcaoEscassa} após os bans
+            </small>
+          )}
           {resultado?.melhorAlvoInimigo && (
             <small className="api-tag api-alvo">
               Counter contra {resultado.melhorAlvoInimigo}
@@ -89,7 +107,8 @@ export function RecomendacaoApi({
           )}
           {resultado?.bloqueado === "nicho" && (
             <small className="api-tag api-risco">
-              Pouco uso neste mapa: só no fechamento, com dois counters fortes comprovados
+              Pouco uso neste mapa: só no fechamento, com dois counters fortes
+              comprovados
             </small>
           )}
           {resultado?.bloqueado === "mapa" && (

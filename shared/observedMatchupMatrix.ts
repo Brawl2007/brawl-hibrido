@@ -1,3 +1,4 @@
+import { CONFIANCA_DE_PARES } from "./motorApiPerfeito";
 import { razoesDeUso, type ReferenciasMapaApi } from "./adequacaoAoMapa";
 import type { ApoioDoMotorApi } from "./motorApiPerfeito";
 export type ObservedMatchupRow = {
@@ -144,12 +145,7 @@ export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiP
     }
     return mapa;
   };
-  const priorDoPar = (lista: readonly { jogos: number; jogosPonderados?: number }[]) => {
-    const volumes = lista.map(jogosPonderados).filter(n => n > 0).sort((a, b) => a - b);
-    const mediana = volumes.length ? volumes[Math.floor(volumes.length / 2)] : 6;
-    return Math.max(4, Math.min(12, Math.sqrt(mediana) * 3));
-  };
-  const kCounter = priorDoPar(dados.confrontos), kSinergia = priorDoPar(dados.sinergias);
+  const kCounter = CONFIANCA_DE_PARES.counter, kSinergia = CONFIANCA_DE_PARES.dupla;
   const pares = (mapa: ReturnType<typeof indexar>, modo: ReturnType<typeof indexar>, jogosPrior: number) => (a: string, b: string): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
     const chave = `${chaveApi(a)}:${chaveApi(b)}`;
     const m = mapa.get(chave), g = modo.get(chave);
@@ -164,7 +160,7 @@ export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiP
     obterSinergia: pares(indexar(dados.sinergias, true), indexar(dados.priorModo?.sinergias ?? [], true), kSinergia),
     obterTrio: (ids: string[]): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
       const chave = ids.map(chaveApi).sort().join(":"), m = trios.get(chave), g = triosModo.get(chave);
-      return m || g ? { vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;
+      return m || g ? { jogosPrior: CONFIANCA_DE_PARES.trio, vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;
     },
   };
 }

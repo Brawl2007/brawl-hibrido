@@ -1,9 +1,8 @@
 import { criarReferenciasDoMapa } from "./adequacaoAoMapa";
 import type { TerrenoDoMapa } from "./terrenoDoMapa";
 import { aplicarReferenciasDoMapa } from "./observedMatchupMatrix";
-import { ranquearCandidatosApiPerfeito, recomendarBansApi, type ResultadoRecomendacaoApi, type PerfilTaticoBrawler } from "./motorApiPerfeito";
+import { avaliarForcaDoMapa, sigmoidPercent, ranquearCandidatosApiPerfeito, recomendarBansApi, type ResultadoRecomendacaoApi, type PerfilTaticoBrawler } from "./motorApiPerfeito";
 import type { DadosDoMotorApi } from "./observedMatchupMatrix";
-import { calcularWinRateBayesiano } from "./amostraPequena";
 import { versaoDoMotor } from "./versaoDoMotor";
 import { lerContextoDoMotor, redistribuirPesosPL, penalidadeBravosDisponiveis, partesAtivasDoPL, pontuarComMotor, type ComponentesDoCandidato, type ConfigDoMotor, type ContextoDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
@@ -2179,15 +2178,16 @@ function rankApiEntries<T extends DraftRow>(rows: T[], locked: Set<string>, quer
   const resultados = ranquearCandidatosApiPerfeito({ ...dados, disponiveisIds,
     aliadosIds: (context.allyRows ?? []).map((r) => r.brawler), inimigosIds: (context.enemyRows ?? []).map((r) => r.brawler),
     modoDeJogo: context.mapModeId ?? "", perfisTaticos: perfisTaticosDoDraft(nomes), turno: context.pickNumber,
-    ordemTime: context.ordemTimeApi, modificadorRanked: context.modificadorRanked, poolNivel11Usuario: context.poolNivel11Usuario,
+    banidosIds: Array.from(context.bannedNames ?? []), regras: context.ruleSettings, pesoBan: context.apiRuleSettings?.apiPesoBan, ordemTime: context.ordemTimeApi, modificadorRanked: context.modificadorRanked, poolNivel11Usuario: context.poolNivel11Usuario,
   });
+  const forcaBase = avaliarForcaDoMapa(dados.estatisticasMapa, context.pickNumber, context.ruleSettings);
   const porNome = new Map(rows.map((r) => [r.brawler, r]));
   const bans = context.draftKind === "ban" ? new Map(recomendarBansApi({ ...dados, disponiveisIds, brawlerPretendidoId: context.brawlerPretendido }).map((r) => [r.brawlerId, r])) : null;
   return resultados.filter((api) => (!bans || bans.has(api.brawlerId)) && (!query || api.brawlerId.toLowerCase().includes(query.toLowerCase())) &&
     (!context.role || context.role === "Todas" || inferDraftRole(api.brawlerId) === context.role || inferDraftRole(api.brawlerId) === "flex"))
     .map((api) => {
       const row = porNome.get(api.brawlerId)!;
-      const base = calcularWinRateBayesiano(dados.estatisticasMapa[api.brawlerId]);
+      const base = forcaBase.mapa[api.brawlerId] ? sigmoidPercent(forcaBase.mapa[api.brawlerId].forca) / 100 : .43;
       const ban = bans?.get(api.brawlerId);
       return { row, api: ban ? undefined : api, apiBan: ban, basePoints: base * 100,
         draftScore: ban ? ban.banScore : api.logOddsFinal, finalPoints: ban ? ban.banScore : api.winProbability,

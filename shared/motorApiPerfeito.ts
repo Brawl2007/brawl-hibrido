@@ -1,4 +1,9 @@
-import { razoesDeUso, type ReferenciaMapaApi } from "./adequacaoAoMapa";
+import { pesosDoPickApi, type DraftRuleSettings } from "./draftRules";
+import {
+  razoesDeUso,
+  combinarVitoriaEUso,
+  type ReferenciaMapaApi,
+} from "./adequacaoAoMapa";
 import { calcularWinRateBayesiano } from "./amostraPequena";
 // shared/motorApiPerfeito.ts
 
@@ -65,12 +70,17 @@ export interface ResultadoRecomendacaoApi {
     riscoMinimaxLogit: number;
     penalidadeTaticaLogit: number;
     ajustePoucoUsoLogit: number;
+    alivioBanLogit: number;
+    escassezFuncaoLogit: number;
   };
   /** Impactos em pontos percentuais; a soma parte de 50% e chega à estimativa. */
   fatoresPercentuais?: ResultadoRecomendacaoApi["fatores"];
   bloqueado?: "hard-counter" | "nicho" | "composicao" | "mapa";
   falhasDeComposicao?: string[];
   melhorAliado?: string;
+  bansQueLiberam?: string[];
+  funcaoEscassa?: "Mid" | "Lane";
+  pesosDoPick?: ReturnType<typeof pesosDoPickApi>;
   alertaHardCounter?: string[];
   melhorAlvoInimigo?: string;
   piorRespostaFuturaInimiga?: string;
@@ -86,6 +96,7 @@ export interface PareamentoLane3v3 {
 
 const LIMIAR_RUIDO = 0.01;
 const PESO_COUNTER = 1.35;
+export const CONFIANCA_DE_PARES = { counter: 15, dupla: 25, trio: 40 } as const;
 
 export interface ApoioDoMotorApi {
   obterCounterDeReserva?: (a: string, b: string) => number | undefined;
@@ -115,44 +126,49 @@ export function ajustarForcaMapaPorUsoETurno(
   razaoUso: number,
   turno: number
 ) {
-  const referencia = [1, 0.85, 0.7, 0.45, 0.3, 0.15][
-    Math.max(0, Math.min(5, turno - 1))
-  ];
-  const confianca = Math.min(1, Math.max(0, razaoUso) / referencia);
-  const penalidade =
-    betaBruto > 0
-      ? betaBruto * (1 - confianca) +
-        0.18 * Math.max(0, 1 - (turno - 1) / 4) * (1 - confianca)
-      : 0;
+  const { vitoria } = pesosDoPickApi(turno);
+  const { combinado } = combinarVitoriaEUso(betaBruto, razaoUso, vitoria);
   return {
-    betaAjustado: betaBruto - penalidade,
-    penalidadePoucoUso: penalidade,
+    betaAjustado: combinado,
+    penalidadePoucoUso: Math.max(0, betaBruto - combinado),
   };
 }
 
 /** O modo inclui o mapa: só a parte fora do mapa entra outra vez como evidência. */
 export function calcularProbabilidadeParBayesiana(
   par: ConfrontoObservado | undefined,
-  esperado: number
+  esperado: number,
+  k: number = CONFIANCA_DE_PARES.counter
 ) {
-  if (!par) return { pSuavizado: esperado, amostraEfetiva: 0 };
-  const nMapa = Math.max(0, par.jogosMapa),
-    nModoFora = Math.max(0, par.jogosModo - nMapa);
-  const wMapa = Math.max(0, Math.min(nMapa, par.vitoriasA));
-  const wModoFora = Math.max(0, Math.min(nModoFora, par.vitoriasAModo - wMapa));
-  const n = nMapa + 0.35 * nModoFora;
-  const k = Math.max(2, par.jogosPrior ?? 6);
+  const nMapa = Math.max(0, par?.jogosMapa ?? 0);
+  const nFora = Math.max(0, (par?.jogosModo ?? 0) - nMapa);
+  const wMapa = Math.max(0, Math.min(nMapa, par?.vitoriasA ?? 0));
+  const wFora = Math.max(0, Math.min(nFora, (par?.vitoriasAModo ?? 0) - wMapa));
+  const n = nMapa + 0.35 * nFora;
+  const confianca = n / (n + Math.max(1, par?.jogosPrior ?? k));
+  const pObservado = n > 0 ? (wMapa + 0.35 * wFora) / n : esperado;
   return {
-    pSuavizado: (wMapa + 0.35 * wModoFora + k * esperado) / (n + k),
+    pSuavizado: confianca * pObservado + (1 - confianca) * esperado,
+    pObservado,
+    confianca,
     amostraEfetiva: n,
   };
 }
 
-function residualPar(base: number, par?: ConfrontoObservado, reserva = 0) {
-  // A fonte de apoio é o prior. A única mistura é N/(N+K), dentro da posterior.
-  const esperado = sigmoid(base + reserva);
-  const { pSuavizado } = calcularProbabilidadeParBayesiana(par, esperado);
-  return aplicarFiltroRuido(logit(pSuavizado) - logit(sigmoid(base)));
+function residualPar(
+  base: number,
+  par: ConfrontoObservado | undefined,
+  reserva: number,
+  k: number
+) {
+  const { pObservado, confianca } = calcularProbabilidadeParBayesiana(
+    par,
+    sigmoid(base),
+    k
+  );
+  // Uma única ponderação N/(N+K), aplicada ao residual; a matriz preenche o complemento.
+  const observado = confianca > 0 ? logit(pObservado) - base : 0;
+  return aplicarFiltroRuido(confianca * observado + (1 - confianca) * reserva);
 }
 export function calcularDeltaCounterPuro(
   a: number,
@@ -160,7 +176,7 @@ export function calcularDeltaCounterPuro(
   par?: ConfrontoObservado,
   reserva = 0
 ) {
-  return residualPar(a - b, par, reserva);
+  return residualPar(a - b, par, reserva, CONFIANCA_DE_PARES.counter);
 }
 export function calcularDeltaSinergiaPura(
   a: number,
@@ -168,8 +184,8 @@ export function calcularDeltaSinergiaPura(
   par?: ConfrontoObservado,
   reserva = 0
 ) {
-  const delta = residualPar(a + b, par, reserva);
-  return delta * (delta > 0 && a < logit(0.46) ? 0.3 : 1);
+  const delta = residualPar(a + b, par, reserva, CONFIANCA_DE_PARES.dupla);
+  return delta * (delta > 0 && a < logit(0.47) ? 0.2 : 1);
 }
 export function calcularDeltaSinergiaTripla(
   betas: number[],
@@ -179,11 +195,8 @@ export function calcularDeltaSinergiaTripla(
   if (!trio) return 0;
   const base =
     betas.reduce((a, b) => a + b, 0) + duplas.reduce((a, b) => a + b, 0);
-  const delta = residualPar(base, {
-    ...trio,
-    jogosPrior: Math.max(10, trio.jogosPrior ?? 10),
-  });
-  return delta * (delta > 0 && betas[0] < logit(0.46) ? 0.3 : 1);
+  const delta = residualPar(base, trio, 0, CONFIANCA_DE_PARES.trio);
+  return delta * (delta > 0 && betas[0] < logit(0.47) ? 0.2 : 1);
 }
 
 /** O próximo turno da equipa na ordem real 1-2-2-1, após os picks já concluídos. */
@@ -340,12 +353,18 @@ export type ParametrosMotorApi = ApoioDoMotorApi & {
   poolNivel11Usuario?: Set<string>;
   ordemTime?: OrdemTimeDraft;
   turno?: number;
+  banidosIds?: readonly string[];
+  regras?: Partial<DraftRuleSettings>;
+  pesoBan?: number;
 };
 
 /** Referência estável de todo o mapa; bans e filtros não alargam a pool de abertura. */
 export function avaliarForcaDoMapa(
-  estatisticas: Record<string, EstatisticasApiMapa>
+  estatisticas: Record<string, EstatisticasApiMapa>,
+  turno = 1,
+  regras?: Partial<DraftRuleSettings>
 ) {
+  const pesos = pesosDoPickApi(turno, regras);
   const razoes = razoesDeUso(estatisticas);
   const probabilidades = Object.fromEntries(
     Object.entries(estatisticas).map(([id, s]) => [
@@ -367,15 +386,29 @@ export function avaliarForcaDoMapa(
         (0.7 * normalizar(probabilidades[id], ps) +
           0.3 * normalizar(razoes[id], usos)) *
         terreno;
+      const mistura = combinarVitoriaEUso(
+        logit(probabilidades[id]),
+        razoes[id],
+        pesos.vitoria
+      );
+      const scoreDoPick =
+        (pesos.vitoria * normalizar(probabilidades[id], ps) +
+          pesos.uso * normalizar(razoes[id], usos)) *
+        terreno;
       return [
         id,
         {
           probabilidade: probabilidades[id],
           razaoUso: razoes[id],
           terreno,
-          score,
+          score: scoreDoPick,
+          scoreViabilidade: score,
+          ...mistura,
           beta: logit(probabilidades[id]),
-          forca: logit(probabilidades[id]) + 0.3 * (2 * score - 1),
+          forca:
+            mistura.combinado > 0
+              ? mistura.combinado * terreno
+              : mistura.combinado,
           confiavel: s.jogosMapa >= 12 && razoes[id] >= 0.7 && terreno >= 0.6,
         },
       ];
@@ -392,10 +425,14 @@ export function avaliarForcaDoMapa(
           mapa[id].razaoUso >= usoDoTop25 &&
           mapa[id].probabilidade >= 0.44
       )
-      .sort((a, b) => mapa[b].score - mapa[a].score || a.localeCompare(b))
+      .sort(
+        (a, b) =>
+          mapa[b].scoreViabilidade - mapa[a].scoreViabilidade ||
+          a.localeCompare(b)
+      )
       .slice(0, 25)
   );
-  return { mapa, top };
+  return { mapa, top, pesos };
 }
 
 export function ranquearCandidatosApiPerfeito(
@@ -406,10 +443,17 @@ export function ranquearCandidatosApiPerfeito(
     Math.min(6, p.turno ?? p.aliadosIds.length + p.inimigosIds.length + 1)
   );
   const bloqueados = new Set([...p.aliadosIds, ...p.inimigosIds]);
-  const disponiveis = [...new Set(p.disponiveisIds)].filter(
-    id => !bloqueados.has(id)
+  const banidos = new Set(
+    (p.banidosIds ?? []).filter(id => !bloqueados.has(id))
   );
-  const { mapa, top } = avaliarForcaDoMapa(p.estatisticasMapa);
+  const disponiveis = [...new Set(p.disponiveisIds)].filter(
+    id => !bloqueados.has(id) && !banidos.has(id)
+  );
+  const { mapa, top, pesos } = avaliarForcaDoMapa(
+    p.estatisticasMapa,
+    turno,
+    p.regras
+  );
   const beta = (id: string) => mapa[id]?.beta ?? logit(0.43);
   const razao = (id: string) => mapa[id]?.razaoUso ?? 0;
   const counterCache = new Map<string, number>(),
@@ -454,16 +498,31 @@ export function ranquearCandidatosApiPerfeito(
     turno,
     p.ordemTime === "second_pick" ? "first_pick" : "second_pick"
   );
+  const forcaInimiga = turnoInimigo
+    ? avaliarForcaDoMapa(p.estatisticasMapa, turnoInimigo, p.regras).mapa
+    : mapa;
   const restantes = Math.max(0, 3 - p.inimigosIds.length);
   const somaUso = disponiveis.reduce((total, id) => total + razao(id), 0) || 1;
 
-  const brutos = candidatos.map(id => {
+  const candidatosSet = new Set(candidatos);
+  const referenciaIds = [
+    ...new Set([...Object.keys(p.estatisticasMapa), ...disponiveis]),
+  ].filter(id => !bloqueados.has(id));
+  const brutos = referenciaIds.map(id => {
     const interacoes = p.inimigosIds.map(inimigo => ({
       inimigo,
       delta: counter(id, inimigo),
     }));
     const saldo = interacoes.reduce((s, c) => s + c.delta, 0);
-    const fortes = interacoes.filter(c => c.delta <= -0.38).map(c => c.inimigo);
+    const fortes = interacoes
+      .filter(
+        c =>
+          c.delta <= -0.38 &&
+          ((p.obterConfronto(id, c.inimigo)?.jogosMapa ?? 0) >=
+            CONFIANCA_DE_PARES.counter ||
+            (p.obterCounterDeReserva?.(id, c.inimigo) ?? 0) <= -0.38)
+      )
+      .map(c => c.inimigo);
     const hard =
       2.6 * interacoes.reduce((s, c) => s + Math.max(0, -c.delta) ** 2, 0) +
       (fortes.length ? 0.65 : 0);
@@ -471,7 +530,8 @@ export function ranquearCandidatosApiPerfeito(
     const countersFortes = interacoes.filter(
       c =>
         c.delta >= 0.22 &&
-        ((p.obterConfronto(id, c.inimigo)?.jogosMapa ?? 0) >= 3 ||
+        ((p.obterConfronto(id, c.inimigo)?.jogosMapa ?? 0) >=
+          CONFIANCA_DE_PARES.counter ||
           (p.obterCounterDeReserva?.(id, c.inimigo) ?? 0) >= 0.22)
     ).length;
     const destravado =
@@ -479,7 +539,7 @@ export function ranquearCandidatosApiPerfeito(
       countersFortes >= 2 &&
       (condicao?.terreno ?? 0) >= 0.6 &&
       (condicao?.probabilidade ?? 0) >= 0.4;
-    const nicho = razao(id) < 0.25 && !destravado;
+    const nicho = razao(id) < 0.3 && !destravado;
     const foraDoMapa = !top.has(id) && !destravado;
     const duplas = p.aliadosIds.map(aliado => ({
       aliado,
@@ -502,7 +562,11 @@ export function ranquearCandidatosApiPerfeito(
         const n = p.obterConfronto(id, adversario)?.jogosMapa ?? 0;
         const reserva = p.obterCounterDeReserva?.(id, adversario);
         const conhecida = reserva !== undefined && Number.isFinite(reserva);
-        return 0.1 * (1 - n / (n + 6)) * (conhecida ? 0.25 : 1);
+        return (
+          0.1 *
+          (1 - n / (n + CONFIANCA_DE_PARES.counter)) *
+          (conhecida ? 0.25 : 1)
+        );
       };
       const riscoCego = disponiveis
         .filter(k => k !== id)
@@ -517,8 +581,7 @@ export function ranquearCandidatosApiPerfeito(
         const pares = [...p.aliadosIds, id].map(a => counter(k, a));
         const valor =
           Math.pow(Math.min(razao(k), 4), 0.35) *
-          (ajustarForcaMapaPorUsoETurno(beta(k), razao(k), turnoInimigo)
-            .betaAjustado +
+          (forcaInimiga[k].forca +
             pares.reduce((s, d) => s + d - 2 * Math.max(0, -d) ** 2, 0));
         if (valor > maiorResposta) {
           maiorResposta = valor;
@@ -535,9 +598,46 @@ export function ranquearCandidatosApiPerfeito(
       modificadorRanked: p.modificadorRanked,
       perfis: p.perfisTaticos,
     });
-    const uso =
-      ajustarForcaMapaPorUsoETurno(beta(id), razao(id), turno)
-        .penalidadePoucoUso + (nicho ? 0.4 : 0);
+    const pesoBan = Math.max(0, Math.min(3, p.pesoBan ?? 0.5));
+    const protegidos =
+      restantes > 0 && top.has(id)
+        ? [...banidos].filter(
+            b => top.has(b) && razao(b) >= 1 && counter(id, b) <= -0.22
+          )
+        : [];
+    const baseParaBan =
+      Math.max(0, (mapa[id]?.forca ?? 0) * pesos.mapa) *
+      Math.max(0, Math.min(1, mapa[id]?.score ?? 0));
+    const alivioBan =
+      (restantes / 3) *
+      Math.min(
+        baseParaBan * 0.3,
+        pesoBan *
+          protegidos.reduce(
+            (s, b) => s + razao(b) * Math.max(0, -counter(id, b)) ** 2,
+            0
+          )
+      );
+    const role = p.perfisTaticos[id]?.role;
+    const precisa =
+      role === "mid"
+        ? !p.aliadosIds.some(a => p.perfisTaticos[a]?.role === "mid")
+        : p.aliadosIds.filter(a => p.perfisTaticos[a]?.role !== "mid").length <
+          2;
+    const mesmaFuncao = referenciaIds.filter(
+      a =>
+        top.has(a) && (p.perfisTaticos[a]?.role === "mid") === (role === "mid")
+    );
+    const antes = mesmaFuncao.length,
+      depois = mesmaFuncao.filter(a => !banidos.has(a)).length;
+    const escassez =
+      top.has(id) && precisa && depois > 0 && antes > depois
+        ? (restantes / 3) *
+          Math.min(
+            baseParaBan * 0.1,
+            (pesoBan * 0.2 * (antes - depois)) / antes / depois
+          )
+        : 0;
     const falhas = falhasAoFecharEquipa(
       [...p.aliadosIds, id],
       p.perfisTaticos,
@@ -555,53 +655,67 @@ export function ranquearCandidatosApiPerfeito(
       risco,
       resposta,
       tatica,
-      uso,
       falhas,
       foraDoMapa,
+      protegidos,
+      alivioBan,
+      escassez,
+      role,
     };
   });
   const viaveis = brutos.filter(
     c => !c.fortes.length && !c.nicho && !c.falhas.length && !c.foraDoMapa
   );
   const referencia = viaveis.length ? viaveis : brutos;
-  const media = (campo: "risco" | "tatica" | "uso") =>
+  const media = (campo: "risco" | "tatica") =>
     referencia.reduce((s, c) => s + c[campo], 0) / (referencia.length || 1);
   const riscoMedio = media("risco"),
-    taticaMedia = media("tatica"),
-    usoMedio = media("uso");
+    taticaMedia = media("tatica");
   return brutos
+    .filter(c => candidatosSet.has(c.id))
     .map(c => {
       const fatores: ResultadoRecomendacaoApi["fatores"] = {
-        forcaMapaLogit: mapa[c.id]?.forca ?? logit(0.43),
-        counterLiquidoLogit: PESO_COUNTER * c.saldo,
+        forcaMapaLogit: (mapa[c.id]?.forca ?? logit(0.43)) * pesos.mapa,
+        counterLiquidoLogit: PESO_COUNTER * pesos.counter * c.saldo,
         penalidadeHardCounterLogit: -c.hard || 0,
-        sinergiaRealLogit: c.somaSinergia,
+        sinergiaRealLogit: pesos.sinergia * c.somaSinergia,
         riscoMinimaxLogit: mapa[c.id]?.confiavel
           ? riscoMedio - c.risco
           : Math.min(0, riscoMedio - c.risco),
         penalidadeTaticaLogit: mapa[c.id]?.confiavel
           ? taticaMedia - c.tatica
           : Math.min(0, taticaMedia - c.tatica),
-        ajustePoucoUsoLogit: mapa[c.id]?.confiavel
-          ? usoMedio - c.uso
-          : Math.min(0, usoMedio - c.uso),
+        ajustePoucoUsoLogit: 0,
+        alivioBanLogit: c.alivioBan,
+        escassezFuncaoLogit: c.escassez,
       };
       // Abertura: a base representa pelo menos 70% de toda a evidência positiva.
       // Mais tarde, o teto dos bônus cresce, sempre multiplicado pela viabilidade do mapa.
       const secundarias = (
         Object.keys(fatores) as Array<keyof typeof fatores>
-      ).filter(k => k !== "forcaMapaLogit");
+      ).filter(
+        k =>
+          !["forcaMapaLogit", "alivioBanLogit", "escassezFuncaoLogit"].includes(
+            k
+          )
+      );
       const positivos = secundarias.reduce(
         (s, k) => s + Math.max(0, fatores[k]),
         0
       );
       const capacidade = Math.max(0, Math.min(1, mapa[c.id]?.score ?? 0));
+      const proporcao = [3 / 7, 0.65, 1, 1.5, 2, 3][turno - 1];
       const teto =
-        turno <= 3
-          ? ((Math.max(0, fatores.forcaMapaLogit) * 3) / 7) * capacidade
-          : Math.max(0.18, Math.max(0, fatores.forcaMapaLogit) * 3) *
-            capacidade;
-      const escalaBonus = positivos > 0 ? Math.min(1, teto / positivos) : 1;
+        Math.max(
+          turno >= 4 ? 0.18 : 0,
+          Math.max(0, fatores.forcaMapaLogit) * proporcao
+        ) * capacidade;
+      const disponivelParaBonus = Math.max(
+        0,
+        teto - fatores.alivioBanLogit - fatores.escassezFuncaoLogit
+      );
+      const escalaBonus =
+        positivos > 0 ? Math.min(1, disponivelParaBonus / positivos) : 1;
       for (const k of secundarias)
         if (fatores[k] > 0) fatores[k] *= escalaBonus;
       const final = Object.values(fatores).reduce((a, b) => a + b, 0);
@@ -614,6 +728,14 @@ export function ranquearCandidatosApiPerfeito(
         turnoAtual: turno,
         fatores,
         fatoresPercentuais: impactosPercentuais(fatores),
+        pesosDoPick: pesos,
+        bansQueLiberam: fatores.alivioBanLogit > 0 ? c.protegidos : undefined,
+        funcaoEscassa:
+          fatores.escassezFuncaoLogit > 0
+            ? c.role === "mid"
+              ? ("Mid" as const)
+              : ("Lane" as const)
+            : undefined,
         bloqueado: c.fortes.length
           ? ("hard-counter" as const)
           : c.nicho

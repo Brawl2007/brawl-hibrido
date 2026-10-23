@@ -82,3 +82,23 @@ describe("os campos das regras mostram números limpos", () => {
     }
   });
 });
+
+
+describe("calibração da escada na v179", () => {
+  const chaves = ["winRatePick1","winRatePick2","winRatePick3","winRatePick4","winRatePick5","winRatePick6"] as const;
+  const anterior = Object.fromEntries(chaves.map((k,i)=>[k,[90,85,80,72,65,55][i]]));
+  it("migra a escada antiga de fábrica preservando ajustes independentes", () => {
+    comArmazenamentoLocal(dados => {
+      dados.set(DRAFT_RULES_STORAGE_KEY,JSON.stringify({...defaultDraftRulePreference,...anterior,synergyPick4:9.5}));
+      const lido=readDraftRulePreference();
+      expect(chaves.map(k=>lido[k])).toEqual([70,75,80,85,90,95]);
+      expect(lido.synergyPick4).toBe(9.5);
+    });
+  });
+  it("preserva uma escada personalizada explicitamente guardada na v179", () => {
+    comArmazenamentoLocal(() => {
+      writeDraftRulePreference({...defaultDraftRulePreference,...anterior});
+      expect(chaves.map(k=>readDraftRulePreference()[k])).toEqual([90,85,80,72,65,55]);
+    });
+  });
+});

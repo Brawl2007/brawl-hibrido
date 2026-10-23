@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   defaultDraftRuleSettings,
   draftRuleSettingKeys,
+  winRatePickKeys,
   isCounterMultiplierKey,
   normalizeDraftRuleSettings,
   COUNTER_PICK_MULTIPLIER_MAX,
@@ -131,8 +132,12 @@ export function pesosDoPickAPartirDasFatias(vitoriaFinal: number, starFinal: num
 export function readDraftRulePreference(): DraftRulePreference {
   if (typeof window === "undefined") return defaultDraftRulePreference;
   try {
-    return normalizePreference(JSON.parse(window.localStorage.getItem(DRAFT_RULES_STORAGE_KEY) ?? "null"))
-      ?? defaultDraftRulePreference;
+    const salvo = JSON.parse(window.localStorage.getItem(DRAFT_RULES_STORAGE_KEY) ?? "null");
+    const anterior = [90,85,80,72,65,55];
+    if (salvo && salvo.calibracaoPorPick !== 179 && winRatePickKeys.every((k,i)=>salvo[k] === anterior[i])) {
+      for (const k of winRatePickKeys) salvo[k] = defaultDraftRulePreference[k];
+    }
+    return normalizePreference(salvo) ?? defaultDraftRulePreference;
   } catch {
     return defaultDraftRulePreference;
   }
@@ -149,7 +154,7 @@ export function toDraftRuleSettings(preference: DraftRulePreference): DraftRuleS
 export function writeDraftRulePreference(preference: DraftRulePreference): DraftRulePreference {
   const normalized = normalizePreference(preference) ?? defaultDraftRulePreference;
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(DRAFT_RULES_STORAGE_KEY, JSON.stringify(normalized));
+    window.localStorage.setItem(DRAFT_RULES_STORAGE_KEY, JSON.stringify({ ...normalized, calibracaoPorPick: 179 }));
     window.dispatchEvent(new CustomEvent(DRAFT_RULES_EVENT));
   }
   return normalized;
