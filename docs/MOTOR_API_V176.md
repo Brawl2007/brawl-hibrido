@@ -1,5 +1,7 @@
 # Motor da API oficial — v176
 
+Histórico da implementação inicial. A calibração atual está em [MOTOR_API_V177.md](MOTOR_API_V177.md).
+
 No Draft, ligar **API oficial** ativa o ranking em log-odds. Os motores Híbrido, PL Prodigy e MetaPick continuam disponíveis com a API desligada. Preferências personalizadas existentes são preservadas; as novas predefinições podem ser recuperadas no painel de regras.
 
 Cada partida contribui com elo (0,35 / 1 / 1,8 / 3), poder dos seis jogadores (1 ou 0,15) e meia-vida de 14 dias. As contagens brutas continuam nos resultados, ao lado das ponderadas. Os priors do modo usam o mesmo período e filtro de rank do mapa. Dados de outros modos ou fontes não entram no motor oficial.

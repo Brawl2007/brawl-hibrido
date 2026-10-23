@@ -1,16 +1,21 @@
 import React from "react";
 import { Retrato } from "./Retrato";
-import type { ResultadoRecomendacaoApi } from "@shared/motorApiPerfeito";
+import {
+  impactosPercentuais,
+  type ResultadoRecomendacaoApi,
+} from "@shared/motorApiPerfeito";
 
 const NOMES: Record<keyof ResultadoRecomendacaoApi["fatores"], string> = {
-  forcaMapaLogit: "Força no mapa",
-  counterLiquidoLogit: "Counter líquido",
-  penalidadeHardCounterLogit: "Hard-counter",
-  sinergiaRealLogit: "Sinergia real",
-  riscoMinimaxLogit: "Risco de resposta",
-  penalidadeTaticaLogit: "Composição",
-  ajustePoucoUsoLogit: "Pouco uso",
+  forcaMapaLogit: "Força neste mapa",
+  counterLiquidoLogit: "Resposta aos inimigos",
+  penalidadeHardCounterLogit: "Confrontos desfavoráveis",
+  sinergiaRealLogit: "Combinação com aliados",
+  riscoMinimaxLogit: "Segurança da escolha",
+  penalidadeTaticaLogit: "Equilíbrio da equipa",
+  ajustePoucoUsoLogit: "Confiança pelo uso",
 };
+const percentagem = (valor: number) =>
+  `${valor > 0 ? "+" : "−"}${Math.abs(valor).toFixed(1)}%`;
 
 export function RecomendacaoApi({
   nome,
@@ -31,8 +36,18 @@ export function RecomendacaoApi({
   locked: boolean;
   onSelect: (nome: string) => void;
 }) {
+  const impactos = resultado
+    ? (resultado.fatoresPercentuais ?? impactosPercentuais(resultado.fatores))
+    : undefined;
+  const fatores = impactos
+    ? (Object.keys(NOMES) as Array<keyof typeof NOMES>).filter(
+        k => Math.abs(impactos[k]) >= 0.05
+      )
+    : [];
   return (
-    <article className="api-recomendacao">
+    <article
+      className={`api-recomendacao ${resultado?.bloqueado ? "api-nao-recomendado" : ""}`}
+    >
       <button
         type="button"
         className="draft-recommendation"
@@ -48,20 +63,38 @@ export function RecomendacaoApi({
         </span>
         <span className="recommendation-main">
           <strong>{nome}</strong>
-          <small>{ban ? ban.motivo : "API oficial · modelo bayesiano"}</small>
+          <small>
+            {ban ? ban.motivo : "Partidas oficiais + apoio de confrontos"}
+          </small>
           {resultado?.melhorAlvoInimigo && (
-            <small className="api-alvo">
-              Melhor alvo: {resultado.melhorAlvoInimigo}
+            <small className="api-tag api-alvo">
+              Counter contra {resultado.melhorAlvoInimigo}
+            </small>
+          )}
+          {resultado?.melhorAliado && (
+            <small className="api-tag api-sinergia">
+              Sinergia com {resultado.melhorAliado}
             </small>
           )}
           {resultado?.piorRespostaFuturaInimiga && (
-            <small>
-              Resposta possível: {resultado.piorRespostaFuturaInimiga}
+            <small className="api-tag api-risco">
+              Atenção à resposta: {resultado.piorRespostaFuturaInimiga}
             </small>
           )}
           {!!resultado?.alertaHardCounter?.length && (
-            <small className="api-alerta">
-              Hard-counter: {resultado.alertaHardCounter.join(", ")}
+            <small className="api-tag api-veto">
+              Não recomendado · hard-counter de{" "}
+              {resultado.alertaHardCounter.join(", ")}
+            </small>
+          )}
+          {resultado?.bloqueado === "nicho" && (
+            <small className="api-tag api-risco">
+              Especialista de pouco uso: falta uma resposta favorável comprovada
+            </small>
+          )}
+          {!!resultado?.falhasDeComposicao?.length && (
+            <small className="api-tag api-veto">
+              {resultado.falhasDeComposicao.join(" · ")}
             </small>
           )}
         </span>
@@ -80,20 +113,25 @@ export function RecomendacaoApi({
           <summary>
             Por que esta escolha? · turno {resultado.turnoAtual}
           </summary>
-          <dl>
-            {(Object.keys(NOMES) as Array<keyof typeof NOMES>).map(chave => (
-              <div key={chave}>
-                <dt>{NOMES[chave]}</dt>
-                <dd>
-                  {resultado.fatores[chave] > 0 ? "+" : ""}
-                  {resultado.fatores[chave].toFixed(3)}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {fatores.length ? (
+            <dl>
+              {fatores.map(chave => (
+                <div key={chave}>
+                  <dt>{NOMES[chave]}</dt>
+                  <dd
+                    className={impactos![chave] < 0 ? "api-veto" : "api-alvo"}
+                  >
+                    {percentagem(impactos![chave])}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p>Sem vantagem clara nos dados deste turno.</p>
+          )}
           <small>
-            Os fatores somam {resultado.logOddsFinal.toFixed(3)} em log-odds. A
-            percentagem é uma estimativa do modelo, sem calibração empírica.
+            Impactos em pontos percentuais, a partir de uma referência de 50%.
+            Estimativas do modelo; não garantem o resultado da partida.
           </small>
         </details>
       )}

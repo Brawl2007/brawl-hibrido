@@ -83,7 +83,7 @@ function LinhaDeConfronto({ linha, posicao, tipo }: { linha: ConfrontoDaFicha; p
           <span className="matriz-barra-taxa" style={{ width: `${Math.max(2, Math.min(100, linha.taxa))}%` }} />
         </span>
         <small>
-          {linha.taxa.toFixed(1)}% vs {(linha.habitual ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas{linha.deltaLogit !== undefined ? ` · efeito puro ${linha.deltaLogit > 0 ? "+" : ""}${linha.deltaLogit.toFixed(3)}` : ""}
+          {linha.taxa.toFixed(1)}% vs {(linha.habitual ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas
           {linha.jogos < JOGOS_MINIMOS_FIAVEIS ? <em className="matriz-amostra"> · amostra pequena</em> : null}
         </small>
       </span>
@@ -108,7 +108,7 @@ function LinhaDeEquipa({ linha, posicao, base }: { linha: EquipaDaFicha; posicao
           <span className="matriz-barra-taxa" style={{ width: `${Math.max(2, Math.min(100, linha.taxa))}%` }} />
         </span>
         <small>
-          {linha.taxa.toFixed(1)}% vs {(base ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas{linha.deltaLogit !== undefined ? ` · efeito puro ${linha.deltaLogit > 0 ? "+" : ""}${linha.deltaLogit.toFixed(3)}` : ""}
+          {linha.taxa.toFixed(1)}% vs {(base ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas
           {linha.jogos < JOGOS_MINIMOS_FIAVEIS ? <em className="matriz-amostra"> · amostra pequena</em> : null}
         </small>
       </span>

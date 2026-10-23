@@ -124,16 +124,16 @@ describe("motor oficial bayesiano V1–V3", () => {
     ).toBeLessThan(ajustarForcaMapaPorUsoETurno(0.8, 0.003, 6).betaAjustado);
     expect(ajustarForcaMapaPorUsoETurno(-0.3, 0, 1).betaAjustado).toBe(-0.3);
   });
-  it("zera pares sem evidência suficiente e tira a força individual do confronto", () => {
+  it("preserva o sinal de pares pequenos e tira a força individual do confronto", () => {
     expect(calcularDeltaCounterPuro(0, 0, undefined)).toBe(0);
-    expect(calcularDeltaCounterPuro(0, 0, par(1, 3))).toBe(0);
+    expect(calcularDeltaCounterPuro(0, 0, par(1, 3))).toBeGreaterThan(.1);
     expect(calcularDeltaCounterPuro(0, 0, par(0.8, 20))).toBeLessThan(
       calcularDeltaCounterPuro(0, 0, par(0.8))
     );
     const a = logit(0.65),
       b = logit(0.5);
     expect(calcularDeltaCounterPuro(a, b, par(sigmoid(a - b)))).toBe(0);
-    expect(aplicarFiltroRuido(0.059)).toBe(0);
+    expect(aplicarFiltroRuido(0.009)).toBe(0);
   });
   it("não paga sinergia de força individual e aplica a trava anti-carona", () => {
     expect(
@@ -146,9 +146,7 @@ describe("motor oficial bayesiano V1–V3", () => {
     const forte = calcularDeltaSinergiaPura(0, 0, par(0.8));
     const fraco = calcularDeltaSinergiaPura(-0.2, 0.2, par(0.8));
     expect(fraco).toBeCloseTo(forte * 0.3);
-    expect(calcularDeltaSinergiaTripla([0, 0, 0], [0, 0, 0], par(1, 2))).toBe(
-      0
-    );
+    expect(calcularDeltaSinergiaTripla([0, 0, 0], [0, 0, 0], par(1, 2))).toBeGreaterThan(0);
   });
   it("veta o hard-counter revelado, exclui picks, respeita pool e soma os sete fatores", () => {
     const p = parametros();
@@ -188,15 +186,15 @@ describe("motor oficial bayesiano V1–V3", () => {
         obterConfronto: (a, b) =>
           counter && a === "A" && b === "C" ? par(0.8) : undefined,
       }).find(r => r.brawlerId === "A")!;
-    expect(r(6, true).fatores.ajustePoucoUsoLogit).toBe(0);
-    expect(r(6, false).fatores.ajustePoucoUsoLogit).toBe(-0.35);
-    expect(r(1, true).fatores.ajustePoucoUsoLogit).toBe(-0.35);
+    expect(r(6, true).bloqueado).toBeUndefined();
+    expect(r(6, false).bloqueado).toBe("nicho");
+    expect(r(1, true).bloqueado).toBe("nicho");
   });
   it("considera risco de todos os disponíveis e elimina risco futuro com equipa inimiga completa", () => {
     const p = parametros();
     const risco = ranquearCandidatosApiPerfeito({
       ...p,
-      obterConfronto: (a, b) => (a === "A" && b === "B" ? par(0.1) : undefined),
+      obterConfronto: (a, b) => (a === "A" && b === "B" ? par(0.1) : a === "B" && b === "A" ? par(.9) : undefined),
     }).find(r => r.brawlerId === "A")!;
     expect(risco.fatores.riscoMinimaxLogit).toBeLessThan(0);
     expect(risco.piorRespostaFuturaInimiga).toBeDefined();

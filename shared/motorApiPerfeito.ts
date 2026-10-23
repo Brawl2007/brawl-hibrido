@@ -38,7 +38,7 @@ export interface EstatisticasApiMapa {
   jogosMapa: number;
   vitoriasModo: number;
   jogosModo: number;
-  taxaUsoMapa: number; // 0..1
+  taxaUsoMapa: number; // Unidade consistente por mapa; o motor usa a razão à média.
 }
 
 export interface ConfrontoObservado {
@@ -46,6 +46,7 @@ export interface ConfrontoObservado {
   jogosMapa: number;
   vitoriasAModo: number;
   jogosModo: number;
+  jogosPrior?: number;
 }
 
 export interface ResultadoRecomendacaoApi {
@@ -62,6 +63,11 @@ export interface ResultadoRecomendacaoApi {
     penalidadeTaticaLogit: number;
     ajustePoucoUsoLogit: number;
   };
+  /** Impactos em pontos percentuais; a soma parte de 50% e chega à estimativa. */
+  fatoresPercentuais?: ResultadoRecomendacaoApi["fatores"];
+  bloqueado?: "hard-counter" | "nicho" | "composicao";
+  falhasDeComposicao?: string[];
+  melhorAliado?: string;
   alertaHardCounter?: string[];
   melhorAlvoInimigo?: string;
   piorRespostaFuturaInimiga?: string;
@@ -75,172 +81,145 @@ export interface PareamentoLane3v3 {
   vantagemPercentualEstimada: number;
 }
 
-const CLAMP_MIN = 0.02;
-const CLAMP_MAX = 0.98;
-const LIMIAR_RUIDO_LOGIT = 0.06;
-const MIN_AMOSTRA_EFETIVA_PAR = 6;
+const LIMIAR_RUIDO = 0.01;
+const PESO_COUNTER = 1.35;
+const TETO_POSITIVO = Math.log(0.72 / 0.28);
+
+export interface ApoioDoMotorApi {
+  obterCounterDeReserva?: (a: string, b: string) => number | undefined;
+  obterSinergiaDeReserva?: (a: string, b: string) => number | undefined;
+}
 
 export function logit(p: number): number {
-  const clamped = Math.min(CLAMP_MAX, Math.max(CLAMP_MIN, p));
-  return Math.log(clamped / (1 - clamped));
+  const limitado = Math.max(0.02, Math.min(0.98, p));
+  return Math.log(limitado / (1 - limitado));
 }
-
-export function sigmoid(logOdds: number): number {
-  return 1 / (1 + Math.exp(-logOdds));
-}
-
-export function sigmoidPercent(logOdds: number): number {
-  return Number((sigmoid(logOdds) * 100).toFixed(1));
-}
-
-export function aplicarFiltroRuido(
-  valorLogit: number,
-  limiar = LIMIAR_RUIDO_LOGIT
-): number {
-  if (Math.abs(valorLogit) < limiar) return 0;
-  return valorLogit > 0 ? valorLogit - limiar * 0.5 : valorLogit + limiar * 0.5;
-}
-
-/**
- * 1. Peso de qualidade de cada partida do /battlelog (Elo + Nível 11 + Decaimento Temporal de 14 dias)
- */
+export const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+export const sigmoidPercent = (x: number) =>
+  Number((100 * sigmoid(x)).toFixed(1));
 export { calcularPesoPartidaObservada } from "./idadeDosDados";
-
-/**
- * 2. Suavização Bayesiana Hierárquica em 3 níveis (Mapa -> Modo -> Neutro 0.50)
- */
 export { calcularWinRateBayesiano } from "./amostraPequena";
 
-/**
- * 3. Trava Dinâmica V3 para Brawler com "Boa Vitória mas Pouco Uso no Mapa"
- */
+/** Uma zona morta pequena; nenhum segundo multiplicador de volume. */
+export function aplicarFiltroRuido(valor: number, limiar = LIMIAR_RUIDO) {
+  const magnitude = Math.max(0, Math.abs(valor) - limiar);
+  return magnitude ? Math.sign(valor) * magnitude : 0;
+}
+
+/** Razão, sem unidade: a mesma composição vale com uso em fração, presença ou %. */
+export function razoesDeUso(estatisticas: Record<string, EstatisticasApiMapa>) {
+  const positivos = Object.values(estatisticas)
+    .map(s => Math.max(0, s.taxaUsoMapa))
+    .filter(u => u > 0 && Number.isFinite(u));
+  const media = positivos.reduce((a, b) => a + b, 0) / (positivos.length || 1);
+  return Object.fromEntries(
+    Object.keys(estatisticas).map(id => [
+      id,
+      media > 0 ? Math.max(0, estatisticas[id].taxaUsoMapa) / media : 1,
+    ])
+  );
+}
+
 export function ajustarForcaMapaPorUsoETurno(
   betaBruto: number,
-  taxaUsoMapa: number,
-  turnoAtual: number
-): { betaAjustado: number; penalidadePoucoUso: number } {
-  const uRef =
-    turnoAtual <= 1
-      ? 0.025 // 1º Pick exige presença consolidada (~2.5%+)
-      : turnoAtual <= 3
-        ? 0.016 // 2º e 3º Picks
-        : turnoAtual <= 5
-          ? 0.009 // 4º e 5º Picks
-          : 0.003; // 6º Pick (Last Pick): libera escolhas cirúrgicas de nicho
-
-  const uso = Math.max(0, taxaUsoMapa);
-  const confiancaUso = uso / (uso + uRef);
-
-  if (betaBruto <= 0) {
-    return { betaAjustado: betaBruto, penalidadePoucoUso: 0 };
-  }
-
-  const fatorAbertura = Math.max(0, 1 - (turnoAtual - 1) / 4);
-  const penalidadeExposicaoNicho = fatorAbertura * 0.22 * (1 - confiancaUso);
-  const betaAjustado = betaBruto * confiancaUso - penalidadeExposicaoNicho;
-
+  razaoUso: number,
+  turno: number
+) {
+  const referencia = [1, 0.85, 0.7, 0.45, 0.3, 0.15][
+    Math.max(0, Math.min(5, turno - 1))
+  ];
+  const confianca = Math.min(1, Math.max(0, razaoUso) / referencia);
+  const penalidade =
+    betaBruto > 0
+      ? betaBruto * (1 - confianca) +
+        0.18 * Math.max(0, 1 - (turno - 1) / 4) * (1 - confianca)
+      : 0;
   return {
-    betaAjustado,
-    penalidadePoucoUso: betaBruto - betaAjustado,
+    betaAjustado: betaBruto - penalidade,
+    penalidadePoucoUso: penalidade,
   };
 }
 
-/**
- * 4. Suavização Bayesiana para Pares (1v1 Counter e 2v2 Sinergia) + Cálculo de Amostra Efetiva
- */
+/** O modo inclui o mapa: só a parte fora do mapa entra outra vez como evidência. */
 export function calcularProbabilidadeParBayesiana(
-  confronto: ConfrontoObservado | undefined,
-  pEsperadoNeutro: number
-): { pSuavizado: number; amostraEfetiva: number } {
-  if (!confronto) return { pSuavizado: pEsperadoNeutro, amostraEfetiva: 0 };
-
-  const amostraEfetiva = confronto.jogosMapa + 0.35 * confronto.jogosModo;
-  const pModo =
-    (confronto.vitoriasAModo + 35 * pEsperadoNeutro) /
-    (confronto.jogosModo + 35);
-  const pMapa =
-    (confronto.vitoriasA + 25 * pModo + 25 * pEsperadoNeutro) /
-    (confronto.jogosMapa + 25 + 25);
-
+  par: ConfrontoObservado | undefined,
+  esperado: number
+) {
+  if (!par) return { pSuavizado: esperado, amostraEfetiva: 0 };
+  const nMapa = Math.max(0, par.jogosMapa),
+    nModoFora = Math.max(0, par.jogosModo - nMapa);
+  const wMapa = Math.max(0, Math.min(nMapa, par.vitoriasA));
+  const wModoFora = Math.max(0, Math.min(nModoFora, par.vitoriasAModo - wMapa));
+  const n = nMapa + 0.35 * nModoFora;
+  const k = Math.max(2, par.jogosPrior ?? 6);
   return {
-    pSuavizado: Math.min(CLAMP_MAX, Math.max(CLAMP_MIN, pMapa)),
-    amostraEfetiva,
+    pSuavizado: (wMapa + 0.35 * wModoFora + k * esperado) / (n + k),
+    amostraEfetiva: n,
   };
 }
 
-/**
- * 5. Counter Mecânico Puro (V2 + V3): desconta força base e amortece pares com poucos jogos (K = 35)
- */
+function residualPar(base: number, par?: ConfrontoObservado, reserva = 0) {
+  // A fonte de apoio é o prior. A única mistura é N/(N+K), dentro da posterior.
+  const esperado = sigmoid(base + reserva);
+  const { pSuavizado } = calcularProbabilidadeParBayesiana(par, esperado);
+  return aplicarFiltroRuido(logit(pSuavizado) - logit(sigmoid(base)));
+}
 export function calcularDeltaCounterPuro(
-  betaBrutoA: number,
-  betaBrutoB: number,
-  confrontoAB: ConfrontoObservado | undefined
-): number {
-  const logitEsperado = betaBrutoA - betaBrutoB;
-  const pEsperado = sigmoid(logitEsperado);
-  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(
-    confrontoAB,
-    pEsperado
-  );
-
-  if (amostraEfetiva < MIN_AMOSTRA_EFETIVA_PAR) return 0;
-
-  const confiancaVolumePar = amostraEfetiva / (amostraEfetiva + 35);
-  const deltaBruto = logit(pSuavizado) - logitEsperado;
-
-  return confiancaVolumePar * aplicarFiltroRuido(deltaBruto);
+  a: number,
+  b: number,
+  par?: ConfrontoObservado,
+  reserva = 0
+) {
+  return residualPar(a - b, par, reserva);
 }
-
-/**
- * 6. Sinergia Mecânica Pura (V2 + V3): desconta força individual, amortece pouco uso (K = 50)
- * e aplica Trava Anti-Carona se o candidato tiver WR < 46% sozinho no mapa.
- */
 export function calcularDeltaSinergiaPura(
-  betaBrutoA: number,
-  betaBrutoAliado: number,
-  duplaAAliado: ConfrontoObservado | undefined
-): number {
-  const logitEsperado = betaBrutoA + betaBrutoAliado;
-  const pEsperado = sigmoid(logitEsperado);
-  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(
-    duplaAAliado,
-    pEsperado
-  );
-
-  if (amostraEfetiva < MIN_AMOSTRA_EFETIVA_PAR) return 0;
-
-  const confiancaVolumePar = amostraEfetiva / (amostraEfetiva + 50);
-  const deltaFiltrado = aplicarFiltroRuido(logit(pSuavizado) - logitEsperado);
-
-  const multiplicadorViabilidadePropria =
-    deltaFiltrado > 0 && betaBrutoA < -0.16 ? 0.3 : 1.0;
-
-  return confiancaVolumePar * multiplicadorViabilidadePropria * deltaFiltrado;
+  a: number,
+  b: number,
+  par?: ConfrontoObservado,
+  reserva = 0
+) {
+  const delta = residualPar(a + b, par, reserva);
+  return delta * (delta > 0 && a < logit(0.46) ? 0.3 : 1);
 }
-
-/** Residual do trio depois das forças individuais e das três sinergias de dupla. */
 export function calcularDeltaSinergiaTripla(
   betas: number[],
-  deltasDuplas: number[],
+  duplas: number[],
   trio?: ConfrontoObservado
 ) {
-  const esperado =
-    betas.reduce((a, b) => a + b, 0) + deltasDuplas.reduce((a, b) => a + b, 0);
-  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(
-    trio,
-    sigmoid(esperado)
-  );
-  if (amostraEfetiva < MIN_AMOSTRA_EFETIVA_PAR) return 0;
-  const residual = aplicarFiltroRuido(logit(pSuavizado) - esperado);
-  return (
-    ((residual * amostraEfetiva) / (amostraEfetiva + 75)) *
-    (residual > 0 && betas[0] < -0.16 ? 0.3 : 1)
+  if (!trio) return 0;
+  const base =
+    betas.reduce((a, b) => a + b, 0) + duplas.reduce((a, b) => a + b, 0);
+  const delta = residualPar(base, {
+    ...trio,
+    jogosPrior: Math.max(10, trio.jogosPrior ?? 10),
+  });
+  return delta * (delta > 0 && betas[0] < logit(0.46) ? 0.3 : 1);
+}
+
+/** O próximo turno da equipa na ordem real 1-2-2-1, após os picks já concluídos. */
+export function proximoTurnoDaEquipa(
+  concluidos: number,
+  ordem: OrdemTimeDraft
+): number | undefined {
+  const primeira = [1, 4, 5],
+    segunda = [2, 3, 6];
+  return (ordem === "first_pick" ? primeira : segunda).find(
+    n => n > concluidos
   );
 }
 
-/**
- * 7. Penalidades e Cobertura Tática Dinâmica (Mid/Side, Classes, Wallbreak em Tempo Real, Anti-Tank e Heist)
- */
+/** Divisão proporcional da variação de probabilidade: impactos somam a estimativa menos 50%. */
+export function impactosPercentuais(
+  fatores: ResultadoRecomendacaoApi["fatores"]
+) {
+  const total = Object.values(fatores).reduce((a, b) => a + b, 0);
+  const escala =
+    Math.abs(total) < 1e-9 ? 25 : (100 * sigmoid(total) - 50) / total;
+  return Object.fromEntries(
+    Object.entries(fatores).map(([k, valor]) => [k, valor * escala])
+  ) as typeof fatores;
+}
+
 export function calcularPenalidadeTaticaDinamica(params: {
   candidatoId: string;
   aliadosIds: string[];
@@ -266,10 +245,8 @@ export function calcularPenalidadeTaticaDinamica(params: {
   const inimigosPerfis = inimigosIds.map(id => perfis[id]).filter(Boolean);
 
   // 7.1. Garantia de Mid antes de fechar a composição
-  const temMidAliado = aliadosPerfis.some(
-    a => a.role === "mid" || a.role === "flex"
-  );
-  if (!temMidAliado && cand.role === "side") {
+  const temMidAliado = aliadosPerfis.some(a => a.role === "mid");
+  if (!temMidAliado && cand.role !== "mid") {
     if (aliadosIds.length === 1) penalidade += 0.12;
     if (aliadosIds.length >= 2) penalidade += 0.38;
   }
@@ -286,7 +263,12 @@ export function calcularPenalidadeTaticaDinamica(params: {
   ).length;
   if (mesmaClasseCount === 1) {
     penalidade +=
-      cand.classe === "thrower" || cand.classe === "assassin" ? 0.45 : 0.25;
+      cand.classe === "thrower" ||
+      cand.classe === "assassin" ||
+      (cand.classe === "tank" &&
+        !aliadosPerfis.some(a => a.classe === "support"))
+        ? 0.45
+        : 0.25;
   } else if (mesmaClasseCount >= 2) {
     penalidade += 0.85;
   }
@@ -310,18 +292,11 @@ export function calcularPenalidadeTaticaDinamica(params: {
   }
 
   // 7.4. Trava Obrigatória de DPS Anti-Tanque
-  const aliadoTemAntiTank = aliadosPerfis.some(
-    a => a.isAntiTank || a.classe === "damage"
-  );
+  const aliadoTemAntiTank = aliadosPerfis.some(a => a.isAntiTank);
   const inimigoTemTankOuAssassino = inimigosPerfis.some(
     e => e.classe === "tank" || e.classe === "assassin"
   );
-  if (
-    aliadosIds.length >= 1 &&
-    !aliadoTemAntiTank &&
-    !cand.isAntiTank &&
-    cand.classe !== "damage"
-  ) {
+  if (aliadosIds.length >= 1 && !aliadoTemAntiTank && !cand.isAntiTank) {
     penalidade += inimigoTemTankOuAssassino ? 0.38 : 0.22;
   }
 
@@ -340,10 +315,27 @@ export function calcularPenalidadeTaticaDinamica(params: {
   return penalidade;
 }
 
-/**
- * 8. Motor Principal Unificado (V1 + V2 + V3): Log-Odds + Trava de Pouco Uso + Veto Quadrático + Minimax Serpentine
- */
-export function ranquearCandidatosApiPerfeito(params: {
+/** Restrições do último aliado: centrar custos não pode ocultar funções em falta. */
+export function falhasAoFecharEquipa(
+  ids: string[],
+  perfis: Record<string, PerfilTaticoBrawler>,
+  modo: string
+): string[] {
+  if (ids.length < 3) return [];
+  const equipa = ids.map(id => perfis[id]).filter(Boolean);
+  const falhas: string[] = [];
+  if (!equipa.some(p => p.role === "mid"))
+    falhas.push("Falta um Mid na equipa");
+  if (!equipa.some(p => p.isAntiTank)) falhas.push("Falta dano contra tanques");
+  if (
+    ["heist", "roubo"].includes(modo.toLowerCase()) &&
+    !equipa.some(p => p.isHeistDps)
+  )
+    falhas.push("Falta dano consistente ao cofre");
+  return falhas;
+}
+
+export type ParametrosMotorApi = ApoioDoMotorApi & {
   disponiveisIds: string[];
   aliadosIds: string[];
   inimigosIds: string[];
@@ -353,443 +345,363 @@ export function ranquearCandidatosApiPerfeito(params: {
   estatisticasMapa: Record<string, EstatisticasApiMapa>;
   obterConfronto: (a: string, b: string) => ConfrontoObservado | undefined;
   obterSinergia: (a: string, b: string) => ConfrontoObservado | undefined;
-  perfisTaticos: Record<string, PerfilTaticoBrawler>;
   obterTrio?: (ids: string[]) => ConfrontoObservado | undefined;
+  perfisTaticos: Record<string, PerfilTaticoBrawler>;
   poolNivel11Usuario?: Set<string>;
   ordemTime?: OrdemTimeDraft;
   turno?: number;
-}): ResultadoRecomendacaoApi[] {
-  const {
-    disponiveisIds,
-    aliadosIds,
-    inimigosIds,
-    modoDeJogo,
-    modificadorRanked = "padrao",
-    estatisticasMapa,
-    obterConfronto,
-    obterSinergia,
-    perfisTaticos,
-    poolNivel11Usuario,
-  } = params;
+};
 
-  const turnoAtual = Math.max(
+export function ranquearCandidatosApiPerfeito(
+  p: ParametrosMotorApi
+): ResultadoRecomendacaoApi[] {
+  const turno = Math.max(
     1,
-    Math.min(6, params.turno ?? aliadosIds.length + inimigosIds.length + 1)
+    Math.min(6, p.turno ?? p.aliadosIds.length + p.inimigosIds.length + 1)
   );
-  // Ordem 1-2-2-1: um pick duplo aliado não é uma resposta inimiga imediata.
-  const ordem =
-    params.ordemTime === "second_pick"
-      ? [false, true, true, false, false, true]
-      : [true, false, false, true, true, false];
-  const proximoTurnoInimigo =
-    ordem.findIndex((nos, i) => i >= turnoAtual && !nos) + 1;
-  const bloqueados = new Set([...aliadosIds, ...inimigosIds]);
-  const disponiveis = [...new Set(disponiveisIds)].filter(
+  const bloqueados = new Set([...p.aliadosIds, ...p.inimigosIds]);
+  const disponiveis = [...new Set(p.disponiveisIds)].filter(
     id => !bloqueados.has(id)
   );
-  const picksInimigosRestantes = Math.max(0, 3 - inimigosIds.length);
-
-  const betaBrutoMapa: Record<string, number> = {};
-  const usoMapa: Record<string, number> = {};
-  for (const id of Object.keys(estatisticasMapa)) {
-    const wr = calcularWinRateBayesiano(estatisticasMapa[id]);
-    betaBrutoMapa[id] = logit(wr);
-    usoMapa[id] = estatisticasMapa[id]?.taxaUsoMapa ?? 0.005;
-  }
-
-  const topAmeacasPool = [...disponiveis].sort(
-    (a, b) =>
-      (betaBrutoMapa[b] ?? 0) +
-      Math.log((usoMapa[b] ?? 0.01) + 0.02) -
-      ((betaBrutoMapa[a] ?? 0) + Math.log((usoMapa[a] ?? 0.01) + 0.02))
+  const razoes = razoesDeUso(p.estatisticasMapa);
+  const betas = Object.fromEntries(
+    Object.entries(p.estatisticasMapa).map(([id, stats]) => [
+      id,
+      logit(calcularWinRateBayesiano(stats)),
+    ])
   );
-
-  const resultados: ResultadoRecomendacaoApi[] = [];
-
-  for (const candId of disponiveis) {
-    if (poolNivel11Usuario && !poolNivel11Usuario.has(candId)) {
-      continue;
-    }
-
-    const betaBrutoCand = betaBrutoMapa[candId] ?? 0;
-    const usoCand = usoMapa[candId] ?? 0.005;
-    const { betaAjustado: betaCand, penalidadePoucoUso } =
-      ajustarForcaMapaPorUsoETurno(betaBrutoCand, usoCand, turnoAtual);
-
-    // A. Soma de Counters Reais e Veto Quadrático contra Hard-Counters já revelados
-    let somaCounter = 0;
-    let penalidadeHardCounter = 0;
-    let piorDeltaIndividual = 0;
-    let melhorDeltaIndividual = -999;
-    let melhorAlvoInimigo: string | undefined;
-    const alertaHardCounter: string[] = [];
-
-    for (const inimigoId of inimigosIds) {
-      const betaInimigo = betaBrutoMapa[inimigoId] ?? 0;
-      const deltaC = calcularDeltaCounterPuro(
-        betaBrutoCand,
-        betaInimigo,
-        obterConfronto(candId, inimigoId)
+  const beta = (id: string) => betas[id] ?? 0;
+  const razao = (id: string) => razoes[id] ?? 1;
+  const counterCache = new Map<string, number>(),
+    sinergiaCache = new Map<string, number>();
+  const counter = (a: string, b: string) => {
+    const chave = `${a}\0${b}`;
+    if (!counterCache.has(chave))
+      counterCache.set(
+        chave,
+        calcularDeltaCounterPuro(
+          beta(a),
+          beta(b),
+          p.obterConfronto(a, b),
+          p.obterCounterDeReserva?.(a, b) ?? 0
+        )
       );
-      somaCounter += deltaC;
-
-      if (deltaC > melhorDeltaIndividual) {
-        melhorDeltaIndividual = deltaC;
-        melhorAlvoInimigo = inimigoId;
-      }
-
-      if (deltaC < 0) {
-        penalidadeHardCounter += 2.6 * Math.pow(Math.abs(deltaC), 2);
-        if (deltaC < piorDeltaIndividual) piorDeltaIndividual = deltaC;
-        if (deltaC <= -0.35) alertaHardCounter.push(inimigoId);
-      }
-    }
-
-    if (piorDeltaIndividual <= -0.38) {
-      penalidadeHardCounter += 0.65;
-    }
-
-    // B. Soma de Sinergia Mecânica Pura com os aliados já escolhidos
-    let somaSinergia = 0;
-    for (const aliadoId of aliadosIds) {
-      const betaAliado = betaBrutoMapa[aliadoId] ?? 0;
-      const deltaS = calcularDeltaSinergiaPura(
-        betaBrutoCand,
-        betaAliado,
-        obterSinergia(candId, aliadoId)
+    return counterCache.get(chave)!;
+  };
+  const sinergia = (a: string, b: string) => {
+    const chave = `${a}\0${b}`;
+    if (!sinergiaCache.has(chave))
+      sinergiaCache.set(
+        chave,
+        calcularDeltaSinergiaPura(
+          beta(a),
+          beta(b),
+          p.obterSinergia(a, b),
+          p.obterSinergiaDeReserva?.(a, b) ?? 0
+        )
       );
-      somaSinergia += 0.85 * deltaS;
-    }
+    return sinergiaCache.get(chave)!;
+  };
+  const candidatos = disponiveis.filter(
+    id => !p.poolNivel11Usuario || p.poolNivel11Usuario.has(id)
+  );
+  const ameaças = [...disponiveis].sort(
+    (a, b) => beta(b) + Math.log1p(razao(b)) - beta(a) - Math.log1p(razao(a))
+  );
+  const turnoInimigo = proximoTurnoDaEquipa(
+    turno,
+    p.ordemTime === "second_pick" ? "first_pick" : "second_pick"
+  );
+  const restantes = Math.max(0, 3 - p.inimigosIds.length);
+  const somaUso = disponiveis.reduce((total, id) => total + razao(id), 0) || 1;
 
-    if (aliadosIds.length === 2 && params.obterTrio) {
-      const [a, b] = aliadosIds;
-      const betaA = betaBrutoMapa[a] ?? 0,
-        betaB = betaBrutoMapa[b] ?? 0;
-      somaSinergia +=
-        0.85 *
-        calcularDeltaSinergiaTripla(
-          [betaBrutoCand, betaA, betaB],
-          [
-            calcularDeltaSinergiaPura(
-              betaBrutoCand,
-              betaA,
-              obterSinergia(candId, a)
-            ),
-            calcularDeltaSinergiaPura(
-              betaBrutoCand,
-              betaB,
-              obterSinergia(candId, b)
-            ),
-            calcularDeltaSinergiaPura(betaA, betaB, obterSinergia(a, b)),
-          ],
-          params.obterTrio([candId, a, b])
+  const brutos = candidatos.map(id => {
+    const interacoes = p.inimigosIds.map(inimigo => ({
+      inimigo,
+      delta: counter(id, inimigo),
+    }));
+    const saldo = interacoes.reduce((s, c) => s + c.delta, 0);
+    const fortes = interacoes.filter(c => c.delta <= -0.38).map(c => c.inimigo);
+    const hard =
+      2.6 * interacoes.reduce((s, c) => s + Math.max(0, -c.delta) ** 2, 0) +
+      (fortes.length ? 0.65 : 0);
+    const nicho = razao(id) < 0.25 && (turno <= 3 || saldo < 0.16);
+    const duplas = p.aliadosIds.map(aliado => ({
+      aliado,
+      delta: sinergia(id, aliado),
+    }));
+    let somaSinergia = duplas.reduce((s, c) => s + c.delta, 0);
+    if (p.aliadosIds.length === 2 && p.obterTrio) {
+      const [a, b] = p.aliadosIds;
+      somaSinergia += calcularDeltaSinergiaTripla(
+        [beta(id), beta(a), beta(b)],
+        [...duplas.map(c => c.delta), sinergia(a, b)],
+        p.obterTrio([id, a, b])
+      );
+    }
+    let risco = 0,
+      resposta: string | undefined,
+      maiorResposta = 0;
+    if (restantes > 0 && turnoInimigo) {
+      const riscoCego = disponiveis
+        .filter(k => k !== id)
+        .reduce(
+          (s, k) =>
+            s + (razao(k) / somaUso) * Math.max(0, -counter(id, k)) ** 2,
+          0
         );
-    }
-
-    // B.1. Regra de Ouro V3 ("Trava de Nicho Sem Counter"):
-    // Brawler com < 1% de uso no mapa NÃO sobe nos picks 1 a 3 nem sem counter comprovado (>= +0.16)
-    let penalidadeNichoSemCounter = 0;
-    if (usoCand < 0.01) {
-      if (turnoAtual <= 3 || somaCounter < 0.16) {
-        penalidadeNichoSemCounter = 0.35;
-      }
-    }
-
-    // C. Simulação Minimax de Resposta Inimiga + Risco Cego nos Picks 1 a 5
-    let riscoMinimaxLogit = 0;
-    let piorRespostaFuturaInimiga: string | undefined;
-
-    if (picksInimigosRestantes > 0) {
-      let riscoCegoAcumulado = 0;
-      for (const ameacaId of disponiveis) {
-        if (ameacaId === candId) continue;
-        const delta = calcularDeltaCounterPuro(
-          betaBrutoCand,
-          betaBrutoMapa[ameacaId] ?? 0,
-          obterConfronto(candId, ameacaId)
-        );
-        riscoCegoAcumulado +=
-          (usoMapa[ameacaId] ?? 0) * Math.max(0, -delta) ** 2;
-      }
-      let piorRespostaInimigaValor = -999;
-      const meuTimeSimulado = [...aliadosIds, candId];
-
-      for (const ameacaId of topAmeacasPool
-        .filter(id => id !== candId)
-        .slice(0, 15)) {
-        if (ameacaId === candId) continue;
-        const betaAmeaca = betaBrutoMapa[ameacaId] ?? 0;
-        const usoAmeaca = usoMapa[ameacaId] ?? 0.01;
-
-        let vantagemInimiga = ajustarForcaMapaPorUsoETurno(
-          betaAmeaca,
-          usoAmeaca,
-          proximoTurnoInimigo || 6
-        ).betaAjustado;
-
-        for (const meuAliadoId of meuTimeSimulado) {
-          const betaMeuAliado = betaBrutoMapa[meuAliadoId] ?? 0;
-          const deltaInimigoVsAliado = calcularDeltaCounterPuro(
-            betaAmeaca,
-            betaMeuAliado,
-            obterConfronto(ameacaId, meuAliadoId)
-          );
-          vantagemInimiga += deltaInimigoVsAliado;
-          if (deltaInimigoVsAliado < 0) {
-            vantagemInimiga -=
-              2.0 * Math.pow(Math.abs(deltaInimigoVsAliado), 2);
-          }
-        }
-
-        const impactoPonderado = Math.pow(usoAmeaca, 0.35) * vantagemInimiga;
-        if (impactoPonderado > piorRespostaInimigaValor) {
-          piorRespostaInimigaValor = impactoPonderado;
-          piorRespostaFuturaInimiga = ameacaId;
+      for (const k of ameaças.filter(k => k !== id).slice(0, 15)) {
+        const pares = [...p.aliadosIds, id].map(a => counter(k, a));
+        const valor =
+          Math.pow(Math.min(razao(k), 4), 0.35) *
+          (ajustarForcaMapaPorUsoETurno(beta(k), razao(k), turnoInimigo)
+            .betaAjustado +
+            pares.reduce((s, d) => s + d - 2 * Math.max(0, -d) ** 2, 0));
+        if (valor > maiorResposta) {
+          maiorResposta = valor;
+          resposta = k;
         }
       }
-
-      const fatorExposicao = picksInimigosRestantes / 3;
-      riscoMinimaxLogit =
-        fatorExposicao *
-        (2.8 * riscoCegoAcumulado +
-          0.45 * Math.max(0, piorRespostaInimigaValor));
+      risco = (restantes / 3) * (2.8 * riscoCego + 0.45 * maiorResposta);
     }
-
-    // D. Penalidade Tática Dinâmica
-    const penalidadeTaticaLogit = calcularPenalidadeTaticaDinamica({
-      candidatoId: candId,
-      aliadosIds,
-      inimigosIds,
-      modoDeJogo,
-      modificadorRanked,
-      perfis: perfisTaticos,
+    const tatica = calcularPenalidadeTaticaDinamica({
+      candidatoId: id,
+      aliadosIds: p.aliadosIds,
+      inimigosIds: p.inimigosIds,
+      modoDeJogo: p.modoDeJogo,
+      modificadorRanked: p.modificadorRanked,
+      perfis: p.perfisTaticos,
     });
-
-    const logOddsFinal =
-      betaCand +
-      somaCounter -
-      penalidadeHardCounter +
-      somaSinergia -
-      riscoMinimaxLogit -
-      penalidadeTaticaLogit -
-      penalidadeNichoSemCounter;
-
-    resultados.push({
-      brawlerId: candId,
-      winProbability: sigmoidPercent(logOddsFinal),
-      logOddsFinal,
-      turnoAtual,
-      fatores: {
-        forcaMapaLogit: betaBrutoCand,
-        counterLiquidoLogit: somaCounter,
-        penalidadeHardCounterLogit: -penalidadeHardCounter || 0,
-        sinergiaRealLogit: somaSinergia,
-        riscoMinimaxLogit: -riscoMinimaxLogit || 0,
-        penalidadeTaticaLogit: -penalidadeTaticaLogit || 0,
-        ajustePoucoUsoLogit:
-          -(penalidadePoucoUso + penalidadeNichoSemCounter) || 0,
-      },
-      alertaHardCounter:
-        alertaHardCounter.length > 0 ? alertaHardCounter : undefined,
-      melhorAlvoInimigo,
-      piorRespostaFuturaInimiga,
-    });
-  }
-
-  return resultados.sort((a, b) => b.logOddsFinal - a.logOddsFinal);
-}
-
-/**
- * 9. Otimizador 3x3 de Pareamento de Lanes (Estilo Deep Draft "Best Lane Matchups")
- */
-export function calcularMelhoresLanes3v3(params: {
-  aliadosIds: string[];
-  inimigosIds: string[];
-  estatisticasMapa: Record<string, EstatisticasApiMapa>;
-  obterConfronto: (a: string, b: string) => ConfrontoObservado | undefined;
-  perfisTaticos: Record<string, PerfilTaticoBrawler>;
-}): PareamentoLane3v3[] {
-  const {
-    aliadosIds,
-    inimigosIds,
-    estatisticasMapa,
-    obterConfronto,
-    perfisTaticos,
-  } = params;
-  if (aliadosIds.length === 0 || inimigosIds.length === 0) return [];
-
-  const betaMapa: Record<string, number> = {};
-  for (const id of [...aliadosIds, ...inimigosIds]) {
-    betaMapa[id] = estatisticasMapa[id]
-      ? logit(calcularWinRateBayesiano(estatisticasMapa[id]))
-      : 0;
-  }
-
-  if (aliadosIds.length < 3 || inimigosIds.length < 3) {
-    const tamanho = Math.min(aliadosIds.length, inimigosIds.length);
-    let melhores: Array<{ a: string; e: string; delta: number }> = [],
-      melhorSoma = -Infinity;
-    const procurar = (
-      restantesA: string[],
-      restantesE: string[],
-      pares: typeof melhores,
-      soma: number
-    ) => {
-      if (pares.length === tamanho) {
-        if (soma > melhorSoma) {
-          melhorSoma = soma;
-          melhores = pares;
-        }
-        return;
-      }
-      for (const a of restantesA)
-        for (const e of restantesE) {
-          const delta = calcularDeltaCounterPuro(
-            betaMapa[a] ?? 0,
-            betaMapa[e] ?? 0,
-            obterConfronto(a, e)
-          );
-          procurar(
-            restantesA.filter(id => id !== a),
-            restantesE.filter(id => id !== e),
-            [...pares, { a, e, delta }],
-            soma + (delta < -0.3 ? delta * 1.8 : delta)
-          );
-        }
-    };
-    procurar(aliadosIds, inimigosIds, [], 0);
-    return melhores
-      .sort(
-        (a, b) =>
-          Number(perfisTaticos[b.a]?.role === "mid") -
-          Number(perfisTaticos[a.a]?.role === "mid")
-      )
-      .map(({ a, e, delta }, i) => ({
-        aliadoId: a,
-        inimigoId: e,
-        posicaoSugerida: (["Mid", "Side A", "Side B"] as const)[i],
-        vantagemLogit: delta,
-        vantagemPercentualEstimada: sigmoidPercent(delta),
-      }));
-  }
-
-  const permutacoes = [
-    [0, 1, 2],
-    [0, 2, 1],
-    [1, 0, 2],
-    [1, 2, 0],
-    [2, 0, 1],
-    [2, 1, 0],
-  ];
-
-  let melhorPermutacao = permutacoes[0];
-  let maiorSomaLogit = -999;
-
-  for (const perm of permutacoes) {
-    let soma = 0;
-    for (let i = 0; i < 3; i++) {
-      const aId = aliadosIds[i];
-      const eId = inimigosIds[perm[i]];
-      const delta = calcularDeltaCounterPuro(
-        betaMapa[aId] ?? 0,
-        betaMapa[eId] ?? 0,
-        obterConfronto(aId, eId)
-      );
-      soma += delta < -0.3 ? delta * 1.8 : delta;
-    }
-    if (soma > maiorSomaLogit) {
-      maiorSomaLogit = soma;
-      melhorPermutacao = perm;
-    }
-  }
-
-  const indicesOrdenados = [0, 1, 2].sort((i, j) => {
-    const rI = perfisTaticos[aliadosIds[i]]?.role === "mid" ? 0 : 1;
-    const rJ = perfisTaticos[aliadosIds[j]]?.role === "mid" ? 0 : 1;
-    return rI - rJ;
-  });
-
-  const posicoes: Array<"Mid" | "Side A" | "Side B"> = [
-    "Mid",
-    "Side A",
-    "Side B",
-  ];
-
-  return indicesOrdenados.map((aliadoIdx, posIdx) => {
-    const aId = aliadosIds[aliadoIdx];
-    const eId = inimigosIds[melhorPermutacao[aliadoIdx]];
-    const delta = calcularDeltaCounterPuro(
-      betaMapa[aId] ?? 0,
-      betaMapa[eId] ?? 0,
-      obterConfronto(aId, eId)
+    const uso =
+      ajustarForcaMapaPorUsoETurno(beta(id), razao(id), turno)
+        .penalidadePoucoUso + (nicho ? 0.4 : 0);
+    const falhas = falhasAoFecharEquipa(
+      [...p.aliadosIds, id],
+      p.perfisTaticos,
+      p.modoDeJogo
     );
     return {
-      aliadoId: aId,
-      inimigoId: eId,
-      posicaoSugerida: posicoes[posIdx],
-      vantagemLogit: Number(delta.toFixed(3)),
-      vantagemPercentualEstimada: sigmoidPercent(delta),
+      id,
+      interacoes,
+      duplas,
+      saldo,
+      hard,
+      fortes,
+      nicho,
+      somaSinergia,
+      risco,
+      resposta,
+      tatica,
+      uso,
+      falhas,
     };
   });
+  const viaveis = brutos.filter(
+    c => !c.fortes.length && !c.nicho && !c.falhas.length
+  );
+  const referencia = viaveis.length ? viaveis : brutos;
+  const media = (campo: "risco" | "tatica" | "uso") =>
+    referencia.reduce((s, c) => s + c[campo], 0) / (referencia.length || 1);
+  const riscoMedio = media("risco"),
+    taticaMedia = media("tatica"),
+    usoMedio = media("uso");
+  return brutos
+    .map(c => {
+      const fatores: ResultadoRecomendacaoApi["fatores"] = {
+        forcaMapaLogit: beta(c.id),
+        counterLiquidoLogit: PESO_COUNTER * c.saldo,
+        penalidadeHardCounterLogit: -c.hard || 0,
+        sinergiaRealLogit: c.somaSinergia,
+        riscoMinimaxLogit: riscoMedio - c.risco,
+        penalidadeTaticaLogit: taticaMedia - c.tatica,
+        ajustePoucoUsoLogit: usoMedio - c.uso,
+      };
+      const bruto = Object.values(fatores).reduce((a, b) => a + b, 0);
+      // Satura suavemente evidência positiva; não inventa uma vitória mínima sem sinal.
+      const escala =
+        bruto > 0
+          ? (TETO_POSITIVO * Math.tanh(bruto / TETO_POSITIVO)) / bruto
+          : 1;
+      for (const k of Object.keys(fatores) as Array<keyof typeof fatores>)
+        fatores[k] *= escala;
+      const final = Object.values(fatores).reduce((a, b) => a + b, 0);
+      const alvo = [...c.interacoes].sort((a, b) => b.delta - a.delta)[0];
+      const aliado = [...c.duplas].sort((a, b) => b.delta - a.delta)[0];
+      return {
+        brawlerId: c.id,
+        logOddsFinal: final,
+        winProbability: sigmoidPercent(final),
+        turnoAtual: turno,
+        fatores,
+        fatoresPercentuais: impactosPercentuais(fatores),
+        bloqueado: c.fortes.length
+          ? ("hard-counter" as const)
+          : c.nicho
+            ? ("nicho" as const)
+            : c.falhas.length
+              ? ("composicao" as const)
+              : undefined,
+        falhasDeComposicao: c.falhas.length ? c.falhas : undefined,
+        alertaHardCounter: c.fortes.length ? c.fortes : undefined,
+        melhorAlvoInimigo: alvo && alvo.delta > 0.01 ? alvo.inimigo : undefined,
+        melhorAliado: aliado && aliado.delta > 0.01 ? aliado.aliado : undefined,
+        piorRespostaFuturaInimiga:
+          c.risco > riscoMedio + 0.015 ? c.resposta : undefined,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(Boolean(a.bloqueado)) - Number(Boolean(b.bloqueado)) ||
+        b.logOddsFinal - a.logOddsFinal
+    );
 }
 
-/**
- * 10. Recomendador de Bans Inteligente 100% API (Protege o 1º Pick pretendido ou remove os S+ do Mapa)
- */
-export function recomendarBansApi(params: {
-  disponiveisIds: string[];
-  estatisticasMapa: Record<string, EstatisticasApiMapa>;
-  obterConfronto: (a: string, b: string) => ConfrontoObservado | undefined;
-  brawlerPretendidoId?: string;
-}): Array<{ brawlerId: string; banScore: number; motivo: string }> {
-  const {
-    disponiveisIds,
-    estatisticasMapa,
-    obterConfronto,
-    brawlerPretendidoId,
-  } = params;
-
-  const betaMapa: Record<string, number> = {};
-  for (const id of disponiveisIds) {
-    if (estatisticasMapa[id]) {
-      betaMapa[id] = logit(calcularWinRateBayesiano(estatisticasMapa[id]));
-    }
-  }
-
-  const betaPretendido = brawlerPretendidoId
-    ? (betaMapa[brawlerPretendidoId] ?? 0)
-    : 0;
-
-  return disponiveisIds
-    .filter(id => id !== brawlerPretendidoId)
-    .map(id => {
-      const stats = estatisticasMapa[id];
-      const uso = stats?.taxaUsoMapa ?? 0.01;
-      const beta = betaMapa[id] ?? 0;
-
-      let ameacaAoPretendido = 0;
-      if (brawlerPretendidoId) {
-        const deltaInimigoContraPretendido = calcularDeltaCounterPuro(
-          beta,
-          betaPretendido,
-          obterConfronto(id, brawlerPretendidoId)
-        );
-        if (deltaInimigoContraPretendido > 0) {
-          ameacaAoPretendido = 2.2 * deltaInimigoContraPretendido;
-        }
+/** Posição e confronto entram juntos na procura; o Mid verdadeiro ocupa o centro. */
+export function calcularMelhoresLanes3v3(
+  p: Pick<
+    ParametrosMotorApi,
+    | "aliadosIds"
+    | "inimigosIds"
+    | "estatisticasMapa"
+    | "obterConfronto"
+    | "perfisTaticos"
+    | "obterCounterDeReserva"
+  >
+): PareamentoLane3v3[] {
+  const n = Math.min(3, p.aliadosIds.length, p.inimigosIds.length);
+  if (!n) return [];
+  const posicoes = ["Mid", "Side A", "Side B"] as const;
+  const beta = (id: string) =>
+    p.estatisticasMapa[id]
+      ? logit(calcularWinRateBayesiano(p.estatisticasMapa[id]))
+      : 0;
+  const role = (id: string) => p.perfisTaticos[id]?.role ?? "flex";
+  const temMid = (ids: string[]) => ids.some(id => role(id) === "mid");
+  const adequacao = (id: string, meio: boolean) =>
+    meio
+      ? role(id) === "mid"
+        ? 0.6
+        : role(id) === "flex"
+          ? 0.15
+          : -0.7
+      : role(id) === "side"
+        ? 0.15
+        : role(id) === "flex"
+          ? 0.1
+          : -0.3;
+  let melhor = -Infinity,
+    resultado: PareamentoLane3v3[] = [];
+  const procurar = (
+    aliados: string[],
+    inimigos: string[],
+    slots: number[],
+    pares: PareamentoLane3v3[],
+    score: number
+  ) => {
+    if (pares.length === n) {
+      if (score > melhor) {
+        melhor = score;
+        resultado = pares;
       }
+      return;
+    }
+    for (const slot of slots)
+      for (const a of aliados)
+        for (const e of inimigos) {
+          if (
+            slot === 0 &&
+            ((temMid(p.aliadosIds) && role(a) !== "mid") ||
+              (temMid(p.inimigosIds) && role(e) !== "mid"))
+          )
+            continue;
+          // Num 3v3 completo não deslocar um Mid para os lados para evitar o confronto central.
+          if (
+            n === 3 &&
+            slot !== 0 &&
+            ((p.aliadosIds.filter(id => role(id) === "mid").length === 1 &&
+              role(a) === "mid") ||
+              (p.inimigosIds.filter(id => role(id) === "mid").length === 1 &&
+                role(e) === "mid"))
+          )
+            continue;
+          const delta = calcularDeltaCounterPuro(
+            beta(a),
+            beta(e),
+            p.obterConfronto(a, e),
+            p.obterCounterDeReserva?.(a, e) ?? 0
+          );
+          const vantagem = beta(a) - beta(e) + delta;
+          procurar(
+            aliados.filter(id => id !== a),
+            inimigos.filter(id => id !== e),
+            slots.filter(s => s !== slot),
+            [
+              ...pares,
+              {
+                aliadoId: a,
+                inimigoId: e,
+                posicaoSugerida: posicoes[slot],
+                vantagemLogit: vantagem,
+                vantagemPercentualEstimada: sigmoidPercent(vantagem),
+              },
+            ],
+            score +
+              vantagem -
+              2.6 * Math.max(0, -delta) ** 2 +
+              adequacao(a, slot === 0) +
+              adequacao(e, slot === 0)
+          );
+        }
+  };
+  procurar(p.aliadosIds, p.inimigosIds, [0, 1, 2], [], 0);
+  return resultado.sort(
+    (a, b) =>
+      posicoes.indexOf(a.posicaoSugerida) - posicoes.indexOf(b.posicaoSugerida)
+  );
+}
 
-      const banScore =
-        Math.pow(uso, 0.45) * (Math.max(0, beta) + ameacaAoPretendido);
-      const motivo =
-        ameacaAoPretendido > 0.25
-          ? `Hard-counter direto da sua escolha planejada`
-          : `Dominante no mapa (${sigmoidPercent(beta)}% WR suavizado)`;
-
+export function recomendarBansApi(
+  p: Pick<
+    ParametrosMotorApi,
+    | "disponiveisIds"
+    | "estatisticasMapa"
+    | "obterConfronto"
+    | "obterCounterDeReserva"
+  > & { brawlerPretendidoId?: string }
+) {
+  const razoes = razoesDeUso(p.estatisticasMapa);
+  const beta = (id: string) =>
+    p.estatisticasMapa[id]
+      ? logit(calcularWinRateBayesiano(p.estatisticasMapa[id]))
+      : 0;
+  const alvo = p.brawlerPretendidoId;
+  return p.disponiveisIds
+    .filter(id => id !== alvo)
+    .map(id => {
+      const ameaca = alvo
+        ? Math.max(
+            0,
+            calcularDeltaCounterPuro(
+              beta(id),
+              beta(alvo),
+              p.obterConfronto(id, alvo),
+              p.obterCounterDeReserva?.(id, alvo) ?? 0
+            )
+          )
+        : 0;
+      const score =
+        Math.pow(
+          Math.max(razoes[id] ?? 1, alvo && ameaca > 0.1 ? 0.2 : 0),
+          0.45
+        ) *
+        (Math.max(0, beta(id)) + 2.2 * ameaca);
       return {
         brawlerId: id,
-        banScore: Number((banScore * 100).toFixed(1)),
-        motivo,
+        banScore: Number((100 * score).toFixed(1)),
+        motivo:
+          ameaca > 0.1
+            ? `Counter da escolha pretendida: ${alvo}`
+            : "Presença e força neste mapa",
       };
     })
     .sort((a, b) => b.banScore - a.banScore);

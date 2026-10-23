@@ -23,7 +23,7 @@ import { calcularWinRateBayesiano, calcularDeltaCounterPuro, calcularDeltaSinerg
  *   (`JOGOS_DE_PRIOR`, o mesmo do Draft): três jogos a 100% não passam à
  *   frente de trezentos a 60%. O número mostrado é o medido, sem ajuste.
  */
-import { JOGOS_DE_PRIOR } from "./counterMatchupValue";
+import { JOGOS_DE_PRIOR, fontesDeApoioDaApi } from "./counterMatchupValue";
 import { nomeDoModo, type ResumoDasPartidas } from "./partidasObservadas";
 
 /** Menos jogos do que isto não entra nos destaques (continua na lista completa). */
@@ -97,8 +97,9 @@ export function fichaDoBrawler(
   nome: string,
   porModo: ResumoDasPartidas["brawlersPorModo"] = {},
   priorModo?: DadosApiParaMotor["priorModo"],
+  modeId?: string,
 ): FichaDaApi {
-  const modelo = resumo.partidasPonderadas !== undefined ? montarDadosDoMotorApi(resumo.brawlers.map((l) => l.brawler), { ...resumo, priorModo }) : undefined;
+  const modelo = resumo.partidasPonderadas !== undefined ? montarDadosDoMotorApi(resumo.brawlers.map((l) => l.brawler), { ...resumo, priorModo }, fontesDeApoioDaApi(modeId)) : undefined;
   const beta = (n: string) => modelo?.estatisticasMapa[n] ? logit(calcularWinRateBayesiano(modelo.estatisticasMapa[n])) : 0;
   const proprio = resumo.brawlers.find((linha) => mesmoNome(linha.brawler, nome));
   const brawler = proprio?.brawler ?? nome;
@@ -110,7 +111,7 @@ export function fichaDoBrawler(
     .map((linha) => {
       const taxa = percentagem(linha.vitorias, linha.jogos);
       const doAdversario = habitual.get(linha.a) ?? null;
-      const puro = modelo ? calcularDeltaCounterPuro(beta(linha.a), beta(brawler), modelo.obterConfronto(linha.a, brawler)) : null;
+      const puro = modelo ? calcularDeltaCounterPuro(beta(linha.a), beta(brawler), modelo.obterConfronto(linha.a, brawler), modelo.obterCounterDeReserva?.(linha.a, brawler)) : null;
       const delta = puro === null ? doAdversario === null ? null : taxa - doAdversario : (sigmoid(puro) - .5) * 100;
       return { adversario: linha.a, jogos: linha.jogos, vitoriasDoAdversario: linha.vitorias, taxa, habitual: doAdversario, delta, deltaLogit: puro ?? undefined, ajustado: puro ?? ajustar(delta, linha.jogos) };
     })
@@ -119,9 +120,9 @@ export function fichaDoBrawler(
   const equipaPonderada = (aliados: string[], jogos: number, vitorias: number) => {
     const linha = equipa(aliados, jogos, vitorias, base);
     if (!modelo) return linha;
-    const deltas = aliados.map((a) => calcularDeltaSinergiaPura(beta(brawler), beta(a), modelo.obterSinergia(brawler, a)));
+    const deltas = aliados.map((a) => calcularDeltaSinergiaPura(beta(brawler), beta(a), modelo.obterSinergia(brawler, a), modelo.obterSinergiaDeReserva?.(brawler, a)));
     let puro = deltas.reduce((a, b) => a + b, 0);
-    if (aliados.length === 2) puro += calcularDeltaSinergiaTripla([beta(brawler), ...aliados.map(beta)], [...deltas, calcularDeltaSinergiaPura(beta(aliados[0]), beta(aliados[1]), modelo.obterSinergia(aliados[0], aliados[1]))], modelo.obterTrio([brawler, ...aliados]));
+    if (aliados.length === 2) puro += calcularDeltaSinergiaTripla([beta(brawler), ...aliados.map(beta)], [...deltas, calcularDeltaSinergiaPura(beta(aliados[0]), beta(aliados[1]), modelo.obterSinergia(aliados[0], aliados[1]), modelo.obterSinergiaDeReserva?.(aliados[0], aliados[1]))], modelo.obterTrio([brawler, ...aliados]));
     return { ...linha, delta: (sigmoid(puro) - .5) * 100, ajustado: puro, deltaLogit: puro };
   };
   const duplas = resumo.sinergias

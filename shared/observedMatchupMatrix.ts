@@ -1,3 +1,4 @@
+import type { ApoioDoMotorApi } from "./motorApiPerfeito";
 export type ObservedMatchupRow = {
   map: string;
   mode: string;
@@ -116,7 +117,7 @@ export const jogosPonderados = (linha?: { jogos: number; jogosPonderados?: numbe
 export const vitoriasPonderadas = (linha?: { vitorias: number; vitoriasPonderadas?: number }) => linha?.vitoriasPonderadas ?? linha?.vitorias ?? 0;
 
 /** Índices O(1), para não procurar milhares de pares a cada simulação do draft. */
-export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiParaMotor) {
+export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiParaMotor, apoio: ApoioDoMotorApi = {}) {
   const brawlers = new Map(dados.brawlers.map((linha) => [chaveApi(linha.brawler), linha]));
   const modo = new Map((dados.priorModo?.brawlers ?? []).map((linha) => [chaveApi(linha.brawler), linha]));
   const estatisticasMapa: Record<string, import("./motorApiPerfeito").EstatisticasApiMapa> = {};
@@ -138,17 +139,24 @@ export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiP
     }
     return mapa;
   };
-  const pares = (mapa: ReturnType<typeof indexar>, modo: ReturnType<typeof indexar>) => (a: string, b: string): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
+  const priorDoPar = (lista: readonly { jogos: number; jogosPonderados?: number }[]) => {
+    const volumes = lista.map(jogosPonderados).filter(n => n > 0).sort((a, b) => a - b);
+    const mediana = volumes.length ? volumes[Math.floor(volumes.length / 2)] : 6;
+    return Math.max(4, Math.min(12, Math.sqrt(mediana) * 3));
+  };
+  const kCounter = priorDoPar(dados.confrontos), kSinergia = priorDoPar(dados.sinergias);
+  const pares = (mapa: ReturnType<typeof indexar>, modo: ReturnType<typeof indexar>, jogosPrior: number) => (a: string, b: string): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
     const chave = `${chaveApi(a)}:${chaveApi(b)}`;
     const m = mapa.get(chave), g = modo.get(chave);
-    return m || g ? { vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;
+    return m || g ? { jogosPrior, vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;
   };
   const indexarTrios = (lista: NonNullable<DadosApiParaMotor["equipas"]>) => new Map(lista.map((l) => [l.membros.map(chaveApi).sort().join(":"), l]));
   const trios = indexarTrios(dados.equipas ?? []), triosModo = indexarTrios(dados.priorModo?.equipas ?? []);
   return {
+    ...apoio,
     estatisticasMapa,
-    obterConfronto: pares(indexar(dados.confrontos, false), indexar(dados.priorModo?.confrontos ?? [], false)),
-    obterSinergia: pares(indexar(dados.sinergias, true), indexar(dados.priorModo?.sinergias ?? [], true)),
+    obterConfronto: pares(indexar(dados.confrontos, false), indexar(dados.priorModo?.confrontos ?? [], false), kCounter),
+    obterSinergia: pares(indexar(dados.sinergias, true), indexar(dados.priorModo?.sinergias ?? [], true), kSinergia),
     obterTrio: (ids: string[]): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
       const chave = ids.map(chaveApi).sort().join(":"), m = trios.get(chave), g = triosModo.get(chave);
       return m || g ? { vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;

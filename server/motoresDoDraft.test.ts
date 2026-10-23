@@ -221,6 +221,6 @@ describe("o Draft tem o seletor do motor", () => {
     expect(draft).toContain("<PainelDoMotor config={motorDoDraft.config} onChange={motorDoDraft.mudar} />");
     expect(draft).toContain("motor: motorDoDraft.config");
     expect(draft).toContain("dadosApi: dadosMotorApi");
-    expect(draft).toContain("Motor: <b>{fonteApi.ligada ? \"API oficial · Log-odds\" : NOMES_DOS_MOTORES[motorDoDraft.config.motor]}</b>");
+    expect(draft).toContain("Motor: <b>{fonteApi.ligada ? \"API + apoio de confrontos\" : NOMES_DOS_MOTORES[motorDoDraft.config.motor]}</b>");
   });
 });

@@ -1,12 +1,13 @@
+import { brawlScopeSynergyData } from "./brawlScopeSynergyData";
 import { montarDadosDoMotorApi, type DadosApiParaMotor, type DadosDoMotorApi } from "./observedMatchupMatrix";
-import { calcularDeltaCounterPuro, calcularDeltaSinergiaPura, calcularProbabilidadeParBayesiana, logit, sigmoid } from "./motorApiPerfeito";
+import { calcularDeltaCounterPuro, calcularDeltaSinergiaPura, calcularProbabilidadeParBayesiana, logit, sigmoid, type ApoioDoMotorApi } from "./motorApiPerfeito";
 import { calcularWinRateBayesiano } from "./amostraPequena";
 import { avancarVersaoDoMotor } from "./versaoDoMotor";
 import { brawlScopeMatchupDeltas } from './brawlScopeMatchupDeltas.generated';
 import { brawlScopeMatchupsByMode } from './brawlScopeMatchupsByMode.generated';
 import { brawlScopeModeForId, normalizeBrawlScopeModeId } from './brawlScopeModes';
 import { DEFAULT_BRAWLSCOPE_READING, normalizeBrawlScopeReading, type BrawlScopeReadingId } from './brawlScopeReading';
-import { getCounterSourceProfiles, isExcludedCounterDirection, type CounterSourceProfile } from './counterSourceRelations';
+import { getBrawlScopeSynergyTeammates, getCounterSourceProfiles, isExcludedCounterDirection, type CounterSourceProfile } from './counterSourceRelations';
 import { normalizeCounterBrawlerName as key } from './counterSyncSnapshot';
 
 export type MatchupValue = {
@@ -165,18 +166,9 @@ export function toOwnerPerspective(publishedDelta: number) {
 }
 
 /**
- * «Só API oficial»: o Draft a ler apenas as partidas Ranked que o site recolhe.
- *
- * Ligado, os confrontos e as sinergias deixam de vir do BrawlScope, do PL
- * Prodigy e do Brawl Planet e passam a vir das partidas guardadas DO MAPA
- * escolhido. Desligado (`null`), tudo volta às fontes de sempre.
- *
- * O valor de um par é quanto o candidato ganha a mais (ou a menos) do que
- * costuma ganhar nesse mapa — não contra 50%, senão um brawler forte teria
- * «counter» contra toda a gente e a força dele contava duas vezes (já está na
- * base). Com poucos jogos, o valor é puxado para zero: cada par soma
- * `JOGOS_DE_PRIOR` jogos imaginários à taxa habitual do candidato, e só com
- * muitos jogos reais a diferença aparece inteira.
+ * A fonte ponderada usa a posterior comum do motor, com apoio das matrizes
+ * para pares escassos. Contagens legadas sem metadados ponderados conservam
+ * a suavização histórica abaixo para compatibilidade de leitura.
  */
 export const JOGOS_DE_PRIOR = 10;
 
@@ -203,9 +195,9 @@ export function fonteObservadaAtiva() {
 }
 
 /** Monta a fonte a partir das contagens da página «Partidas» de um mapa. */
-export function montarFonteObservada(dados: Omit<DadosApiParaMotor, "partidas"> & { partidas?: number }): FonteObservada {
+export function montarFonteObservada(dados: Omit<DadosApiParaMotor, "partidas"> & { partidas?: number; modeId?: string }): FonteObservada {
   const nomes = [...new Set(dados.brawlers.map((r) => key(r.brawler)))];
-  const modelo = dados.partidasPonderadas !== undefined ? montarDadosDoMotorApi(nomes, { ...dados, partidas: dados.partidas ?? 0 }) : undefined;
+  const modelo = dados.partidasPonderadas !== undefined ? montarDadosDoMotorApi(nomes, { ...dados, partidas: dados.partidas ?? 0 }, fontesDeApoioDaApi(dados.modeId)) : undefined;
   return {
     modelo,
     vitoriaNoMapa: new Map(dados.brawlers.map((linha) => [key(linha.brawler), modelo ? calcularWinRateBayesiano(modelo.estatisticasMapa[key(linha.brawler)]) : linha.jogos ? linha.vitorias / linha.jogos : 0.5])),
@@ -223,9 +215,9 @@ function parDoModelo(a: string, b: string, sinergia: boolean): ParObservado | nu
   const beta = (nome: string) => logit(fonteObservada?.vitoriaNoMapa.get(key(nome)) ?? .5);
   const ba = beta(a), bb = beta(b);
   const par = sinergia ? modelo.obterSinergia(a, b) : modelo.obterConfronto(a, b);
-  if (!par) return null;
-  const delta = sinergia ? calcularDeltaSinergiaPura(ba, bb, par) : calcularDeltaCounterPuro(ba, bb, par);
-  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(par, sigmoid(sinergia ? ba + bb : ba - bb));
+  const reserva = (sinergia ? modelo.obterSinergiaDeReserva?.(a, b) : modelo.obterCounterDeReserva?.(a, b)) ?? 0;
+  const delta = sinergia ? calcularDeltaSinergiaPura(ba, bb, par, reserva) : calcularDeltaCounterPuro(ba, bb, par, reserva);
+  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(par, sigmoid((sinergia ? ba + bb : ba - bb) + reserva));
   return { delta: (sigmoid(delta) - .5) * 100, jogos: amostraEfetiva, vitoria: pSuavizado * 100 };
 }
 
@@ -334,8 +326,14 @@ function deltaDaFicha(titular: string, adversario: string, perfis: CounterSource
 
 export function getMatchupValue(owner: string, foe: string, modeId?: string, reading = activeReading): MatchupValue {
   if (key(owner) === key(foe)) return calculateMatchupValue(null, 0, 0);
-  // «Só API oficial»: nenhuma outra fonte entra, nem as confirmações do PL Prodigy e do Brawl Planet.
+  // Fonte observada: posterior dos jogos oficiais e do prior de apoio, sem recursão na leitura ativa.
   if (fonteObservada) return calculateMatchupValue(confrontoObservado(owner, foe), 0, 0, { scope: "api-oficial" });
+  return getMatchupDasFontes(owner, foe, modeId, reading);
+}
+
+/** Leitura explícita das matrizes de apoio, sem alterar o interruptor global da API. */
+export function getMatchupDasFontes(owner: string, foe: string, modeId?: string, reading: BrawlScopeReadingId = modeId ? "byMode" : "overall"): MatchupValue {
+  if (key(owner) === key(foe)) return calculateMatchupValue(null, 0, 0);
   /**
    * Direções rejeitadas manualmente não valem em lado nenhum — nem na lista, nem
    * no Score. A exclusão é bidirecional na leitura: se a direção A→B foi
@@ -383,6 +381,23 @@ export function getMatchupValue(owner: string, foe: string, modeId?: string, rea
     evidence(owner, foe, 'Brawl Planet', own, other),
     origin,
   );
+}
+
+/** Apoio para pares escassos: catálogos existentes e snapshot do modo ativo. */
+export function fontesDeApoioDaApi(modeId?: string): ApoioDoMotorApi {
+  const transformar = (pp: number) => logit(.5 + Math.max(-30, Math.min(30, pp)) / 100);
+  const sinergias = new Map(Object.values(brawlScopeSynergyData).map(p => [key(p.brawler), p.teammates]));
+  return {
+    obterCounterDeReserva: (a, b) => transformar(getMatchupDasFontes(a, b, modeId).total),
+    obterSinergiaDeReserva: (a, b) => {
+      const lista = (dono: string) => {
+        const viva = getBrawlScopeSynergyTeammates(dono, modeId, true);
+        return viva.length ? viva : sinergias.get(key(dono)) ?? [];
+      };
+      const valores = [lista(a).find(r => key(r.brawler) === key(b))?.delta, lista(b).find(r => key(r.brawler) === key(a))?.delta].filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      return transformar(valores.length ? valores.reduce((x, y) => x + y, 0) / valores.length : 0);
+    },
+  };
 }
 
 /**

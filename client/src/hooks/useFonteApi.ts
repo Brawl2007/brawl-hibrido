@@ -6,28 +6,18 @@ import { useApiOficial } from "@/hooks/useApiOficial";
 import { definirFonteObservada, montarFonteObservada } from "@shared/counterMatchupValue";
 
 /**
- * O interruptor «Só API oficial» do Draft.
- *
- * Ligado, o Draft passa a ler apenas as partidas Ranked que o site recolhe da
- * API da Supercell, do mapa escolhido e do período escolhido (30 dias por
- * omissão; 24 h, 7, 14, tudo ou os dias que se escreverem):
- *  - a base de cada brawler (vitória e uso) sai dessas partidas, e não do
- *    Brawl Planet nem do TopBrawl;
- *  - os confrontos 1 contra 1 e as sinergias (e anti-sinergias) também, e não
- *    do BrawlScope, do PL Prodigy nem do Brawl Planet.
- * Desligado, tudo volta às fontes de sempre.
- *
- * Um mapa ainda sem partidas fica com toda a gente a 50% e sem bónus: é a
- * verdade de «não sabemos», e o aviso no ecrã diz quantas partidas há.
+ * A base de mapas e brawlers vem das partidas oficiais, no mapa, período e rank
+ * escolhidos. Confrontos escassos usam as matrizes do projeto como prior; a
+ * contribuição dessas matrizes diminui à medida que a API acumula evidência.
  */
 function normalizarNome(nome: string | undefined) {
   return (nome ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export type DadosDoMapaDaApi = DadosApiParaMotor;
+export type DadosDoMapaDaApi = DadosApiParaMotor & { modeId?: string };
 
 /** Um só objeto vazio: criado a cada desenho, o efeito abaixo correria sem parar. */
-const SEM_PARTIDAS: DadosDoMapaDaApi = { partidas: 0, brawlers: [], confrontos: [], sinergias: [] };
+const SEM_PARTIDAS: DadosDoMapaDaApi = { partidas: 0, partidasPonderadas: 0, brawlers: [], confrontos: [], sinergias: [] };
 
 export function useFonteApi(nomeDoMapa: string | undefined) {
   // O mesmo interruptor do site todo (Draft, Mapas, Matriz): ver `useApiOficial`.
@@ -46,7 +36,7 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     if (!ligada) return undefined;
     if (!mapa) return lista.data ? SEM_PARTIDAS : undefined;
     if (!doMapa.data) return undefined;
-    return { ...doMapa.data, priorModo: {
+    return { ...doMapa.data, modeId: mapa.mode, priorModo: {
       brawlers: lista.data?.brawlersPorModo[mapa.mode] ?? [],
       confrontos: lista.data?.confrontosPorModo?.[mapa.mode] ?? [],
       sinergias: lista.data?.sinergiasPorModo?.[mapa.mode] ?? [],

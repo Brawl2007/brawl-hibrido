@@ -99,7 +99,7 @@ export async function fichaDaMatriz(filtro: FiltroDasPartidas & { brawler: strin
     modos: geral.modos,
     mapas: geral.mapas,
     brawlers: resumo.brawlers.map((linha) => ({ brawler: linha.brawler, jogos: linha.jogos })),
-    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo, priorModo),
+    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo, priorModo, modo),
   };
 }
 

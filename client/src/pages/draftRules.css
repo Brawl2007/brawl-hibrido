@@ -156,3 +156,18 @@
 .api-analise h3 { margin: 12px 0 8px; font-weight: 700; }
 .api-analise ul, .api-analise ol { padding-left: 20px; }
 .api-analise li { margin: 6px 0; }
+
+.api-tag { display: inline-block; margin-top: 5px; padding: 3px 6px; border: 1px solid var(--bh-line); border-radius: 6px; }
+.api-veto { color: var(--bh-negative); }
+.api-risco { color: var(--bh-warning); }
+.api-sinergia { color: var(--bh-violet); }
+.api-nao-recomendado { border-color: var(--bh-warning); }
+.api-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.api-lane { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 16px 10px; background: var(--bh-surface-2); border: 1px solid var(--bh-line); border-radius: 10px; text-align: center; }
+.api-lane h4 { font-size: 12px; color: var(--bh-text-muted); }
+.api-lane > b { font-size: 20px; }
+.api-lane > small { color: var(--bh-text-dim); }
+.api-inimigos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.api-inimigos li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px; padding: 10px; background: var(--bh-surface-2); border-radius: 8px; }
+.api-inimigos li small { flex-basis: 100%; color: var(--bh-text-muted); }
+@media (max-width: 620px) { .api-lanes { grid-template-columns: 1fr; } .api-inimigos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

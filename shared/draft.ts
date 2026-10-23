@@ -4,7 +4,7 @@ import { calcularWinRateBayesiano } from "./amostraPequena";
 import { versaoDoMotor } from "./versaoDoMotor";
 import { lerContextoDoMotor, redistribuirPesosPL, penalidadeBravosDisponiveis, partesAtivasDoPL, pontuarComMotor, type ComponentesDoCandidato, type ConfigDoMotor, type ContextoDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
-import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa, confrontoObservadoComJogos, sinergiaObservadaComJogos, type ParObservado } from "./counterMatchupValue";
+import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa, confrontoObservadoComJogos, sinergiaObservadaComJogos, type ParObservado, fontesDeApoioDaApi } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
 export type DraftTeam = "blue" | "red";
 import { getMainAttackRange } from "./brawlerAttackRanges";
@@ -2159,12 +2159,12 @@ export function perfisTaticosDoDraft(nomes: readonly string[]): Record<string, P
   const heist = lista("Colt,Colette,Chuck,Jessie,Nita,Bull,Darryl,Melodie,8-bit,Amber,Spike,Rico,Clancy,Brock");
   return Object.fromEntries(nomes.map((id) => {
     const classe = classes[getBrawlerClass(id)] ?? "damage";
-    return [id, { id, role: inferDraftRole(id), classe, isWallbreaker: wallbreak.has(id.toLowerCase()), isAntiTank: antiTank.has(id.toLowerCase()), isHeistDps: heist.has(id.toLowerCase()), dependsOnWalls: classe === "thrower" || id === "Rico" }];
+    return [id, { id, role: inferDraftRole(id), classe, isWallbreaker: wallbreak.has(id.toLowerCase()), isAntiTank: antiTank.has(id.toLowerCase()), isHeistDps: heist.has(id.toLowerCase()), dependsOnWalls: classe === "thrower" || ["Rico", "Rosa", "Jacky", "Bull", "El Primo", "Ash", "Frank", "Trunk"].includes(id) }];
   }));
 }
 
 function rankApiEntries<T extends DraftRow>(rows: T[], locked: Set<string>, query: string, context: DraftRankingContext<T>): RankedDraftEntry<T>[] {
-  const dados = context.dadosApi!;
+  const dados = { ...fontesDeApoioDaApi(context.mapModeId), ...context.dadosApi! };
   const disponiveisIds = rows.filter((r) => !locked.has(r.brawler)).map((r) => r.brawler);
   const nomes = Object.keys(dados.estatisticasMapa);
   const resultados = ranquearCandidatosApiPerfeito({ ...dados, disponiveisIds,
@@ -2183,7 +2183,7 @@ function rankApiEntries<T extends DraftRow>(rows: T[], locked: Set<string>, quer
       return { row, api: ban ? undefined : api, apiBan: ban, basePoints: base * 100,
         draftScore: ban ? ban.banScore : api.logOddsFinal, finalPoints: ban ? ban.banScore : api.winProbability,
         signal: calculateDraftSignal(row, { ...context, allyRows: [], enemyRows: [], bannedNames: [] }, false), rank: 0 };
-    }).sort((a, b) => b.draftScore - a.draftScore || a.row.brawler.localeCompare(b.row.brawler))
+    }).sort((a, b) => Number(Boolean(a.api?.bloqueado)) - Number(Boolean(b.api?.bloqueado)) || b.draftScore - a.draftScore || a.row.brawler.localeCompare(b.row.brawler))
     .map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
@@ -2232,8 +2232,9 @@ function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], c
 export function orderDraftEntries<T extends DraftRow>(entries: readonly RankedDraftEntry<T>[], order: "base" | "context") {
   const sorted = [...entries];
   if (order === "base") sorted.sort((a, b) =>
-    b.signal.scoreBreakdown.hybridScore - a.signal.scoreBreakdown.hybridScore
+    (b.api ? b.basePoints : b.signal.scoreBreakdown.hybridScore) - (a.api ? a.basePoints : a.signal.scoreBreakdown.hybridScore)
     || a.row.brawler.localeCompare(b.row.brawler));
+  if (sorted.some(e => e.api)) sorted.sort((a, b) => Number(Boolean(a.api?.bloqueado)) - Number(Boolean(b.api?.bloqueado)));
   return sorted.map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 

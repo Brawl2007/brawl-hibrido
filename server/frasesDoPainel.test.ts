@@ -49,7 +49,7 @@ describe("o Draft não cita percentagens que não aplica", () => {
   it("o removedor de comentários não comeu o ficheiro", () => {
     // Um teste que procura num ficheiro mutilado passa por acaso. Estas duas
     // linhas de código real têm de sobreviver à limpeza.
-    expect(draft).toContain("const counterReason = enemyPicks.length");
+    expect(draft).toContain("const counterReason = fonteApi.ligada");
     expect(draft.split("\n").length).toBeGreaterThan(2000);
   });
 

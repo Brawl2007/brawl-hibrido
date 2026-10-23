@@ -12,7 +12,7 @@ export function BotaoApiOficial({ ligada, onAlternar, className = "" }: { ligada
       className={`mesa-fonte-api botao-api-oficial ${ligada ? "is-active" : ""} ${className}`.trim()}
       aria-pressed={ligada}
       onClick={onAlternar}
-      title="Ligado: só as partidas Ranked recolhidas da API da Supercell, no site todo (Draft, Mapas e Matriz). Desligado: BrawlScope, Brawl Planet, TopBrawl e PL Prodigy, com os pesos."
+      title="Ligado: estatísticas das partidas oficiais; confrontos e duplas com poucos jogos recebem apoio das matrizes do projeto. Desligado: estatísticas das outras fontes, com os pesos."
     >
       <span className="mesa-fonte-api-caixa" aria-hidden="true">{ligada ? "✓" : ""}</span>
       API oficial
