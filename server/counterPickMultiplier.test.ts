@@ -14,9 +14,9 @@ beforeEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: true 
 afterEach(() => setCounterSyncSnapshot(undefined, { allowOfflineFallback: false }));
 
 describe("ajuste de Counter separado por pick", () => {
-  it("por omissão todos os picks valem a percentagem publicada", () => {
+  it("por omissão o counter cresce com o pick", () => {
     for (const pick of [1, 2, 3, 4, 5, 6]) {
-      expect(getCounterPickMultiplier(pick, defaultDraftRuleSettings)).toBe(1);
+      expect(getCounterPickMultiplier(pick, defaultDraftRuleSettings)).toBe([1, 1.15, 1.25, 1.45, 1.65, 2][pick - 1]);
     }
   });
 
@@ -105,7 +105,7 @@ describe("ajuste de Counter separado por pick", () => {
     expect(getCounterPickMultiplier(1, extremos)).toBe(COUNTER_PICK_MULTIPLIER_MAX);
     expect(getCounterPickMultiplier(2, extremos)).toBe(COUNTER_PICK_MULTIPLIER_MIN);
     // Valores inválidos caem no padrão em vez de contaminarem o Score.
-    expect(getCounterPickMultiplier(3, normalizeDraftRuleSettings({ counterPickMultiplier3: Number.NaN }))).toBe(1);
+    expect(getCounterPickMultiplier(3, normalizeDraftRuleSettings({ counterPickMultiplier3: Number.NaN }))).toBe(1.25);
   });
 
   it("as regras percentuais continuam a ser tratadas como percentagens", () => {

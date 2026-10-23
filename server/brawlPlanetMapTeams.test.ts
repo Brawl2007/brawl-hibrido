@@ -48,34 +48,34 @@ describe("sinergia Brawl Planet por mapa", () => {
 
   it("v169 · por omissão a equipa tripla conta, como antes da v168; desligada, não conta", () => {
     expect(defaultDraftRuleSettings.sinergiaDeEquipaTripla).toBe(1);
-    expect(calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams }).scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
-    const signal = calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams, ruleSettings: { sinergiaDeEquipaTripla: 0 } });
+    expect(calculateDraftSignal(gus, { pickNumber: 2, allyRows: [chester], mapTeams: pitStopTeams }).scoreBreakdown.mapTeamSynergyPoints).toBeGreaterThan(0);
+    const signal = calculateDraftSignal(gus, { pickNumber: 2, allyRows: [chester], mapTeams: pitStopTeams, ruleSettings: { sinergiaDeEquipaTripla: 0 } });
     expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBe(0);
     expect(signal.reasons.join(" ")).not.toContain("Composição do mapa");
   });
 
   it("aplica a taxa oficial para a composição literal do mapa e não acumula Best Teammate global", () => {
-    const signal = calculateDraftSignal(gus, { allyRows: [chester], mapTeams: pitStopTeams, ruleSettings: TRIPLA_LIGADA });
+    const signal = calculateDraftSignal(gus, { pickNumber: 2, allyRows: [chester], mapTeams: pitStopTeams, ruleSettings: TRIPLA_LIGADA });
 
-    expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(signal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
+    expect(signal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(signal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick2);
     expect(signal.scoreBreakdown.synergyPoints).toBe(0);
     expect(signal.bonusSources.mapTeamSynergy).toMatchObject({ map: "Pit Stop", winRate: 85.6 });
-    expect(signal.reasons.join(" ")).toContain(`Bónus Composição do mapa +${defaultDraftRuleSettings.synergyPick1 * 100}%`);
+    expect(signal.reasons.join(" ")).toContain(`Bónus Composição do mapa +${defaultDraftRuleSettings.synergyPick2 * 100}%`);
   });
 
   it("dá a taxa oficial a Pearl e Bolt quando Brock completa a composição Ranked de Flaring Phoenix", () => {
-    const pearlSignal = calculateDraftSignal(pearl, { allyRows: [brock], mapTeams: flaringPhoenixTeams, ruleSettings: TRIPLA_LIGADA });
-    const boltSignal = calculateDraftSignal(bolt, { allyRows: [brock], mapTeams: flaringPhoenixTeams, ruleSettings: TRIPLA_LIGADA });
+    const pearlSignal = calculateDraftSignal(pearl, { pickNumber: 2, allyRows: [brock], mapTeams: flaringPhoenixTeams, ruleSettings: TRIPLA_LIGADA });
+    const boltSignal = calculateDraftSignal(bolt, { pickNumber: 2, allyRows: [brock], mapTeams: flaringPhoenixTeams, ruleSettings: TRIPLA_LIGADA });
 
-    expect(pearlSignal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(pearlSignal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
-    expect(boltSignal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(boltSignal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick1);
+    expect(pearlSignal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(pearlSignal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick2);
+    expect(boltSignal.scoreBreakdown.mapTeamSynergyPoints).toBeCloseTo(boltSignal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.synergyPick2);
     expect(pearlSignal.bonusSources.mapTeamSynergy?.brawlers).toEqual(["Brock", "Pearl", "Bolt"]);
     expect(boltSignal.bonusSources.mapTeamSynergy?.brawlers).toEqual(["Brock", "Pearl", "Bolt"]);
   });
 
   it("aplica a matriz oficial de Sinergia à composição literal do mapa em todos os picks", () => {
     const signals = [1, 2, 3, 4, 5, 6].map((pickNumber) => calculateDraftSignal(pearl, {
-      allyRows: [brock],
+      pickNumber: 2, allyRows: [brock],
       mapTeams: flaringPhoenixTeams,
       pickNumber,
       ruleSettings: TRIPLA_LIGADA,

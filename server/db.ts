@@ -25,6 +25,7 @@ import {
   InsertRankedMapCapture,
   observedBattles,
   observedBattleRanks,
+  observedBattleQuality,
   observedPlayers,
   observedMatchCollectionConfig,
   observedMatchCollectionRuns,
@@ -937,7 +938,7 @@ export function somarParesDoLote(entradas: ReadonlyArray<{ deltas: readonly Obse
  * partidas novas contam para os agregados — repetir uma recolha não duplica.
  */
 export async function recordObservedBattlesBatch(
-  entradas: ReadonlyArray<{ battle: InsertObservedBattle; deltas: readonly ObservedMatchupDelta[]; rank?: { min: number; max: number; medio: number } | null }>,
+  entradas: ReadonlyArray<{ battle: InsertObservedBattle; deltas: readonly ObservedMatchupDelta[]; rank?: { min: number; max: number; medio: number } | null; todosNivel11?: boolean }>,
 ) {
   const db = await getDb();
   if (!db || !entradas.length) return { battlesInserted: 0, pairObservations: 0 };
@@ -954,6 +955,13 @@ export async function recordObservedBattlesBatch(
       .from(observedBattles)
       .where(inArray(observedBattles.fingerprint, impressoes.slice(i, i + 500)));
     for (const linha of linhas) existentes.add(linha.fingerprint);
+  }
+  // Releituras podem enriquecer partidas antigas sem duplicar os resultados.
+  const comQualidade = [...unicas.values()].filter((entrada) => entrada.todosNivel11 !== undefined);
+  for (let i = 0; i < comQualidade.length; i += 400) {
+    await db.insert(observedBattleQuality).values(comQualidade.slice(i, i + 400).map((entrada) => ({
+      fingerprint: entrada.battle.fingerprint, todosNivel11: entrada.todosNivel11 ? 1 : 0,
+    }))).onDuplicateKeyUpdate({ set: { todosNivel11: sql`values(todos_nivel_11)` } });
   }
   const novas = Array.from(unicas.values()).filter((entrada) => !existentes.has(entrada.battle.fingerprint));
   if (!novas.length) return { battlesInserted: 0, pairObservations: 0 };
@@ -1182,7 +1190,7 @@ export async function listObservedBattlesParaResumo(filtro: { desde?: Date; mode
  */
 export async function percorrerPartidasParaResumo(
   filtro: { desde: Date; mode?: string; mapId?: string; rank?: { min: number; max: number } },
-  consumir: (linhas: { mapId: string; mode: string; winningTeam: string; losingTeam: string }[]) => void,
+  consumir: (linhas: { mapId: string; mode: string; winningTeam: string; losingTeam: string; battleTime: Date; rankMedio: number | null; todosNivel11: number | null }[]) => void,
 ) {
   const db = await getDb();
   if (!db) throw new Error("Base de dados das partidas não configurada.");
@@ -1204,11 +1212,13 @@ export async function percorrerPartidasParaResumo(
       const colunas = {
         mapId: tidb ? sql<string>`/*+ SET_VAR(tidb_executor_concurrency=1) INL_JOIN(observed_battle_ranks) */ ${observedBattles.mapId}`.as("map_id") : observedBattles.mapId,
         mode: observedBattles.mode, winningTeam: observedBattles.winningTeam, losingTeam: observedBattles.losingTeam,
+        battleTime: observedBattles.battleTime, rankMedio: observedBattleRanks.rankMedio, todosNivel11: observedBattleQuality.todosNivel11,
       };
       const consulta = filtro.rank
         ? db.select(colunas).from(observedBattles).innerJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint))
-        : db.select({ ...colunas, mapId: observedBattles.mapId }).from(observedBattles);
-      const linhas = await consulta.where(and(inArray(observedBattles.id, ids.map(linha => linha.id)),
+        : db.select({ ...colunas, mapId: observedBattles.mapId }).from(observedBattles).leftJoin(observedBattleRanks, eq(observedBattleRanks.fingerprint, observedBattles.fingerprint));
+      const comQualidade = consulta.leftJoin(observedBattleQuality, eq(observedBattleQuality.fingerprint, observedBattles.fingerprint));
+      const linhas = await comQualidade.where(and(inArray(observedBattles.id, ids.map(linha => linha.id)),
         filtro.rank ? between(observedBattleRanks.rankMedio, filtro.rank.min, filtro.rank.max) : undefined));
       if (!filtro.rank && linhas.length !== ids.length) throw new Error("Leitura incompleta das partidas selecionadas.");
       consumir(linhas);
@@ -1262,6 +1272,7 @@ export async function expirarPartidasAntigas(agora = new Date()) {
           throw new Error("Agregados inconsistentes: limpeza cancelada sem apagar o lote.");
       }
       const fingerprints = antigas.map(partida => partida.fingerprint);
+      await tx.delete(observedBattleQuality).where(inArray(observedBattleQuality.fingerprint, fingerprints));
       await tx.delete(observedBattleRanks).where(inArray(observedBattleRanks.fingerprint, fingerprints));
       await tx.delete(observedBattles).where(and(inArray(observedBattles.id, antigas.map(partida => partida.id)), lt(observedBattles.battleTime, corte)));
       return antigas.length;

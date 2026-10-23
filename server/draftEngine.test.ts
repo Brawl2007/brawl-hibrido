@@ -16,7 +16,8 @@ import { definirLeituraDasDuasFichas as definirFichasDoFicheiro } from "@shared/
  * antes (50%: qualquer diferença conta). O limiar tem testes próprios em
  * `server/regrasV168.test.ts`, com o motor tal como vem.
  */
-const SEM_LIMIAR = { counterMinimo: 0.5 };
+// Estes testes isolam a leitura dos confrontos; a escada de multiplicadores tem suite própria.
+const SEM_LIMIAR = { counterMinimo: 0.5, counterPickMultiplier: 1, enemyCounterPenalty: 0 };
 type ContextoDoSinal = NonNullable<Parameters<typeof calculateDraftSignalDoMotor>[1]>;
 const calculateDraftSignal: typeof calculateDraftSignalDoMotor = (row, context = {} as ContextoDoSinal, ...resto) =>
   calculateDraftSignalDoMotor(row, { ...context, ruleSettings: { ...SEM_LIMIAR, ...context.ruleSettings } }, ...resto);
@@ -111,7 +112,7 @@ describe("draft engine", () => {
     expect(experimental.scoreBreakdown.hybridScore).toBeCloseTo(69, 6);
     // A taxa configurada continua a ser reportada, mas os pontos vêm do delta
     // publicado para o par — por isso a asserção usa a fórmula, não a taxa.
-    expect(experimental.scoreBreakdown.counterBonusRate).toBe(0.06);
+    expect(experimental.scoreBreakdown.counterBonusRate).toBe(0.08);
     expect(experimental.scoreBreakdown.counterPoints)
       .toBeCloseTo(expectedCounterPoints(experimental.scoreBreakdown.hybridPoints, "Brock", [counterTarget]), 6);
     expect(getMatchupValue("Brock", counterTarget).total).toBeGreaterThan(0);
@@ -172,7 +173,7 @@ describe("draft engine", () => {
       counterPick2: 0.235,
       enemyCounterPenalty: 0,
       sameClassPenalty: 1,
-      synergyPick3: 0.04,
+      synergyPick3: 0.07,
     });
   });
 
@@ -204,12 +205,11 @@ describe("draft engine", () => {
     expect(counterSignal.scoreBreakdown.counterBonusRate).toBe(0.23);
     expect(counterSignal.scoreBreakdown.counterPoints)
       .toBeCloseTo(expectedCounterPoints(counterSignal.scoreBreakdown.hybridPoints, "Brock", [counterTarget], 2), 6);
-    // O desbónus separado de Enemy Counter foi desligado de propósito: o delta
-    // negativo do mesmo confronto já desconta pontos pela via do Counter, e somar
-    // os dois contaria o mesmo matchup duas vezes.
+    // O piso só completa a parte de risco que o delta negativo ainda não pagou.
     expect(getMatchupValue("Brock", enemyCounter).total).toBeLessThan(0);
-    expect(pressureSignal.scoreBreakdown.enemyCounterPenaltyPercent).toBe(0);
-    expect(pressureSignal.scoreBreakdown.enemyCounterPenaltyPoints).toBe(0);
+    const complemento = Math.max(0, rules.enemyCounterPenalty - Math.abs(getMatchupValue("Brock", enemyCounter).total) / 100 * 2);
+    expect(pressureSignal.scoreBreakdown.enemyCounterPenaltyPercent).toBeCloseTo(complemento * 100);
+    expect(pressureSignal.scoreBreakdown.enemyCounterPenaltyPoints).toBeCloseTo(pressureSignal.scoreBreakdown.hybridPoints * complemento);
     expect(pressureSignal.scoreBreakdown.counterPoints)
       .toBeCloseTo(expectedCounterPoints(pressureSignal.scoreBreakdown.hybridPoints, "Brock", [enemyCounter], 2), 6);
     expect(pressureSignal.scoreBreakdown.counterPoints).toBeLessThan(0);
@@ -362,8 +362,8 @@ describe("draft engine", () => {
     expect(redStart[blueSecondIndex]).toMatchObject({ team: "blue", kind: "pick" });
     expect(redStart[blueThirdIndex]).toMatchObject({ team: "blue", kind: "pick" });
     expect([redOpeningIndex, blueSecondIndex, blueThirdIndex].map((index) => getGlobalPickNumber(redStart, index))).toEqual([1, 2, 3]);
-    expect(calculateDraftSignal(row, { enemyRows, pickNumber: getGlobalPickNumber(redStart, blueSecondIndex) }).scoreBreakdown.counterBonusRate).toBe(0.06);
-    expect(calculateDraftSignal(row, { enemyRows, pickNumber: getGlobalPickNumber(redStart, blueThirdIndex) }).scoreBreakdown.counterBonusRate).toBe(0.05);
+    expect(calculateDraftSignal(row, { enemyRows, pickNumber: getGlobalPickNumber(redStart, blueSecondIndex) }).scoreBreakdown.counterBonusRate).toBe(0.08);
+    expect(calculateDraftSignal(row, { enemyRows, pickNumber: getGlobalPickNumber(redStart, blueThirdIndex) }).scoreBreakdown.counterBonusRate).toBe(0.10);
   });
 
   it("uses one contextual Score entry for the rank number, ordering and displayed points", () => {
@@ -648,7 +648,7 @@ describe("draft engine", () => {
     const choices = ["Belle", null];
     // In competitive ranked (Power League / Ranked), a banned brawler is excluded from the pick pool.
     expect(getDraftLockedNames([...steps], choices, 1).has("Belle")).toBe(true);
-    expect(draftSignalBonuses).toMatchObject({ counter: 0.05, missingMid: 0.04, bannedCounter: 0.03, openingLongRange: 0.03, synergy: 0.03 });
+    expect(draftSignalBonuses).toMatchObject({ counter: 0, missingMid: 0.12, bannedCounter: 0.04, openingLongRange: 0.05, synergy: 0 });
   });
 
   it("uses the corrected competitive roles for Surge, Griff, Gale and Gigi", () => {
@@ -763,7 +763,7 @@ describe("draft engine", () => {
       { allyRows: [{ brawler: "8-Bit", score: 70, tier: "A" as const, brawlPlanetWinRate: 55 }], enemyRows: [] },
     );
 
-    expect(coltWith8Bit.scoreBreakdown.sameClassPenaltyPoints).toBeCloseTo(2.25, 6);
+    expect(coltWith8Bit.scoreBreakdown.sameClassPenaltyPoints).toBeCloseTo(7.5, 6);
     expect(coltWith8Bit.bonusSources.sameClassClass).toBe("Destruidor");
     expect(coltWith8Bit.bonusSources.sameClassPenalties).toEqual(["8-Bit"]);
   });
@@ -1162,9 +1162,8 @@ describe("draft engine", () => {
     expect(activeTopSixteen).not.toContain("Glowy");
     expect(glowyEntry).toBeDefined();
     expect(glowyEntry!.rank).toBeGreaterThan(17);
-    // O risco continua auditável em bonusSources, mas o desbónus separado de Enemy
-    // Counter está desligado: quem desconta agora é o delta negativo do Counter.
-    expect(glowyEntry!.signal.scoreBreakdown.enemyCounterPenaltyPoints).toBe(0);
+    // Dois confrontos desfavoráveis acrescentam a pressão configurada.
+    expect(glowyEntry!.signal.scoreBreakdown.enemyCounterPenaltyPoints).toBeCloseTo(glowyEntry!.signal.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.repeatedEnemyCounterPressure);
     expect(glowyEntry!.signal.scoreBreakdown.counterPoints).toBeCloseTo(
       expectedCounterPoints(glowyEntry!.signal.scoreBreakdown.hybridPoints, "Glowy", [neutralName, enemyCounterName]),
       6,
@@ -1873,7 +1872,7 @@ describe("draft engine", () => {
 
     expect(withOneSide.scoreBreakdown.missingSidePoints).toBeCloseTo(withOneSide.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.missingSide, 6);
     expect(withBothSides.scoreBreakdown.missingSidePoints).toBe(0);
-    expect(withBothSides.scoreBreakdown.sameClassPenaltyPoints).toBeCloseTo(withBothSides.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.sameClassPenalty * 2, 6);
+    expect(withBothSides.scoreBreakdown.sameClassPenaltyPoints).toBeCloseTo(withBothSides.scoreBreakdown.hybridPoints * defaultDraftRuleSettings.sameClassPenalty * 3.5, 6);
     /**
      * Dois Tanks aliados são −3% cada: −6% no total, que cabia no antigo tecto de
      * desbónus deste estado (−8%) e não era cortado. O que este teste guarda,

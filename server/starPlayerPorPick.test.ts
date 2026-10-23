@@ -29,7 +29,7 @@ import { calculateHybridScoreForWinRateWeight, calculateHybridScoresByMap } from
 
 describe("a escada do Star Player por pick", () => {
   it("entra plana, com a mesma fatia que o painel do Score oferece", () => {
-    expect(starPlayerPickKeys.map((key) => defaultDraftRuleSettings[key])).toEqual([0.3, 0.3, 0.3, 0.3, 0.3, 0.3]);
+    expect(starPlayerPickKeys.map((key) => defaultDraftRuleSettings[key])).toEqual([0.12, 0.12, 0.12, 0.12, 0.12, 0.12]);
     // Plana de propósito: inclinar o Star Player ao longo do draft é uma
     // opinião que ninguém mediu, e não é para vir de fábrica.
     expect(new Set(starPlayerPickKeys.map((key) => defaultDraftRuleSettings[key])).size).toBe(1);
@@ -130,7 +130,7 @@ describe("a escada do Star Player por pick", () => {
     // caísse em zero, quem já tinha regras personalizadas ficava com o Star
     // Player fora do Draft sem ter pedido nada.
     const antiga = normalizeDraftRuleSettings({ winRatePick1: 0.8, counterPick1: 0.07 });
-    expect(starPlayerPickKeys.map((key) => antiga[key])).toEqual([0.3, 0.3, 0.3, 0.3, 0.3, 0.3]);
+    expect(starPlayerPickKeys.map((key) => antiga[key])).toEqual([0.12, 0.12, 0.12, 0.12, 0.12, 0.12]);
     expect(antiga.winRatePick1).toBe(0.8);
   });
 
@@ -141,8 +141,8 @@ describe("a escada do Star Player por pick", () => {
     expect(limpo.starPlayerPick1).toBe(1);
     expect(limpo.starPlayerPick2).toBe(0);
     // Não-números caem no valor de fábrica, como todas as outras regras.
-    expect(limpo.starPlayerPick3).toBe(0.3);
-    expect(limpo.starPlayerPick4).toBe(0.3);
+    expect(limpo.starPlayerPick3).toBe(0.12);
+    expect(limpo.starPlayerPick4).toBe(0.12);
   });
 
   it("as duas escadas têm seis degraus e não se sobrepõem", () => {

@@ -49,6 +49,18 @@ describe("histórico completo sem corte aos 60 mil", () => {
   });
 });
 
+it("enriquece poder 11 de uma partida existente sem duplicar a partida ou os counters", async () => {
+  client.query.mockResolvedValueOnce([[["fp"]], []]).mockResolvedValueOnce([{ affectedRows: 1 }, []]);
+  const { recordObservedBattlesBatch } = await import("./db");
+  const r = await recordObservedBattlesBatch([{ battle: { fingerprint: "fp", battleTime: desde, mapId: "m", mode: "heist", eventType: "soloRanked", winningTeam: '["A"]', losingTeam: '["B"]', sourcePlayerTag: "#P" }, deltas: [], todosNivel11: true }]);
+  expect(r).toEqual({ battlesInserted: 0, pairObservations: 0 });
+  const sqls = client.query.mock.calls.map((_, i) => consulta(i));
+  expect(sqls).toHaveLength(2);
+  expect(sqls[1].sql).toContain("insert into `observed_battle_quality`");
+  expect(sqls[1].sql).toContain("on duplicate key update");
+  expect(sqls[1].params).toEqual(["fp", 1]);
+});
+
 describe("retenção de 30 dias", () => {
   const agora = new Date("2026-10-22T21:00:00Z");
   const antiga = [7, "fp", new Date("2026-09-01Z"), "m", "knockout", "soloRanked", '["A"]', '["B"]', "#P", new Date("2026-09-01Z")];
@@ -71,7 +83,7 @@ describe("retenção de 30 dias", () => {
     expect((await expirarPartidasAntigas(agora)).removidas).toBe(1);
     const sqls = client.query.mock.calls.map((_, i) => consulta(i).sql);
     expect(sqls.findIndex(s => s.startsWith("update"))).toBeLessThan(sqls.findIndex(s => s.startsWith("delete")));
-    expect(sqls.filter(s => s.startsWith("delete"))).toHaveLength(2);
+    expect(sqls.filter(s => s.startsWith("delete"))).toHaveLength(3);
     expect(sqls[sqls.length - 1]).toBe("commit");
     expect(consulta(2).params).toEqual(expect.arrayContaining(["A", "B", "m", "knockout"]));
   });

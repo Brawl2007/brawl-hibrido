@@ -24,11 +24,13 @@ async function calcular(filtro: FiltroDasPartidas) {
   const desde = new Date(Date.now() - dias * 86_400_000);
   const rank = intervaloDoRank(filtro.rank);
   const intervalo = rank ? { min: rank.min, max: rank.max } : undefined;
-  const acumulador = criarResumoDasPartidas();
+  const acumulador = criarResumoDasPartidas({ ponderar: true });
   const [_, porMapa, nomesGuardados] = await Promise.all([
     percorrerPartidasParaResumo({ desde, mode: filtro.mode, mapId: filtro.mapId, rank: intervalo }, (linhas) => {
       acumulador.acrescentar(linhas.map(linha => ({ mapId: linha.mapId, mode: linha.mode,
-        vencedores: lerEquipa(linha.winningTeam), derrotados: lerEquipa(linha.losingTeam) })));
+        vencedores: lerEquipa(linha.winningTeam), derrotados: lerEquipa(linha.losingTeam),
+        battleTimeIso: linha.battleTime?.toISOString(), todosNivel11: linha.todosNivel11 === 1,
+        eloMedioRank: linha.rankMedio == null ? "abaixo" : linha.rankMedio >= 19 ? "mestre" : linha.rankMedio >= 16 ? "lendario" : linha.rankMedio >= 13 ? "mitico" : "abaixo" })));
     }),
     listObservedMapsParaResumo(desde, intervalo),
     lerNomesDosMapas(),
@@ -87,6 +89,8 @@ export async function fichaDaMatriz(filtro: FiltroDasPartidas & { brawler: strin
     resumoDasPartidas(filtro),
     resumoDasPartidas({ dias: filtro.dias, rank: filtro.rank }),
   ]);
+  const modo = filtro.mode ?? geral.mapas.find((m) => m.mapId === filtro.mapId)?.mode;
+  const priorModo = modo ? { brawlers: geral.brawlersPorModo[modo] ?? [], confrontos: geral.confrontosPorModo?.[modo] ?? [], sinergias: geral.sinergiasPorModo?.[modo] ?? [], equipas: geral.equipasPorModo?.[modo] ?? [] } : undefined;
   return {
     geradoEm: resumo.geradoEm,
     dias: resumo.dias,
@@ -95,7 +99,7 @@ export async function fichaDaMatriz(filtro: FiltroDasPartidas & { brawler: strin
     modos: geral.modos,
     mapas: geral.mapas,
     brawlers: resumo.brawlers.map((linha) => ({ brawler: linha.brawler, jogos: linha.jogos })),
-    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo),
+    ficha: fichaDoBrawler(resumo, filtro.brawler, geral.brawlersPorModo, priorModo),
   };
 }
 

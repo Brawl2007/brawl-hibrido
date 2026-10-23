@@ -138,7 +138,7 @@ describe("todos os bónus chegam ao Score quando a condição acontece", () => {
     expect(calculateDraftSignal(row("8-Bit"), { allyRows: [row(pior!)], enemyRows: [] }).scoreBreakdown.worstTeammatePenaltyPoints).toBeGreaterThan(0);
   });
 
-  it("os dois desbónus desligados continuam a zero, de propósito", () => {
+  it("Counter Top continua desligado e o piso de risco revelado é auditável", () => {
     /**
      * Não são avarias: o confronto desfavorável já desconta pelo delta com sinal,
      * e Counter no Top é risco possível e não confronto real. Estão assinalados
@@ -152,7 +152,8 @@ describe("todos os bónus chegam ao Score quando a condição acontece", () => {
       topRecommendationNames: ["Brock", counterDoBrock],
     });
 
-    expect(signal.scoreBreakdown.enemyCounterPenaltyPoints).toBe(0);
+    const pisoRestante = Math.max(0, .12 - Math.abs(getMatchupValue("Brock", counterDoBrock).total) / 100 * signal.scoreBreakdown.counterPickMultiplier);
+    expect(signal.scoreBreakdown.enemyCounterPenaltyPoints).toBeCloseTo(signal.scoreBreakdown.hybridPoints * pisoRestante);
     expect(signal.scoreBreakdown.topTwentyCounterPenaltyPoints).toBe(0);
   });
 });

@@ -22,5 +22,5 @@
  *
  * Se o que mudou chega para publicar, chega para subir o número.
  */
-export const VERSAO_DO_SITE = "v175";
+export const VERSAO_DO_SITE = "v176";
 

@@ -91,3 +91,28 @@ export function descreverFrescura(fontes: LeituraPorFonte | null | undefined, ag
     rotulo: idade ? `Dados lidos ${idade}` : "Idade dos dados desconhecida",
   };
 }
+
+/** Qualidade e meia-vida das partidas oficiais; datas inválidas não ganham peso. */
+export function calcularPesoPartidaObservada(
+  partida: { battleTimeIso: string; eloMedioRank: "mitico" | "lendario" | "mestre" | "abaixo"; todosNivel11: boolean },
+  agoraMs: number = Date.now()
+): number {
+  const pesoElo =
+    partida.eloMedioRank === "mestre"
+      ? 3.0
+      : partida.eloMedioRank === "lendario"
+      ? 1.8
+      : partida.eloMedioRank === "mitico"
+      ? 1.0
+      : 0.35;
+
+  const pesoNivel = partida.todosNivel11 ? 1.0 : 0.15;
+
+  const dataMs = Date.parse(partida.battleTimeIso);
+  const diasDecorridos = Number.isFinite(dataMs)
+    ? Math.max(0, (agoraMs - dataMs) / (1000 * 60 * 60 * 24))
+    : Infinity;
+  const decaimentoTemporal = Math.pow(0.5, diasDecorridos / 14);
+
+  return pesoElo * pesoNivel * decaimentoTemporal;
+}

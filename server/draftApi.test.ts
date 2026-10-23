@@ -141,7 +141,7 @@ describe("v170 · counter e counterado com a API", () => {
     const normal = contra(["Bull"]).scoreBreakdown.counterPoints;
     expect(contra(["Bull"], { apiRuleSettings: { apiPesoCounter: 2 } }).scoreBreakdown.counterPoints).toBeCloseTo(normal * 2, 6);
     expect(contra(["Bull"], { apiRuleSettings: { apiPesoCounter: 0.5 } }).scoreBreakdown.counterPoints).toBeCloseTo(normal / 2, 6);
-    expect(contra(["Bull"], { ruleSettings: { counterPickMultiplier2: multiplicadorDoPick2 * 3 } }).scoreBreakdown.counterPoints).toBeCloseTo(normal * 3, 6);
+    expect(contra(["Bull"], { ruleSettings: { counterPickMultiplier2: multiplicadorDoPick2 * 2 } }).scoreBreakdown.counterPoints).toBeCloseTo(normal * 2, 6);
   });
 
   it("o mínimo e os jogos mudam-se nas regras", () => {

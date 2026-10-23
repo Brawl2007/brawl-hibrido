@@ -40,10 +40,10 @@ describe("os campos das regras mostram números limpos", () => {
     }
   });
 
-  it("o Enemy Counter é 3,5 e não 3,5000000000000004", () => {
-    expect(defaultDraftRulePreference.enemyCounterPenalty).toBe(3.5);
+  it("o Enemy Counter recalibrado mostra 12%", () => {
+    expect(defaultDraftRulePreference.enemyCounterPenalty).toBe(12);
     // A ida e volta para o motor tem de continuar a dar a taxa original.
-    expect(defaultDraftRulePreference.enemyCounterPenalty / 100).toBeCloseTo(0.035, 10);
+    expect(defaultDraftRulePreference.enemyCounterPenalty / 100).toBeCloseTo(0.12, 10);
   });
 
   it("uma preferência já gravada COM lixo não passa a contar como personalizada", () => {
@@ -57,8 +57,8 @@ describe("os campos das regras mostram números limpos", () => {
     comArmazenamentoLocal((dados) => {
       dados.set(DRAFT_RULES_STORAGE_KEY, JSON.stringify({
         ...defaultDraftRulePreference,
-        enemyCounterPenalty: 3.5000000000000004,
-        sameClassPenalty: 2.9999999999999996,
+        enemyCounterPenalty: 12.000000000000002,
+        sameClassPenalty: 9.999999999999998,
       }));
       const lido = readDraftRulePreference();
       const personalizadas = draftRuleSettingKeys.filter((key) => lido[key] !== defaultDraftRulePreference[key]);

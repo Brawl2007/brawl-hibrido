@@ -94,3 +94,65 @@ export function listObservedMaps(rows: readonly ObservedMatchupRow[]) {
 export function listObservedModes(rows: readonly ObservedMatchupRow[]) {
   return Array.from(new Set(rows.map((row) => row.mode))).sort((a, b) => a.localeCompare(b, "pt-PT"));
 }
+
+/** Entrada única do Draft, fichas e mapas: contagens brutas ficam disponíveis para auditoria. */
+export type DadosApiParaMotor = {
+  partidas: number;
+  partidasPonderadas?: number;
+  brawlers: readonly import("./partidasObservadas").ContagemDeBrawler[];
+  confrontos: readonly import("./partidasObservadas").ContagemDeConfronto[];
+  sinergias: readonly import("./partidasObservadas").ContagemDeSinergia[];
+  equipas?: readonly import("./partidasObservadas").ContagemDeEquipa[];
+  priorModo?: {
+    brawlers: readonly import("./partidasObservadas").ContagemDeBrawler[];
+    confrontos: readonly import("./partidasObservadas").ContagemDeConfronto[];
+    sinergias: readonly import("./partidasObservadas").ContagemDeSinergia[];
+    equipas?: readonly import("./partidasObservadas").ContagemDeEquipa[];
+  };
+};
+
+const chaveApi = (nome: string) => nome.toLowerCase().replace(/[^a-z0-9]/g, "");
+export const jogosPonderados = (linha?: { jogos: number; jogosPonderados?: number }) => linha?.jogosPonderados ?? linha?.jogos ?? 0;
+export const vitoriasPonderadas = (linha?: { vitorias: number; vitoriasPonderadas?: number }) => linha?.vitoriasPonderadas ?? linha?.vitorias ?? 0;
+
+/** Índices O(1), para não procurar milhares de pares a cada simulação do draft. */
+export function montarDadosDoMotorApi(nomes: readonly string[], dados: DadosApiParaMotor) {
+  const brawlers = new Map(dados.brawlers.map((linha) => [chaveApi(linha.brawler), linha]));
+  const modo = new Map((dados.priorModo?.brawlers ?? []).map((linha) => [chaveApi(linha.brawler), linha]));
+  const estatisticasMapa: Record<string, import("./motorApiPerfeito").EstatisticasApiMapa> = {};
+  for (const nome of nomes) {
+    const mapa = brawlers.get(chaveApi(nome));
+    const doModo = modo.get(chaveApi(nome));
+    estatisticasMapa[nome] = {
+      brawlerId: nome, jogosMapa: jogosPonderados(mapa), vitoriasMapa: vitoriasPonderadas(mapa),
+      jogosModo: jogosPonderados(doModo), vitoriasModo: vitoriasPonderadas(doModo),
+      taxaUsoMapa: (dados.partidasPonderadas ?? dados.partidas) > 0
+        ? Math.min(1, jogosPonderados(mapa) / (dados.partidasPonderadas ?? dados.partidas)) : 0,
+    };
+  }
+  const indexar = (lista: readonly { a: string; b: string; jogos: number; vitorias: number; jogosPonderados?: number; vitoriasPonderadas?: number }[], simetrico: boolean) => {
+    const mapa = new Map<string, (typeof lista)[number]>();
+    for (const linha of lista) {
+      mapa.set(`${chaveApi(linha.a)}:${chaveApi(linha.b)}`, linha);
+      if (simetrico) mapa.set(`${chaveApi(linha.b)}:${chaveApi(linha.a)}`, linha);
+    }
+    return mapa;
+  };
+  const pares = (mapa: ReturnType<typeof indexar>, modo: ReturnType<typeof indexar>) => (a: string, b: string): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
+    const chave = `${chaveApi(a)}:${chaveApi(b)}`;
+    const m = mapa.get(chave), g = modo.get(chave);
+    return m || g ? { vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;
+  };
+  const indexarTrios = (lista: NonNullable<DadosApiParaMotor["equipas"]>) => new Map(lista.map((l) => [l.membros.map(chaveApi).sort().join(":"), l]));
+  const trios = indexarTrios(dados.equipas ?? []), triosModo = indexarTrios(dados.priorModo?.equipas ?? []);
+  return {
+    estatisticasMapa,
+    obterConfronto: pares(indexar(dados.confrontos, false), indexar(dados.priorModo?.confrontos ?? [], false)),
+    obterSinergia: pares(indexar(dados.sinergias, true), indexar(dados.priorModo?.sinergias ?? [], true)),
+    obterTrio: (ids: string[]): import("./motorApiPerfeito").ConfrontoObservado | undefined => {
+      const chave = ids.map(chaveApi).sort().join(":"), m = trios.get(chave), g = triosModo.get(chave);
+      return m || g ? { vitoriasA: vitoriasPonderadas(m), jogosMapa: jogosPonderados(m), vitoriasAModo: vitoriasPonderadas(g), jogosModo: jogosPonderados(g) } : undefined;
+    },
+  };
+}
+export type DadosDoMotorApi = ReturnType<typeof montarDadosDoMotorApi>;

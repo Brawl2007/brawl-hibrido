@@ -42,6 +42,7 @@ const TABELAS_ESPERADAS = [
   "counter_sync_snapshots",
   "counter_sync_relation_evidence",
   "observed_battles",
+  "observed_battle_quality",
   "observed_match_collection_config",
   "observed_match_collection_runs",
   "observed_matchup_aggregates",

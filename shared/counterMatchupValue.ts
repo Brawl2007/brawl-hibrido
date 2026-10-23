@@ -1,3 +1,6 @@
+import { montarDadosDoMotorApi, type DadosApiParaMotor, type DadosDoMotorApi } from "./observedMatchupMatrix";
+import { calcularDeltaCounterPuro, calcularDeltaSinergiaPura, calcularProbabilidadeParBayesiana, logit, sigmoid } from "./motorApiPerfeito";
+import { calcularWinRateBayesiano } from "./amostraPequena";
 import { avancarVersaoDoMotor } from "./versaoDoMotor";
 import { brawlScopeMatchupDeltas } from './brawlScopeMatchupDeltas.generated';
 import { brawlScopeMatchupsByMode } from './brawlScopeMatchupsByMode.generated';
@@ -179,6 +182,7 @@ export const JOGOS_DE_PRIOR = 10;
 
 type ContagemObservada = { jogos: number; vitorias: number };
 export type FonteObservada = {
+  modelo?: DadosDoMotorApi;
   /** Taxa de vitória de cada brawler no mapa, de 0 a 1. */
   vitoriaNoMapa: ReadonlyMap<string, number>;
   /** `a␀b` → a contra b. */
@@ -199,19 +203,30 @@ export function fonteObservadaAtiva() {
 }
 
 /** Monta a fonte a partir das contagens da página «Partidas» de um mapa. */
-export function montarFonteObservada(dados: {
-  brawlers: ReadonlyArray<{ brawler: string; jogos: number; vitorias: number }>;
-  confrontos: ReadonlyArray<{ a: string; b: string; jogos: number; vitorias: number }>;
-  sinergias: ReadonlyArray<{ a: string; b: string; jogos: number; vitorias: number }>;
-}): FonteObservada {
+export function montarFonteObservada(dados: Omit<DadosApiParaMotor, "partidas"> & { partidas?: number }): FonteObservada {
+  const nomes = [...new Set(dados.brawlers.map((r) => key(r.brawler)))];
+  const modelo = dados.partidasPonderadas !== undefined ? montarDadosDoMotorApi(nomes, { ...dados, partidas: dados.partidas ?? 0 }) : undefined;
   return {
-    vitoriaNoMapa: new Map(dados.brawlers.map((linha) => [key(linha.brawler), linha.jogos ? linha.vitorias / linha.jogos : 0.5])),
+    modelo,
+    vitoriaNoMapa: new Map(dados.brawlers.map((linha) => [key(linha.brawler), modelo ? calcularWinRateBayesiano(modelo.estatisticasMapa[key(linha.brawler)]) : linha.jogos ? linha.vitorias / linha.jogos : 0.5])),
     confrontos: new Map(dados.confrontos.map((linha) => [`${key(linha.a)}\u0000${key(linha.b)}`, { jogos: linha.jogos, vitorias: linha.vitorias }])),
     sinergias: new Map(dados.sinergias.map((linha) => {
       const [a, b] = [key(linha.a), key(linha.b)].sort();
       return [`${a}\u0000${b}`, { jogos: linha.jogos, vitorias: linha.vitorias }];
     })),
   };
+}
+
+function parDoModelo(a: string, b: string, sinergia: boolean): ParObservado | null {
+  const modelo = fonteObservada?.modelo;
+  if (!modelo) return null;
+  const beta = (nome: string) => logit(fonteObservada?.vitoriaNoMapa.get(key(nome)) ?? .5);
+  const ba = beta(a), bb = beta(b);
+  const par = sinergia ? modelo.obterSinergia(a, b) : modelo.obterConfronto(a, b);
+  if (!par) return null;
+  const delta = sinergia ? calcularDeltaSinergiaPura(ba, bb, par) : calcularDeltaCounterPuro(ba, bb, par);
+  const { pSuavizado, amostraEfetiva } = calcularProbabilidadeParBayesiana(par, sigmoid(sinergia ? ba + bb : ba - bb));
+  return { delta: (sigmoid(delta) - .5) * 100, jogos: amostraEfetiva, vitoria: pSuavizado * 100 };
 }
 
 function diferencaEncolhida(contagem: ContagemObservada | undefined, habitual: number) {
@@ -229,6 +244,7 @@ export function vitoriaObservadaNoMapa(brawler: string) {
 
 /** Pontos percentuais que `owner` ganha a mais contra `foe` neste mapa; null sem jogos. */
 export function confrontoObservado(owner: string, foe: string) {
+  if (fonteObservada?.modelo) return parDoModelo(owner, foe, false)?.delta ?? null;
   if (!fonteObservada) return null;
   const habitual = fonteObservada.vitoriaNoMapa.get(key(owner)) ?? 0.5;
   return diferencaEncolhida(fonteObservada.confrontos.get(`${key(owner)}\u0000${key(foe)}`), habitual);
@@ -236,6 +252,7 @@ export function confrontoObservado(owner: string, foe: string) {
 
 /** Pontos percentuais que `candidato` ganha a mais ao lado de `aliado`; negativo é anti-sinergia. */
 export function sinergiaObservada(candidato: string, aliado: string) {
+  if (fonteObservada?.modelo) return parDoModelo(candidato, aliado, true)?.delta ?? null;
   if (!fonteObservada) return null;
   const habitual = fonteObservada.vitoriaNoMapa.get(key(candidato)) ?? 0.5;
   const [a, b] = [key(candidato), key(aliado)].sort();
@@ -263,6 +280,7 @@ function parEncolhido(contagem: ContagemObservada | undefined, habitual: number)
 
 /** O confronto de `owner` contra `foe` neste mapa, com os jogos; null sem API ligada ou sem jogos. */
 export function confrontoObservadoComJogos(owner: string, foe: string): ParObservado | null {
+  if (fonteObservada?.modelo) return parDoModelo(owner, foe, false);
   if (!fonteObservada) return null;
   const habitual = fonteObservada.vitoriaNoMapa.get(key(owner)) ?? 0.5;
   return parEncolhido(fonteObservada.confrontos.get(`${key(owner)}\u0000${key(foe)}`), habitual);
@@ -270,6 +288,7 @@ export function confrontoObservadoComJogos(owner: string, foe: string): ParObser
 
 /** A dupla `candidato` + `aliado` neste mapa, com os jogos, na perspetiva do candidato. */
 export function sinergiaObservadaComJogos(candidato: string, aliado: string): ParObservado | null {
+  if (fonteObservada?.modelo) return parDoModelo(candidato, aliado, true);
   if (!fonteObservada) return null;
   const habitual = fonteObservada.vitoriaNoMapa.get(key(candidato)) ?? 0.5;
   const [a, b] = [key(candidato), key(aliado)].sort();

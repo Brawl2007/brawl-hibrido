@@ -55,7 +55,8 @@ describe("chips de pontuação do Draft", () => {
         source: expect.stringContaining(enemyCounter),
       }),
     ]));
-    expect(chips.some((chip) => chip.label.startsWith("Desbônus Enemy Counter"))).toBe(false);
+    const piso = chips.find((chip) => chip.label.startsWith("Desbônus Enemy Counter"));
+    expect(piso?.points).toBeCloseTo(-signal.scoreBreakdown.enemyCounterPenaltyPoints);
   });
 
   it("mostra nos chips o ajuste configurado que multiplica o delta de Counter", () => {
@@ -253,8 +254,8 @@ describe("chips de pontuação do Draft", () => {
     expect(getActiveDraftBonuses(counterSignal, inferDraftRole("Brock"))).toEqual(expect.arrayContaining([
       expect.objectContaining({
         label: "Counter",
-        rate: expect.closeTo(counterDelta, 6),
-        points: expect.closeTo(69 * (counterDelta / 100), 6),
+        rate: expect.closeTo(counterDelta * counterSignal.scoreBreakdown.counterPickMultiplier, 6),
+        points: expect.closeTo(69 * (counterDelta / 100) * counterSignal.scoreBreakdown.counterPickMultiplier, 6),
         source: expect.stringContaining(counterTarget),
       }),
     ]));

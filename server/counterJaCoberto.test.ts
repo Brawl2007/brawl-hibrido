@@ -166,9 +166,9 @@ describe("resposta já coberta", () => {
     // Só a Pearl é respondida, por isso a excepção da resposta dupla não se aplica.
     expect(ligada.bonusSources.suppressedCounterTargets).toEqual(["Pearl"]);
     // +6 −5 = +1 sem a regra; −5 com a regra. O desbónus sobrevive inteiro.
-    expect(desligada.scoreBreakdown.counterPoints).toBeCloseTo(base * 0.01, 6);
-    expect(ligada.scoreBreakdown.counterPoints).toBeCloseTo(base * -0.05, 6);
-    expect(ligada.scoreBreakdown.rawContextualPenaltyPoints).toBeCloseTo(base * 0.05, 6);
+    expect(desligada.scoreBreakdown.counterPoints).toBeCloseTo(base * 0.01 * ligada.scoreBreakdown.counterPickMultiplier, 6);
+    expect(ligada.scoreBreakdown.counterPoints).toBeCloseTo(base * -0.05 * ligada.scoreBreakdown.counterPickMultiplier, 6);
+    expect(ligada.scoreBreakdown.rawContextualPenaltyPoints).toBeCloseTo(base * 0.05 * ligada.scoreBreakdown.counterPickMultiplier + ligada.scoreBreakdown.enemyCounterPenaltyPoints, 6);
   });
 
   it("sem aliado nenhum a cobrir, a regra ligada não muda nada", () => {

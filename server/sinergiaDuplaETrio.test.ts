@@ -39,7 +39,7 @@ describe("dupla e trio são coisas diferentes", () => {
    */
   it("a dupla conta uma vez, pela fonte prioritária", () => {
     setCounterSyncSnapshot(snapshotMesmaDupla());
-    const sinal = calculateDraftSignal(nori, { mapModeId: "knockout", allyRows: [gus] });
+    const sinal = calculateDraftSignal(nori, { mapModeId: "knockout", pickNumber: 2, allyRows: [gus] });
 
     expect(sinal.bonusSources.synergySource).toBe("BrawlScope");
     // Os 10% do BrawlScope, e não 10% + 6%.
@@ -55,7 +55,7 @@ describe("dupla e trio são coisas diferentes", () => {
     setCounterSyncSnapshot(snapshotMesmaDupla());
     const composicao = [{ map: "Flaring Phoenix", brawlers: ["Nori", "Gus", "Pearl"], winRate: 58, sourceUrl: "https://planet.test/mapa" }];
     const sinal = calculateDraftSignal(nori, {
-      mapModeId: "knockout", mapName: "Flaring Phoenix", allyRows: [gus, pearl], mapTeams: composicao as never,
+      mapModeId: "knockout", mapName: "Flaring Phoenix", pickNumber: 2, allyRows: [gus, pearl], mapTeams: composicao as never,
       // v168: a equipa tripla vem desligada; este teste mede-a, por isso liga-a.
       ruleSettings: { sinergiaDeEquipaTripla: 1 },
     });

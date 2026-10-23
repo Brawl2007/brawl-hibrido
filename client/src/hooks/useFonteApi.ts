@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { montarDadosDoMotorApi, type DadosApiParaMotor } from "@shared/observedMatchupMatrix";
+import { calcularWinRateBayesiano } from "@shared/amostraPequena";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApiOficial } from "@/hooks/useApiOficial";
-import { definirFonteObservada, JOGOS_DE_PRIOR, montarFonteObservada } from "@shared/counterMatchupValue";
+import { definirFonteObservada, montarFonteObservada } from "@shared/counterMatchupValue";
 
 /**
  * O interruptor «Só API oficial» do Draft.
@@ -22,12 +24,7 @@ function normalizarNome(nome: string | undefined) {
   return (nome ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export type DadosDoMapaDaApi = {
-  partidas: number;
-  brawlers: ReadonlyArray<{ brawler: string; jogos: number; vitorias: number }>;
-  confrontos: ReadonlyArray<{ a: string; b: string; jogos: number; vitorias: number }>;
-  sinergias: ReadonlyArray<{ a: string; b: string; jogos: number; vitorias: number }>;
-};
+export type DadosDoMapaDaApi = DadosApiParaMotor;
 
 /** Um só objeto vazio: criado a cada desenho, o efeito abaixo correria sem parar. */
 const SEM_PARTIDAS: DadosDoMapaDaApi = { partidas: 0, brawlers: [], confrontos: [], sinergias: [] };
@@ -37,7 +34,7 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
   const { ligada, alternar, dias, setDias, rank, setRank } = useApiOficial();
   const doRank = rank || undefined;
 
-  const lista = trpc.observedMatches.partidas.useQuery({ dias, rank: doRank }, { enabled: ligada, staleTime: 120_000, placeholderData: (anterior) => anterior });
+  const lista = trpc.observedMatches.partidas.useQuery({ dias, rank: doRank }, { enabled: ligada, staleTime: 120_000 });
   const mapa = lista.data?.mapas.find((entrada) => normalizarNome(entrada.nome) === normalizarNome(nomeDoMapa));
   const doMapa = trpc.observedMatches.partidas.useQuery(
     { dias, rank: doRank, mapId: mapa?.mapId },
@@ -45,9 +42,17 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     // números da chave anterior como se pertencessem ao novo mapa.
     { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000 },
   );
-  const dados: DadosDoMapaDaApi | undefined = ligada
-    ? mapa ? doMapa.data : lista.data ? SEM_PARTIDAS : undefined
-    : undefined;
+  const dados = useMemo<DadosDoMapaDaApi | undefined>(() => {
+    if (!ligada) return undefined;
+    if (!mapa) return lista.data ? SEM_PARTIDAS : undefined;
+    if (!doMapa.data) return undefined;
+    return { ...doMapa.data, priorModo: {
+      brawlers: lista.data?.brawlersPorModo[mapa.mode] ?? [],
+      confrontos: lista.data?.confrontosPorModo?.[mapa.mode] ?? [],
+      sinergias: lista.data?.sinergiasPorModo?.[mapa.mode] ?? [],
+      equipas: lista.data?.equipasPorModo?.[mapa.mode] ?? [],
+    } };
+  }, [ligada, mapa, lista.data, doMapa.data]);
 
   const [versao, setVersao] = useState(0);
   useEffect(() => {
@@ -65,6 +70,7 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
     setDias,
     rank,
     setRank,
+    erro: ligada ? lista.error?.message ?? doMapa.error?.message ?? null : null,
     aCarregar: ligada && (lista.isLoading || (Boolean(mapa?.mapId) && doMapa.isLoading)),
     /** Muda sempre que a fonte do motor muda — entra nas dependências do ranking. */
     versao,
@@ -83,6 +89,7 @@ export function useFonteApi(nomeDoMapa: string | undefined) {
  * apareceu.
  */
 export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[], dados: DadosDoMapaDaApi = SEM_PARTIDAS): T[] {
+  const modelo = montarDadosDoMotorApi(linhas.map((l) => l.brawler), dados);
   const porNome = new Map(dados.brawlers.map((linha) => [normalizarNome(linha.brawler), linha]));
   return linhas.map((linha) => {
     const contagem = porNome.get(normalizarNome(linha.brawler));
@@ -90,10 +97,10 @@ export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[],
     const vitorias = contagem?.vitorias ?? 0;
     return {
       ...linha,
-      winRate: ((vitorias + JOGOS_DE_PRIOR * 0.5) / (jogos + JOGOS_DE_PRIOR)) * 100,
+      winRate: calcularWinRateBayesiano(modelo.estatisticasMapa[linha.brawler]) * 100,
       /** A vitória medida, sem o ajuste: é a que o ecrã mostra (a mesma da página «Partidas»). */
       vitoriaNaApi: jogos > 0 ? (vitorias / jogos) * 100 : null,
-      usage: dados.partidas > 0 ? (jogos / dados.partidas) * 100 : 0,
+      usage: modelo.estatisticasMapa[linha.brawler].taxaUsoMapa * 100,
       topBrawlWinRate: null,
       topBrawlUseRate: null,
       topBrawlScore: null,
@@ -108,7 +115,9 @@ export function linhasDaApi<T extends { brawler: string }>(linhas: readonly T[],
 
 export type PartidasDeTodosOsMapas = {
   mapas: ReadonlyArray<{ mapId: string; nome: string; partidas: number }>;
-  brawlersPorMapa: Readonly<Record<string, ReadonlyArray<{ brawler: string; jogos: number; vitorias: number }>>>;
+  brawlersPorMapa: Readonly<Record<string, ReadonlyArray<import("@shared/partidasObservadas").ContagemDeBrawler>>>;
+  brawlersPorModo?: Readonly<Record<string, ReadonlyArray<import("@shared/partidasObservadas").ContagemDeBrawler>>>;
+  partidasPonderadasPorMapa?: Record<string, number>;
 };
 
 /**
@@ -127,6 +136,6 @@ export function linhasDosMapasDaApi<T extends { brawler: string; map: string }>(
   return Array.from(porMapa, ([nome, doMapa]) => {
     const mapa = porNome.get(normalizarNome(nome));
     const brawlers = mapa ? geral.brawlersPorMapa[mapa.mapId] ?? [] : [];
-    return linhasDaApi(doMapa, { partidas: mapa?.partidas ?? 0, brawlers, confrontos: [], sinergias: [] });
+    return linhasDaApi(doMapa, { partidas: mapa?.partidas ?? 0, partidasPonderadas: mapa ? geral.partidasPonderadasPorMapa?.[mapa.mapId] : 0, brawlers, confrontos: [], sinergias: [], priorModo: { brawlers: geral.brawlersPorModo?.[((doMapa[0] as { modeId?: string }).modeId ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")] ?? [], confrontos: [], sinergias: [] } });
   }).flat();
 }

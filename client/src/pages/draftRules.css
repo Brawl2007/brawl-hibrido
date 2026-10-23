@@ -142,3 +142,17 @@
   flex-basis: 100%; margin-top: .28rem;
   color: var(--bh-text-dim); font-size: .6rem; line-height: 1.45;
 }
+
+.api-recomendacao { min-width: 0; border: 1px solid var(--bh-line); border-radius: 12px; overflow: hidden; }
+.api-recomendacao .draft-recommendation { width: 100%; }
+.api-fatores { padding: 10px 14px; font-size: 12px; }
+.api-fatores summary { cursor: pointer; }
+.api-fatores dl { display: grid; gap: 5px; margin: 10px 0; }
+.api-fatores dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.api-fatores dd { margin: 0; font-variant-numeric: tabular-nums; }
+.api-alvo { color: var(--bh-positive); }
+.api-alerta { color: var(--bh-warning); }
+.api-analise { padding: 16px; border: 1px solid var(--bh-line); border-radius: 12px; margin: 12px 0; }
+.api-analise h3 { margin: 12px 0 8px; font-weight: 700; }
+.api-analise ul, .api-analise ol { padding-left: 20px; }
+.api-analise li { margin: 6px 0; }

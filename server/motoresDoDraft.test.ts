@@ -194,8 +194,8 @@ describe("o Draft com cada motor", () => {
   it("v167 · no Draft, o PL começa só com a base e ganha partes com os picks e os bans", () => {
     const pl = { ...CONFIG_DO_MOTOR, motor: "plprodigy" as const };
     const nomesDasPartes = (ctx: Parameters<typeof rankDraftEntries>[4]) => new Set(rankDraftEntries(linhas, new Set(), "", "Todos", { ...ctx, motor: pl }).flatMap((e) => e.motor!.partes.map((p) => p.nome)));
-    expect(nomesDasPartes({ enemyRows: [], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 1, completedPickCount: 0 })).toEqual(new Set(["Uso", "Vitória"]));
-    expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 2, completedPickCount: 1 })).toEqual(new Set(["Uso", "Vitória", "Counter"]));
+    expect(nomesDasPartes({ enemyRows: [], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 1, completedPickCount: 0 })).toEqual(new Set(["Uso", "Vitória", "Exposição precoce"]));
+    expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [], mapModeId: inimigo.modeId, pickNumber: 2, completedPickCount: 1 })).toEqual(new Set(["Uso", "Vitória", "Counter", "Exposição precoce"]));
     expect(nomesDasPartes({ enemyRows: [inimigo], allyRows: [linhas[7]], mapModeId: inimigo.modeId, pickNumber: 4, completedPickCount: 3, bannedNames: new Set([linhas[9].brawler]) }))
       .toEqual(new Set(["Uso", "Vitória", "Counter", "Encaixe", "Sinergia", "Ban"]));
   });
@@ -219,7 +219,8 @@ describe("o Draft tem o seletor do motor", () => {
   it("painel, botão à vista e o motor no contexto do ranking", () => {
     expect(draft).toContain('{ id: "motor", label: "Motor do Draft (Híbrido, PL Prodigy, MetaPick)", soDono: false }');
     expect(draft).toContain("<PainelDoMotor config={motorDoDraft.config} onChange={motorDoDraft.mudar} />");
-    expect(draft).toContain("motor: motorDoDraft.config }), [motorDoDraft.config,");
-    expect(draft).toContain("Motor: <b>{NOMES_DOS_MOTORES[motorDoDraft.config.motor]}</b>");
+    expect(draft).toContain("motor: motorDoDraft.config");
+    expect(draft).toContain("dadosApi: dadosMotorApi");
+    expect(draft).toContain("Motor: <b>{fonteApi.ligada ? \"API oficial · Log-odds\" : NOMES_DOS_MOTORES[motorDoDraft.config.motor]}</b>");
   });
 });

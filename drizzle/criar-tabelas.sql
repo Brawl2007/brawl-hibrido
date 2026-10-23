@@ -252,3 +252,9 @@ CREATE TABLE IF NOT EXISTS `ranked_map_captures` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `ranked_map_captures_map_id` PRIMARY KEY(`map_id`)
 );
+
+CREATE TABLE IF NOT EXISTS `observed_battle_quality` (
+  `fingerprint` varchar(64) NOT NULL,
+  `todos_nivel_11` int NOT NULL,
+  PRIMARY KEY (`fingerprint`)
+);

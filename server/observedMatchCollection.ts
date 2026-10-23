@@ -94,6 +94,7 @@ export type NormalizedObservedBattle = {
   mode: string;
   eventType: string;
   winningTeam: string[];
+  todosNivel11: boolean;
   losingTeam: string[];
   sourcePlayerTag: string;
   deltas: ObservedMatchupDelta[];
@@ -185,6 +186,7 @@ export function normalizeObservedBattle(
     winningTeam,
     losingTeam,
     sourcePlayerTag,
+    todosNivel11: battle.teams.flat().length === 6 && battle.teams.flat().every((jogador) => jogador.brawler?.power === 11),
     deltas: createMatchupDeltas(mapId, mode, winningTeam, losingTeam),
     rank: rankDaPartida(battle.teams.flat().map((jogador) => jogador.brawler?.trophies)),
   };
@@ -304,6 +306,7 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
         },
         deltas: candidate.deltas,
         rank: candidate.rank,
+        todosNivel11: candidate.todosNivel11,
       })),
     );
     const bolaDeNeve = await atualizarBolaDeNeve(logs, startedAt).catch((erro: unknown) => {

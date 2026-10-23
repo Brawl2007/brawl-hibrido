@@ -106,3 +106,9 @@ export function explicarConfianca(confianca: ConfiancaDaLinha): string | null {
   }
   return partes.length ? partes.join(" ") : null;
 }
+
+/** Prior por modo (40 jogos) e por mapa (30 do modo + 20 neutros). */
+export function calcularWinRateBayesiano(stats: { vitoriasModo: number; jogosModo: number; vitoriasMapa: number; jogosMapa: number }): number {
+  const pModo = (stats.vitoriasModo + 20) / (stats.jogosModo + 40);
+  return Math.min(0.98, Math.max(0.02, (stats.vitoriasMapa + 30 * pModo + 10) / (stats.jogosMapa + 50)));
+}

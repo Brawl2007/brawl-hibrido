@@ -1,5 +1,8 @@
+import { ranquearCandidatosApiPerfeito, recomendarBansApi, type ResultadoRecomendacaoApi, type PerfilTaticoBrawler } from "./motorApiPerfeito";
+import type { DadosDoMotorApi } from "./observedMatchupMatrix";
+import { calcularWinRateBayesiano } from "./amostraPequena";
 import { versaoDoMotor } from "./versaoDoMotor";
-import { lerContextoDoMotor, partesAtivasDoPL, pontuarComMotor, type ComponentesDoCandidato, type ConfigDoMotor, type ContextoDoMotor, type MotorDoDraft } from "./motoresDoDraft";
+import { lerContextoDoMotor, redistribuirPesosPL, penalidadeBravosDisponiveis, partesAtivasDoPL, pontuarComMotor, type ComponentesDoCandidato, type ConfigDoMotor, type ContextoDoMotor, type MotorDoDraft } from "./motoresDoDraft";
 import { getDraftRoleOverride } from "./draftRoleOverrides";
 import { getMatchupValue, describeMatchupValue, getBrawlScopeReading, definirLeituraDasDuasFichas, fonteObservadaAtiva, sinergiaObservada, vitoriaObservadaNoMapa, confrontoObservadoComJogos, sinergiaObservadaComJogos, type ParObservado } from "./counterMatchupValue";
 import { normalizeCounterBrawlerName } from "./counterSyncSnapshot";
@@ -472,6 +475,12 @@ export type DraftRankingContext<T extends DraftRow = DraftRow> = {
    * imitam o PL Prodigy e o MetaPick. Ver `motoresDoDraft.ts`.
    */
   motor?: ConfigDoMotor;
+  dadosApi?: DadosDoMotorApi;
+  ordemTimeApi?: "first_pick" | "second_pick";
+  draftKind?: "ban" | "pick";
+  brawlerPretendido?: string;
+  modificadorRanked?: "padrao" | "timed_detonation" | "quickfire" | "big_friend" | "barbed_ammo";
+  poolNivel11Usuario?: Set<string>;
 };
 
 /** Referência de Pontos Base e resultado contextual já convertido para a escala visual do Draft. */
@@ -565,6 +574,7 @@ export type DraftSignal = {
     /** Número de recomendações contextuais que podem ativar o desbónus de counter neste pick. */
     topCounterWindowSize: number;
 	    sameClassPenaltyPoints: number;
+    earlyExposurePenaltyPoints?: number;
 	    worstTeammatePenaltyPoints: number;
 	    /** Soma dos fatores contextuais a favor e contra. O ajuste é a diferença entre as duas. */
 	    rawContextualBonusPoints: number;
@@ -1570,8 +1580,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
   const isOpeningFit = !hasAllyPick;
   /** 1 / 0,72 / 0,48 conforme a prioridade da função no modo; 1 depois do primeiro pick. */
   const openingFitWeight = isOpeningFit ? roleObjectiveFit(context.mapModeId, role) : 1;
-  const effectiveMissingMidRate = ruleSettings.missingMid * openingFitWeight;
-  const effectiveMissingSideRate = ruleSettings.missingSide * openingFitWeight;
+  const effectiveMissingMidRate = (ruleSettings.missingMid > 0 && context.pickNumber && context.pickNumber >= 5 ? Math.max(.18, ruleSettings.missingMid) : ruleSettings.missingMid) * openingFitWeight;
+  const effectiveMissingSideRate = (ruleSettings.missingSide > 0 && context.pickNumber && context.pickNumber >= 5 ? Math.max(.18, ruleSettings.missingSide) : ruleSettings.missingSide) * openingFitWeight;
   const fitRateLabel = (rate: number) => Number((rate * 100).toFixed(2));
   const isOpeningPick = (context.pickNumber ?? 0) >= 1 && (context.pickNumber ?? 0) <= 3;
   const hasOpeningLongRangeBonus = isOpeningPick && isOpeningLongRangeEligible(row.brawler);
@@ -1712,9 +1722,13 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ? pontosDeSinergiaDaApi * pontoNoScore
     : hasSynergy ? hybridPoints * effectiveSynergyRate : 0;
   const mapTeamSynergyPoints = hasMapTeamSynergy ? hybridPoints * mapTeamSynergyRate : 0;
-  const enemyCounterDeltaRate = 0;
-  const enemyCounterPenaltyPoints = 0;
-  const enemyCounterPenaltyPercent = 0;
+  // Piso de risco por confronto desfavorável: completa o delta já descontado,
+  // sem cobrar os mesmos pontos duas vezes. Dois inimigos acrescentam pressão.
+  const confrontosPerdidos = !soApi && !isAlreadyChosen ? enemyDeltaPairs.filter((par) => par.delta < 0) : [];
+  const enemyCounterDeltaRate = confrontosPerdidos.reduce((soma, par) => soma + Math.max(0, ruleSettings.enemyCounterPenalty - Math.abs(par.delta) / 100 * counterPickMultiplier), 0)
+    + Math.max(0, confrontosPerdidos.length - 1) * ruleSettings.repeatedEnemyCounterPressure;
+  const enemyCounterPenaltyPoints = hybridPoints * enemyCounterDeltaRate;
+  const enemyCounterPenaltyPercent = Number((enemyCounterDeltaRate * 100).toFixed(3));
   const pressaoLigada = regrasApi ? regrasApi.apiPressaoPorAliado >= 0.5 : ruleSettings.desbonusPressaoPorAliado >= 0.5;
   const repeatedEnemyCounterPressurePoints = repeatedEnemyCounterPressures.length && pressaoLigada
     ? hybridPoints * repeatedEnemyCounterPressures.reduce((sum, pressure) => sum + pressure.rate, 0)
@@ -1734,13 +1748,17 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     .filter((bName) => getBrawlerClass(bName) === candidateClass);
   const sameClassCount = sameClassTriggerAllies.length;
   // Os dois desbónus podem ser desligados nas regras, sem perder a percentagem guardada.
-  const sameClassPenaltyPoints = sameClassCount > 0 && ruleSettings.desbonusMesmaClasse >= 0.5 ? hybridPoints * ruleSettings.sameClassPenalty * sameClassCount : 0;
+  const sameClassPenaltyPoints = sameClassCount > 0 && ruleSettings.desbonusMesmaClasse >= 0.5 ? hybridPoints * (sameClassCount >= 2 ? ruleSettings.sameClassPenalty * 3.5 : ruleSettings.sameClassPenalty) : 0;
   const worstTeammatePenaltyPoints = activeWorstTeammates.length && ruleSettings.desbonusWorstTeammate >= 0.5
     ? hybridPoints * ruleSettings.worstTeammatePenalty * activeWorstTeammates.length
     : 0;
 
   const rawContextualBonusPoints = Math.max(0, counterPoints) + missingMidPoints + missingSidePoints + banPoints + openingLongRangePoints + Math.max(0, synergyPoints) + mapTeamSynergyPoints;
-  const rawContextualPenaltyPoints = Math.max(0, -counterPoints) + Math.max(0, -synergyPoints) + enemyCounterPenaltyPoints + repeatedEnemyCounterPressurePoints + topTwentyCounterPenaltyPoints + sameClassPenaltyPoints + worstTeammatePenaltyPoints;
+  const riscoAbertura = !soApi && ["Tank", "Lançador"].includes(candidateClass) && isOpeningPick
+    ? lerContextoDoMotor(row.brawler, { inimigos: enemyRows.map((r) => r.brawler), aliados: allyRows.map((r) => r.brawler), bans: context.bannedNames ?? [],
+      roster: (context.popularityRows ?? []).map((r) => r.brawler), bloqueados: [...allyRows, ...enemyRows].map((r) => r.brawler), modeId: context.mapModeId, incluirRiscos: true }) : null;
+  const earlyExposurePenaltyPoints = hybridPoints * penalidadeBravosDisponiveis(riscoAbertura?.riscos.map((r) => r.pp) ?? [], context.pickNumber ?? 1, true) / 100;
+  const rawContextualPenaltyPoints = Math.max(0, -counterPoints) + Math.max(0, -synergyPoints) + enemyCounterPenaltyPoints + repeatedEnemyCounterPressurePoints + topTwentyCounterPenaltyPoints + sameClassPenaltyPoints + worstTeammatePenaltyPoints + earlyExposurePenaltyPoints;
 	// Sem tecto: o ajuste é a soma dos fatores ativos, tal como o cartão os lista.
 	const contextualAdjustment = rawContextualBonusPoints - rawContextualPenaltyPoints;
 	const draftScore = hybridPoints + contextualAdjustment;
@@ -1751,8 +1769,8 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ...(suppressedCounterTargets.length
       ? [`Resposta já coberta · bónus retirado (${fullyCoveredTargets.filter((coverage) => suppressedCounterTargets.includes(coverage.enemy)).map((coverage) => `${coverage.enemy} já respondido por ${coverage.allies.join(", ")}`).join(" · ")})`]
       : coveredCounterTargets.length ? [`Resposta já coberta · bónus mantido (${coveredCounterTargets.map((coverage) => `${coverage.enemy} também counterado por ${coverage.allies.join(", ")}`).join(" · ")})`] : []),
-    ...(missingMidPoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingMid * 100}%` : `Mid em falta +${ruleSettings.missingMid * 100}%`] : []),
-    ...(missingSidePoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%` : role === "flex" ? `Fit Mid/Lane +${ruleSettings.missingSide * 100}%` : `Lane em falta +${ruleSettings.missingSide * 100}%`] : []),
+    ...(missingMidPoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%` : role === "flex" ? `Fit Mid/Lane +${fitRateLabel(effectiveMissingMidRate)}%` : `Mid em falta +${fitRateLabel(effectiveMissingMidRate)}%`] : []),
+    ...(missingSidePoints ? [isOpeningFit ? `Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%` : role === "flex" ? `Fit Mid/Lane +${fitRateLabel(effectiveMissingSideRate)}%` : `Lane em falta +${fitRateLabel(effectiveMissingSideRate)}%`] : []),
     ...(banPoints && regrasApi ? [`Counter banido +${Number((banPoints / pontoNoScore).toFixed(2))} pts (partidas da API oficial · ${countersBanidosDaApi.map((entrada) => `${entrada.brawler} ${entrada.delta}`).join(", ")})`] : []),
     ...(banPoints && !regrasApi ? [`Counter banido +${banBonusRate * 100 * bannedCounters.length}% (${bannedCounters.length} counter${bannedCounters.length === 1 ? "" : "s"} · Top 10 de counters (BrawlScope / PL Prodigy) + Top 25 do mapa · pick ${banBonusPick}: +${banBonusRate * 100}% por counter)`] : []),
     ...(nonTop30BannedCounters.length ? [`Counter banido fora do Top 30 · 0% (${row.brawler} não recebe bónus de Counter de Ban neste mapa)`] : []),
@@ -1761,10 +1779,11 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     ...(mapTeamSynergyPoints && mapTeamSynergy ? [`Composição do mapa +${mapTeamSynergyRate * 100}% (pick ${synergyBonusPick} · ${mapTeamSynergy.brawlers.join(" · ")} · ${mapTeamSynergy.winRate.toFixed(1)}% WR)`] : []),
     ...(soApi && synergyPoints ? [`${synergyPoints > 0 ? "Sinergia" : "Anti-sinergia"} ${synergyPoints > 0 ? "+" : ""}${Number((synergyPoints / pontoNoScore).toFixed(2))} pts (partidas da API oficial · ${duplasDaApi.filter((dupla) => dupla.pontos).map((dupla) => `${dupla.aliado} ${dupla.par!.vitoria}% em ${dupla.par!.jogos} jogos`).join(", ")})`] : []),
     ...(!soApi && synergyPoints ? [`${synergySource === "BrawlScope" ? "Sinergia BrawlScope" : "Best Teammate"} ${effectiveSynergyRate > 0 ? "+" : ""}${Number((effectiveSynergyRate * 100).toFixed(2))}% (${hasPublishedSynergyRate ? "percentagem publicada" : `pick ${synergyBonusPick}`} · ${aliadosDaSinergia.join(", ")})`] : []),
+    ...(earlyExposurePenaltyPoints ? [`Exposição precoce -${(earlyExposurePenaltyPoints / hybridPoints * 100).toFixed(1)}%`] : []),
     ...(enemyCounterPenaltyPoints ? [`Desbônus Enemy Counter -${enemyCounterPenaltyPercent}% (${activeEnemyCounters.length} counter${activeEnemyCounters.length === 1 ? "" : "s"})`] : []),
     ...(repeatedEnemyCounterPressurePoints ? [`Pressão Enemy Counter -${repeatedEnemyCounterPressurePercent}% (${repeatedEnemyCounterPressures.map((pressure) => `${pressure.enemy}: ${pressure.counteredAllies.join(", ")}`).join(" · ")})`] : []),
     ...(topTwentyCounterPenaltyPoints ? [`Desbônus Counter no Top ${topCounterWindowSize} -${topTwentyCounterPenaltyPercent}% (${topTwentyCounters.length} counter${topTwentyCounters.length === 1 ? "" : "s"}: ${topTwentyCounters.join(", ")})`] : []),
-    ...(sameClassPenaltyPoints ? [`Desbônus Mesma Classe (${candidateClass}) -${ruleSettings.sameClassPenalty * 100 * sameClassCount}% — ativado por ${sameClassTriggerAllies.join(", ")}`] : []),
+    ...(sameClassPenaltyPoints ? [`Desbônus Mesma Classe (${candidateClass}) -${hybridPoints ? Number((sameClassPenaltyPoints / hybridPoints * 100).toFixed(2)) : 0}% — ativado por ${sameClassTriggerAllies.join(", ")}`] : []),
     ...(worstTeammatePenaltyPoints ? [`Worst Teammate -${ruleSettings.worstTeammatePenalty * 100 * activeWorstTeammates.length}% (${activeWorstTeammates.join(", ")})`] : []),
   ] : [];
   // Mantido como alias transitório para contratos existentes do Draft.
@@ -1816,15 +1835,15 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     reasons.push(`Counter banido sem bónus: ${nonTop25BannedCounters.join(", ")} ${nonTop25BannedCounters.length === 1 ? "é counter literal" : "são counters literais"} de ${row.brawler}, mas ${nonTop25BannedCounters.length === 1 ? "está" : "estão"} fora do Top 25 de Score Híbrido base do mapa.`);
   }
   if (missingMidPoints) reasons.push(isOpeningFit
-    ? `Bónus Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%: primeiro pick da equipa, toda a estrutura está por preencher. A taxa base de ${ruleSettings.missingMid * 100}% é escalada pela prioridade de ${role.toUpperCase()} neste modo (${Math.round(openingFitWeight * 100)}%).`
+    ? `Bónus Fit de abertura +${fitRateLabel(effectiveMissingMidRate)}%: primeiro pick da equipa, toda a estrutura está por preencher. A taxa base de ${fitRateLabel(effectiveMissingMidRate)}% é escalada pela prioridade de ${role.toUpperCase()} neste modo (${Math.round(openingFitWeight * 100)}%).`
     : role === "flex"
-    ? `Bónus Fit Mid/Lane +${ruleSettings.missingMid * 100}%: este Flex cobre o Mid em falta; recebe somente um Fit, sem duplicar a Lane.`
-    : `Bónus Mid em falta +${ruleSettings.missingMid * 100}%: a equipa ainda não tem um Mid e esta recomendação preenche essa função.`);
+    ? `Bónus Fit Mid/Lane +${fitRateLabel(effectiveMissingMidRate)}%: este Flex cobre o Mid em falta; recebe somente um Fit, sem duplicar a Lane.`
+    : `Bónus Mid em falta +${fitRateLabel(effectiveMissingMidRate)}%: a equipa ainda não tem um Mid e esta recomendação preenche essa função.`);
   if (missingSidePoints) reasons.push(isOpeningFit
-    ? `Bónus Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%: primeiro pick da equipa, toda a estrutura está por preencher. A taxa base de ${ruleSettings.missingSide * 100}% é escalada pela prioridade de ${role.toUpperCase()} neste modo (${Math.round(openingFitWeight * 100)}%).`
+    ? `Bónus Fit de abertura +${fitRateLabel(effectiveMissingSideRate)}%: primeiro pick da equipa, toda a estrutura está por preencher. A taxa base de ${fitRateLabel(effectiveMissingSideRate)}% é escalada pela prioridade de ${role.toUpperCase()} neste modo (${Math.round(openingFitWeight * 100)}%).`
     : role === "flex"
-    ? `Bónus Fit Mid/Lane +${ruleSettings.missingSide * 100}%: este Flex cobre uma Lane disponível (${sideLaneCount}/2); recebe somente um Fit.`
-    : `Bónus Lane em falta +${ruleSettings.missingSide * 100}%: a equipa tem ${sideLaneCount}/2 Lanes e esta recomendação preenche uma lane disponível.`);
+    ? `Bónus Fit Mid/Lane +${fitRateLabel(effectiveMissingSideRate)}%: este Flex cobre uma Lane disponível (${sideLaneCount}/2); recebe somente um Fit.`
+    : `Bónus Lane em falta +${fitRateLabel(effectiveMissingSideRate)}%: a equipa tem ${sideLaneCount}/2 Lanes e esta recomendação preenche uma lane disponível.`);
   if (openingLongRangePoints) reasons.push(`Bónus de abertura +${ruleSettings.openingLongRange * 100}%: ataque principal de ${openingRangeThreshold} blocos ou mais no pick ${context.pickNumber}. Lançadores não recebem este bónus.`);
   if (mapTeamSynergyPoints && mapTeamSynergy) reasons.push(`Bónus Composição do mapa +${mapTeamSynergyRate * 100}% (pick ${synergyBonusPick}): ${mapTeamSynergy.brawlers.join(" · ")} é uma equipa literal do Brawl Planet para ${mapTeamSynergy.map}, com ${mapTeamSynergy.winRate.toFixed(1)}% de Win Rate. Fonte: ${mapTeamSynergy.sourceUrl}`);
   if (synergyPoints) {
@@ -1846,7 +1865,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
     reasons.push(`Desbônus Counter no Top ${topCounterWindowSize} -${topTwentyCounterPenaltyPercent}%: ${topTwentyCounters.join(", ")} ${topTwentyCounters.length === 1 ? "é" : "são"} counter${topTwentyCounters.length === 1 ? "" : "s"} literal${topTwentyCounters.length === 1 ? "" : "is"} de ${row.brawler} e ${topTwentyCounters.length === 1 ? "está" : "estão"} entre as ${topCounterWindowSize} recomendações contextuais deste pick.`);
   }
   if (sameClassPenaltyPoints) {
-    reasons.push(`Desbônus Mesma Classe (${candidateClass}) -${ruleSettings.sameClassPenalty * 100 * sameClassCount}%: ativado por ${sameClassTriggerAllies.join(", ")} no teu time. Bans não entram neste cálculo.`);
+    reasons.push(`Desbônus Mesma Classe (${candidateClass}) -${hybridPoints ? Number((sameClassPenaltyPoints / hybridPoints * 100).toFixed(2)) : 0}%: ativado por ${sameClassTriggerAllies.join(", ")} no teu time. Bans não entram neste cálculo.`);
   }
   if (worstTeammatePenaltyPoints) {
     reasons.push(`Desbônus Worst Teammate -${ruleSettings.worstTeammatePenalty * 100 * activeWorstTeammates.length}%: ${activeWorstTeammates.join(", ")} ${activeWorstTeammates.length === 1 ? "é aliado identificado" : "são aliados identificados"} pelo Brawl Planet como combinação negativa para ${row.brawler}.`);
@@ -1902,6 +1921,7 @@ export function calculateDraftSignal<T extends DraftRow>(row: T, context: DraftR
       topTwentyCounterPenaltyPoints,
 	      topCounterWindowSize,
 	      sameClassPenaltyPoints,
+      earlyExposurePenaltyPoints,
 	      worstTeammatePenaltyPoints,
 	      rawContextualBonusPoints,
 	      rawContextualPenaltyPoints,
@@ -1966,6 +1986,8 @@ export type RankedDraftEntry<T extends DraftRow = DraftRow> = {
   finalPoints: number;
   signal: DraftSignal;
   rank: number;
+  api?: ResultadoRecomendacaoApi;
+  apiBan?: { banScore: number; motivo: string };
   /** Com o motor PL Prodigy ou MetaPick: de onde vieram os pontos finais. */
   motor?: { nome: MotorDoDraft; partes: Array<{ nome: string; valor: number }>; contexto?: ContextoDoMotor };
 };
@@ -2055,6 +2077,10 @@ export type DraftCounterWindow = {
 
 function resolveActiveCounterWindow<T extends DraftRow>(eligibleRows: T[], context: DraftRankingContext<T>): DraftCounterWindow {
   const topCounterWindowSize = getTopCounterWindowSize(context.pickNumber, context.completedPickCount);
+  if (context.dadosApi) {
+    const nomes = rankApiEntries(eligibleRows, new Set(), "", { ...context, role: "Todas" }).slice(0, topCounterWindowSize).map((e) => e.row.brawler);
+    return { topRecommendationNames: nomes, counterPenaltyEligibleNames: nomes };
+  }
   if (topCounterWindowSize <= 0 || eligibleRows.length === 0) {
     return { topRecommendationNames: [], counterPenaltyEligibleNames: [] };
   }
@@ -2094,6 +2120,7 @@ export function rankDraftEntries<T extends DraftRow>(rows: T[], lockedNames: Set
   if (typeof context.ruleSettings?.lerAsDuasFichas === "number") {
     definirLeituraDasDuasFichas(context.ruleSettings.lerAsDuasFichas >= 0.5);
   }
+  if (context.dadosApi) return rankApiEntries(rows, lockedNames, query, context);
   const normalizedQuery = query.trim().toLowerCase();
   const globalEligibleRows = [...rows]
     .filter((row) => !lockedNames.has(row.brawler));
@@ -2123,6 +2150,43 @@ export function rankDraftEntries<T extends DraftRow>(rows: T[], lockedNames: Set
   return reordenarComMotor(doHibrido, context, lockedNames, context.motor);
 }
 
+/** Metadados táticos do catálogo e funções locais, independentes de fontes de estatísticas. */
+export function perfisTaticosDoDraft(nomes: readonly string[]): Record<string, PerfilTaticoBrawler> {
+  const classes: Record<string, PerfilTaticoBrawler["classe"]> = { Artilheiro: "sniper", Lançador: "thrower", Tank: "tank", Assassino: "assassin", Controlador: "controller", Destruidor: "damage", Suporte: "support" };
+  const lista = (texto: string) => new Set(texto.split(",").map((n) => n.toLowerCase()));
+  const wallbreak = lista("Brock,Colt,Shelly,Bull,El Primo,Frank,Griff,Dynamike,Jacky,Stu,Gray,Chester,Maisie,Pearl");
+  const antiTank = lista("Colette,Shelly,Gale,Griff,Spike,Bea,Otis,Surge,Chester,Clancy,Emz,Lou,Cordelius");
+  const heist = lista("Colt,Colette,Chuck,Jessie,Nita,Bull,Darryl,Melodie,8-bit,Amber,Spike,Rico,Clancy,Brock");
+  return Object.fromEntries(nomes.map((id) => {
+    const classe = classes[getBrawlerClass(id)] ?? "damage";
+    return [id, { id, role: inferDraftRole(id), classe, isWallbreaker: wallbreak.has(id.toLowerCase()), isAntiTank: antiTank.has(id.toLowerCase()), isHeistDps: heist.has(id.toLowerCase()), dependsOnWalls: classe === "thrower" || id === "Rico" }];
+  }));
+}
+
+function rankApiEntries<T extends DraftRow>(rows: T[], locked: Set<string>, query: string, context: DraftRankingContext<T>): RankedDraftEntry<T>[] {
+  const dados = context.dadosApi!;
+  const disponiveisIds = rows.filter((r) => !locked.has(r.brawler)).map((r) => r.brawler);
+  const nomes = Object.keys(dados.estatisticasMapa);
+  const resultados = ranquearCandidatosApiPerfeito({ ...dados, disponiveisIds,
+    aliadosIds: (context.allyRows ?? []).map((r) => r.brawler), inimigosIds: (context.enemyRows ?? []).map((r) => r.brawler),
+    modoDeJogo: context.mapModeId ?? "", perfisTaticos: perfisTaticosDoDraft(nomes), turno: context.pickNumber,
+    ordemTime: context.ordemTimeApi, modificadorRanked: context.modificadorRanked, poolNivel11Usuario: context.poolNivel11Usuario,
+  });
+  const porNome = new Map(rows.map((r) => [r.brawler, r]));
+  const bans = context.draftKind === "ban" ? new Map(recomendarBansApi({ ...dados, disponiveisIds, brawlerPretendidoId: context.brawlerPretendido }).map((r) => [r.brawlerId, r])) : null;
+  return resultados.filter((api) => (!bans || bans.has(api.brawlerId)) && (!query || api.brawlerId.toLowerCase().includes(query.toLowerCase())) &&
+    (!context.role || context.role === "Todas" || inferDraftRole(api.brawlerId) === context.role || inferDraftRole(api.brawlerId) === "flex"))
+    .map((api) => {
+      const row = porNome.get(api.brawlerId)!;
+      const base = calcularWinRateBayesiano(dados.estatisticasMapa[api.brawlerId]);
+      const ban = bans?.get(api.brawlerId);
+      return { row, api: ban ? undefined : api, apiBan: ban, basePoints: base * 100,
+        draftScore: ban ? ban.banScore : api.logOddsFinal, finalPoints: ban ? ban.banScore : api.winProbability,
+        signal: calculateDraftSignal(row, { ...context, allyRows: [], enemyRows: [], bannedNames: [] }, false), rank: 0 };
+    }).sort((a, b) => b.draftScore - a.draftScore || a.row.brawler.localeCompare(b.row.brawler))
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
 /**
  * Modelos locais PL/Meta: os confrontos, sinergias, bans e riscos vêm da
  * fonte ativa. As restrições de bónus do Híbrido não se aplicam a estes modelos.
@@ -2134,7 +2198,7 @@ function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], c
     inimigos, aliados, bans: Array.from(context.bannedNames ?? []),
     roster: (context.popularityRows ?? entries.map((entry) => entry.row)).map((row) => row.brawler),
     bloqueados: lockedNames, modeId: context.mapModeId,
-    incluirRiscos: config.motor === "metapick",
+    incluirRiscos: true,
   };
   const contextos = entries.map((entry) => lerContextoDoMotor(entry.row.brawler, contextoComum));
   const componentes: ComponentesDoCandidato[] = entries.map((entry, i) => ({
@@ -2147,10 +2211,12 @@ function reordenarComMotor<T extends DraftRow>(entries: RankedDraftEntry<T>[], c
     encaixe: entry.signal.fit,
     countersBanidos: contextos[i].countersBanidos.length,
     riscos: contextos[i].riscos.map((relacao) => relacao.pp),
+    exposicaoPrecoce: config.motor === "plprodigy" ? penalidadeBravosDisponiveis(contextos[i].riscos.map((r) => r.pp), context.pickNumber ?? 1, ["Tank", "Lançador"].includes(getBrawlerClass(entry.row.brawler))) : 0,
   }));
   // No PL, as partes entram com o draft: no começo só a base (Vitória e Uso).
   const ativasDoPL = partesAtivasDoPL({ inimigos: inimigos.length, aliados: aliados.length, bans: Array.from(context.bannedNames ?? []).length });
-  const pontuacoes = pontuarComMotor(componentes, config, ativasDoPL) ?? [];
+  const configEfetiva = config.motor === "plprodigy" ? { ...config, pl: redistribuirPesosPL(config.pl, inimigos.length) } : config;
+  const pontuacoes = pontuarComMotor(componentes, configEfetiva, ativasDoPL) ?? [];
   return entries
     .map((entry, i) => ({
       ...entry,

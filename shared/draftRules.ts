@@ -154,77 +154,52 @@ export type DraftRuleSettings = {
 };
 
 export const defaultDraftRuleSettings: DraftRuleSettings = {
-  // 1 mantém exatamente a percentagem que o BrawlScope publica para o confronto.
-  // O ajuste fica disponível nas regras do Draft para duplicar, triplicar ou reduzir.
   counterPickMultiplier: 1,
-  // Por omissão, todos os picks valem a percentagem publicada tal como sai da
-  // fonte. A escada por posição é uma opinião, não um dado — fica à escolha.
   counterPickMultiplier1: 1,
-  counterPickMultiplier2: 1,
-  counterPickMultiplier3: 1,
-  counterPickMultiplier4: 1,
-  counterPickMultiplier5: 1,
-  counterPickMultiplier6: 1,
-  /**
-   * A escada que o Draft usa por omissão: 70/30 no primeiro pick, subindo cinco
-   * pontos a cada pick até 95/5 no último.
-   *
-   * Ao contrário dos multiplicadores de Counter, que ficam neutros por omissão,
-   * esta escada vem ligada: o 70/30 fixo também é uma opinião — a de que o
-   * momento do draft não conta — e é a única das duas que não se podia
-   * desligar. Quem preferir o valor único põe os seis iguais, e o botão ao lado
-   * faz isso de uma vez.
-   */
-  winRatePick1: 0.7,
-  winRatePick2: 0.75,
+  counterPickMultiplier2: 1.15,
+  counterPickMultiplier3: 1.25,
+  counterPickMultiplier4: 1.45,
+  counterPickMultiplier5: 1.65,
+  counterPickMultiplier6: 2,
+  winRatePick1: 0.9,
+  winRatePick2: 0.85,
   winRatePick3: 0.8,
-  winRatePick4: 0.85,
-  winRatePick5: 0.9,
-  winRatePick6: 0.95,
-  /**
-   * Plano nos seis picks, com a mesma fatia que o painel do Score oferece por
-   * omissão. Ao contrário da escada da vitória, esta entra sem inclinação
-   * nenhuma: subir ou descer o Star Player ao longo do draft é uma opinião
-   * sobre drafting que ninguém mediu, e inventá-la aqui seria dá-la como
-   * adquirida a quem nunca a pediu.
-   */
-  starPlayerPick1: 0.3,
-  starPlayerPick2: 0.3,
-  starPlayerPick3: 0.3,
-  starPlayerPick4: 0.3,
-  starPlayerPick5: 0.3,
-  starPlayerPick6: 0.3,
-  // Matriz gradual: um sinal isolado informa, mas não ultrapassa o ranking do mapa.
-  // Respostas aos picks 2/4/6 têm peso ligeiramente maior, por serem contrapartidas reais.
-  counterPick1: 0.05,
-  counterPick2: 0.06,
-  counterPick3: 0.05,
-  counterPick4: 0.06,
-  counterPick5: 0.05,
-  counterPick6: 0.06,
-  synergyPick1: 0.03,
-  synergyPick2: 0.03,
-  synergyPick3: 0.04,
-  synergyPick4: 0.03,
-  synergyPick5: 0.04,
-  synergyPick6: 0.03,
-  banPick1: 0.03,
-  banPick2: 0.025,
-  banPick3: 0.02,
-  banPick4: 0.015,
-  banPick5Plus: 0.01,
-  missingMid: 0.04,
-  missingSide: 0.04,
-  openingLongRange: 0.03,
-  enemyCounterPenalty: 0.035,
-  repeatedEnemyCounterPressure: 0.03,
+  winRatePick4: 0.72,
+  winRatePick5: 0.65,
+  winRatePick6: 0.55,
+  starPlayerPick1: 0.12,
+  starPlayerPick2: 0.12,
+  starPlayerPick3: 0.12,
+  starPlayerPick4: 0.12,
+  starPlayerPick5: 0.12,
+  starPlayerPick6: 0.12,
+  counterPick1: 0,
+  counterPick2: 0.08,
+  counterPick3: 0.1,
+  counterPick4: 0.14,
+  counterPick5: 0.18,
+  counterPick6: 0.25,
+  synergyPick1: 0,
+  synergyPick2: 0.05,
+  synergyPick3: 0.07,
+  synergyPick4: 0.08,
+  synergyPick5: 0.1,
+  synergyPick6: 0.1,
+  banPick1: 0.04,
+  banPick2: 0.035,
+  banPick3: 0.03,
+  banPick4: 0.02,
+  banPick5Plus: 0,
+  missingMid: 0.12,
+  missingSide: 0.1,
+  openingLongRange: 0.05,
+  enemyCounterPenalty: 0.12,
+  repeatedEnemyCounterPressure: 0.15,
   topCounterPenalty: 0,
-  sameClassPenalty: 0.03,
-  worstTeammatePenalty: 0.03,
+  sameClassPenalty: 0.1,
+  worstTeammatePenalty: 0.08,
   coveredCounterSuppression: 0,
   lerAsDuasFichas: 1,
-  // Com as fontes, o Draft de antes da v168; as regras da v168 ficam como opção
-  // e o que a v168 queria vive nas regras da API (`defaultDraftApiRuleSettings`).
   sinergiaDeEquipaTripla: 1,
   sinergiaSoAcimaDaVitoria: 0,
   counterMinimo: 0.5,
@@ -328,7 +303,7 @@ export function getWinRatePickWeight(pickNumber: number | undefined, settings: D
  * Quem chama isto é responsável por só o aplicar com o interruptor global
  * ligado — ver `starPlayerPick1`.
  */
-export function getStarPlayerPickWeight(pickNumber: number | undefined, settings: DraftRuleSettings) {
+export function getStarPlayerPickWeight(pickNumber: number | undefined, settings: DraftRuleSettings, modeId?: string) {
   const byPick: Record<number, number> = {
     1: settings.starPlayerPick1,
     2: settings.starPlayerPick2,
@@ -338,7 +313,8 @@ export function getStarPlayerPickWeight(pickNumber: number | undefined, settings
     6: settings.starPlayerPick6,
   };
   const pick = typeof pickNumber === "number" && Number.isFinite(pickNumber) ? Math.trunc(pickNumber) : 1;
-  return byPick[pick] ?? settings.starPlayerPick1;
+  const peso = byPick[pick] ?? settings.starPlayerPick1;
+  return modeId?.toLowerCase() === "heist" && peso === .12 ? .18 : peso;
 }
 
 /** As chaves da escada do Star Player, na ordem dos picks. */

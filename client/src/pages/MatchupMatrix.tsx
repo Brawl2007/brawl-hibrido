@@ -83,7 +83,7 @@ function LinhaDeConfronto({ linha, posicao, tipo }: { linha: ConfrontoDaFicha; p
           <span className="matriz-barra-taxa" style={{ width: `${Math.max(2, Math.min(100, linha.taxa))}%` }} />
         </span>
         <small>
-          {linha.taxa.toFixed(1)}% vs {(linha.habitual ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas
+          {linha.taxa.toFixed(1)}% vs {(linha.habitual ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas{linha.deltaLogit !== undefined ? ` · efeito puro ${linha.deltaLogit > 0 ? "+" : ""}${linha.deltaLogit.toFixed(3)}` : ""}
           {linha.jogos < JOGOS_MINIMOS_FIAVEIS ? <em className="matriz-amostra"> · amostra pequena</em> : null}
         </small>
       </span>
@@ -108,7 +108,7 @@ function LinhaDeEquipa({ linha, posicao, base }: { linha: EquipaDaFicha; posicao
           <span className="matriz-barra-taxa" style={{ width: `${Math.max(2, Math.min(100, linha.taxa))}%` }} />
         </span>
         <small>
-          {linha.taxa.toFixed(1)}% vs {(base ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas
+          {linha.taxa.toFixed(1)}% vs {(base ?? 0).toFixed(1)}% habitual · {linha.jogos.toLocaleString("pt-PT")} batalhas{linha.deltaLogit !== undefined ? ` · efeito puro ${linha.deltaLogit > 0 ? "+" : ""}${linha.deltaLogit.toFixed(3)}` : ""}
           {linha.jogos < JOGOS_MINIMOS_FIAVEIS ? <em className="matriz-amostra"> · amostra pequena</em> : null}
         </small>
       </span>
@@ -397,7 +397,7 @@ export default function MatchupMatrix() {
         <section className="matriz-colunas">
           <div className="matriz-coluna">
             <h2 className="matriz-titulo"><Shield size={15} aria-hidden="true" /> Counters de {nome}</h2>
-            <p className="matriz-explica">{api.ligada ? "Ganham mais contra ele do que o habitual deles." : "Levam vantagem sobre ele nas fontes."}</p>
+            <p className="matriz-explica">{api.ligada ? "Vantagem ajustada por força no mapa, amostra, elo e idade dos jogos." : "Levam vantagem sobre ele nas fontes."}</p>
             <ol className="matriz-lista">
               {api.ligada
                 ? (ficha?.counters ?? []).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo="counter" />)
@@ -407,7 +407,7 @@ export default function MatchupMatrix() {
           </div>
           <div className="matriz-coluna">
             <h2 className="matriz-titulo"><Swords size={15} aria-hidden="true" /> {nome} castiga</h2>
-            <p className="matriz-explica">{api.ligada ? "Ganham menos contra ele do que o habitual deles." : "Ele leva vantagem sobre eles nas fontes."}</p>
+            <p className="matriz-explica">{api.ligada ? "Desvantagem residual após descontar a força individual dos brawlers." : "Ele leva vantagem sobre eles nas fontes."}</p>
             <ol className="matriz-lista">
               {api.ligada
                 ? (ficha?.castiga ?? []).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo="castiga" />)
@@ -432,7 +432,7 @@ export default function MatchupMatrix() {
           <h2 className="matriz-titulo"><Users size={15} aria-hidden="true" /> Trios com {nome}</h2>
           {api.ligada ? (
             <>
-              <p className="matriz-explica">As equipas de três com ele que mais ganham acima do habitual dele.</p>
+              <p className="matriz-explica">As equipas de três com maior sinergia ajustada, descontando a força individual e as duplas.</p>
               <ol className="matriz-lista matriz-lista-larga">
                 {(ficha?.melhoresTrios ?? []).map((linha, i) => <LinhaDeEquipa key={linha.aliados.join("+")} linha={linha} posicao={i + 1} base={ficha?.taxa ?? null} />)}
               </ol>
@@ -469,8 +469,7 @@ export default function MatchupMatrix() {
         <footer className="matriz-metodo">
           <Database size={15} aria-hidden="true" />
           <p>
-            <strong>Como ler:</strong> num confronto, «66% vs 50% habitual» quer dizer que o adversário ganha 66% das partidas contra {nome},
-            quando no geral ganha 50% — +16 pontos, é um counter. Nas duplas e nos trios, compara-se a equipa com a vitória habitual de {nome}.
+            <strong>Como ler:</strong> as barras mostram a vitória medida contra {nome} e a habitual. O destaque mostra o efeito puro ajustado por força individual, qualidade, idade e volume da amostra. Nas duplas e trios também se desconta a força dos membros; uma vitória alta com poucos jogos não basta para indicar sinergia.
             A ordem desconta as amostras pequenas; o número mostrado é o medido.
           </p>
         </footer>

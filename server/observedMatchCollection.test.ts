@@ -54,6 +54,18 @@ describe("observed Ranked battle collection", () => {
     expect(battle?.deltas).toHaveLength(8);
   });
 
+  it("só confirma poder 11 quando os seis jogadores o têm na API", () => {
+    const teams = [
+      ["Bibi", "Max", "Colt"].map((name, i) => ({ tag: `#E${i}`, brawler: { name, power: 11, trophies: 19 } })),
+      ["Bea", "Piper", "Gus"].map((name, i) => ({ tag: i === 0 ? "#SOURCE" : `#A${i}`, brawler: { name, power: 11, trophies: 19 } })),
+    ];
+    const p = { ...rankedBattle, battle: { ...rankedBattle.battle, teams } };
+    expect(normalizeObservedBattle(p, "#SOURCE")).toMatchObject({ todosNivel11: true, rank: { medio: 19 } });
+    teams[0][0].brawler.power = 10;
+    expect(normalizeObservedBattle(p, "#SOURCE")?.todosNivel11).toBe(false);
+    expect(normalizeObservedBattle(rankedBattle, "#SOURCE")?.todosNivel11).toBe(false);
+  });
+
   it("inverts the teams when the observed source loses", () => {
     const battle = normalizeObservedBattle(
       { ...rankedBattle, battle: { ...rankedBattle.battle, result: "defeat" } },

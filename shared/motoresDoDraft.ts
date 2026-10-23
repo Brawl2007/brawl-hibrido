@@ -102,6 +102,7 @@ export type ComponentesDoCandidato = {
   countersBanidos: number;
   /** Força (pp) dos counters dele que o adversário ainda pode escolher, do mais forte para o mais fraco. */
   riscos: number[];
+  exposicaoPrecoce?: number;
 };
 
 export type PontuacaoDoMotor = { brawler: string; pontos: number; partes: Array<{ nome: string; valor: number }> };
@@ -183,6 +184,17 @@ export function partesAtivasDoPL(draft: { inimigos: number; aliados: number; ban
   return { uso: true, vitoria: true, counter: draft.inimigos > 0, encaixe: draft.aliados > 0, sinergia: draft.aliados > 0, ban: draft.bans > 0 && draft.inimigos < 3 };
 }
 
+/** Ban deixa de ter função com três inimigos: 2/3 do peso vão para Counter, 1/3 para Encaixe. */
+export function redistribuirPesosPL(pesos: PesosPLProdigy, inimigos: number): PesosPLProdigy {
+  return inimigos < 3 ? { ...pesos } : { ...pesos, counter: pesos.counter + pesos.ban * 2 / 3, encaixe: pesos.encaixe + pesos.ban / 3, ban: 0 };
+}
+
+/** Exposição de uma abertura a counters ainda disponíveis, em pontos percentuais. */
+export function penalidadeBravosDisponiveis(riscos: readonly number[], turno: number, vulneravel: boolean) {
+  if (!vulneravel || turno < 1 || turno > 3 || !riscos.length) return 0;
+  return soma(riscos.slice(0, 3)) / Math.min(3, riscos.length) * (4 - turno) / 3;
+}
+
 export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato[], pesos: PesosPLProdigy = PESOS_PL_PRODIGY, ativas: PartesAtivasDoPL = TODAS_AS_PARTES): PontuacaoDoMotor[] {
   // Mapas só com o Score publicado (sem vitória nem uso): o Score do mapa faz as vezes dos dois.
   const semVitoria = candidatos.every((c) => c.vitoria === null);
@@ -201,6 +213,7 @@ export function pontuarComoPLProdigy(candidatos: readonly ComponentesDoCandidato
   const totalDosPesos = soma(chaves.map((chave) => Math.max(0, pesos[chave]))) || 1;
   return candidatos.map((candidato, i) => {
     const contribuicoes = chaves.map((chave) => ({ nome: nomes[chave], valor: (Math.max(0, pesos[chave]) * partes[chave][i]) / totalDosPesos }));
+    if (candidato.exposicaoPrecoce) contribuicoes.push({ nome: "Exposição precoce", valor: -candidato.exposicaoPrecoce });
     // As partes somam o valor bruto local (em %), antes da escala estimada.
     return { brawler: candidato.brawler, pontos: escalaDoPLProdigy(soma(contribuicoes.map((parte) => parte.valor)) / 100), partes: contribuicoes };
   });

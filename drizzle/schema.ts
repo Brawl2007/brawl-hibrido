@@ -416,6 +416,12 @@ export const observedBattleRanks = mysqlTable("observed_battle_ranks", {
   rankMedio: int("rank_medio").notNull(),
 });
 
+/** Metadados de qualidade dos seis jogadores; histórico sem linha tem nível desconhecido. */
+export const observedBattleQuality = mysqlTable("observed_battle_quality", {
+  fingerprint: varchar("fingerprint", { length: 64 }).primaryKey(),
+  todosNivel11: int("todos_nivel_11").notNull(),
+});
+
 /**
  * Os jogadores que a recolha segue além dos rankings (a «bola de neve»).
  *
