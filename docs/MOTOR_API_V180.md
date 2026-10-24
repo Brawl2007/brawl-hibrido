@@ -1,5 +1,7 @@
 # Escala de Vitória/Uso e escassez após bans — v180
 
+Registro da v180. A camada tática atual está documentada em [MOTOR_API_V181.md](MOTOR_API_V181.md).
+
 A v180 corrige duas distorções da v179. Os pesos por pick continuam em 70/30, 75/25, 80/20, 85/15, 90/10 e 95/5.
 
 O sinal de uso é `0,175 × clamp(ln(max(0,02, razãoUso)), −2, 2)`, com amplitude de −0,35 a +0,35. Essa faixa aproxima o uso da escala habitual da força de vitória em log-odds. Uso médio permanece neutro, uso acima da média contribui positivamente e a progressão logarítmica é preservada dentro do limite. A combinação ponderada aplica cada peso uma única vez. Na abertura, 58% de vitória com razão de uso 1,5 supera menos de 50% de vitória com razão 4, inclusive se o sinal de uso do segundo atingir o teto. O exemplo de 60%/1,4 contra 48%/4,5 também passa a favorecer a maior vitória.

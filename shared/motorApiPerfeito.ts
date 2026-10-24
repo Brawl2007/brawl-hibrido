@@ -2,9 +2,17 @@ import { pesosDoPickApi, type DraftRuleSettings } from "./draftRules";
 import {
   razoesDeUso,
   combinarVitoriaEUso,
+  aberturaDasReferencias,
   type ReferenciaMapaApi,
 } from "./adequacaoAoMapa";
 import { calcularWinRateBayesiano } from "./amostraPequena";
+import {
+  completarPerfilMecanico,
+  calcularDeltaMecanico,
+  combinarReservaMecanica,
+  calcularProtecaoDoAliado,
+  calcularRespostaTatica,
+} from "./estrategiaTatica";
 // shared/motorApiPerfeito.ts
 
 export type OrdemTimeDraft = "first_pick" | "second_pick";
@@ -36,6 +44,13 @@ export interface PerfilTaticoBrawler {
   isHeistDps?: boolean;
   dependsOnWalls?: boolean;
   dependsOnBushes?: boolean;
+  isBodyguard?: boolean;
+  isMobileAssassin?: boolean;
+  lowSustainedDps?: boolean;
+  hasCloseDefense?: boolean;
+  hasEscape?: boolean;
+  hasSpawnerOrShield?: boolean;
+  effectiveRange?: number;
 }
 
 export interface EstatisticasApiMapa {
@@ -72,6 +87,8 @@ export interface ResultadoRecomendacaoApi {
     ajustePoucoUsoLogit: number;
     alivioBanLogit: number;
     escassezFuncaoLogit: number;
+    guardaCostasLogit: number;
+    respostaTaticaLogit: number;
   };
   /** Impactos em pontos percentuais; a soma parte de 50% e chega à estimativa. */
   fatoresPercentuais?: ResultadoRecomendacaoApi["fatores"];
@@ -84,6 +101,9 @@ export interface ResultadoRecomendacaoApi {
   alertaHardCounter?: string[];
   melhorAlvoInimigo?: string;
   piorRespostaFuturaInimiga?: string;
+  aliadosProtegidos?: string[];
+  ameacasCobertas?: string[];
+  motivosTaticos?: string[];
 }
 
 export interface PareamentoLane3v3 {
@@ -101,6 +121,7 @@ export const CONFIANCA_DE_PARES = { counter: 15, dupla: 25, trio: 40 } as const;
 export interface ApoioDoMotorApi {
   obterCounterDeReserva?: (a: string, b: string) => number | undefined;
   obterSinergiaDeReserva?: (a: string, b: string) => number | undefined;
+  counterDeReservaExcluido?: (a: string, b: string) => boolean;
 }
 
 export function logit(p: number): number {
@@ -456,6 +477,39 @@ export function ranquearCandidatosApiPerfeito(
   );
   const beta = (id: string) => mapa[id]?.beta ?? logit(0.43);
   const razao = (id: string) => mapa[id]?.razaoUso ?? 0;
+  const perfis = Object.fromEntries(
+    Object.entries(p.perfisTaticos).map(([id, perfil]) => [
+      id,
+      completarPerfilMecanico(perfil),
+    ])
+  );
+  const contextoMecanico = {
+    abertura: aberturaDasReferencias(
+      Object.values(p.estatisticasMapa).map(s => s.referenciaMapa)
+    ),
+    modo: p.modoDeJogo,
+    paredesDestruidas: p.modificadorRanked === "timed_detonation",
+  };
+  const aliados = p.aliadosIds.map(id => perfis[id]).filter(Boolean);
+  const inimigos = p.inimigosIds.map(id => perfis[id]).filter(Boolean);
+  const reservas = new Map<string, number | undefined>();
+  const reserva = (a: string, b: string) => {
+    const chave = `${a}\0${b}`;
+    if (!reservas.has(chave)) {
+      const fonte = p.obterCounterDeReserva?.(a, b);
+      reservas.set(
+        chave,
+        p.counterDeReservaExcluido?.(a, b)
+          ? undefined
+          : combinarReservaMecanica(
+              fonte,
+              calcularDeltaMecanico(perfis[a], perfis[b], contextoMecanico),
+              p.obterConfronto(a, b)?.jogosMapa ?? 0
+            )
+      );
+    }
+    return reservas.get(chave);
+  };
   const counterCache = new Map<string, number>(),
     sinergiaCache = new Map<string, number>();
   const counter = (a: string, b: string) => {
@@ -467,7 +521,7 @@ export function ranquearCandidatosApiPerfeito(
           beta(a),
           beta(b),
           p.obterConfronto(a, b),
-          p.obterCounterDeReserva?.(a, b) ?? 0
+          reserva(a, b) ?? 0
         )
       );
     return counterCache.get(chave)!;
@@ -520,7 +574,7 @@ export function ranquearCandidatosApiPerfeito(
           c.delta <= -0.38 &&
           ((p.obterConfronto(id, c.inimigo)?.jogosMapa ?? 0) >=
             CONFIANCA_DE_PARES.counter ||
-            (p.obterCounterDeReserva?.(id, c.inimigo) ?? 0) <= -0.38)
+            (reserva(id, c.inimigo) ?? 0) <= -0.38)
       )
       .map(c => c.inimigo);
     const hard =
@@ -532,7 +586,7 @@ export function ranquearCandidatosApiPerfeito(
         c.delta >= 0.22 &&
         ((p.obterConfronto(id, c.inimigo)?.jogosMapa ?? 0) >=
           CONFIANCA_DE_PARES.counter ||
-          (p.obterCounterDeReserva?.(id, c.inimigo) ?? 0) >= 0.22)
+          (reserva(id, c.inimigo) ?? 0) >= 0.22)
     ).length;
     const destravado =
       turno >= 4 &&
@@ -560,8 +614,8 @@ export function ranquearCandidatosApiPerfeito(
     if (restantes > 0 && turnoInimigo) {
       const incerteza = (adversario: string) => {
         const n = p.obterConfronto(id, adversario)?.jogosMapa ?? 0;
-        const reserva = p.obterCounterDeReserva?.(id, adversario);
-        const conhecida = reserva !== undefined && Number.isFinite(reserva);
+        const apoio = reserva(id, adversario);
+        const conhecida = apoio !== undefined && Number.isFinite(apoio);
         return (
           0.1 *
           (1 - n / (n + CONFIANCA_DE_PARES.counter)) *
@@ -596,7 +650,26 @@ export function ranquearCandidatosApiPerfeito(
       inimigosIds: p.inimigosIds,
       modoDeJogo: p.modoDeJogo,
       modificadorRanked: p.modificadorRanked,
-      perfis: p.perfisTaticos,
+      perfis,
+    });
+    const podeReceberBonus =
+      (top.has(id) || destravado) && (condicao?.probabilidade ?? 0) >= 0.47;
+    const protecao = calcularProtecaoDoAliado({
+      candidato: podeReceberBonus ? perfis[id] : undefined,
+      aliados,
+      ameacas: ameaças
+        .filter(a => a !== id && perfis[a])
+        .map(a => ({ perfil: perfis[a], uso: razao(a) })),
+      turno,
+      inimigosRestantes: restantes,
+      obterCounter: counter,
+    });
+    const respostaTatica = calcularRespostaTatica({
+      candidato: podeReceberBonus ? perfis[id] : undefined,
+      aliados,
+      inimigos,
+      turno,
+      contexto: contextoMecanico,
     });
     const pesoBan = Math.max(0, Math.min(3, p.pesoBan ?? 0.5));
     const protegidos =
@@ -662,6 +735,8 @@ export function ranquearCandidatosApiPerfeito(
       alivioBan,
       escassez,
       role,
+      protecao,
+      respostaTatica,
     };
   });
   const viaveis = brutos.filter(
@@ -689,6 +764,8 @@ export function ranquearCandidatosApiPerfeito(
         ajustePoucoUsoLogit: 0,
         alivioBanLogit: c.alivioBan,
         escassezFuncaoLogit: c.escassez,
+        guardaCostasLogit: c.protecao.bonus,
+        respostaTaticaLogit: c.respostaTatica.bonus,
       };
       // Abertura: a base representa pelo menos 70% de toda a evidência positiva.
       // Mais tarde, o teto dos bônus cresce, sempre multiplicado pela viabilidade do mapa.
@@ -704,7 +781,22 @@ export function ranquearCandidatosApiPerfeito(
         (s, k) => s + Math.max(0, fatores[k]),
         0
       );
-      const capacidade = Math.max(0, Math.min(1, mapa[c.id]?.score ?? 0));
+      // No fechamento, uma diferença mínima de WR entre opções viáveis não
+      // pode zerar um bom protetor só por ele ser o mínimo da normalização.
+      const qualidadeAbsoluta =
+        !c.foraDoMapa && !c.nicho
+          ? Math.max(
+              0,
+              Math.min(1, ((mapa[c.id]?.probabilidade ?? 0) - 0.44) / 0.16)
+            ) * (mapa[c.id]?.terreno ?? 0)
+          : 0;
+      const capacidade = Math.max(
+        0,
+        Math.min(
+          1,
+          Math.max(mapa[c.id]?.score ?? 0, turno >= 4 ? qualidadeAbsoluta : 0)
+        )
+      );
       const proporcao = [3 / 7, 0.65, 1, 1.5, 2, 3][turno - 1];
       const teto =
         Math.max(
@@ -752,6 +844,18 @@ export function ranquearCandidatosApiPerfeito(
         melhorAliado: aliado && aliado.delta > 0.01 ? aliado.aliado : undefined,
         piorRespostaFuturaInimiga:
           c.risco > riscoMedio + 0.015 ? c.resposta : undefined,
+        aliadosProtegidos:
+          fatores.guardaCostasLogit > 0
+            ? c.protecao.aliadosProtegidos
+            : undefined,
+        ameacasCobertas:
+          fatores.guardaCostasLogit > 0
+            ? c.protecao.ameacasCobertas
+            : undefined,
+        motivosTaticos:
+          fatores.respostaTaticaLogit > 0
+            ? c.respostaTatica.motivos
+            : undefined,
       };
     })
     .sort(

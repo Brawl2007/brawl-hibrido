@@ -19,6 +19,8 @@
  * inventado. Só os nomes do draft passam; só as ações desta lista existem.
  */
 import { z } from "zod";
+import { getMainAttackRange } from "./brawlerAttackRanges";
+import type { PerfilTaticoBrawler } from "./motorApiPerfeito";
 
 export const LANES = ["esquerda", "mid", "direita"] as const;
 export type Lane = (typeof LANES)[number];
@@ -242,3 +244,243 @@ export type ExplicacaoTatica = {
   porFase: Array<{ fase: FaseExplicada; dica: string }>;
   justificativa: string;
 };
+
+// Apoio do Draft para pares escassos. São hipóteses mecânicas contextuais,
+// nunca contagens de partidas nem probabilidades medidas pela API.
+const chaveMecanica = (id: string) =>
+  id.toLowerCase().replace(/[^a-z0-9]/g, "");
+const conjuntoMecanico = (nomes: string) =>
+  new Set(nomes.split(",").map(chaveMecanica));
+const GUARDA_COSTAS = conjuntoMecanico(
+  "R-T,Buster,Gale,Pearl,Bull,Shelly,Chester,Cordelius,Otis,Lou,Surge,Maisie"
+);
+const MOBILIDADE = conjuntoMecanico(
+  "Mico,Mortis,Edgar,Kenji,Lily,Shade,Kit,Melodie,Darryl"
+);
+const BAIXO_DPS = conjuntoMecanico(
+  "Gene,Gus,Squeak,Mr. P,Sandy,Byron,Sprout,Mortis"
+);
+const DEFESA_CURTA = conjuntoMecanico("Nani,Eve,Mr. P,Gus,R-T");
+const FUGA = conjuntoMecanico("Piper,Brock,Angelo,Janet,Bonnie,Gray");
+const ANTI_TANQUE = conjuntoMecanico(
+  "Colette,Clancy,Gale,Griff,Chester,Lou,Rico,Otis,Shelly,Surge,Maisie"
+);
+const QUEBRA_PAREDE = conjuntoMecanico("Brock,Colt,Griff,Frank,Ruffs");
+
+export function completarPerfilMecanico(
+  p: PerfilTaticoBrawler
+): PerfilTaticoBrawler {
+  const id = chaveMecanica(p.id);
+  return {
+    ...p,
+    isBodyguard: p.isBodyguard ?? GUARDA_COSTAS.has(id),
+    isMobileAssassin:
+      p.isMobileAssassin ?? (p.classe === "assassin" || MOBILIDADE.has(id)),
+    isAntiTank: p.isAntiTank || ANTI_TANQUE.has(id),
+    isWallbreaker: p.isWallbreaker || QUEBRA_PAREDE.has(id),
+    lowSustainedDps: p.lowSustainedDps ?? BAIXO_DPS.has(id),
+    hasCloseDefense:
+      p.hasCloseDefense ?? (GUARDA_COSTAS.has(id) || DEFESA_CURTA.has(id)),
+    hasEscape: p.hasEscape ?? FUGA.has(id),
+    hasSpawnerOrShield: p.hasSpawnerOrShield ?? DEFESA_CURTA.has(id),
+    effectiveRange: p.effectiveRange ?? getMainAttackRange(p.id) ?? undefined,
+  };
+}
+
+export type ContextoMecanicoDoMapa = {
+  abertura: number | null;
+  modo: string;
+  paredesDestruidas?: boolean;
+};
+
+function mapaTemParedes(c: ContextoMecanicoDoMapa) {
+  return !c.paredesDestruidas && c.abertura !== null && c.abertura <= 0.6;
+}
+
+/** Residual em log-odds, antissimétrico e limitado. Não substitui a força do mapa. */
+export function calcularDeltaMecanico(
+  atacante: PerfilTaticoBrawler | undefined,
+  defensor: PerfilTaticoBrawler | undefined,
+  contexto: ContextoMecanicoDoMapa
+): number {
+  if (
+    !atacante ||
+    !defensor ||
+    chaveMecanica(atacante.id) === chaveMecanica(defensor.id)
+  )
+    return 0;
+  const a = completarPerfilMecanico(atacante),
+    b = completarPerfilMecanico(defensor);
+  const paredes = mapaTemParedes(contexto);
+  const aberto = contexto.abertura !== null && contexto.abertura >= 0.7;
+  const objetivo =
+    ["hotzone", "brawlball"].includes(chaveMecanica(contexto.modo)) && !aberto;
+  const vantagem = (p: PerfilTaticoBrawler, q: PerfilTaticoBrawler) => {
+    let v = 0;
+    if (p.isMobileAssassin && q.classe === "thrower") v = Math.max(v, 0.9);
+    if (p.isMobileAssassin && q.classe === "sniper" && !q.hasCloseDefense)
+      v = Math.max(v, q.hasEscape ? 0.3 : 0.7);
+    if (p.classe === "tank" && q.isMobileAssassin) v = Math.max(v, 0.65);
+    if (p.isBodyguard && q.isMobileAssassin) v = Math.max(v, 0.85);
+    if (p.isAntiTank && q.classe === "tank") v = Math.max(v, 0.9);
+    if (p.classe === "tank" && q.lowSustainedDps && (paredes || objetivo))
+      v = Math.max(v, 0.7);
+    if (
+      paredes &&
+      p.classe === "thrower" &&
+      !q.isWallbreaker &&
+      (q.classe === "controller" ||
+        q.classe === "sniper" ||
+        (q.classe === "damage" && (q.effectiveRange ?? Infinity) <= 8.7))
+    )
+      v = Math.max(v, 0.6);
+    if (
+      paredes &&
+      p.isWallbreaker &&
+      (q.classe === "thrower" ||
+        (q.classe === "tank" && (q.dependsOnWalls || q.dependsOnBushes)))
+    )
+      v = Math.max(v, 0.4);
+    if (
+      aberto &&
+      p.classe === "sniper" &&
+      !q.isMobileAssassin &&
+      (p.effectiveRange ?? 0) >= (q.effectiveRange ?? Infinity) + 1.5
+    )
+      v = Math.max(v, 0.55);
+    if (q.classe === "sniper") {
+      let duelo = 0;
+      if (
+        p.classe === "sniper" &&
+        (p.effectiveRange ?? 0) >= (q.effectiveRange ?? Infinity) + 0.7
+      )
+        duelo += 0.25;
+      if (p.hasSpawnerOrShield) duelo += 0.3;
+      v = Math.max(v, duelo);
+    }
+    return v;
+  };
+  return Math.max(-0.9, Math.min(0.9, vantagem(a, b) - vantagem(b, a)));
+}
+
+/** A mecânica preenche a falta de jogos do mapa, sem enfraquecer uma amostra robusta. */
+export function combinarReservaMecanica(
+  fonte: number | undefined,
+  mecanica: number,
+  jogosMapa: number
+) {
+  const faltaDeJogos = Math.max(0, 1 - Math.max(0, jogosMapa) / 15);
+  if (!mecanica || !faltaDeJogos) return fonte;
+  if (fonte === undefined || !Number.isFinite(fonte))
+    return faltaDeJogos * mecanica;
+  const peso = 0.6 * faltaDeJogos;
+  return (1 - peso) * fonte + peso * mecanica;
+}
+
+export function calcularProtecaoDoAliado(p: {
+  candidato: PerfilTaticoBrawler | undefined;
+  aliados: readonly PerfilTaticoBrawler[];
+  ameacas: readonly { perfil: PerfilTaticoBrawler; uso: number }[];
+  turno: number;
+  inimigosRestantes: number;
+  obterCounter: (a: string, b: string) => number;
+}) {
+  const vazio = {
+    bonus: 0,
+    aliadosProtegidos: [] as string[],
+    ameacasCobertas: [] as string[],
+  };
+  if (!p.candidato || p.inimigosRestantes <= 0 || p.turno === 1 || p.turno >= 6) return vazio;
+  const cand = completarPerfilMecanico(p.candidato);
+  if (!cand.isBodyguard) return vazio;
+  const aliados = p.aliados.map(completarPerfilMecanico);
+  const frageis = aliados.filter(
+    a => a.classe === "thrower" || (a.classe === "sniper" && !a.hasCloseDefense)
+  );
+  const agressores = p.ameacas.filter(({ perfil }) => {
+    const a = completarPerfilMecanico(perfil);
+    return a.id !== cand.id && (a.isMobileAssassin || a.classe === "tank");
+  });
+  if (!frageis.length || !agressores.length) return vazio;
+  const protegidos = new Set<string>(),
+    cobertos = new Set<string>();
+  let beneficio = 0;
+  const totalUso = agressores.reduce((s, a) => s + Math.min(4, a.uso), 0) || 1;
+  for (const { perfil: agressor, uso } of agressores) {
+    const defesa = Math.max(0, p.obterCounter(cand.id, agressor.id));
+    if (defesa < 0.22) continue;
+    for (const aliado of frageis) {
+      const risco = Math.max(0, p.obterCounter(agressor.id, aliado.id));
+      const jaCoberto = aliados.some(
+        a => a.isBodyguard && p.obterCounter(a.id, agressor.id) >= 0.22
+      );
+      if (risco < 0.3 || jaCoberto) continue;
+      protegidos.add(aliado.id);
+      cobertos.add(agressor.id);
+      beneficio +=
+        (Math.min(4, uso) / totalUso) *
+        risco *
+        defesa *
+        (aliado.hasEscape ? 0.5 : 1);
+    }
+  }
+  const progressao = [0, 0.45, 0.7, 1, 1, 0][
+    Math.max(0, Math.min(5, p.turno - 1))
+  ];
+  return {
+    bonus: Math.min(0.35, 0.5 * beneficio) * progressao,
+    aliadosProtegidos: [...protegidos],
+    ameacasCobertas: [...cobertos],
+  };
+}
+
+/** Respostas de composição, distintas do residual individual dos confrontos. */
+export function calcularRespostaTatica(p: {
+  candidato: PerfilTaticoBrawler | undefined;
+  aliados: readonly PerfilTaticoBrawler[];
+  inimigos: readonly PerfilTaticoBrawler[];
+  turno: number;
+  contexto: ContextoMecanicoDoMapa;
+}) {
+  const motivos: string[] = [];
+  if (!p.candidato || p.turno <= 1) return { bonus: 0, motivos };
+  const cand = completarPerfilMecanico(p.candidato);
+  const inimigos = p.inimigos.map(completarPerfilMecanico);
+  let bonus = 0;
+  if (
+    mapaTemParedes(p.contexto) &&
+    cand.isWallbreaker &&
+    !p.aliados.some(a => a.classe === "thrower" || a.dependsOnWalls) &&
+    inimigos.some(
+      e =>
+        e.classe === "thrower" ||
+        (e.classe === "tank" && (e.dependsOnWalls || e.dependsOnBushes))
+    )
+  ) {
+    bonus += 0.12;
+    motivos.push("Abrir as paredes da composição inimiga");
+  }
+  if (p.turno === 6 && inimigos.length === 3 && mapaTemParedes(p.contexto)) {
+    if (
+      cand.classe === "tank" &&
+      !inimigos.some(e => e.isAntiTank) &&
+      inimigos.filter(e => e.lowSustainedDps).length >= 2
+    ) {
+      bonus += 0.15;
+      motivos.push("Último pick contra uma equipa sem anti-tanque");
+    }
+    if (
+      cand.classe === "thrower" &&
+      !inimigos.some(e => e.isWallbreaker || e.isMobileAssassin) &&
+      inimigos.filter(e =>
+        ["controller", "damage", "sniper"].includes(e.classe)
+      ).length >= 2
+    ) {
+      bonus += 0.15;
+      motivos.push(
+        "Último pick com paredes e sem invasor ou quebra de parede inimigo"
+      );
+    }
+  }
+  return { bonus: Math.min(0.25, bonus), motivos };
+}

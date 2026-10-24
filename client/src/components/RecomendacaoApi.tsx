@@ -15,6 +15,8 @@ const NOMES: Record<keyof ResultadoRecomendacaoApi["fatores"], string> = {
   ajustePoucoUsoLogit: "Confiança pelo uso",
   alivioBanLogit: "Caminho livre pelos bans",
   escassezFuncaoLogit: "Prioridade de função após bans",
+  guardaCostasLogit: "Proteção contra o próximo pick inimigo",
+  respostaTaticaLogit: "Resposta à composição inimiga",
 };
 const percentagem = (valor: number) =>
   `${valor > 0 ? "+" : "−"}${Math.abs(valor).toFixed(1)}%`;
@@ -94,6 +96,17 @@ export function RecomendacaoApi({
               Sinergia com {resultado.melhorAliado}
             </small>
           )}
+          {!!resultado?.aliadosProtegidos?.length && (
+            <small className="api-tag api-sinergia">
+              Protege {resultado.aliadosProtegidos.join(", ")} contra{" "}
+              {resultado.ameacasCobertas?.join(", ")}
+            </small>
+          )}
+          {resultado?.motivosTaticos?.map(motivo => (
+            <small className="api-tag api-alvo" key={motivo}>
+              {motivo}
+            </small>
+          ))}
           {resultado?.piorRespostaFuturaInimiga && (
             <small className="api-tag api-risco">
               Atenção à resposta: {resultado.piorRespostaFuturaInimiga}

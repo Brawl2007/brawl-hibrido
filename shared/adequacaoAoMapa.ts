@@ -12,6 +12,8 @@ export type ReferenciaMapaApi = {
   uso: number | null;
   score: number | null;
   adequacaoTerreno: number;
+  /** Geometria do próprio mapa; null quando não há grelha nem perfil conhecido. */
+  abertura?: number | null;
 };
 export type ReferenciasMapaApi = Readonly<Record<string, ReferenciaMapaApi>>;
 type Perfil = { classe: string; dependsOnWalls?: boolean };
@@ -114,6 +116,7 @@ export function criarReferenciasDoMapa<
               typeof r.score === "number" && Number.isFinite(r.score)
                 ? limitar(r.score / 100)
                 : null,
+            abertura,
             adequacaoTerreno: adequacaoAoTerreno(
               r.brawler,
               perfis[r.brawler],
@@ -123,6 +126,21 @@ export function criarReferenciasDoMapa<
         ];
       })
   );
+}
+
+/** Só referências do mapa atual podem estabelecer se existem paredes. */
+export function aberturaDasReferencias(
+  referencias: readonly (ReferenciaMapaApi | undefined)[]
+): number | null {
+  const valores = referencias
+    .map(r => r?.abertura)
+    .filter(
+      (n): n is number =>
+        typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1
+    );
+  return valores.length
+    ? valores.reduce((s, n) => s + n, 0) / valores.length
+    : null;
 }
 
 type UsoNoMapa = {

@@ -1,4 +1,5 @@
 import { criarReferenciasDoMapa } from "./adequacaoAoMapa";
+import { completarPerfilMecanico } from "./estrategiaTatica";
 import type { TerrenoDoMapa } from "./terrenoDoMapa";
 import { aplicarReferenciasDoMapa } from "./observedMatchupMatrix";
 import { avaliarForcaDoMapa, sigmoidPercent, ranquearCandidatosApiPerfeito, recomendarBansApi, type ResultadoRecomendacaoApi, type PerfilTaticoBrawler } from "./motorApiPerfeito";
@@ -2165,7 +2166,7 @@ export function perfisTaticosDoDraft(nomes: readonly string[]): Record<string, P
   const heist = lista("Colt,Colette,Chuck,Jessie,Nita,Bull,Darryl,Melodie,8-bit,Amber,Spike,Rico,Clancy,Brock");
   return Object.fromEntries(nomes.map((id) => {
     const classe = classes[getBrawlerClass(id)] ?? "damage";
-    return [id, { id, role: inferDraftRole(id), classe, isWallbreaker: wallbreak.has(id.toLowerCase()), isAntiTank: antiTank.has(id.toLowerCase()), isHeistDps: heist.has(id.toLowerCase()), dependsOnWalls: classe === "thrower" || ["Rico", "Rosa", "Jacky", "Bull", "El Primo", "Ash", "Frank", "Trunk"].includes(id) }];
+    return [id, completarPerfilMecanico({ id, role: inferDraftRole(id), classe, isWallbreaker: wallbreak.has(id.toLowerCase()), isAntiTank: antiTank.has(id.toLowerCase()), isHeistDps: heist.has(id.toLowerCase()), dependsOnWalls: classe === "thrower" || ["Rico", "Rosa", "Jacky", "Bull", "El Primo", "Ash", "Frank", "Trunk"].includes(id) })];
   }));
 }
 

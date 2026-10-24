@@ -388,6 +388,7 @@ export function fontesDeApoioDaApi(modeId?: string): ApoioDoMotorApi {
   const transformar = (pp: number) => logit(.5 + Math.max(-30, Math.min(30, pp)) / 100);
   const sinergias = new Map(Object.values(brawlScopeSynergyData).map(p => [key(p.brawler), p.teammates]));
   return {
+    counterDeReservaExcluido: (a, b) => isExcludedCounterDirection(a, b) || isExcludedCounterDirection(b, a),
     obterCounterDeReserva: (a, b) => { const par = getMatchupDasFontes(a, b, modeId); return par.base === null ? undefined : transformar(par.total); },
     obterSinergiaDeReserva: (a, b) => {
       const lista = (dono: string) => {

@@ -199,6 +199,9 @@ describe("v178: força e viabilidade próprias do mapa", () => {
           ])
         ),
         perfisTaticos: perfisTaticosDoDraft(nomes),
+        // Este cenário isola a reação à evidência observada. A matriz mecânica
+        // da v181 tem cenários próprios de cobertura com nomes reais.
+        counterDeReservaExcluido: () => true,
       };
       const alvos = ["Bull", "Frank", "Edgar"].slice(0, n);
       const antes = ranquearCandidatosApiPerfeito({
