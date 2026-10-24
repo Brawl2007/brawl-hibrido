@@ -161,16 +161,16 @@ export function razoesDeUso(estatisticas: Record<string, UsoNoMapa>) {
   );
 }
 
-/** Sinais comparáveis, com uso médio neutro e frequência acima da média positiva. */
+/** Uso médio neutro, com amplitude próxima da força de vitória habitual no mapa. */
 export function combinarVitoriaEUso(
   betaVitoria: number,
   razaoUso: number,
   pesoVitoria: number
 ) {
-  const sinalUso = Math.max(
-    -2,
-    Math.min(2, Math.log(Math.max(0.02, razaoUso)))
-  );
+  // O logaritmo bruto chega a ±2, enquanto logit(WR) costuma ficar perto de
+  // −0,25…+0,40. Reescalar para ±0,35 evita que popularidade engula a vitória.
+  const sinalUso =
+    (0.35 / 2) * Math.max(-2, Math.min(2, Math.log(Math.max(0.02, razaoUso))));
   return {
     sinalVitoria: betaVitoria,
     sinalUso,

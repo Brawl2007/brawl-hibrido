@@ -1,5 +1,7 @@
 # Calibração por pick e influência de bans — v179
 
+Registro da v179. Os ajustes atuais de escala e escassez estão em [MOTOR_API_V180.md](MOTOR_API_V180.md).
+
 A v179 mantém a viabilidade de mapa e terreno da v178 e corrige três controles distintos: a divisão Vitória/Uso dentro da base, a participação da base diante de counters e sinergias e a confiança nas interações observadas.
 
 ## Pesos

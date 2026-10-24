@@ -634,8 +634,9 @@ export function ranquearCandidatosApiPerfeito(
       top.has(id) && precisa && depois > 0 && antes > depois
         ? (restantes / 3) *
           Math.min(
+            0.06,
             baseParaBan * 0.1,
-            (pesoBan * 0.2 * (antes - depois)) / antes / depois
+            (pesoBan * 0.2 * (antes - depois)) / antes
           )
         : 0;
     const falhas = falhasAoFecharEquipa(

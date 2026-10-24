@@ -2,8 +2,10 @@ import { getCounterProfile, calculateDraftSignal } from "../shared/draft";
 import { getMatchupValue } from "../shared/counterMatchupValue";
 import { setCounterSyncSnapshot } from "../shared/counterSourceRelations";
 import { describe, expect, it } from "vitest";
+import { combinarVitoriaEUso } from "../shared/adequacaoAoMapa";
 import {
   ajustarForcaMapaPorUsoETurno,
+  avaliarForcaDoMapa,
   aplicarFiltroRuido,
   calcularDeltaCounterPuro,
   calcularDeltaSinergiaPura,
@@ -31,6 +33,7 @@ import {
 import {
   defaultDraftRuleSettings,
   getStarPlayerPickWeight,
+  pesosDoPickApi,
 } from "../shared/draftRules";
 
 const agora = Date.parse("2026-10-22T12:00:00Z");
@@ -63,6 +66,115 @@ const parametros = () => ({
   obterSinergia: (_a: string, _b: string): ConfrontoObservado | undefined =>
     undefined,
   perfisTaticos: { A: perfil("A"), B: perfil("B"), C: perfil("C") },
+});
+
+describe("v180: escala de uso e escassez após bans", () => {
+  it("mantém o uso neutro na média e limita sua amplitude sem perder a progressão", () => {
+    const sinal = (uso: number) => combinarVitoriaEUso(0, uso, 0.7).sinalUso;
+    expect(sinal(1)).toBe(0);
+    expect(sinal(0)).toBeGreaterThanOrEqual(-0.35);
+    expect(sinal(100)).toBeLessThanOrEqual(0.35);
+    expect(sinal(1.5)).toBeGreaterThan(0);
+    expect(sinal(4)).toBeGreaterThan(sinal(1.5));
+    expect(sinal(1 / 4)).toBeCloseTo(-sinal(4));
+  });
+
+  it.each([
+    [0.58, 1.5, 0.499, 4],
+    [0.6, 1.4, 0.48, 4.5],
+  ])(
+    "no primeiro pick, WR %s com uso %s supera WR %s com uso %s",
+    (boa, usoBom, fraca, usoAlto) => {
+      const { vitoria, uso } = pesosDoPickApi(1);
+      expect(vitoria).toBe(0.7);
+      expect(uso).toBeCloseTo(0.3);
+      const forte = combinarVitoriaEUso(logit(boa), usoBom, vitoria);
+      const popular = combinarVitoriaEUso(logit(fraca), usoAlto, vitoria);
+      expect(forte.combinado).toBeGreaterThan(popular.combinado);
+      // Nem o maior sinal de uso pode inverter esse caso de vitória negativa.
+      expect(forte.combinado).toBeGreaterThan(
+        combinarVitoriaEUso(logit(fraca), 100, vitoria).combinado
+      );
+    }
+  );
+
+  it("preserva essa preferência no ranking real, com razões relativas ao mapa completo", () => {
+    const ids = [
+      "FORTE",
+      "POPULAR",
+      ...Array.from({ length: 7 }, (_, i) => `S${i}`),
+    ];
+    const p = {
+      ...parametros(),
+      turno: 1,
+      disponiveisIds: ids,
+      estatisticasMapa: Object.fromEntries(
+        ids.map(id => [
+          id,
+          stats(
+            id,
+            id === "FORTE" ? 0.15 : id === "POPULAR" ? 0.4 : 0.05,
+            id === "FORTE" ? 0.58 : id === "POPULAR" ? 0.499 : 0.5
+          ),
+        ])
+      ),
+      perfisTaticos: Object.fromEntries(ids.map(id => [id, perfil(id)])),
+    };
+    const { mapa } = avaliarForcaDoMapa(p.estatisticasMapa, 1);
+    expect(mapa.FORTE.razaoUso).toBeCloseTo(1.5);
+    expect(mapa.POPULAR.razaoUso).toBeCloseTo(4);
+    expect(mapa.FORTE.forca).toBeGreaterThan(mapa.POPULAR.forca);
+    expect(ranquearCandidatosApiPerfeito(p)[0].brawlerId).toBe("FORTE");
+  });
+
+  const escassez = (
+    banidosIds: string[],
+    pesoBan = 0.2,
+    wr = 0.9,
+    inimigosIds: string[] = []
+  ) => {
+    const ids = ["A", "B", "C", "D"];
+    return ranquearCandidatosApiPerfeito({
+      ...parametros(),
+      turno: 1,
+      disponiveisIds: ids,
+      banidosIds,
+      pesoBan,
+      inimigosIds,
+      estatisticasMapa: Object.fromEntries(
+        ids.map(id => [id, stats(id, 0.1, wr)])
+      ),
+      perfisTaticos: Object.fromEntries(
+        ids.map(id => [id, { ...perfil(id), role: "mid" as const }])
+      ),
+    }).find(r => r.brawlerId === "A")!.fatores;
+  };
+
+  it("aumenta a escassez gradualmente, sem salto extra ao sobrar uma opção", () => {
+    const bonus = [[], ["B"], ["B", "C"], ["B", "C", "D"]].map(
+      bans => escassez(bans).escassezFuncaoLogit
+    );
+    expect(bonus[0]).toBe(0);
+    expect(bonus[1]).toBeGreaterThan(0);
+    expect(bonus[2] - bonus[1]).toBeCloseTo(bonus[1] - bonus[0]);
+    expect(bonus[3] - bonus[2]).toBeCloseTo(bonus[2] - bonus[1]);
+  });
+
+  it("limita a escassez mesmo com peso máximo e preserva o decaimento e a trava da base", () => {
+    const bans = ["B", "C", "D"];
+    const inicial = escassez(bans, 3, 0.95).escassezFuncaoLogit;
+    expect(inicial).toBeCloseTo(0.06);
+    for (const n of [1, 2, 3]) {
+      expect(
+        escassez(bans, 3, 0.95, ["X", "Y", "Z"].slice(0, n)).escassezFuncaoLogit
+      ).toBeCloseTo((inicial * (3 - n)) / 3);
+    }
+    const mediano = escassez(bans, 3, 0.51);
+    expect(mediano.escassezFuncaoLogit).toBeLessThanOrEqual(
+      mediano.forcaMapaLogit * 0.1
+    );
+    expect(escassez(bans, 3, 0.48).escassezFuncaoLogit).toBe(0);
+  });
 });
 
 describe("motor oficial bayesiano V1–V3", () => {

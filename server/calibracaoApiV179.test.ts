@@ -101,7 +101,9 @@ describe("v179: vitória/uso e participação global por pick", () => {
       brawlers: ids.map(brawler => ({
         brawler,
         jogos: brawler === "B" ? 2000 : 1000,
-        vitorias: brawler === "B" ? 1100 : 600,
+        // O uso decide entre vitórias próximas (59% e 60%), sem superar uma
+        // diferença grande de desempenho após o ajuste de escala da v180.
+        vitorias: brawler === "B" ? 1180 : 600,
       })),
       confrontos: [],
       sinergias: [],
