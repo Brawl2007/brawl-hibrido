@@ -209,7 +209,14 @@ export async function fetchOfficialRankedPlayers(countryCode = "global"): Promis
   return fetchOfficialRankings(countryCode, "players") as Promise<OfficialRankedPlayer[]>;
 }
 
-export async function fetchOfficialBattleLog(playerTag: string): Promise<OfficialBattleLogEntry[]> {
+/**
+ * Porque é que uma leitura não trouxe histórico: o código HTTP, ou «rede» e
+ * «tempo» quando nem houve resposta. Uma leitura falhada NÃO é um jogador sem
+ * partidas Ranked — quem lê tem de os distinguir (v184).
+ */
+export type FalhaDaLeitura = number | "rede" | "tempo";
+
+export async function fetchOfficialBattleLog(playerTag: string, aoFalhar?: (falha: FalhaDaLeitura) => void): Promise<OfficialBattleLogEntry[]> {
   const apiKey = getApiKey();
   if (!apiKey || !playerTag) return [];
 
@@ -223,12 +230,14 @@ export async function fetchOfficialBattleLog(playerTag: string): Promise<Officia
     });
     if (!res.ok) {
       console.warn(`[BrawlStarsAPI] /battlelog failed for ${normalizedTag}: ${res.status} ${res.statusText}`);
+      aoFalhar?.(res.status);
       return [];
     }
     const data = (await res.json()) as { items?: OfficialBattleLogEntry[] };
     return data.items || [];
   } catch (err) {
     console.error(`[BrawlStarsAPI] Error fetching battle log for ${playerTag}:`, err);
+    aoFalhar?.(err instanceof Error && err.name === "AbortError" ? "tempo" : "rede");
     return [];
   } finally {
     clearTimeout(timeout);

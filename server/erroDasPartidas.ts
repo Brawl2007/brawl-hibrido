@@ -33,6 +33,9 @@ export function diagnosticoDasPartidas(erro: unknown) {
     if (codigo === "OFFICIAL_API_NOT_CONFIGURED") {
       return { errorCode: codigo, error: "Sem chave da API oficial para recolher partidas. Configura a chave no painel do site ou no alojamento." };
     }
+    if (codigo === "OFFICIAL_API_READS_FAILED") {
+      return { errorCode: codigo, error: "A API oficial recusou ou não respondeu a nenhuma leitura de jogador. 403: o IP não está na lista da chave (ou liga o proxy da RoyaleAPI); 401: chave inválida; 429: limite de pedidos; 5xx ou rede: serviço indisponível." };
+    }
     if (codigo === "OFFICIAL_API_NO_PLAYERS") {
       return { errorCode: codigo, error: "A API oficial não devolveu jogadores para a amostra. Verifica a chave, o acesso à API e a disponibilidade do serviço." };
     }

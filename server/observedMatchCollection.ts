@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   fetchOfficialBattleLog,
   fetchOfficialRankedPlayers,
+  type FalhaDaLeitura,
   isOfficialApiConfigured,
   type OfficialBattleLogEntry,
 } from "./brawlStarsApi";
@@ -17,6 +18,7 @@ import {
   recordObservedBattlesBatch,
   reservarJanelaDasPartidas,
   tirarJogadoresParados,
+  tirarJogadoresPorTag,
   updateObservedMatchCollectionConfig,
   updateObservedMatchCollectionRun,
   type ObservedMatchupDelta,
@@ -31,7 +33,8 @@ import {
   type PartidaDoHistorico,
 } from "./bolaDeNeve";
 import { RANKED_MAP_SOURCES } from "@shared/rankedMaps";
-import { getSetting, setSetting } from "./appSettings";
+import { getSetting, getSettingFresh, setSetting } from "./appSettings";
+import { ajustarRitmoDaRecolha, lerRitmo, lugaresDaListaNaVolta, RITMO_INICIAL } from "./ritmoDaRecolha";
 import { avancarMigracao, DIAS_NOS_PACOTES, lerArmazenamento } from "./migracaoCompacta";
 import { compactarDiasFechados, expirarPacotes, gravarEmPacotes } from "./pacotesDePartidas";
 import { diaDaBatalha, diaMenos } from "@shared/partidasCompactas";
@@ -48,8 +51,10 @@ export { podeRecolherAgora } from "@shared/agendamentoPartidas";
  * garante que a função da Vercel acaba sempre a tempo de gravar.
  */
 export const JOGADORES_POR_RECOLHA = 120;
-const CONCURRENCY = 8;
-const TEMPO_MAXIMO_A_LER_MS = 35_000;
+/** A recolha de hoje começa em 240 jogadores e sobe sozinha: ver `ritmoDaRecolha.ts`. */
+export const CHAVE_DO_RITMO = "ritmoDaRecolha";
+export const CHAVE_DA_ULTIMA_VOLTA = "ultimaVoltaDaRecolha";
+const TEMPO_MAXIMO_A_LER_MS = 60_000;
 
 /**
  * Os tipos de batalha do modo Ranked na API oficial.
@@ -238,7 +243,7 @@ async function atualizarBolaDeNeve(logs: ReadonlyArray<{ tag: string; entries: O
   return acrescentarJogadoresALista(vistos, LIMITE_DA_LISTA);
 }
 
-async function mapWithConcurrency<T, R>(items: readonly T[], task: (item: T) => Promise<R>, prazo = Number.POSITIVE_INFINITY) {
+async function mapWithConcurrency<T, R>(items: readonly T[], task: (item: T) => Promise<R>, prazo = Number.POSITIVE_INFINITY, concorrencia = 8) {
   const results: R[] = [];
   let cursor = 0;
   const worker = async () => {
@@ -248,7 +253,7 @@ async function mapWithConcurrency<T, R>(items: readonly T[], task: (item: T) => 
       results.push(await task(item));
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(concorrencia, items.length) }, worker));
   return results;
 }
 
@@ -264,8 +269,11 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     // cache e antes de gastar pedidos à API: se falhar, a volta falha à vista.
     const armazenamento = await lerArmazenamento();
     const volta = voltaDaRecolha(startedAt);
+    // O ritmo desta volta (jogadores e pedidos em simultâneo). Sem estado legível, o inicial.
+    const ritmo = await (async () => lerRitmo(await getSettingFresh(CHAVE_DO_RITMO)))().catch(() => ({ ...RITMO_INICIAL }));
+    const lugaresDaLista = lugaresDaListaNaVolta(ritmo.jogadores);
     // A bola de neve (ver `bolaDeNeve.ts`). Se a lista falhar, a recolha segue só com os rankings.
-    const naAltura = await listarJogadoresNaAltura(startedAt, JOGADORES_POR_RECOLHA).catch((erro: unknown) => {
+    const naAltura = await listarJogadoresNaAltura(startedAt, ritmo.jogadores).catch((erro: unknown) => {
       console.warn("[Partidas] Lista da bola de neve não lida:", erro instanceof Error ? erro.message : erro);
       return [] as string[];
     });
@@ -273,14 +281,32 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     const dosRankings = jogadoresDaVolta(
       listas.flat().map(player => player.tag?.trim()).filter((tag): tag is string => Boolean(tag)),
       volta,
-      JOGADORES_POR_RECOLHA - Math.min(naAltura.length, LUGARES_DA_BOLA_DE_NEVE),
+      ritmo.jogadores - Math.min(naAltura.length, lugaresDaLista),
     );
-    const escolha = escolherLeituras(dosRankings, naAltura, JOGADORES_POR_RECOLHA);
+    const escolha = escolherLeituras(dosRankings, naAltura, ritmo.jogadores, lugaresDaLista);
     const players = escolha.tags;
     if (!players.length) throw Object.assign(new Error("A API oficial não devolveu jogadores para a amostra."), { code: "OFFICIAL_API_NO_PLAYERS" });
 
     const prazo = Date.now() + TEMPO_MAXIMO_A_LER_MS;
-    const logs = await mapWithConcurrency(players, async tag => ({ tag, entries: await fetchOfficialBattleLog(tag) }), prazo);
+    const todasAsLeituras = await mapWithConcurrency(players, async tag => {
+      let falha: FalhaDaLeitura | undefined;
+      const entries = await fetchOfficialBattleLog(tag, (motivo) => { falha = motivo; });
+      return { tag, entries, falha };
+    }, prazo, ritmo.concorrencia);
+    // Uma leitura que falhou NÃO é um jogador sem partidas Ranked: não entra nas contas
+    // da bola de neve (o jogador volta a ser lido na próxima volta) nem nas partidas.
+    const falhasPorMotivo: Record<string, number> = {};
+    for (const leitura of todasAsLeituras) if (leitura.falha !== undefined) falhasPorMotivo[String(leitura.falha)] = (falhasPorMotivo[String(leitura.falha)] ?? 0) + 1;
+    const logs = todasAsLeituras.filter((leitura) => leitura.falha === undefined);
+    const limitados = falhasPorMotivo["429"] ?? 0;
+    const naoLidos = todasAsLeituras.length - logs.length;
+    if (todasAsLeituras.length > 0 && logs.length === 0) {
+      console.error("[Partidas] Nenhuma leitura de jogador teve resposta:", JSON.stringify(falhasPorMotivo));
+      throw Object.assign(new Error("A API oficial recusou todas as leituras."), { code: "OFFICIAL_API_READS_FAILED" });
+    }
+    // O código 404 quer dizer que o jogador já não existe: sai da lista.
+    const inexistentes = todasAsLeituras.filter((leitura) => leitura.falha === 404).map((leitura) => normalizarTag(leitura.tag)).filter((tag): tag is string => Boolean(tag));
+    if (inexistentes.length) await tirarJogadoresPorTag(inexistentes).catch(() => undefined);
     /**
      * Que tipos de batalha a API devolveu, para se poder confirmar no ar que o
      * Ranked está mesmo a ser apanhado (e não os jogos de troféus).
@@ -387,8 +413,16 @@ export async function collectObservedRankedMatches(trigger: ObservedCollectionTr
     });
     await updateObservedMatchCollectionConfig({ lastStatus: "success", lastCompletedAt: completedAt, lastError: null });
     const resumoDaBola = { lidosDaLista: escolha.daLista, lidosDosRankings: escolha.dosRankings, ...bolaDeNeve };
-    console.log(`[Partidas] ${logs.length} jogadores lidos · ${candidates.length} partidas Ranked · ${battlesInserted} novas · bola de neve: ${JSON.stringify(resumoDaBola)} · tipos: ${JSON.stringify(tiposVistos)}`);
-    return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos, niveisVistos, bolaDeNeve: resumoDaBola, armazenamento: migracao?.armazenamento ?? armazenamento };
+    // O ritmo da volta seguinte, e o que aconteceu nesta (para o painel de estado). Nunca faz falhar a volta.
+    const proximoRitmo = ajustarRitmoDaRecolha(ritmo, { pedidos: todasAsLeituras.length, limitados, falhas: naoLidos - limitados, completa: todasAsLeituras.length === players.length, podeSubir: armazenamento === "compacto" });
+    await Promise.all([
+      setSetting(CHAVE_DO_RITMO, JSON.stringify(proximoRitmo)),
+      setSetting(CHAVE_DA_ULTIMA_VOLTA, JSON.stringify({
+        em: completedAt.toISOString(), pedidos: players.length, lidos: logs.length, falhas: falhasPorMotivo, novas: battlesInserted, ritmo, proximoRitmo,
+      })),
+    ]).catch((erro: unknown) => console.warn("[Partidas] Ritmo não guardado:", erro instanceof Error ? erro.message : erro));
+    console.log(`[Partidas] ${logs.length} jogadores lidos (${naoLidos} sem resposta: ${JSON.stringify(falhasPorMotivo)}) · ${candidates.length} partidas Ranked · ${battlesInserted} novas · bola de neve: ${JSON.stringify(resumoDaBola)} · ritmo: ${JSON.stringify(ritmo)} → ${JSON.stringify(proximoRitmo)} · tipos: ${JSON.stringify(tiposVistos)}`);
+    return { ok: true as const, playersSampled: logs.length, rankedFound: candidates.length, battlesInserted, pairObservations, tiposVistos, niveisVistos, bolaDeNeve: resumoDaBola, armazenamento: migracao?.armazenamento ?? armazenamento, falhas: falhasPorMotivo, ritmo: proximoRitmo };
   } catch (error) {
     const diagnostico = diagnosticoDasPartidas(error);
     const completedAt = new Date();

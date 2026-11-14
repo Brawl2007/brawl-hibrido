@@ -29,4 +29,16 @@ describe("confirmação visível da recolha", () => {
     const b = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, armazenamento: { armazenamento: "compacto" } }));
     expect(b).not.toContain("Formato compacto");
   });
+
+  it("mostra o ritmo da última volta, as falhas por motivo e a fila de jogadores", () => {
+    const cadencia = estadoDaCadenciaDasPartidas({ lastStatus: "success", lastStartedAt: "2026-09-30T12:00:00Z", lastCompletedAt: "2026-09-30T12:00:40Z" }, true, new Date("2026-09-30T12:05:00Z"));
+    const html = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, ritmo: {
+      ultimaVolta: { pedidos: 300, lidos: 296, falhas: { "429": 3, rede: 1 }, novas: 2400, proximoRitmo: { jogadores: 150 } },
+      lista: { naLista: 49995, naAltura: 31000 },
+    } }));
+    expect(html).toContain("296 de 300 jogadores lidos");
+    expect(html).toContain("3 (limite de pedidos)");
+    expect(html).toContain("Próxima volta: 150 jogadores");
+    expect(html).toContain("à espera de leitura");
+  });
 });

@@ -20,7 +20,7 @@ import { probeAllSources } from "./sourceProbe";
 import { confrontoNoMapa, fichaDaMatriz, resumoDasPartidas, resumoDosMapas, resumoParaODraft } from "./partidasResumo";
 import { estadoDaMigracao } from "./migracaoCompacta";
 import { contarPartidasEmPacotes } from "./pacotesDePartidas";
-import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
+import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getSettingFresh, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
 import { IP_DO_PROXY_ROYALEAPI, normalizarCaminhoDaApi, probeOfficialApi, setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
 import { ErroDoGeneral, ateAo, guardarChaveDaGemini, lerChaveDaGemini, modelosDaGemini, pedirPlanoAoGeneral, rotularTerrenoComIA, testarChaveDaGemini } from "./generalIA";
 import { esquemaDoPedidoTatico } from "./decisoesTaticas";
@@ -39,6 +39,7 @@ import {
   getObservedMatchCollectionConfig,
   getObservedMatchCollectionCoverage,
   getObservedMatchupAggregate,
+  contarJogadoresDaLista,
   listObservedMatchCollectionRuns,
   getProdigyLinks,
   getRankedSyncConfig,
@@ -60,7 +61,7 @@ import { getSnapshotSynergies } from "@shared/counterSyncSnapshot";
 import { brawlScopeSynergyData, normalizeBrawlScopeSynergyList } from "@shared/brawlScopeSynergyData";
 import { getBrawlScopeColagemFeita, normalizarVistaBrawlScope, getBrawlScopeMatchupCoverage, getBrawlScopeMatchupMatrix, getPublicCounterSyncSnapshot, getSourceHealth, clearImportedBrawlScope, importBrawlScopePage, limparBloqueio, persistMatchupMatricesNow, persistCaptures, syncCounterData } from "./counterSync";
 import { fetchOfficialEvents, fetchOfficialRankings, isOfficialApiConfigured } from "./brawlStarsApi";
-import { normalizeObservedMode, resolveObservedMapId } from "./observedMatchCollection";
+import { CHAVE_DA_ULTIMA_VOLTA, normalizeObservedMode, resolveObservedMapId } from "./observedMatchCollection";
 
 
 /**
@@ -873,6 +874,11 @@ export const appRouter = router({
       .query(({ input }) => resumoDosMapas(input ?? {})),
     status: publicProcedure.query(async () => {
       const armazenamento = await estadoDaMigracao().catch(() => ({ armazenamento: "legado" as const }));
+      // O ritmo e as falhas da última volta, e a fila de jogadores à espera (v184).
+      const [ultimaVolta, lista] = await Promise.all([
+        getSettingFresh(CHAVE_DA_ULTIMA_VOLTA).then((texto) => (texto ? JSON.parse(texto) as Record<string, unknown> : null)).catch(() => null),
+        contarJogadoresDaLista(new Date()).catch(() => null),
+      ]);
       const [config, coverage, runs] = await Promise.all([
         getObservedMatchCollectionConfig(),
         armazenamento.armazenamento === "compacto"
@@ -894,6 +900,7 @@ export const appRouter = router({
         lastError: config?.lastError ?? null,
         coverage,
         armazenamento,
+        recolha: { ultimaVolta, lista },
         runs,
         /**
          * Sem chave da API oficial não há batalhas nenhumas para recolher — e

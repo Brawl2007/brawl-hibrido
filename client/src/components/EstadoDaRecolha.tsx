@@ -28,9 +28,28 @@ function textoDoArmazenamento(a: ArmazenamentoDasPartidas | undefined) {
     : `Formato compacto: ${feitas} partidas copiadas. O Draft continua a usar o formato anterior até a cópia acabar.`;
 }
 
-export function EstadoDaRecolha({ cadencia, armazenamento }: { cadencia: Cadencia | undefined; armazenamento?: ArmazenamentoDasPartidas }) {
+/** O ritmo da última volta (v184): quantos jogadores se leem, quantos falharam e quantos esperam na lista. */
+export type RitmoDaRecolha = {
+  ultimaVolta?: { pedidos?: number; lidos?: number; falhas?: Record<string, number>; novas?: number; proximoRitmo?: { jogadores: number } } | null;
+  lista?: { naLista: number; naAltura: number } | null;
+};
+
+function textoDoRitmo(r: RitmoDaRecolha | undefined) {
+  const volta = r?.ultimaVolta;
+  if (!volta || typeof volta.pedidos !== "number") return null;
+  const falhas = Object.entries(volta.falhas ?? {});
+  const total = falhas.reduce((s, [, n]) => s + n, 0);
+  const partes = [`Última volta: ${volta.lidos ?? 0} de ${volta.pedidos} jogadores lidos${volta.novas !== undefined ? `, ${volta.novas.toLocaleString("pt-PT")} partidas novas` : ""}.`];
+  if (total > 0) partes.push(`Sem resposta: ${falhas.map(([motivo, n]) => `${n} (${motivo === "429" ? "limite de pedidos" : motivo})`).join(", ")}.`);
+  if (volta.proximoRitmo) partes.push(`Próxima volta: ${volta.proximoRitmo.jogadores} jogadores.`);
+  if (r?.lista) partes.push(`Lista: ${r.lista.naLista.toLocaleString("pt-PT")} jogadores, ${r.lista.naAltura.toLocaleString("pt-PT")} à espera de leitura.`);
+  return partes.join(" ");
+}
+
+export function EstadoDaRecolha({ cadencia, armazenamento, ritmo }: { cadencia: Cadencia | undefined; armazenamento?: ArmazenamentoDasPartidas; ritmo?: RitmoDaRecolha }) {
   if (!cadencia) return null;
   const migracao = textoDoArmazenamento(armazenamento);
+  const leituras = textoDoRitmo(ritmo);
   const aviso = cadencia.estado === "atrasada" || cadencia.estado === "falhou" || cadencia.estado === "sem_chave";
   return (
     <aside className={`my-3 rounded-xl border border-border bg-card px-4 py-3 text-sm ${aviso ? "text-destructive" : "text-muted-foreground"}`} aria-label="Estado da recolha automática">
@@ -41,6 +60,7 @@ export function EstadoDaRecolha({ cadencia, armazenamento }: { cadencia: Cadenci
         {cadencia.estado === "atrasada" ? "Não há uma nova recolha concluída no horário previsto. O agendador ou o servidor podem ter falhado. " : null}
         {cadencia.estado !== "sem_chave" ? <>Próxima prevista: <time dateTime={cadencia.proximaPrevista}>{hora(cadencia.proximaPrevista)}</time>.</> : null}
         {cadencia.erro ? <> {cadencia.erro}</> : null}
+        {leituras ? <span className="mt-1 block">{leituras}</span> : null}
         {migracao ? <span className="mt-1 block">{migracao}</span> : null}
       </span>
     </aside>
