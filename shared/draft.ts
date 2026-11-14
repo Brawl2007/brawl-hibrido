@@ -28,6 +28,7 @@ import {
   type BrawlPlanetMapTeam,
   type BrawlPlanetMapTeamEntry,
 } from "./brawlPlanetMapTeams";
+import type { ConfigDoMotorApi } from "./configDoMotorApi";
 import { defaultDraftRuleSettings, getCounterPickMultiplier, regrasDoMotor, regrasDaApiDoMotor, type DraftApiRuleSettings, type DraftRuleSettings } from "./draftRules";
 
 export type DraftKind = "ban" | "pick";
@@ -462,6 +463,8 @@ export type DraftRankingContext<T extends DraftRow = DraftRow> = {
   ruleSettings?: Partial<DraftRuleSettings>;
   /** v170: as regras do Draft com «API oficial» (ver `DraftApiRuleSettings`). Só contam com a API ligada. */
   apiRuleSettings?: Partial<DraftApiRuleSettings>;
+  /** v183: configuração do motor da API (distribuição por pick, bônus e desbônus). */
+  configDoMotorApi?: ConfigDoMotorApi;
   /**
    * O maior Score Híbrido do mapa (o que vale 100 Pontos Base). Os pontos
    * SOMADOS da API são dados em Pontos Base; isto converte-os para o Score.
@@ -2179,11 +2182,11 @@ function rankApiEntries<T extends DraftRow>(rows: T[], locked: Set<string>, quer
   const resultados = ranquearCandidatosApiPerfeito({ ...dados, disponiveisIds,
     aliadosIds: (context.allyRows ?? []).map((r) => r.brawler), inimigosIds: (context.enemyRows ?? []).map((r) => r.brawler),
     modoDeJogo: context.mapModeId ?? "", perfisTaticos: perfisTaticosDoDraft(nomes), turno: context.pickNumber,
-    banidosIds: Array.from(context.bannedNames ?? []), regras: context.ruleSettings, pesoBan: context.apiRuleSettings?.apiPesoBan, ordemTime: context.ordemTimeApi, modificadorRanked: context.modificadorRanked, poolNivel11Usuario: context.poolNivel11Usuario,
+    banidosIds: Array.from(context.bannedNames ?? []), regras: context.ruleSettings, pesoBan: context.apiRuleSettings?.apiPesoBan, config: context.configDoMotorApi, ordemTime: context.ordemTimeApi, modificadorRanked: context.modificadorRanked, poolNivel11Usuario: context.poolNivel11Usuario,
   });
-  const forcaBase = avaliarForcaDoMapa(dados.estatisticasMapa, context.pickNumber, context.ruleSettings);
+  const forcaBase = avaliarForcaDoMapa(dados.estatisticasMapa, context.pickNumber, context.ruleSettings, context.configDoMotorApi);
   const porNome = new Map(rows.map((r) => [r.brawler, r]));
-  const bans = context.draftKind === "ban" ? new Map(recomendarBansApi({ ...dados, disponiveisIds, brawlerPretendidoId: context.brawlerPretendido }).map((r) => [r.brawlerId, r])) : null;
+  const bans = context.draftKind === "ban" ? new Map(recomendarBansApi({ ...dados, disponiveisIds, brawlerPretendidoId: context.brawlerPretendido, config: context.configDoMotorApi }).map((r) => [r.brawlerId, r])) : null;
   return resultados.filter((api) => (!bans || bans.has(api.brawlerId)) && (!query || api.brawlerId.toLowerCase().includes(query.toLowerCase())) &&
     (!context.role || context.role === "Todas" || inferDraftRole(api.brawlerId) === context.role || inferDraftRole(api.brawlerId) === "flex"))
     .map((api) => {

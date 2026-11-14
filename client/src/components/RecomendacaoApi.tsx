@@ -18,6 +18,29 @@ const NOMES: Record<keyof ResultadoRecomendacaoApi["fatores"], string> = {
   guardaCostasLogit: "Proteção contra o próximo pick inimigo",
   respostaTaticaLogit: "Resposta à composição inimiga",
 };
+/** As linhas do «Por que esta escolha?»: counter e sinergia aparecem separados em bônus e desbônus. */
+export function linhasDoCartao(
+  impactos: ResultadoRecomendacaoApi["fatores"],
+  detalhes?: ResultadoRecomendacaoApi["detalhesPercentuais"]
+) {
+  const linhas: Array<{ chave: string; nome: string; valor: number }> = [];
+  const juntar = (chave: string, nome: string, valor: number) => {
+    if (Math.abs(valor) >= 0.05) linhas.push({ chave, nome, valor });
+  };
+  for (const chave of Object.keys(NOMES) as Array<keyof typeof NOMES>) {
+    // A divisão só vale se somar o total mostrado; senão, mostra-se o total.
+    const bate = (a: number, b: number, total: number) => Math.abs(a + b - total) < 0.05;
+    if (chave === "counterLiquidoLogit" && detalhes && bate(detalhes.counter, detalhes.counterado, impactos[chave])) {
+      juntar("counter", "Counter contra os inimigos escolhidos", detalhes.counter);
+      juntar("counterado", "Counterado: já escolheram quem o countera", detalhes.counterado);
+    } else if (chave === "sinergiaRealLogit" && detalhes && bate(detalhes.sinergia, detalhes.antiSinergia, impactos[chave])) {
+      juntar("sinergia", "Sinergia com os aliados", detalhes.sinergia);
+      juntar("antiSinergia", "Anti-sinergia com os aliados", detalhes.antiSinergia);
+    } else juntar(chave, NOMES[chave], impactos[chave]);
+  }
+  return linhas;
+}
+
 const percentagem = (valor: number) =>
   `${valor > 0 ? "+" : "−"}${Math.abs(valor).toFixed(1)}%`;
 
@@ -44,9 +67,7 @@ export function RecomendacaoApi({
     ? (resultado.fatoresPercentuais ?? impactosPercentuais(resultado.fatores))
     : undefined;
   const fatores = impactos
-    ? (Object.keys(NOMES) as Array<keyof typeof NOMES>).filter(
-        k => Math.abs(impactos[k]) >= 0.05
-      )
+    ? linhasDoCartao(impactos, resultado?.detalhesPercentuais)
     : [];
   return (
     <article
@@ -152,13 +173,11 @@ export function RecomendacaoApi({
           </summary>
           {fatores.length ? (
             <dl>
-              {fatores.map(chave => (
-                <div key={chave}>
-                  <dt>{NOMES[chave]}</dt>
-                  <dd
-                    className={impactos![chave] < 0 ? "api-veto" : "api-alvo"}
-                  >
-                    {percentagem(impactos![chave])}
+              {fatores.map(linha => (
+                <div key={linha.chave}>
+                  <dt>{linha.nome}</dt>
+                  <dd className={linha.valor < 0 ? "api-veto" : "api-alvo"}>
+                    {percentagem(linha.valor)}
                   </dd>
                 </div>
               ))}
