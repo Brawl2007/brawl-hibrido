@@ -88,11 +88,12 @@ describe("instalador da base de dados", () => {
   const script = readFileSync(resolve(raiz, "scripts/db-setup.mjs"), "utf8");
   const sql = readFileSync(resolve(raiz, "drizzle/criar-tabelas.sql"), "utf8");
 
-  it("cria as 19 tabelas incluindo qualidade das partidas", () => {
+  it("cria as 21 tabelas incluindo qualidade e pacotes das partidas", () => {
     const tabelas = sql.match(/CREATE TABLE IF NOT EXISTS `[a-z_]+`/g) ?? [];
     // v157: `observed_battle_ranks`, o rank de cada partida recolhida.
     // v160: `observed_players`, os jogadores da bola de neve.
-    expect(tabelas).toHaveLength(19);
+    // v182: `observed_battle_packs` e `observed_summary_cache`.
+    expect(tabelas).toHaveLength(21);
     expect(tabelas).toContain("CREATE TABLE IF NOT EXISTS `observed_battle_ranks`");
     expect(tabelas).toContain("CREATE TABLE IF NOT EXISTS `observed_players`");
   });

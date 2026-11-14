@@ -181,7 +181,7 @@ export default function Partidas() {
           </p>
         </header>
 
-        <EstadoDaRecolha cadencia={recolha.data?.cadencia} />
+        <EstadoDaRecolha cadencia={recolha.data?.cadencia} armazenamento={recolha.data?.armazenamento} />
         {recolha.isError ? <p role="alert">Não foi possível consultar o estado da recolha. Os totais guardados estão indisponíveis.</p> : null}
 
         <section className="partidas-filtros" aria-label="Filtros">

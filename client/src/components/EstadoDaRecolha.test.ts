@@ -20,4 +20,13 @@ describe("confirmação visível da recolha", () => {
     expect(html).toContain("Guardada:");
     expect(html).toContain("Próxima prevista:");
   });
+
+  it("avisa que a cópia para o formato compacto está a decorrer, e cala-se depois", () => {
+    const cadencia = estadoDaCadenciaDasPartidas({ lastStatus: "success", lastStartedAt: "2026-09-30T12:00:00Z", lastCompletedAt: "2026-09-30T12:00:40Z" }, true, new Date("2026-09-30T12:05:00Z"));
+    const a = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, armazenamento: { armazenamento: "a_migrar", convertidas: 120000 } }));
+    expect(a).toContain("Formato compacto");
+    expect(a).toContain("continua a usar o formato anterior");
+    const b = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, armazenamento: { armazenamento: "compacto" } }));
+    expect(b).not.toContain("Formato compacto");
+  });
 });

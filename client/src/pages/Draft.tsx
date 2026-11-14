@@ -957,7 +957,7 @@ export function SourceHealthPanel({ sourceStates, health, processHealth }: {
         </p>
       ) : null}
 
-      <EstadoDaRecolha cadencia={observedQuery.data?.cadencia} />
+      <EstadoDaRecolha cadencia={observedQuery.data?.cadencia} armazenamento={observedQuery.data?.armazenamento} />
 
       {db && !db.reachable ? (
         <p className="source-health-db">

@@ -28,10 +28,11 @@ export function useFonteApi(nomeDoMapa: string | undefined, linhasOriginais: rea
   const { ligada, alternar, dias, setDias, rank, setRank } = useApiOficial();
   const doRank = rank || undefined;
 
-  const lista = trpc.observedMatches.partidas.useQuery({ dias, rank: doRank }, { enabled: ligada, staleTime: 120_000 });
+  // Só as contagens por brawler de todos os mapas (leve) e, depois, o resumo do mapa escolhido.
+  const lista = trpc.observedMatches.mapas.useQuery({ dias, rank: doRank }, { enabled: ligada, staleTime: 120_000 });
   const mapa = lista.data?.mapas.find((entrada) => normalizarNome(entrada.nome) === normalizarNome(nomeDoMapa));
-  const doMapa = trpc.observedMatches.partidas.useQuery(
-    { dias, rank: doRank, mapId: mapa?.mapId },
+  const doMapa = trpc.observedMatches.draft.useQuery(
+    { mapId: mapa?.mapId ?? "", dias, rank: doRank },
     // A chave inclui o mapa, período e rank. Durante uma mudança não se usam
     // números da chave anterior como se pertencessem ao novo mapa.
     { enabled: ligada && Boolean(mapa?.mapId), staleTime: 120_000 },
@@ -42,12 +43,8 @@ export function useFonteApi(nomeDoMapa: string | undefined, linhasOriginais: rea
     if (!ligada) return undefined;
     if (!mapa) return lista.data ? { ...SEM_PARTIDAS, referenciasMapa } : undefined;
     if (!doMapa.data || terreno.isLoading) return undefined;
-    return { ...doMapa.data, referenciasMapa, modeId: mapa.mode, priorModo: {
-      brawlers: lista.data?.brawlersPorModo[mapa.mode] ?? [],
-      confrontos: lista.data?.confrontosPorModo?.[mapa.mode] ?? [],
-      sinergias: lista.data?.sinergiasPorModo?.[mapa.mode] ?? [],
-      equipas: lista.data?.equipasPorModo?.[mapa.mode] ?? [],
-    } };
+    // O servidor já devolve o apoio do modo (`priorModo`) junto com o mapa.
+    return { ...doMapa.data, referenciasMapa, modeId: doMapa.data.modeId ?? mapa.mode };
   }, [ligada, mapa, lista.data, doMapa.data, referenciasMapa, terreno.isLoading]);
 
   const [versao, setVersao] = useState(0);

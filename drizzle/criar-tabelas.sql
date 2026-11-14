@@ -258,3 +258,28 @@ CREATE TABLE IF NOT EXISTS `observed_battle_quality` (
   `todos_nivel_11` int NOT NULL,
   PRIMARY KEY (`fingerprint`)
 );
+
+-- v182: partidas Ranked num formato compacto, um pacote por mapa, modo e dia.
+-- Ver `shared/partidasCompactas.ts`.
+CREATE TABLE IF NOT EXISTS `observed_battle_packs` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`map_id` varchar(128) NOT NULL,
+	`mode` varchar(64) NOT NULL,
+	`dia` varchar(10) NOT NULL,
+	`partidas` int NOT NULL,
+	`dados` longtext NOT NULL,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `observed_battle_packs_id` PRIMARY KEY(`id`),
+	INDEX `observed_battle_packs_map_dia_idx` (`map_id`, `dia`),
+	INDEX `observed_battle_packs_mode_dia_idx` (`mode`, `dia`),
+	INDEX `observed_battle_packs_dia_idx` (`dia`)
+);
+
+-- v182: resumos já calculados (Draft, mapas, página Partidas), para o primeiro
+-- pedido de uma instância fria não refazer a conta.
+CREATE TABLE IF NOT EXISTS `observed_summary_cache` (
+	`chave` varchar(190) NOT NULL,
+	`gerado_em` timestamp NOT NULL DEFAULT (now()),
+	`dados` longtext NOT NULL,
+	PRIMARY KEY (`chave`)
+);

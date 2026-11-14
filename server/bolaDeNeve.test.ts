@@ -51,7 +51,7 @@ vi.mock("./brawlStarsApi", () => ({
   fetchOfficialRankedPlayers: vi.fn(async (pais: string) => (pais === "global" ? api.rankings.map((tag) => ({ tag })) : [])),
   fetchOfficialBattleLog: vi.fn(async (tag: string) => { api.lidos.push(tag); return api.historicos.get(tag) ?? []; }),
 }));
-vi.mock("./appSettings", () => ({ getSetting: vi.fn(async () => null), setSetting: vi.fn(async () => undefined) }));
+vi.mock("./appSettings", () => ({ getSetting: vi.fn(async () => null), getSettingFresh: vi.fn(async () => null), setSetting: vi.fn(async () => undefined) }));
 vi.mock("./rankedSync", () => ({ RANKED_MAP_SOURCES: [] }));
 
 const { collectObservedRankedMatches, partidasDoHistorico, tagsDasPartidasRanked } = await import("./observedMatchCollection");
