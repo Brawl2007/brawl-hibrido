@@ -985,6 +985,45 @@ export function ranquearCandidatosApiPerfeito(
     );
 }
 
+/**
+ * A chance estimada da equipa com os picks já feitos (v185).
+ *
+ * É a conta que a calibração mede (`shared/calibracaoDoMotorApi.ts`): força dos
+ * brawlers, counters e sinergias, cada uma com o peso medido nas partidas
+ * reais. Um lugar por escolher conta como o brawler médio (zero), por isso a
+ * estimativa encolhe para 50% no início do draft.
+ */
+export function calcularChanceDaEquipa(
+  p: Pick<ParametrosMotorApi, "aliadosIds" | "inimigosIds" | "estatisticasMapa" | "obterConfronto" | "obterSinergia"> & {
+    pesos: { forca: number; counter: number; sinergia: number };
+  }
+) {
+  const beta = (id: string) =>
+    logit(
+      calcularWinRateBayesiano(
+        p.estatisticasMapa[id] ?? { vitoriasMapa: 0, jogosMapa: 0, vitoriasModo: 0, jogosModo: 0 }
+      )
+    );
+  const betas = (ids: readonly string[]) => ids.map(beta);
+  const forca =
+    betas(p.aliadosIds).reduce((s, v) => s + v, 0) -
+    betas(p.inimigosIds).reduce((s, v) => s + v, 0);
+  let counter = 0;
+  for (const a of p.aliadosIds)
+    for (const e of p.inimigosIds)
+      counter += calcularDeltaCounterPuro(beta(a), beta(e), p.obterConfronto(a, e));
+  const sinergiaDe = (ids: readonly string[]) => {
+    let total = 0;
+    for (let i = 0; i < ids.length; i++)
+      for (let j = i + 1; j < ids.length; j++)
+        total += calcularDeltaSinergiaPura(beta(ids[i]), beta(ids[j]), p.obterSinergia(ids[i], ids[j]));
+    return total;
+  };
+  const sinergia = sinergiaDe(p.aliadosIds) - sinergiaDe(p.inimigosIds);
+  const z = p.pesos.forca * forca + p.pesos.counter * counter + p.pesos.sinergia * sinergia;
+  return { chance: sigmoidPercent(z), fatores: { forca, counter, sinergia } };
+}
+
 /** Posição e confronto entram juntos na procura; o Mid verdadeiro ocupa o centro. */
 export function calcularMelhoresLanes3v3(
   p: Pick<

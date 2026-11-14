@@ -2,7 +2,7 @@ import { fontesDeApoioDaApi } from "@shared/counterMatchupValue";
 import { RecomendacaoApi } from "@/components/RecomendacaoApi";
 import { AnaliseApi } from "@/components/AnaliseApi";
 import { montarDadosDoMotorApi } from "@shared/observedMatchupMatrix";
-import { calcularMelhoresLanes3v3, ranquearCandidatosApiPerfeito, proximoTurnoDaEquipa } from "@shared/motorApiPerfeito";
+import { calcularChanceDaEquipa, calcularMelhoresLanes3v3, ranquearCandidatosApiPerfeito, proximoTurnoDaEquipa } from "@shared/motorApiPerfeito";
 import { perfisTaticosDoDraft } from "@shared/draft";
 import { Retrato } from "@/components/Retrato";
 import * as DicaPrimitiva from "@radix-ui/react-tooltip";
@@ -2709,6 +2709,11 @@ export default function Draft() {
   const [pretendidoApi, setPretendidoApi] = useState("");
   const dadosMotorApi = useMemo(() => fonteApi.ligada ? montarDadosDoMotorApi(currentRows.map((r) => r.brawler), fonteApi.dados ?? { partidas: 0, brawlers: [], confrontos: [], sinergias: [] }, fontesDeApoioDaApi(selectedMap?.modeId)) : undefined, [fonteApi.ligada, fonteApi.dados, currentRows, selectedMap?.modeId, counterSnapshotVersion, liveMatchups.version]);
   const perfisApi = useMemo(() => perfisTaticosDoDraft(currentRows.map((r) => r.brawler)), [currentRows, roleVersion]);
+  // A calibração do motor nas partidas reais (v185): só se mostra a chance da equipa com ela aprovada.
+  const calibracaoApi = trpc.observedMatches.calibracao.useQuery(undefined, { enabled: fonteApi.ligada, staleTime: 600_000 });
+  const chanceDaEquipa = useMemo(() => dadosMotorApi && calibracaoApi.data?.aprovada && (myPicks.length || opponentPicks.length)
+    ? calcularChanceDaEquipa({ ...dadosMotorApi, aliadosIds: myPicks.map((r) => r.brawler), inimigosIds: opponentPicks.map((r) => r.brawler), pesos: calibracaoApi.data.pesos })
+    : null, [dadosMotorApi, calibracaoApi.data, myPicks, opponentPicks]);
   const lanesApi = useMemo(() => dadosMotorApi ? calcularMelhoresLanes3v3({ ...dadosMotorApi, aliadosIds: myPicks.map((r) => r.brawler), inimigosIds: opponentPicks.map((r) => r.brawler), perfisTaticos: perfisApi }) : [], [dadosMotorApi, myPicks, opponentPicks, perfisApi]);
   const escolhasInimigasApi = useMemo(() => dadosMotorApi && visaoInimigaApi && enemyPicks.length < 3 ? ranquearCandidatosApiPerfeito({ ...dadosMotorApi,
     disponiveisIds: currentRows.filter((r) => !analysisLockedNames.has(r.brawler)).map((r) => r.brawler),
@@ -3083,7 +3088,7 @@ export default function Draft() {
             {analysisDraftStep?.kind === "ban" && <><label htmlFor="proteger-pick-api">Proteger 1.º pick</label><select id="proteger-pick-api" value={pretendidoApi} onChange={(e) => setPretendidoApi(e.target.value)}><option value="">Priorizar dominantes do mapa</option>{currentRows.filter((r) => !analysisLockedNames.has(r.brawler)).map((r) => <option key={r.brawler} value={r.brawler}>{r.brawler}</option>)}</select></>}
             </div>
             {fonteApi.erro && <p role="alert" className="api-alerta">Não foi possível carregar as partidas oficiais. As estimativas estão sem amostra; consulta o diagnóstico da recolha.</p>}
-            <AnaliseApi lanes={lanesApi} inimigos={escolhasInimigasApi} aberta={visaoInimigaApi} onAlternar={() => setVisaoInimigaApi((v) => !v)} />
+            <AnaliseApi lanes={lanesApi} inimigos={escolhasInimigasApi} aberta={visaoInimigaApi} onAlternar={() => setVisaoInimigaApi((v) => !v)} chanceDaEquipa={chanceDaEquipa} calibracao={calibracaoApi.data ?? null} />
           </>}
           <div className="draft-content">
             <section className="draft-mesa" aria-label="Azul contra Vermelha">
@@ -3217,7 +3222,7 @@ export default function Draft() {
                 {painelAberto === "regras" && <>
                   {hasCustomGlobalWeights && <p className="mesa-painel-nota">Este navegador usa Vitória {experimentalWeights.winRate}% / Uso {experimentalWeights.usageRate}% em todo o site. <a href="/#ranking-laboratory">Mudar</a></p>}
                   {fonteApi.ligada ? <section className="api-analise"><h3>Partidas oficiais e dados de apoio</h3><p>A força no mapa vem das partidas oficiais recentes. Com poucos jogos de um confronto ou dupla, as matrizes do projeto ajudam a recomendação; conforme a amostra cresce, a API assume o resultado. A divisão começa em 70% vitória e 30% uso e chega a 95% e 5% no último pick. Bans podem liberar caminhos e tornar uma função escassa; esse efeito termina quando os três inimigos estão definidos. Os cartões mostram o impacto de cada fator na chance estimada.</p></section> : <PainelDasRegrasDaApi regras={regrasDaApi.regras} ligada={false} personalizadas={regrasDaApi.personalizadas} onChange={regrasDaApi.mudar} onReset={regrasDaApi.repor} />}
-                  {fonteApi.ligada ? <PainelDoMotorApi config={configApi.config} preset={configApi.preset} onCampo={configApi.mudarCampo} onPick={configApi.mudarPick} onProporcao={configApi.mudarProporcao} onPreset={configApi.aplicarPreset} onRepor={configApi.repor} /> : <DraftRulesPanel abertoDeInicio preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />}
+                  {fonteApi.ligada ? <PainelDoMotorApi config={configApi.config} preset={configApi.preset} onCampo={configApi.mudarCampo} onPick={configApi.mudarPick} onProporcao={configApi.mudarProporcao} onPreset={configApi.aplicarPreset} onRepor={configApi.repor} calibracao={calibracaoApi.data ?? null} onCalibrar={configApi.aplicarCalibracao} /> : <DraftRulesPanel abertoDeInicio preference={draftRulePreference} hasCustomRules={hasCustomRules} onChange={updateDraftRulePreference} onReset={resetDraftRulePreference} reading={brawlScopeReading} onReadingChange={setBrawlScopeReadingPreference} liveCoverage={liveMatchups.coverage as Record<string, { profiles: number; pairs: number }>} liveCapturedAt={liveMatchups.capturedAt} />}
                 </>}
                 {painelAberto === "funcoes" && <DraftRoleEditor noPainel names={liveRows.map(row => row.brawler)} />}
                 {painelAberto === "pontuacao" && <div className="draft-arena-reference">

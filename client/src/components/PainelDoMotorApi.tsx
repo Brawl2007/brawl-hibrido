@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
+import type { PesosCalibrados, ResultadoDaCalibracao } from "@shared/calibracaoDoMotorApi";
 import {
   CAMPOS_DA_CONFIG,
   CAMPOS_DO_PICK,
@@ -79,7 +80,25 @@ function Controlo({ campo, config, onChange }: { campo: CampoDaConfig; config: C
   );
 }
 
-export function PainelDoMotorApi({ config, preset, onCampo, onPick, onProporcao, onPreset, onRepor }: {
+/** O que a calibração nas partidas reais diz, e o botão que a aplica. */
+function BlocoDaCalibracao({ calibracao, onCalibrar }: { calibracao: ResultadoDaCalibracao | null | undefined; onCalibrar?: (pesos: PesosCalibrados) => void }) {
+  if (!calibracao) return <p className="regras-da-api-estado">Calibração nas partidas reais: ainda sem resultado (corre uma vez por dia, depois de as partidas passarem ao formato compacto).</p>;
+  const q = calibracao.qualidade, p = calibracao.pesos;
+  return (
+    <div className="regras-da-api-estado" aria-label="Calibração nas partidas reais">
+      <p>
+        <b>Calibração nas partidas reais</b> — {calibracao.amostras.validacao.toLocaleString("pt-PT")} partidas recentes de validação:
+        acerta {(q.acerto * 100).toFixed(1)}% (ao acaso, 50%); perda {q.logLoss.toFixed(4)} contra {q.referencia.toFixed(4)} ao acaso e {q.soForca.toFixed(4)} só com a força dos brawlers.
+        Pesos medidos: força {p.forca.toFixed(2)}, counter {p.counter.toFixed(2)}, sinergia {p.sinergia.toFixed(2)} (1 = a conta já está calibrada).
+      </p>
+      {calibracao.aprovada
+        ? onCalibrar && <button type="button" onClick={() => onCalibrar(p)}>Aplicar calibração</button>
+        : <p>Não aprovada: {calibracao.motivo}</p>}
+    </div>
+  );
+}
+
+export function PainelDoMotorApi({ config, preset, onCampo, onPick, onProporcao, onPreset, onRepor, calibracao, onCalibrar }: {
   config: ConfigDoMotorApi;
   preset: IdDoPreset | "personalizado";
   onCampo: (secao: SecaoEscalar, campo: string, valor: number) => void;
@@ -87,6 +106,8 @@ export function PainelDoMotorApi({ config, preset, onCampo, onPick, onProporcao,
   onProporcao: (pick: number, valor: number) => void;
   onPreset: (id: IdDoPreset) => void;
   onRepor: () => void;
+  calibracao?: ResultadoDaCalibracao | null;
+  onCalibrar?: (pesos: PesosCalibrados) => void;
 }) {
   return (
     <section className="api-analise regras-da-api" aria-label="Configuração do motor da API">
@@ -101,6 +122,7 @@ export function PainelDoMotorApi({ config, preset, onCampo, onPick, onProporcao,
         ))}
         <span>{preset === "personalizado" ? "Personalizado — guardado neste navegador." : "Preset ativo."}</span>
       </div>
+      <BlocoDaCalibracao calibracao={calibracao} onCalibrar={onCalibrar} />
       <div className="api-pesos-scroll">
         <table className="api-pesos">
           <thead>

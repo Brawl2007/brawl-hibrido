@@ -11,6 +11,7 @@ import {
   type IdDoPreset,
   type SecaoEscalar,
 } from "@shared/configDoMotorApi";
+import { configCalibrada, type PesosCalibrados } from "@shared/calibracaoDoMotorApi";
 import { defaultDraftApiRuleSettings, normalizarRegrasDaApi } from "@shared/draftRules";
 import { readDraftRulePreference, toDraftRuleSettings } from "@/lib/draftRules";
 
@@ -72,6 +73,7 @@ export function useConfigDoMotorApi() {
   const mudarProporcao = useCallback((pick: number, valor: number) =>
     aplicar((c) => { c.tetoDosBonus.proporcao[pick] = valor; return c; }), [aplicar]);
   const aplicarPreset = useCallback((id: IdDoPreset) => aplicar(() => configDoPreset(id)), [aplicar]);
+  const aplicarCalibracao = useCallback((pesos: PesosCalibrados) => aplicar(() => configCalibrada(pesos)), [aplicar]);
   const preset = useMemo(() => presetDaConfig(config), [config]);
-  return { config, preset, mudarCampo, mudarPick, mudarProporcao, aplicarPreset, repor: () => aplicarPreset("padrao") };
+  return { config, preset, mudarCampo, mudarPick, mudarProporcao, aplicarPreset, aplicarCalibracao, repor: () => aplicarPreset("padrao") };
 }

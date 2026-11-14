@@ -19,6 +19,7 @@ import { resumirPartidas, nomeDoModo } from "@shared/partidasObservadas";
 import { probeAllSources } from "./sourceProbe";
 import { confrontoNoMapa, fichaDaMatriz, resumoDasPartidas, resumoDosMapas, resumoParaODraft } from "./partidasResumo";
 import { estadoDaMigracao } from "./migracaoCompacta";
+import { CHAVE_DA_CALIBRACAO, lerCalibracaoGuardada } from "./calibracaoPartidas";
 import { contarPartidasEmPacotes } from "./pacotesDePartidas";
 import { BRAWL_STARS_API_KEY_SETTING, BRAWL_STARS_API_VIA_SETTING, getSetting, getSettingFresh, getStoredApiKey, getStoredApiVia, setSetting } from "./appSettings";
 import { IP_DO_PROXY_ROYALEAPI, normalizarCaminhoDaApi, probeOfficialApi, setRuntimeApiKey, setRuntimeApiVia } from "./brawlStarsApi";
@@ -872,6 +873,8 @@ export const appRouter = router({
         rank: z.enum(["diamante", "mitico", "lendario", "mestre"]).optional(),
       }).optional())
       .query(({ input }) => resumoDosMapas(input ?? {})),
+    /** A última calibração do motor nas partidas reais (v185); `null` até haver uma. */
+    calibracao: publicProcedure.query(async () => lerCalibracaoGuardada(await getSettingFresh(CHAVE_DA_CALIBRACAO).catch(() => null))),
     status: publicProcedure.query(async () => {
       const armazenamento = await estadoDaMigracao().catch(() => ({ armazenamento: "legado" as const }));
       // O ritmo e as falhas da última volta, e a fila de jogadores à espera (v184).
