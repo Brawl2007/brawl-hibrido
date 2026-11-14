@@ -101,7 +101,7 @@ describe("período à escolha (v158)", () => {
     expect(ler("server/routers.ts")).toContain("dias: z.number().int().min(0).max(3650).default(30)");
     const draft = ler("client/src/pages/Draft.tsx");
     expect(draft).toContain("<SeletorDePeriodo className=\"mesa-fonte-api-periodo\" dias={fonteApi.dias} onChange={fonteApi.setDias} />");
-    expect(ler("client/src/hooks/useFonteApi.ts")).toContain("{ dias, rank: doRank, mapId: mapa?.mapId }");
+    expect(ler("client/src/hooks/useFonteApi.ts")).toContain('{ mapId: mapa?.mapId ?? "", dias, rank: doRank }');
   });
 });
 

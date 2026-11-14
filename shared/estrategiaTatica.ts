@@ -384,6 +384,9 @@ export function calcularProtecaoDoAliado(p: {
   turno: number;
   inimigosRestantes: number;
   obterCounter: (a: string, b: string) => number;
+  /** Teto e fator do bônus (v183: configuráveis; de fábrica 0,35 e 0,5). */
+  teto?: number;
+  fator?: number;
 }) {
   const vazio = {
     bonus: 0,
@@ -428,7 +431,7 @@ export function calcularProtecaoDoAliado(p: {
     Math.max(0, Math.min(5, p.turno - 1))
   ];
   return {
-    bonus: Math.min(0.35, 0.5 * beneficio) * progressao,
+    bonus: Math.min(p.teto ?? 0.35, (p.fator ?? 0.5) * beneficio) * progressao,
     aliadosProtegidos: [...protegidos],
     ameacasCobertas: [...cobertos],
   };
@@ -441,7 +444,10 @@ export function calcularRespostaTatica(p: {
   inimigos: readonly PerfilTaticoBrawler[];
   turno: number;
   contexto: ContextoMecanicoDoMapa;
+  /** Valores do bônus (v183: configuráveis; de fábrica 0,12 / 0,15 / 0,15 e teto 0,25). */
+  valores?: { abrirParedes: number; ultimoTank: number; ultimoLancador: number; teto: number };
 }) {
+  const v = p.valores ?? { abrirParedes: 0.12, ultimoTank: 0.15, ultimoLancador: 0.15, teto: 0.25 };
   const motivos: string[] = [];
   if (!p.candidato || p.turno <= 1) return { bonus: 0, motivos };
   const cand = completarPerfilMecanico(p.candidato);
@@ -457,7 +463,7 @@ export function calcularRespostaTatica(p: {
         (e.classe === "tank" && (e.dependsOnWalls || e.dependsOnBushes))
     )
   ) {
-    bonus += 0.12;
+    bonus += v.abrirParedes;
     motivos.push("Abrir as paredes da composição inimiga");
   }
   if (p.turno === 6 && inimigos.length === 3 && mapaTemParedes(p.contexto)) {
@@ -466,7 +472,7 @@ export function calcularRespostaTatica(p: {
       !inimigos.some(e => e.isAntiTank) &&
       inimigos.filter(e => e.lowSustainedDps).length >= 2
     ) {
-      bonus += 0.15;
+      bonus += v.ultimoTank;
       motivos.push("Último pick contra uma equipa sem anti-tanque");
     }
     if (
@@ -476,11 +482,11 @@ export function calcularRespostaTatica(p: {
         ["controller", "damage", "sniper"].includes(e.classe)
       ).length >= 2
     ) {
-      bonus += 0.15;
+      bonus += v.ultimoLancador;
       motivos.push(
         "Último pick com paredes e sem invasor ou quebra de parede inimigo"
       );
     }
   }
-  return { bonus: Math.min(0.25, bonus), motivos };
+  return { bonus: Math.min(v.teto, bonus), motivos };
 }

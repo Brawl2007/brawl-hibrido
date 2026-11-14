@@ -21,7 +21,7 @@ vi.mock("./brawlStarsApi", () => ({
   fetchOfficialBattleLog: mocks.log,
 }));
 vi.mock("./rankedSync", () => ({ RANKED_MAP_SOURCES: [] }));
-vi.mock("./appSettings", () => ({ getSetting: vi.fn(async () => null), setSetting: vi.fn() }));
+vi.mock("./appSettings", () => ({ getSetting: vi.fn(async () => null), getSettingFresh: vi.fn(async () => null), setSetting: vi.fn() }));
 import { collectObservedRankedMatches, recolherSeForAltura } from "./observedMatchCollection";
 
 describe("reserva da recolha entre chamadas concorrentes", () => {

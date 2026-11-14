@@ -218,6 +218,20 @@ export async function handleCronSync(req: Request, res: Response) {
         });
   const countersMs = desligados ? 0 : Date.now() - inicio - rankedMs;
 
+  /**
+   * A calibração do motor da API nas partidas guardadas (v185), uma vez por dia
+   * e só se sobrar tempo. Não pode derrubar a recolha que já está feita.
+   */
+  const calibracao = await (async () => {
+    try {
+      const { calibrarSeForAltura } = await import("./calibracaoPartidas");
+      return await calibrarSeForAltura(new Date(), fim - 15_000);
+    } catch (error) {
+      console.error(`[Cron] calibração adiada: ${error instanceof Error ? error.message : String(error)}`);
+      return { estado: "falhou" as const };
+    }
+  })();
+
   const duracaoMs = Date.now() - inicio;
   console.log(`[Cron] recolha concluída em ${duracaoMs}ms · ranked=${ranked.estado} (${rankedMs}ms) · counters=${counters.estado} (${countersMs}ms)${fechadas ? ` · ${fechadas} execuções abandonadas fechadas` : ""}`);
 
@@ -246,5 +260,5 @@ export async function handleCronSync(req: Request, res: Response) {
     console.error(`[Cron] não consegui guardar o registo da recolha: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  res.json({ ok: true, duracaoMs, ranked: ranked.estado, rankedMs, counters: counters.estado, countersMs, execucoesFechadas: fechadas });
+  res.json({ ok: true, duracaoMs, ranked: ranked.estado, rankedMs, counters: counters.estado, countersMs, calibracao: calibracao.estado, execucoesFechadas: fechadas });
 }

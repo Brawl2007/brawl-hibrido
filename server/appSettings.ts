@@ -69,6 +69,25 @@ export async function getSetting(chave: string): Promise<string | null> {
   }
 }
 
+/**
+ * Lê uma definição diretamente da base de dados, ignorando a cache do processo.
+ *
+ * Para estados que várias instâncias da Vercel partilham e que decidem onde se
+ * escreve (ver `server/migracaoCompacta.ts`): uma cópia velha na memória de
+ * outra instância mandaria partidas para o sítio errado. Falhas propagam-se.
+ */
+export async function getSettingFresh(chave: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Base de dados indisponível.");
+  if (!tabelaPronta) await ensureAppSettingsTable();
+  const resultado = await db.execute(sql`SELECT setting_value FROM app_settings WHERE setting_key = ${chave} LIMIT 1`);
+  const rows: unknown = Array.isArray(resultado) ? resultado[0] : resultado;
+  const linhas = (Array.isArray(rows) ? rows : []) as Array<{ setting_value?: string | null }>;
+  const valor = linhas?.[0]?.setting_value ?? null;
+  cache.set(chave, valor);
+  return valor;
+}
+
 /** Grava uma definição. Passar null apaga-a. */
 export async function setSetting(chave: string, valor: string | null) {
   const db = await getDb();

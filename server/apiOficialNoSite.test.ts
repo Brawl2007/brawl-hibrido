@@ -39,7 +39,7 @@ describe("um só interruptor, um só período e um só rank", () => {
   it("as consultas do Draft levam o rank escolhido", () => {
     const fonte = ler("client/src/hooks/useFonteApi.ts");
     expect(fonte).toContain("useQuery({ dias, rank: doRank }");
-    expect(fonte).toContain("{ dias, rank: doRank, mapId: mapa?.mapId }");
+    expect(fonte).toContain('{ mapId: mapa?.mapId ?? "", dias, rank: doRank }');
   });
 });
 

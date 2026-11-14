@@ -20,4 +20,25 @@ describe("confirmação visível da recolha", () => {
     expect(html).toContain("Guardada:");
     expect(html).toContain("Próxima prevista:");
   });
+
+  it("avisa que a cópia para o formato compacto está a decorrer, e cala-se depois", () => {
+    const cadencia = estadoDaCadenciaDasPartidas({ lastStatus: "success", lastStartedAt: "2026-09-30T12:00:00Z", lastCompletedAt: "2026-09-30T12:00:40Z" }, true, new Date("2026-09-30T12:05:00Z"));
+    const a = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, armazenamento: { armazenamento: "a_migrar", convertidas: 120000 } }));
+    expect(a).toContain("Formato compacto");
+    expect(a).toContain("continua a usar o formato anterior");
+    const b = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, armazenamento: { armazenamento: "compacto" } }));
+    expect(b).not.toContain("Formato compacto");
+  });
+
+  it("mostra o ritmo da última volta, as falhas por motivo e a fila de jogadores", () => {
+    const cadencia = estadoDaCadenciaDasPartidas({ lastStatus: "success", lastStartedAt: "2026-09-30T12:00:00Z", lastCompletedAt: "2026-09-30T12:00:40Z" }, true, new Date("2026-09-30T12:05:00Z"));
+    const html = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia, ritmo: {
+      ultimaVolta: { pedidos: 300, lidos: 296, falhas: { "429": 3, rede: 1 }, novas: 2400, proximoRitmo: { jogadores: 150 } },
+      lista: { naLista: 49995, naAltura: 31000 },
+    } }));
+    expect(html).toContain("296 de 300 jogadores lidos");
+    expect(html).toContain("3 (limite de pedidos)");
+    expect(html).toContain("Próxima volta: 150 jogadores");
+    expect(html).toContain("à espera de leitura");
+  });
 });

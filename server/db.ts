@@ -1102,6 +1102,26 @@ export async function acrescentarJogadoresALista(tags: readonly string[], limite
   return { acrescentados: Number(depois) - Number(total), naLista: Number(depois) };
 }
 
+/** Tira da lista os jogadores que a API diz não existirem (404): nunca voltarão a ser lidos. */
+export async function tirarJogadoresPorTag(tags: readonly string[]) {
+  const db = await getDb();
+  if (!db || !tags.length) return;
+  for (let i = 0; i < tags.length; i += 500) {
+    await db.delete(observedPlayers).where(inArray(observedPlayers.tag, tags.slice(i, i + 500)));
+  }
+}
+
+/** Quantos jogadores da lista já estão na altura de ser lidos, e quantos a lista tem. */
+export async function contarJogadoresDaLista(agora: Date) {
+  const db = await getDb();
+  if (!db) return { naLista: 0, naAltura: 0 };
+  const [[total], [naAltura]] = await Promise.all([
+    db.select({ n: count() }).from(observedPlayers),
+    db.select({ n: count() }).from(observedPlayers).where(lte(observedPlayers.nextReadAt, agora)),
+  ]);
+  return { naLista: Number(total?.n ?? 0), naAltura: Number(naAltura?.n ?? 0) };
+}
+
 /** Tira da lista quem não joga Ranked há demasiado tempo (ou nunca jogou, desde que entrou). */
 export async function tirarJogadoresParados(antesDe: Date) {
   const db = await getDb();

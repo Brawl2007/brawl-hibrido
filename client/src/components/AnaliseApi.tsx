@@ -3,6 +3,7 @@ import type {
   PareamentoLane3v3,
   ResultadoRecomendacaoApi,
 } from "@shared/motorApiPerfeito";
+import type { ResultadoDaCalibracao } from "@shared/calibracaoDoMotorApi";
 
 const ROTAS = [
   { id: "Side A", nome: "Lateral Esquerda" },
@@ -15,15 +16,31 @@ export function AnaliseApi({
   inimigos,
   aberta,
   onAlternar,
+  chanceDaEquipa,
+  calibracao,
 }: {
   lanes: PareamentoLane3v3[];
   inimigos: ResultadoRecomendacaoApi[];
   aberta: boolean;
   onAlternar: () => void;
+  /** A chance estimada da equipa com os picks já feitos; só existe com a calibração aprovada. */
+  chanceDaEquipa?: { chance: number } | null;
+  calibracao?: ResultadoDaCalibracao | null;
 }) {
   const sugestoes = inimigos.filter(r => !r.bloqueado).slice(0, 6);
   return (
     <section className="api-analise" aria-label="Análise das partidas oficiais">
+      {chanceDaEquipa && calibracao?.aprovada && (
+        <div className="api-chance-equipa" aria-live="polite">
+          <h3>Chance da equipa</h3>
+          <b>{chanceDaEquipa.chance.toFixed(1)}%</b>
+          <small>
+            Calibrada em {calibracao.amostras.validacao.toLocaleString("pt-PT")} partidas recentes: acerta{" "}
+            {(calibracao.qualidade.acerto * 100).toFixed(1)}% (ao acaso seria 50%). Estimativa do modelo; não garante o
+            resultado.
+          </small>
+        </div>
+      )}
       <button
         type="button"
         className="mesa-ajustes-botao"

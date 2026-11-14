@@ -476,3 +476,34 @@ export const observedMatchupAggregates = mysqlTable(
 
 export type ObservedMatchupAggregate = typeof observedMatchupAggregates.$inferSelect;
 export type InsertObservedMatchupAggregate = typeof observedMatchupAggregates.$inferInsert;
+
+/**
+ * Partidas Ranked num formato compacto (v182): um pacote por mapa, modo e dia,
+ * com as partidas numa lista curta de números. Ver `shared/partidasCompactas.ts`.
+ * Um dia pode ter várias partes; a recolha junta-as quando passam de seis.
+ */
+export const observedBattlePacks = mysqlTable(
+  "observed_battle_packs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    mapId: varchar("map_id", { length: 128 }).notNull(),
+    mode: varchar("mode", { length: 64 }).notNull(),
+    /** AAAA-MM-DD, em UTC. */
+    dia: varchar("dia", { length: 10 }).notNull(),
+    partidas: int("partidas").notNull(),
+    dados: longtext("dados").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  table => ({
+    mapDiaIdx: index("observed_battle_packs_map_dia_idx").on(table.mapId, table.dia),
+    modeDiaIdx: index("observed_battle_packs_mode_dia_idx").on(table.mode, table.dia),
+    diaIdx: index("observed_battle_packs_dia_idx").on(table.dia),
+  })
+);
+
+/** Resumos já calculados, servidos enquanto se recalculam em segundo plano. */
+export const observedSummaryCache = mysqlTable("observed_summary_cache", {
+  chave: varchar("chave", { length: 190 }).primaryKey(),
+  geradoEm: timestamp("gerado_em").defaultNow().notNull(),
+  dados: longtext("dados").notNull(),
+});

@@ -68,8 +68,17 @@ function somar<T extends ContagemPonderada & { jogos: number; vitorias: number }
   if (ganhou) atual.vitorias += 1;
 }
 
-export function criarResumoDasPartidas(opcoes: { ponderar?: boolean; agoraMs?: number } = {}) {
+/**
+ * `escopo` diz o que se conta:
+ *  - "tudo" (por omissão): brawlers, confrontos, duplas e trios, e as mesmas contas por modo;
+ *  - "unico": o mesmo, sem a segunda cópia por modo (para um mapa ou um modo já filtrados);
+ *  - "brawlers": só as contagens por brawler, por modo e por mapa (a secção Mapas).
+ */
+export function criarResumoDasPartidas(opcoes: { ponderar?: boolean; agoraMs?: number; escopo?: "tudo" | "unico" | "brawlers" } = {}) {
   const agoraMs = opcoes.agoraMs ?? Date.now();
+  const escopo = opcoes.escopo ?? "tudo";
+  const comPares = escopo !== "brawlers";
+  const porModoDosPares = opcoes.ponderar && escopo === "tudo";
   let totalPonderado = 0;
   const partidasPonderadasPorMapa: Record<string, number> = {};
   const confrontosPorModo = new Map<string, Map<string, ContagemDeConfronto>>();
@@ -116,20 +125,20 @@ export function criarResumoDasPartidas(opcoes: { ponderar?: boolean; agoraMs?: n
           somar(brawlers, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou, peso);
           somar(doModo, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou, peso);
           somar(doMapa, brawler, () => ({ brawler, jogos: 0, vitorias: 0 }), ganhou, peso);
-          for (const adversario of new Set(adversarios)) {
+          if (comPares) for (const adversario of new Set(adversarios)) {
             if (adversario === brawler) continue;
             somar(confrontos, `${brawler}\u0000${adversario}`, () => ({ a: brawler, b: adversario, jogos: 0, vitorias: 0 }), ganhou, peso);
-            if (opcoes.ponderar) somar(paresDoModo(confrontosPorModo, partida.mode), `${brawler}\u0000${adversario}`, () => ({ a: brawler, b: adversario, jogos: 0, vitorias: 0 }), ganhou, peso);
+            if (porModoDosPares) somar(paresDoModo(confrontosPorModo, partida.mode), `${brawler}\u0000${adversario}`, () => ({ a: brawler, b: adversario, jogos: 0, vitorias: 0 }), ganhou, peso);
           }
         }
-        for (let i = 0; i < membros.length; i += 1) {
+        if (comPares) for (let i = 0; i < membros.length; i += 1) {
           for (let j = i + 1; j < membros.length; j += 1) {
             somar(sinergias, `${membros[i]}\u0000${membros[j]}`, () => ({ a: membros[i], b: membros[j], jogos: 0, vitorias: 0 }), ganhou, peso);
-            if (opcoes.ponderar) somar(paresDoModo(sinergiasPorModo, partida.mode), `${membros[i]}\u0000${membros[j]}`, () => ({ a: membros[i], b: membros[j], jogos: 0, vitorias: 0 }), ganhou, peso);
+            if (porModoDosPares) somar(paresDoModo(sinergiasPorModo, partida.mode), `${membros[i]}\u0000${membros[j]}`, () => ({ a: membros[i], b: membros[j], jogos: 0, vitorias: 0 }), ganhou, peso);
           }
         }
-        if (membros.length) somar(equipas, membros.join("\u0000"), () => ({ membros, jogos: 0, vitorias: 0 }), ganhou, peso);
-        if (opcoes.ponderar && membros.length) somar(paresDoModo(equipasPorModo, partida.mode), membros.join("\u0000"), () => ({ membros, jogos: 0, vitorias: 0 }), ganhou, peso);
+        if (comPares && membros.length) somar(equipas, membros.join("\u0000"), () => ({ membros, jogos: 0, vitorias: 0 }), ganhou, peso);
+        if (porModoDosPares && membros.length) somar(paresDoModo(equipasPorModo, partida.mode), membros.join("\u0000"), () => ({ membros, jogos: 0, vitorias: 0 }), ganhou, peso);
       }
     }
 
@@ -143,6 +152,8 @@ export function criarResumoDasPartidas(opcoes: { ponderar?: boolean; agoraMs?: n
       ...(opcoes.ponderar ? {
         partidasPonderadas: totalPonderado,
         partidasPonderadasPorMapa,
+      } : {}),
+      ...(porModoDosPares ? {
         confrontosPorModo: Object.fromEntries([...confrontosPorModo].map(([modo, lista]) => [modo, [...lista.values()]])),
         sinergiasPorModo: Object.fromEntries([...sinergiasPorModo].map(([modo, lista]) => [modo, [...lista.values()]])),
         equipasPorModo: Object.fromEntries([...equipasPorModo].map(([modo, lista]) => [modo, [...lista.values()]])),
