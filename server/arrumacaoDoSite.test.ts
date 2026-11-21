@@ -64,7 +64,10 @@ describe("o Draft num só ecrã", () => {
   });
 
   it("de quem é a vez aparece em grande, com o pick ou ban", () => {
-    expect(draft).toContain('`${activeDraftStep.kind === "ban" ? "Ban" : "Pick"} da ${activeDraftStep.team === "blue" ? "Azul" : "Vermelha"}');
+    // v186: "Pick 5 de 6" em grande e, por baixo, "Vez da equipa azul" na cor da equipa.
+    expect(draft).toContain('<strong className="bh-display">{rotuloDoPasso ?? "Equipas completas"}</strong>');
+    expect(draft).toContain("const textoDaVez = vezDaEquipa(activeDraftStep);");
+    expect(draft).toContain("mesa-vez-equipa equipa-${activeDraftStep?.team}");
   });
 
   it("as equipas sugeridas e os counters estão ao centro, em abas, sem ocupar a página", () => {

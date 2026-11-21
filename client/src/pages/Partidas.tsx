@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { escreverParametros, formatarDecimal, lerParametro } from "@/lib/parametrosDaRota";
+import { useAlturaVisivel } from "@/hooks/useAlturaVisivel";
 import { ArrowDown, ArrowUp, Database, Handshake, Search, Swords, UserRound, Users } from "lucide-react";
 import { BarraDoSite } from "@/components/BarraDoSite";
 import { MobileNav } from "@/components/MobileNav";
@@ -49,7 +52,8 @@ function Cara({ nome, grande = false }: { nome: string; grande?: boolean }) {
 }
 
 function percentagem(valor: number | null) {
-  return valor === null ? "—" : valor.toFixed(2);
+  // Vírgula decimal, como no resto do site; a unidade está no cabeçalho («Vitória %»).
+  return valor === null ? "—" : formatarDecimal(valor);
 }
 
 function Vitoria({ jogos, vitorias }: { jogos: number; vitorias: number }) {
@@ -94,15 +98,25 @@ function Cabecalho({ rotulo, coluna, ativa, descendente, onOrdenar }: { rotulo: 
 export default function Partidas() {
   // O período e o rank são os do site todo (`useApiOficial`): os mesmos do Draft, dos Mapas e da Matriz.
   const { dias, setDias, rank, setRank } = useApiOficial();
-  const [mode, setMode] = useState<string>("");
-  const [mapId, setMapId] = useState<string>("");
-  const [separador, setSeparador] = useState<Separador>("brawlers");
+  /*
+   * Os filtros vivem no endereço: mudar de vista (Brawlers, 1 contra 1,
+   * Equipas, Sinergias) usa a mesma consulta e os mesmos filtros, e ir à
+   * Matriz e voltar encontra tudo como estava.
+   */
+  const [mode, setMode] = useState<string>(() => lerParametro("modo") ?? "");
+  const [mapId, setMapId] = useState<string>(() => lerParametro("mapa") ?? "");
+  const [separador, setSeparador] = useState<Separador>(() => (SEPARADORES.some((item) => item.id === lerParametro("vista")) ? lerParametro("vista") as Separador : "brawlers"));
   const [coluna, setColuna] = useState<Coluna>("vitoria");
   const [descendente, setDescendente] = useState(true);
-  const [procura, setProcura] = useState("");
-  const [soFiaveis, setSoFiaveis] = useState(false);
+  const [procura, setProcura] = useState(() => lerParametro("q") ?? "");
+  const [soFiaveis, setSoFiaveis] = useState(() => lerParametro("fiaveis") === "1");
   const [mostradas, setMostradas] = useState(DE_CADA_VEZ);
-  const [escolhido, setEscolhido] = useState<string>("");
+  const [escolhido, setEscolhido] = useState<string>(() => lerParametro("b") ?? "");
+  useEffect(() => {
+    escreverParametros({ modo: mode || null, mapa: mapId || null, vista: separador === "brawlers" ? null : separador, q: procura.trim() ? procura : null, fiaveis: soFiaveis ? "1" : null, b: escolhido || null });
+  }, [mode, mapId, separador, procura, soFiaveis, escolhido]);
+  // A faixa do filtro fica presa ao topo só quando sobra altura (teclado aberto incluído).
+  const faixaFixa = useAlturaVisivel(560);
 
   const consulta = trpc.observedMatches.partidas.useQuery(
     { dias, mode: mode || undefined, mapId: mapId || undefined, rank: rank || undefined },
@@ -168,6 +182,13 @@ export default function Partidas() {
       : <>Melhores brawlers · todos os modos e mapas</>;
   const atualizado = dados?.geradoEm ? new Date(dados.geradoEm).toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
   const cabecalhos = { ativa: coluna, descendente, onOrdenar: ordenarPor };
+  const linhasDaVista = separador === "brawlers" ? brawlers.length : separador === "confrontos" ? confrontos.length : separador === "equipas" ? equipas.length : sinergias.length;
+  const filtroLocalAtivo = soFiaveis || Boolean(termo);
+  const limparFiltro = () => { setSoFiaveis(false); setProcura(""); setMostradas(DE_CADA_VEZ); };
+  const descricaoDaAmostra = dados
+    ? `${partidas.toLocaleString("pt-PT")} ${partidas === 1 ? "partida" : "partidas"}${dados.exemplo ? " de teste" : ""}`
+    : "—";
+  const brawlerParaAMatriz = separador === "confrontos" ? alvo : escolhido || dados?.brawlers[0]?.brawler || "";
 
   return (
     <div className="partidas-pagina">
@@ -241,6 +262,14 @@ export default function Partidas() {
               </p>
             </div>
 
+            <p className={`partidas-faixa ${faixaFixa ? "is-fixa" : ""}`} aria-label="Filtro ativo">
+              <span>{mapaEscolhido?.nome ?? "Todos os mapas"}</span>
+              <span>{nomeDoModo ?? "Todos os modos"}</span>
+              <span>{rank ? RANKS_DO_FILTRO.find((opcao) => opcao.id === rank)?.nome : "Todos os ranks"}</span>
+              <span>{dados ? (dados.dias === 0 ? "Desde sempre" : `${dados.dias} dias`) : dias === 0 ? "Desde sempre" : `${dias} dias`}</span>
+              <b>{descricaoDaAmostra}</b>
+            </p>
+
             <nav className="partidas-separadores" aria-label="O que ver">
               {SEPARADORES.map(({ id, label, icon: Icon }) => (
                 <button key={id} type="button" className={separador === id ? "is-active" : ""} aria-pressed={separador === id} onClick={() => mudar(setSeparador)(id)}>
@@ -276,6 +305,18 @@ export default function Partidas() {
               </div>
             ) : null}
 
+            {dados && partidas > 0 && linhasDaVista === 0 ? (
+              <div className="partidas-vazio partidas-zero" role="status">
+                <p><b>0 resultados</b></p>
+                <p>
+                  {soFiaveis
+                    ? `Nenhuma linha chega aos ${JOGOS_MINIMOS_FIAVEIS} jogos: a amostra tem ${descricaoDaAmostra}.`
+                    : `Nada corresponde a «${procura.trim()}» nesta vista.`}
+                </p>
+                {filtroLocalAtivo ? <button type="button" onClick={limparFiltro}>Limpar filtro</button> : null}
+              </div>
+            ) : null}
+
             {dados && partidas > 0 && separador === "brawlers" ? (
               <div className="partidas-lista" aria-label="Brawlers">
                 <div className="partidas-linha is-cabeca">
@@ -304,7 +345,7 @@ export default function Partidas() {
                     {nomesComJogos.map((nome) => <option key={nome} value={nome}>{nome}</option>)}
                   </select>
                 </label>
-                <p className="partidas-nota">Vitória de <b>{alvo}</b> contra cada adversário que enfrentou, nas partidas deste filtro.</p>
+                <p className="partidas-nota">Vitórias da <b>equipa de {alvo}</b> contra cada adversário que enfrentou, nas partidas deste filtro. «2V · 1D» são vitórias e derrotas da equipa de {alvo}.</p>
                 <div className="partidas-linha is-cabeca">
                   <span>Contra</span>
                   <Cabecalho rotulo="Vitória %" coluna="vitoria" {...cabecalhos} />
@@ -333,7 +374,7 @@ export default function Partidas() {
                 </div>
                 {equipas.slice(0, mostradas).map((linha) => (
                   <div key={linha.membros.join("|")} className={`partidas-linha ${linha.jogos < JOGOS_MINIMOS_FIAVEIS ? "is-pequena" : ""}`}>
-                    <span className="partidas-nome">{linha.membros.map((nome) => <Cara key={nome} nome={nome} grande />)} <span className="partidas-trio">{linha.membros.join(" · ")}</span></span>
+                    <span className="partidas-nome">{linha.membros.map((nome) => <Cara key={nome} nome={nome} grande />)} <span className="partidas-trio">{linha.membros.join(" + ")}</span></span>
                     <Vitoria {...linha} />
                     <span />
                     <Jogos {...linha} />
@@ -365,6 +406,9 @@ export default function Partidas() {
                 ))}
                 <MaisLinhas total={sinergias.length} mostradas={mostradas} onMais={() => setMostradas((n) => n + DE_CADA_VEZ)} />
               </div>
+            ) : null}
+            {brawlerParaAMatriz ? (
+              <p className="partidas-para-a-matriz"><Link href={`/matchups?b=${encodeURIComponent(brawlerParaAMatriz)}`}>Abrir Matriz 1v1 de {brawlerParaAMatriz}</Link></p>
             ) : null}
           </section>
         </div>

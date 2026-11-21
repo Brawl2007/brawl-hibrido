@@ -469,7 +469,8 @@ describe("Dashboard de fontes com seis destaques", () => {
     expect(homeSource).not.toContain("Gestão Manual de Fontes");
     expect(homeSource).not.toContain("Full matrix");
     expect(homeSource).not.toContain("Hot picks");
-    expect(homeSource).toContain('onExplore={() => scrollTo("maps")}');
+    // v186: a entrada é o mapa em destaque; "Mapas" desce à lista completa.
+    expect(homeSource).toContain('onIrParaMapas={() => scrollTo("maps")}');
     expect(homeSource).not.toContain('scrollTo("brawlers")');
   });
 });
@@ -499,7 +500,8 @@ describe("arrumação da página do Draft", () => {
     expect(source).toContain('<section className="draft-contextbar"');
     // E mostra o que muda a cada turno, não uma frase fixa.
     expect(source).toContain("{selectedMap?.name ?? \"Sem mapa\"}");
-    expect(source).toContain("{activeDraftStep ? activeDraftStep.label : \"—\"}");
+    // v186: "Pick 5 de 6" — a posição do passo entre os do mesmo tipo.
+    expect(source).toContain("const rotuloDoPasso = rotuloDoTurno(draftSequence, activeStepIndex);");
   });
 
   it("põe o tabuleiro antes dos painéis de configuração", () => {

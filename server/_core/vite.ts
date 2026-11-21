@@ -9,10 +9,17 @@ import { servePrecompressed } from "./precompressedStatic";
 export async function setupVite(app: Express, server: Server) {
   // Vite/Rollup só é necessário no desenvolvimento. O import dinâmico impede
   // que o bundle serverless de produção carregue o binário opcional do Rollup.
-  const [{ createServer: createViteServer }, { default: viteConfig }] = await Promise.all([
+  const [{ createServer: createViteServer }, { default: exportado }] = await Promise.all([
     import("vite"),
     import("../../vite.config"),
   ]);
+  // `vite.config.ts` exporta uma FUNÇÃO assíncrona (o runtime do Manus é
+  // carregado a pedido). Espalhar a função num objeto não copiava nada: a raiz
+  // `client/` perdia-se e o modo de desenvolvimento respondia "Failed to load
+  // url /src/main.tsx" com a página em branco. Resolve-se a configuração antes.
+  const viteConfig = typeof exportado === "function"
+    ? await exportado({ command: "serve", mode: "development" })
+    : exportado;
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },

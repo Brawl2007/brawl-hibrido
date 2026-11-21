@@ -1,0 +1,286 @@
+/*
+ * Brawl Híbrido — percursos de toque (v186).
+ *
+ * A primeira passagem do redesenho em papel: o mapa em destaque, o ranking com
+ * a régua de pesos, o turno do Draft, o Quadro, o Alcance, a Matriz e as
+ * Partidas. Papel quente e tinta nas páginas de consulta; o Draft e o Quadro
+ * ficam escuros, com as equipas pelo nome e pela cor.
+ *
+ * Regras que esta folha segue:
+ * - números tabulares, alinhados à direita, com unidade e vírgula decimal;
+ * - alvos de toque com pelo menos 44 × 44 px;
+ * - foco sempre visível;
+ * - com `prefers-reduced-motion`, nada desliza: troca-se de uma vez.
+ */
+:root {
+  --bh-papel: #F5F2E9;
+  --bh-tinta: #18151F;
+  --bh-tinta-suave: #57525F;
+  --bh-violeta: #5729B6;
+  --bh-lilas: #D8C9F4;
+  --bh-lilas-claro: #E9E0F8;
+  --bh-amarelo: #FCE35A;
+  --bh-azul-equipa: #9DDCF6;
+  --bh-coral-equipa: #FFC0AC;
+  --bh-noite: #1E1A27;
+  --bh-noite-2: #2A2535;
+  --bh-noite-linha: rgba(245, 242, 233, .14);
+  --bh-papel-linha: rgba(24, 21, 31, .16);
+}
+
+/* ---------- Tema papel ---------- */
+.tema-papel {
+  background: var(--bh-papel);
+  color: var(--bh-tinta);
+  font-family: "Space Grotesk", sans-serif;
+}
+.tema-papel :focus-visible { outline: 3px solid var(--bh-violeta); outline-offset: 2px; }
+.tema-papel .numero, .tema-escuro .numero { text-align: right; font-variant-numeric: tabular-nums; }
+.titulo-de-mapa {
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 800;
+  line-height: .92;
+  letter-spacing: -.01em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.titulo-de-mapa:focus { outline: none; }
+.titulo-de-mapa:focus-visible { outline: 3px solid var(--bh-violeta); outline-offset: 4px; }
+
+.botao-tinta, .botao-lilas, .botao-amarelo {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 44px; padding: 0 18px;
+  font: 700 16px/1.1 "Space Grotesk", sans-serif;
+  border: 0; border-radius: 4px; cursor: pointer; text-decoration: none;
+  transition: background-color .15s ease, transform .15s ease;
+}
+.botao-tinta { background: var(--bh-tinta); color: var(--bh-papel); }
+.botao-tinta:hover { background: var(--bh-violeta); }
+.botao-lilas { background: var(--bh-lilas); color: var(--bh-tinta); }
+.botao-lilas:hover { background: var(--bh-lilas-claro); }
+.botao-amarelo { background: var(--bh-amarelo); color: var(--bh-tinta); width: 100%; }
+.botao-compacto { min-height: 44px; padding: 0 14px; font-size: 15px; }
+.ligacao-voltar {
+  min-height: 44px; padding: 0; background: none; border: 0; cursor: pointer;
+  color: var(--bh-violeta); font: 700 15px "Space Grotesk", sans-serif;
+}
+.tema-escuro .ligacao-voltar { color: var(--bh-lilas); }
+
+/* ---------- Início em papel ---------- */
+.inicio-papel { padding: 18px 16px 28px; }
+.mapa-em-destaque { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 1360px; margin: 0 auto; }
+.mapa-em-destaque > *, .ranking-do-mapa > * { min-width: 0; }
+.migalhas { display: flex; align-items: center; gap: 6px; color: var(--bh-tinta-suave); font-size: 15px; }
+.migalhas-ligacao { min-height: 44px; padding: 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.titulo-grande { font-size: clamp(44px, 11vw, 120px); text-transform: uppercase; }
+.aviso-de-rota { margin: 10px 0 0; padding: 10px 12px; background: var(--bh-amarelo); color: var(--bh-tinta); font-size: 14px; }
+.mapa-em-destaque-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.mapa-lider { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 12px; margin: 18px 0 0; padding-top: 14px; border-top: 2px solid var(--bh-tinta); }
+.mapa-lider-retrato { width: 44px; height: 44px; display: grid; place-items: center; overflow: hidden; background: var(--bh-lilas); }
+.mapa-lider-retrato img { width: 100%; height: 100%; object-fit: cover; }
+.mapa-lider small { display: block; color: var(--bh-tinta-suave); font-size: 12px; }
+.mapa-lider b { font-size: 17px; }
+.mapa-lider-score { color: var(--bh-violeta); font-variant-numeric: tabular-nums; }
+.mapa-lider-score b { font-size: 18px; }
+
+/* A estampa e o terreno. */
+.estampa-do-mapa { margin: 0; background: var(--bh-lilas-claro); }
+.estampa-moldura {
+  position: relative; overflow: hidden;
+  aspect-ratio: 5 / 4;
+  background: var(--bh-noite);
+  touch-action: pan-y;
+  user-select: none; -webkit-user-select: none;
+  cursor: ew-resize;
+}
+.estampa-face { position: absolute; inset: 0; }
+.estampa-face-terreno { display: grid; place-items: center; background: repeating-conic-gradient(var(--bh-noite) 0 25%, var(--bh-noite-2) 0 50%) 0 0 / 24px 24px; }
+.estampa-face-terreno img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.estampa-terreno-vazio { padding: 16px; color: var(--bh-lilas); font-size: 14px; text-align: center; }
+.estampa-face-arte { transition: clip-path .22s cubic-bezier(.2, .7, .2, 1); will-change: clip-path; }
+.estampa-do-mapa.a-arrastar .estampa-face-arte { transition: none; }
+.estampa-arte { width: 100%; height: 100%; display: block; }
+/* As nervuras da impressão e a luz: só aqui, no grande plano. */
+.estampa-nervuras { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .22) 0 1px, rgba(0, 0, 0, .10) 1px 2px, transparent 2px 5px); }
+.estampa-luz { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 80% at 18% 8%, rgba(255, 255, 255, .45), transparent 55%), linear-gradient(180deg, transparent 70%, rgba(24, 21, 31, .14)); }
+.estampa-corte { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--bh-papel); box-shadow: 0 0 0 1px rgba(24, 21, 31, .35); pointer-events: none; }
+.estampa-controlos { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; }
+.estampa-controlos button {
+  min-height: 44px; min-width: 44px; padding: 0 8px; background: none; border: 0; cursor: pointer;
+  color: var(--bh-tinta); font: 700 15px "Space Grotesk", sans-serif;
+}
+.estampa-controlos button.is-active { color: var(--bh-violeta); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.estampa-regua { width: 100%; height: 44px; margin: 0; background: transparent; accent-color: var(--bh-violeta); cursor: pointer; }
+.estampa-regua::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--bh-violeta) var(--progresso, 0%), rgba(24, 21, 31, .2) var(--progresso, 0%)); }
+.estampa-regua::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; margin-top: -9px; border-radius: 50%; background: var(--bh-violeta); border: 3px solid var(--bh-papel); box-shadow: 0 0 0 1px var(--bh-violeta); }
+.estampa-regua { -webkit-appearance: none; appearance: none; --progresso: 0%; }
+.estampa-regua::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(24, 21, 31, .2); }
+.estampa-regua::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--bh-violeta); }
+.estampa-regua::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--bh-violeta); border: 3px solid var(--bh-papel); }
+
+.na-rotacao { border-top: 2px solid var(--bh-tinta); padding-top: 10px; }
+.na-rotacao-titulo { margin: 0 0 6px; font-size: 15px; font-weight: 700; }
+.na-rotacao-titulo small { color: var(--bh-tinta-suave); font-weight: 400; margin-left: 6px; }
+.na-rotacao-lista { display: flex; gap: 6px; margin: 0; padding: 0 0 6px; list-style: none; overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+.na-rotacao-lista li { flex: 0 0 auto; scroll-snap-align: start; }
+.na-rotacao-lista button {
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 10px 4px 4px;
+  background: transparent; border: 0; cursor: pointer; color: var(--bh-tinta); text-align: left;
+  font: 500 15px "Space Grotesk", sans-serif;
+}
+.na-rotacao-lista button.is-active { background: var(--bh-lilas); color: var(--bh-violeta); font-weight: 700; }
+.na-rotacao-miniatura { width: 26px; height: 40px; flex: 0 0 auto; background: var(--bh-noite-2) center / cover no-repeat; }
+.na-rotacao-nome { display: grid; white-space: nowrap; }
+.na-rotacao-nome small { color: var(--bh-tinta-suave); font-size: 12px; font-weight: 400; }
+
+@media (min-width: 900px) {
+  .inicio-papel { padding: 26px 32px 36px; }
+  .mapa-em-destaque { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); column-gap: 36px; align-items: start; }
+  .mapa-em-destaque-texto { padding-top: 6px; }
+  .mapa-em-destaque-acoes { display: flex; }
+  .estampa-moldura { aspect-ratio: 16 / 10; }
+  .na-rotacao { grid-column: 1 / -1; }
+}
+
+/* ---------- Ranking do mapa ---------- */
+.ranking-do-mapa { max-width: 760px; margin: 28px auto 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.ranking-cabeca { display: flex; justify-content: space-between; align-items: center; color: var(--bh-tinta-suave); font-size: 15px; }
+.ranking-do-mapa > .titulo-de-mapa { font-size: clamp(40px, 9vw, 64px); }
+.ranking-pesos, .ranking-publicado { background: var(--bh-lilas-claro); padding: 14px 16px; display: grid; gap: 10px; }
+.ranking-pesos-linha { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ranking-pesos-rotulo { font-weight: 700; }
+.ranking-pesos-valor { font-variant-numeric: tabular-nums; }
+.regua-de-pesos { position: relative; display: flex; align-items: center; height: 44px; touch-action: none; user-select: none; }
+.regua-de-pesos-trilho { position: relative; flex: 1; height: 6px; border-radius: 3px; background: rgba(24, 21, 31, .18); }
+.regua-de-pesos-alcance { position: absolute; height: 100%; border-radius: 3px; background: var(--bh-violeta); }
+.regua-de-pesos-polegar { position: relative; display: block; width: 26px; height: 26px; border-radius: 50%; background: var(--bh-violeta); border: 3px solid var(--bh-papel); box-shadow: 0 0 0 1px var(--bh-violeta); cursor: grab; }
+.regua-de-pesos-polegar:focus-visible { outline: 3px solid var(--bh-tinta); outline-offset: 3px; }
+.regua-de-pesos-bolha { position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%); padding: 3px 8px; background: var(--bh-tinta); color: var(--bh-papel); font-size: 14px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ranking-presets { display: flex; gap: 4px; }
+.ranking-presets button { min-height: 44px; min-width: 64px; padding: 0 10px; background: none; border: 0; border-bottom: 3px solid transparent; cursor: pointer; color: var(--bh-tinta); font: 700 15px "Space Grotesk", sans-serif; font-variant-numeric: tabular-nums; }
+.ranking-presets button.is-active { color: var(--bh-violeta); border-bottom-color: var(--bh-violeta); }
+.ranking-pesos-nota, .ranking-origem { margin: 0; color: var(--bh-tinta-suave); font-size: 14px; }
+.ranking-publicado p { margin: 0; line-height: 1.45; }
+.ranking-do-mapa > .botao-tinta { justify-self: start; }
+.ranking-tabela { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ranking-tabela th { padding: 8px 6px; text-align: left; font-size: 13px; font-weight: 500; color: var(--bh-tinta-suave); border-bottom: 2px solid var(--bh-tinta); }
+.ranking-tabela th.numero { text-align: right; }
+.ranking-tabela td { padding: 0 6px; border-bottom: 1px solid var(--bh-papel-linha); }
+.ranking-tabela tr { background: var(--bh-papel); }
+.ranking-tabela tr.is-selecionada { background: var(--bh-lilas); }
+.ranking-posicao { width: 34px; color: var(--bh-tinta-suave); }
+.ranking-brawler { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 4px 0; background: none; border: 0; cursor: pointer; color: inherit; font: 700 16px "Space Grotesk", sans-serif; text-align: left; }
+.ranking-retrato { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; background: var(--bh-lilas); font-size: 12px; }
+.ranking-retrato img { width: 100%; height: 100%; object-fit: cover; }
+.ranking-score { font-weight: 700; font-size: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .estampa-face-arte, .botao-tinta, .botao-lilas { transition: none; }
+}
+
+/* ---------- Draft: o turno ---------- */
+.draft-shell .draft-cabeca {
+  order: -10;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 12px;
+  color: var(--bh-papel);
+}
+.draft-cabeca .ligacao-voltar { color: var(--bh-lilas); justify-self: start; }
+.draft-cabeca .titulo-de-mapa { grid-column: 1 / -1; grid-row: 2; font-size: clamp(38px, 9vw, 64px); color: var(--bh-papel); }
+.draft-cabeca-ajustes { grid-column: 2; grid-row: 1; min-height: 44px; display: inline-flex; align-items: center; color: var(--bh-lilas); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.draft-cabeca .aviso-de-rota { grid-column: 1 / -1; }
+.mesa-vez-equipa { display: block; font-weight: 700; font-size: 15px; }
+.mesa-vez-equipa.equipa-blue { color: var(--bh-azul-equipa); }
+.mesa-vez-equipa.equipa-red { color: var(--bh-coral-equipa); }
+.draft-desfazer {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--bh-noite-linha); border-radius: 8px; background: transparent; cursor: pointer;
+  color: var(--bh-lilas); font: 700 14px "Space Grotesk", sans-serif;
+}
+.draft-desfazer:disabled { opacity: .45; cursor: default; }
+.draft-abrir-quadro { width: auto; min-width: 160px; }
+.draft-shell .team-board.blue .team-heading h3 { color: var(--bh-azul-equipa); }
+.draft-shell .team-board.red .team-heading h3 { color: var(--bh-coral-equipa); }
+.draft-shell .team-board.blue { border-top: 3px solid var(--bh-azul-equipa); }
+.draft-shell .team-board.red { border-top: 3px solid var(--bh-coral-equipa); }
+/* O retrato que viaja até à vaga: decoração por cima de tudo, sem toques. */
+.voo-do-retrato {
+  position: fixed; z-index: 2000; width: 40px; height: 40px; overflow: hidden; pointer-events: none;
+  display: grid; place-items: center; border-radius: 6px;
+  background: var(--bh-noite-2); color: var(--bh-papel); font: 800 14px "Space Grotesk", sans-serif;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .35);
+}
+.voo-do-retrato img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 760px) {
+  /* No iPhone: mapa, vez, procura e vaga atual primeiro; os ajustes depois. */
+  .draft-shell .draft-content { order: -5; }
+  .draft-shell .draft-contextbar { order: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .voo-do-retrato { display: none; } }
+
+/* ---------- Quadro do General: faixas, índice e vista plana ---------- */
+.qg-faixas-e-vista { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 10px 0 6px; }
+.qg-faixas, .qg-vista-do-campo { display: flex; align-items: center; gap: 2px; }
+.qg-faixas-titulo { margin-right: 6px; color: var(--bh-papel); font-weight: 700; }
+.qg-faixas button, .qg-vista-do-campo button {
+  min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; cursor: pointer;
+  color: var(--bh-lilas); font: 700 15px "Space Grotesk", sans-serif;
+}
+.qg-faixas button.is-active, .qg-vista-do-campo button.is-active { background: var(--bh-noite-2); color: var(--bh-papel); box-shadow: inset 0 -3px 0 var(--bh-lilas); }
+.qg-faixas button:disabled, .qg-vista-do-campo button:disabled { opacity: .4; cursor: default; }
+.qg-faixas button:focus-visible, .qg-vista-do-campo button:focus-visible { outline: 3px solid var(--bh-amarelo); outline-offset: 2px; }
+.qg-indice-da-faixa { display: grid; gap: 4px; margin: 6px 0 10px; padding: 14px 16px; background: var(--bh-noite-2); color: var(--bh-papel); border-radius: 4px; }
+.qg-indice-da-faixa strong { font-size: 17px; }
+.qg-indice-da-faixa span { color: var(--bh-lilas); font-size: 14px; }
+.qg-indice-valor { font-family: "Space Grotesk", sans-serif; font-size: 34px; font-weight: 800; color: var(--bh-amarelo); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.qg-indice-da-faixa small { color: rgba(245, 242, 233, .72); font-size: 13px; }
+.qg-indice-pista { margin: 4px 0 10px; color: var(--bh-lilas); font-size: 14px; }
+.quadro-plano { display: grid; justify-items: center; padding: 8px 0; }
+.quadro-plano-campo { position: relative; width: min(100%, 360px); background: repeating-conic-gradient(#2E6B3A 0 25%, #347A41 0 50%) 0 0 / 8.7% 5.7%; overflow: hidden; border-radius: 4px; }
+.quadro-plano-mapa { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.quadro-plano-sem-imagem { position: absolute; inset: auto 0 8px; text-align: center; color: rgba(255, 255, 255, .6); font-size: 12px; }
+.quadro-plano-setas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; color: var(--bh-amarelo); }
+.quadro-plano-seta { fill: none; stroke: currentColor; stroke-width: .28; stroke-linecap: round; stroke-linejoin: round; }
+.quadro-plano-seta.seta-recuo { color: var(--bh-coral-equipa); stroke-dasharray: .6 .4; }
+.quadro-plano-seta.seta-rotacao { color: var(--bh-azul-equipa); }
+.quadro-plano-fichas { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; }
+.quadro-plano-ficha {
+  position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 3px;
+  display: grid; place-items: center; border: 0; background: transparent; cursor: pointer;
+}
+.quadro-plano-ficha > img, .quadro-plano-ficha > span {
+  grid-area: 1 / 1; width: 34px; height: 34px; border-radius: 6px; object-fit: cover;
+  display: grid; place-items: center; font: 800 12px "Space Grotesk", sans-serif; color: var(--bh-tinta);
+}
+.quadro-plano-ficha > span { background: var(--bh-papel); }
+.quadro-plano-ficha > img { z-index: 1; }
+.quadro-plano-ficha.lado-nos > img, .quadro-plano-ficha.lado-nos > span { box-shadow: 0 0 0 3px var(--bh-azul-equipa); }
+.quadro-plano-ficha.lado-eles > img, .quadro-plano-ficha.lado-eles > span { box-shadow: 0 0 0 3px var(--bh-coral-equipa); }
+.quadro-plano-ficha.pode-mover { touch-action: none; }
+.quadro-plano-ficha.a-arrastar { z-index: 3; cursor: grabbing; }
+.quadro-plano-campo.com-realce .quadro-plano-ficha:not(.is-realce) { opacity: .55; }
+.quadro-plano-ficha.is-realce > img, .quadro-plano-ficha.is-realce > span { box-shadow: 0 0 0 3px var(--bh-amarelo); }
+.quadro-plano-ficha:focus-visible { outline: 3px solid var(--bh-amarelo); outline-offset: 1px; border-radius: 8px; }
+
+/* ---------- Alcance, ficha e Matriz ---------- */
+.alcance-procura { margin: 12px 0 6px; max-width: 520px; }
+.alcance-escala { margin: 0 0 8px; color: var(--bh-text-muted); font-size: 13px; }
+.regua-de-alcance { position: relative; display: block; height: 8px; margin-top: 6px; min-width: 120px; border-radius: 2px; background: rgba(216, 201, 244, .22); }
+.regua-de-alcance i { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--bh-lilas); }
+.botao-ver-matriz {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 12px; padding: 0 18px;
+  border-radius: 4px; background: var(--bh-papel); color: var(--bh-tinta); font: 700 15px "Space Grotesk", sans-serif; text-decoration: none;
+}
+.botao-ver-matriz:hover { background: var(--bh-lilas); }
+.matriz-beneficiario { display: block; font-weight: 700; font-size: 13px; color: var(--bh-amarelo); }
+
+/* ---------- Partidas: faixa do filtro e zero resultados ---------- */
+.partidas-faixa {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin: 0 0 10px; padding: 10px 12px;
+  background: var(--bh-noite-2); color: var(--bh-papel); font-size: 13px; border-radius: 4px; z-index: 5;
+}
+.partidas-faixa span { color: var(--bh-lilas); }
+.partidas-faixa b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.partidas-faixa.is-fixa { position: sticky; top: 58px; box-shadow: 0 6px 14px rgba(0, 0, 0, .3); }
+.partidas-zero button { min-height: 44px; }
+.partidas-para-a-matriz { margin: 14px 0 0; }
+.partidas-para-a-matriz a { display: inline-flex; align-items: center; min-height: 44px; color: var(--bh-lilas); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }

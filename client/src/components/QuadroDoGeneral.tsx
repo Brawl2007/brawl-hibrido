@@ -54,6 +54,13 @@ import type { ExplicacaoTatica } from "@shared/estrategiaTatica";
 import { useSimulacaoTatica } from "@/hooks/useSimulacaoTatica";
 
 const Quadro3D = lazy(() => import("./Quadro3D"));
+import { QuadroPlano } from "./QuadroPlano";
+import { formatarDecimal } from "@/lib/parametrosDaRota";
+import type { PosicaoNoMapa } from "@shared/draft";
+
+/** A vista do campo: plana (sempre disponível) ou 3D (carregada quando se pede). */
+const CHAVE_DA_VISTA_DO_CAMPO = "brawl-hibrido:quadro-vista:v1";
+const NOME_DA_FAIXA: Record<PosicaoNoMapa, string> = { left: "Esquerda", mid: "Meio", right: "Direita" };
 const SEM_EFEITOS: EfeitoNo3D[] = [];
 const ignorar = () => {};
 /** Cada passo da simulação pede um enquadramento novo à câmara. */
@@ -443,7 +450,24 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
     linhaNossa: duelo.ally,
     linhaDeles: duelo.enemy,
     vantagem: Math.max(0, Math.min(100, calculateLaneMatchup(duelo.ally, duelo.enemy).score)),
+    // De onde vem o número: "BrawlScope -5,15% (tabela geral)", "Inferência por Win Rate…".
+    nota: calculateLaneMatchup(duelo.ally, duelo.enemy).note,
   })), [nossos, deles]);
+  /*
+   * A faixa escolhida realça a dupla no campo e mostra o índice do duelo — com
+   * a equipa a que o índice pertence escrita ao lado, sempre. O índice é a
+   * vantagem da NOSSA equipa (0–100, 50 é equilíbrio), como no motor.
+   */
+  const [faixa, setFaixa] = useState<PosicaoNoMapa | null>(null);
+  const dueloDaFaixa = faixa ? duelos.find((d) => d.posicao === faixa) ?? null : null;
+  const [vistaDoCampo, setVistaDoCampo] = useState<"plana" | "3d">(() => {
+    try { return window.localStorage.getItem(CHAVE_DA_VISTA_DO_CAMPO) === "3d" ? "3d" : "plana"; } catch { return "plana"; }
+  });
+  const escolherVistaDoCampo = (vistaNova: "plana" | "3d") => {
+    setVistaDoCampo(vistaNova);
+    try { window.localStorage.setItem(CHAVE_DA_VISTA_DO_CAMPO, vistaNova); } catch { /* fica só nesta visita */ }
+  };
+  const campoEm3D = vistaDoCampo === "3d" && !erro3D;
   const duelos3D = useMemo<DueloNo3D[]>(() => duelos.map((d) => ({ nosso: chaveDaFicha("nos", d.nosso), deles: chaveDaFicha("eles", d.deles), vantagem: d.vantagem })), [duelos]);
 
   /*
@@ -911,10 +935,50 @@ export function QuadroDoGeneral({ mapa, mapaId, nosNome, nossos, deles, retratoD
         )}
       </div>
 
+      <div className="qg-faixas-e-vista">
+        <div className="qg-faixas" role="group" aria-label="Faixa">
+          <span className="qg-faixas-titulo">Faixa</span>
+          {(["left", "mid", "right"] as const).map((posicao) => {
+            const existe = duelos.some((d) => d.posicao === posicao);
+            return (
+              <button key={posicao} type="button" disabled={!existe} aria-pressed={faixa === posicao} className={faixa === posicao ? "is-active" : ""} onClick={() => setFaixa((atual) => (atual === posicao ? null : posicao))}>
+                {NOME_DA_FAIXA[posicao]}
+              </button>
+            );
+          })}
+        </div>
+        <div className="qg-vista-do-campo" role="group" aria-label="Vista do campo">
+          <button type="button" aria-pressed={!campoEm3D} className={!campoEm3D ? "is-active" : ""} onClick={() => escolherVistaDoCampo("plana")}>Plana</button>
+          <button type="button" aria-pressed={campoEm3D} className={campoEm3D ? "is-active" : ""} onClick={() => escolherVistaDoCampo("3d")} disabled={Boolean(erro3D)}>3D</button>
+        </div>
+      </div>
+      {dueloDaFaixa ? (
+        <div className="qg-indice-da-faixa" aria-live="polite">
+          <strong>{dueloDaFaixa.nosso} × {dueloDaFaixa.deles}</strong>
+          <span>Índice da equipa {nosNome.toLowerCase()}</span>
+          <b className="qg-indice-valor">{formatarDecimal(dueloDaFaixa.vantagem)} / 100</b>
+          <small>{dueloDaFaixa.nota}</small>
+        </div>
+      ) : duelos.length ? <p className="qg-indice-pista">Escolhe uma faixa para ver a dupla e o índice do duelo.</p> : null}
+
       <div className="quadro-general-corpo">
         <div className="quadro-general-palco-wrap">
-          {erro3D ? (
-            <p className="quadro-general-sem3d">{erro3D}</p>
+          {!campoEm3D ? (
+            <>
+              {erro3D ? <p className="quadro-general-sem3d">{erro3D} A vista plana tem as mesmas escolhas.</p> : null}
+              <QuadroPlano
+                nomeDoMapa={mapa?.name ?? "Mapa"}
+                imagem={mapaId ? `/api/imagens/mapa/${mapaId}.png` : null}
+                terreno={terrenoAqui}
+                fichas={fichasNoEcra}
+                setas={passoSimulado ? passoSimulado.setas : camadas.setas}
+                duelos={duelos}
+                faixa={faixa}
+                onFaixa={setFaixa}
+                onMover={passoSimulado ? undefined : moverFicha}
+                nomeDaNossaEquipa={nosNome.toLowerCase()}
+              />
+            </>
           ) : (
             <Suspense fallback={<div className="quadro3d-palco quadro3d-a-carregar">A preparar o mapa em 3D…</div>}>
               <Quadro3D

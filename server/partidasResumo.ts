@@ -1,3 +1,4 @@
+import { resumirPartidasDeExemplo, usarPartidasDeExemplo } from "./partidasDeExemplo";
 import { criarReferenciasDoMapa } from "@shared/adequacaoAoMapa";
 import { perfisTaticosDoDraft } from "@shared/draft";
 import { getPublicRankedSnapshot } from "./rankedSync";
@@ -99,7 +100,7 @@ async function calcularDosPacotes(filtro: FiltroDasPartidas) {
 }
 
 type ResumoTerminado = ReturnType<ReturnType<typeof criarResumoDasPartidas>["terminar"]>;
-function montarResumoDaPagina(p: { filtro: FiltroDasPartidas; dias: number; rank: string | null; porMapa: ReadonlyArray<{ mapId: string; mode: string; partidas: number }>; nomesGuardados: Record<string, string>; resumo: ResumoTerminado }) {
+function montarResumoDaPagina(p: { filtro: FiltroDasPartidas; dias: number; rank: string | null; porMapa: ReadonlyArray<{ mapId: string; mode: string; partidas: number }>; nomesGuardados: Record<string, string>; resumo: ResumoTerminado; exemplo?: boolean }) {
   const nomeDoMapa = (mapId: string) =>
     p.nomesGuardados[mapId] ?? RANKED_MAP_SOURCES.find(([, id]) => id === mapId)?.[0] ?? `Mapa ${mapId}`;
   const modos = new Map<string, number>();
@@ -109,6 +110,8 @@ function montarResumoDaPagina(p: { filtro: FiltroDasPartidas; dias: number; rank
     dias: p.dias,
     filtro: { mode: p.filtro.mode ?? null, mapId: p.filtro.mapId ?? null, rank: p.rank },
     limiteAtingido: false,
+    /** As partidas de teste do desenvolvimento (`partidasDeExemplo.ts`), nunca em produção. */
+    exemplo: p.exemplo ?? false,
     modos: Array.from(modos, ([mode, partidas]) => ({ mode, nome: nomeDoModo(mode), partidas })).sort((a, b) => b.partidas - a.partidas),
     mapas: p.porMapa
       .map((linha) => ({ mapId: linha.mapId, nome: nomeDoMapa(linha.mapId), mode: linha.mode, modoNome: nomeDoModo(linha.mode), partidas: Number(linha.partidas) }))
@@ -198,6 +201,10 @@ async function comResumoGuardado<T>(chave: string, calcularResumo: () => Promise
 }
 
 export async function resumoDasPartidas(filtro: FiltroDasPartidas): Promise<ResumoDaPagina> {
+  if (usarPartidasDeExemplo()) {
+    const { dias } = parametrosDoFiltro(filtro);
+    return montarResumoDaPagina({ filtro, dias, rank: null, exemplo: true, ...resumirPartidasDeExemplo(filtro) });
+  }
   const { dias } = parametrosDoFiltro(filtro);
   return comResumoGuardado(`resumo:${JSON.stringify([dias, filtro.mode ?? "", filtro.mapId ?? "", filtro.rank ?? ""])}`, () => calcular(filtro));
 }
