@@ -117,10 +117,10 @@ describe("recolha de partidas Ranked a sério (v155)", () => {
     expect(jogadoresDaVolta(["#a", "#A", "#b"], 3)).toEqual(["#A", "#B"]);
   });
 
-  it("recusa outra recolha na mesma janela de 15 minutos", () => {
+  it("recusa outra recolha na mesma janela de uma hora (v190)", () => {
     const agora = new Date("2026-09-29T12:10:00Z");
     const ha = (min: number) => new Date(agora.getTime() - min * 60_000);
-    expect(INTERVALO_DAS_PARTIDAS_MS).toBe(15 * 60_000);
+    expect(INTERVALO_DAS_PARTIDAS_MS).toBe(60 * 60_000);
     expect(podeRecolherAgora(undefined, agora).pode).toBe(true);
     expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(5) }, agora).pode).toBe(false);
     expect(podeRecolherAgora({ lastStatus: "success", lastStartedAt: ha(15) }, agora).pode).toBe(true);
@@ -129,19 +129,18 @@ describe("recolha de partidas Ranked a sério (v155)", () => {
     expect(podeRecolherAgora({ lastStatus: "running", lastStartedAt: ha(60) }, agora).pode).toBe(true);
   });
 
-  it("grava tudo em lote e a recolha corre no GitHub Actions, não na Vercel (v189)", () => {
+  it("grava tudo em lote e o GitHub Actions pede a recolha à Vercel de hora a hora (v190)", () => {
     const ler = (caminho: string) => readFileSync(resolve(process.cwd(), caminho), "utf8");
     expect(ler("server/observedMatchCollection.ts")).toContain("recordObservedBattlesBatch(");
-    // Na Vercel a rota responde sem recolher: foi o que passou o limite de CPU do Hobby.
     const vercel = ler("server/_core/index.vercel.ts");
-    expect(vercel).toContain('app.get("/api/partidas/recolher", recolhaNoutroSitio)');
-    expect(vercel).not.toContain("recolherSeForAltura");
+    expect(vercel).toContain('app.get("/api/partidas/recolher"');
+    // O agendador externo de 15 em 15 minutos já não recolhe.
+    expect(vercel.slice(vercel.indexOf('app.get("/api/partidas/agendar"'))).not.toMatch(/^[^\n]*recolherSeForAltura/);
     expect(JSON.parse(ler("vercel.json")).crons.map((cron: { path: string }) => cron.path)).not.toContain("/api/partidas/recolher");
     const workflow = ler(".github/workflows/recolher-partidas.yml");
     expect(workflow).toContain(`cron: "${AGENDAMENTO_DAS_PARTIDAS.cron}"`);
-    expect(workflow).toContain("pnpm exec tsx scripts/recolher-partidas.ts");
-    expect(workflow).toContain("DATABASE_URL: ${{ secrets.DATABASE_URL }}");
-    expect(workflow).toContain("BRAWL_STARS_API_VIA: royaleapi");
+    expect(AGENDAMENTO_DAS_PARTIDAS.cron).toBe("7 * * * *");
+    expect(workflow).toContain("https://brawl-hibrido.vercel.app/api/partidas/recolher");
   });
 });
 

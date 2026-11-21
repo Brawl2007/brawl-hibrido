@@ -1,16 +1,17 @@
 /** Partidas têm um relógio próprio; o cron diário dos mapas não as agenda. */
-export const INTERVALO_DAS_PARTIDAS_MS = 15 * 60_000;
+// De hora a hora desde a v190: a cada 15 minutos passava o limite de CPU do Hobby da Vercel.
+export const INTERVALO_DAS_PARTIDAS_MS = 60 * 60_000;
 export const RECOLHA_PRESA_MS = 10 * 60_000;
 // Alguns agendadores enviam o pedido segundos antes do minuto marcado.
 const MARGEM_DO_AGENDADOR_MS = 30_000;
 const MARGEM_DO_ALERTA_MS = 90_000;
 
 export const AGENDAMENTO_DAS_PARTIDAS = {
-  intervaloMinutos: 15,
-  cron: "3,18,33,48 * * * *",
-  descricao: "a cada 15 minutos, no GitHub Actions (pode atrasar)",
+  intervaloMinutos: 60,
+  cron: "7 * * * *",
+  descricao: "uma vez por hora; GitHub Actions pode atrasar",
   fonte: ".github/workflows/recolher-partidas.yml",
-  horarioPrincipal: "03, 18, 33 e 48 de cada hora",
+  horarioPrincipal: "minuto 07 de cada hora",
 } as const;
 
 type EstadoGuardado = {
@@ -59,7 +60,7 @@ export function estadoDaCadenciaDasPartidas(config: EstadoGuardado | undefined, 
     : atrasada || config?.lastStatus === "running" ? "atrasada" : "em_dia";
   return {
     estado,
-    intervaloMinutos: 15,
+    intervaloMinutos: INTERVALO_DAS_PARTIDAS_MS / 60_000,
     ultimaTentativa: inicio === null ? null : new Date(inicio).toISOString(),
     ultimaConclusao: config?.lastStatus === "success" && concluida !== null ? new Date(concluida).toISOString() : null,
     proximaPrevista: proxima.toISOString(),
