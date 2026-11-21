@@ -1,4 +1,3 @@
-import { diagnosticoDasPartidas } from "../erroDasPartidas";
 import { VERSAO_DO_SITE } from "@shared/version";
 import { INTERVALO_DE_RELIGACAO_MS } from "@shared/realtimeStream";
 import "dotenv/config";
@@ -13,8 +12,6 @@ import { createContext } from "./context";
 import { serveStatic } from "./static";
 import { handleCounterSyncScheduled, handleRankedSyncScheduled } from "../scheduled";
 import { handleCronSync } from "../cronSync";
-import { recolherSeForAltura } from "../observedMatchCollection";
-import { agendarRecolhaDePartidas } from "../recolhaPartidasHttp";
 import { handleObservedMatchCollectionScheduled } from "../observedMatchScheduled";
 import { getPublicCounterSyncSnapshot } from "../counterSync";
 import { getNextRefreshAt, getPublicRankedSnapshot } from "../rankedSync";
@@ -59,8 +56,8 @@ export function createApp() {
    * primeira abertura de quem apanhasse uma instância acabada de acordar.
    */
   app.use((req, _res, next) => {
-    // O arranque desta rota corre dentro do trabalho protegido por waitUntil.
-    if (req.path === "/api/partidas/agendar" && req.method === "GET") return next();
+    // As rotas da recolha já não tocam na base: não precisam do arranque.
+    if (req.path === "/api/partidas/agendar" || req.path === "/api/partidas/recolher") return next();
     if (!precisaDoArranque(req.path)) return next();
     void garantirArranque().finally(() => next());
   });
@@ -78,29 +75,18 @@ export function createApp() {
    */
   app.get("/api/cron/sync", handleCronSync);
   /**
-   * Recolha de partidas Ranked da API oficial, de 15 em 15 minutos.
-   *
-   * Na Vercel ninguém a chamava: só o servidor antigo, que ficava sempre de pé,
-   * a corria no ciclo dele. GitHub Actions pede a recolha a cada 15 minutos,
-   * mas pode atrasar. Um agendador HTTP dedicado usa /api/partidas/agendar;
-   * o cron diário da Vercel continua a ser uma reserva.
-   *
-   * É público de propósito, para o GitHub Actions não precisar de segredos. O
-   * que o protege é o intervalo mínimo entre recolhas (`podeRecolherAgora`):
-   * chamado antes do tempo, não faz nada e diz quando pode.
+   * A recolha de partidas saiu daqui (v189): corre no GitHub Actions
+   * (`.github/workflows/recolher-partidas.yml`). Corrida na Vercel, a cada 15
+   * minutos, passou o limite de CPU do plano Hobby e o site foi pausado.
+   * Quem ainda chamar estas rotas (o agendador externo) recebe a resposta sem
+   * a função tocar na base nem gastar CPU.
    */
-  app.get("/api/partidas/recolher", async (_req, res) => {
-    try {
-      const resultado = await recolherSeForAltura("scheduled");
-      res.setHeader("Cache-Control", "no-store");
-      res.status(resultado.ok || "saltada" in resultado ? 200 : 503).json(resultado);
-    } catch (erro) {
-      const diagnostico = diagnosticoDasPartidas(erro);
-      console.error("[Partidas] Pedido falhou:", diagnostico.errorCode);
-      res.status(500).json({ ok: false, ...diagnostico });
-    }
-  });
-  app.get("/api/partidas/agendar", agendarRecolhaDePartidas);
+  const recolhaNoutroSitio = (_req: express.Request, res: express.Response) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ ok: false, saltada: true, motivo: "A recolha de partidas corre no GitHub Actions." });
+  };
+  app.get("/api/partidas/recolher", recolhaNoutroSitio);
+  app.get("/api/partidas/agendar", recolhaNoutroSitio);
   registarImagensDaBrawlify(app);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);
