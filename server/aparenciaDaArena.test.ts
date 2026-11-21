@@ -345,7 +345,8 @@ describe("a entrada responde ao próprio título", () => {
     // O cartão tirava o NÚMERO de measuredRows[0] e o NOME de currentRows[0].
     // Se a primeira linha fosse de um brawler indisponível, o score de um
     // aparecia com o nome de outro. Agora os dois lêem o mesmo `lider`.
-    expect(HOME).toContain("<Hero selectedMap={selectedMap} leader={lider}");
+    // v186: a entrada passou a ser o mapa em destaque, com o mesmo `lider`.
+    expect(HOME).toMatch(/<MapaEmDestaque[\s\S]*?lider=\{lider\}/);
     expect(HOME).toContain("value={formatScore(lider?.score ?? null)} detail={`${lider?.brawler");
     expect(HOME).not.toContain("currentRows[0]?.brawler");
   });
@@ -363,7 +364,9 @@ describe("a entrada responde ao próprio título", () => {
   });
 
   it("um retrato que falha não deixa um quadrado partido", () => {
-    expect(heroi).toContain("onError={() => setRetratoFalhado(retrato)}");
+    // v186: o líder no mapa usa `Retrato`, que mostra as iniciais quando a imagem falha.
+    const destaque = readFileSync("client/src/components/MapaEmDestaque.tsx", "utf8");
+    expect(destaque).toContain("<Retrato src={retratoDe(lider)} nome={lider.brawler} />");
   });
 
   it("o recuo lateral não volta a ser uma percentagem dentro da grelha", () => {
@@ -438,13 +441,13 @@ describe("o movimento não custa o site", () => {
   });
 
   it("a troca de mapa responde já, e a entrada é só a primeira", () => {
-    const HOME = readFileSync("client/src/pages/Home.tsx", "utf8");
-    // "Primeira vez" é o primeiro nº1 MOSTRADO, não o primeiro render: a
-    // entrada renderiza sem dados antes de o nº1 existir.
-    expect(HOME).toContain("primeiroMostrado.current === null");
-    expect(HOME).toContain('jaTrocou.current ? "is-troca" : "is-entrada"');
-    // A troca não tem atraso: resposta a um clique começa no frame do clique.
-    expect(CSS_LIMPO).toContain(".hero-champion.is-troca .hero-champion-card {\n  animation: bh-champion-swap var(--dur-padrao) var(--ease-pop) both;");
+    // v186: o mapa em destaque troca nome, estampa, líder e destino do Draft
+    // no mesmo render do toque — sem cascata nem atraso de entrada.
+    const destaque = readFileSync("client/src/components/MapaEmDestaque.tsx", "utf8");
+    expect(destaque).not.toMatch(/delay|initial=\{/);
+    const PERCURSOS = readFileSync("client/src/percursos-v186.css", "utf8");
+    expect(PERCURSOS).toContain(".estampa-face-arte { transition: clip-path .22s");
+    expect(PERCURSOS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.estampa-face-arte/);
   });
 
   it("o Framer Motion respeita quem pediu menos movimento", () => {

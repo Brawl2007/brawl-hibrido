@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { escreverParametros } from "@/lib/parametrosDaRota";
 import { Database, Handshake, Search, Shield, Swords, Target, Users } from "lucide-react";
 import { BarraDoSite } from "@/components/BarraDoSite";
 import { MobileNav } from "@/components/MobileNav";
@@ -66,8 +67,9 @@ function rotuloDaEquipa(delta: number) {
 }
 
 /** Uma linha de confronto da API: taxa do adversário contra ele vs a habitual. */
-function LinhaDeConfronto({ linha, posicao, tipo }: { linha: ConfrontoDaFicha; posicao: number; tipo: "counter" | "castiga" }) {
+function LinhaDeConfronto({ linha, posicao, tipo, base }: { linha: ConfrontoDaFicha; posicao: number; tipo: "counter" | "castiga"; base?: string }) {
   const delta = linha.delta ?? 0;
+  const beneficiario = base ? beneficiarioDoConfronto(base, nomeBonito(linha.adversario), linha.delta) : null;
   return (
     <li className={`matriz-linha is-${tipo}`}>
       <span className="matriz-posicao">{posicao}</span>
@@ -78,6 +80,7 @@ function LinhaDeConfronto({ linha, posicao, tipo }: { linha: ConfrontoDaFicha; p
           <em className="matriz-etiqueta">{tipo === "counter" ? rotuloDoCounter(delta) : rotuloDoCastigo(delta)}</em>
           <b className="matriz-delta">{sinal(linha.delta)}</b>
         </span>
+        {beneficiario ? <span className="matriz-beneficiario">{beneficiario}</span> : null}
         <span className="matriz-barra" aria-hidden="true">
           <span className="matriz-barra-habitual" style={{ left: `${linha.habitual ?? 50}%` }} />
           <span className="matriz-barra-taxa" style={{ width: `${Math.max(2, Math.min(100, linha.taxa))}%` }} />
@@ -121,7 +124,19 @@ function LinhaDeEquipa({ linha, posicao, base }: { linha: EquipaDaFicha; posicao
  * Nos confrontos o valor já vem do lado do adversário (`fichaDasFontes`), como
  * na API e no BrawlScope: positivo = counter, negativo = é castigado.
  */
-function LinhaDasFontes({ nome, valor, texto, posicao, tipo }: { nome: string; valor: number | null; texto: string; posicao: number; tipo: "counter" | "castiga" | "equipa" }) {
+/**
+ * Quem tem vantagem, por extenso. Nos confrontos o valor vem do lado do
+ * ADVERSÁRIO: +7,45% contra Willow quer dizer que é o adversário quem ganha.
+ * Um sinal sozinho obrigava a lembrar essa convenção; o nome não.
+ */
+export function beneficiarioDoConfronto(base: string, adversario: string, valor: number | null) {
+  if (valor === null || !Number.isFinite(valor)) return null;
+  if (Math.abs(valor) < 0.005) return "Sem vantagem para nenhum";
+  return `${valor > 0 ? adversario : base} tem vantagem`;
+}
+
+function LinhaDasFontes({ nome, valor, texto, posicao, tipo, base }: { nome: string; valor: number | null; texto: string; posicao: number; tipo: "counter" | "castiga" | "equipa"; base?: string }) {
+  const beneficiario = tipo !== "equipa" && base ? beneficiarioDoConfronto(base, nomeBonito(nome), valor) : null;
   return (
     <li className={`matriz-linha is-${tipo}`}>
       <span className="matriz-posicao">{posicao}</span>
@@ -131,6 +146,7 @@ function LinhaDasFontes({ nome, valor, texto, posicao, tipo }: { nome: string; v
           <strong>{nomeBonito(nome)}</strong>
           <b className="matriz-delta">{valor === null ? "—" : formatMatchupPercent(valor)}</b>
         </span>
+        {beneficiario ? <span className="matriz-beneficiario">{beneficiario}</span> : null}
         <small>{texto}</small>
       </span>
     </li>
@@ -158,6 +174,8 @@ export default function MatchupMatrix() {
   const [procura, setProcura] = useState("");
   const [verTodos, setVerTodos] = useState(false);
 
+  // O brawler-base vai no endereço: voltar, recarregar e partilhar mantêm-no.
+  useEffect(() => { escreverParametros({ b: brawler }); }, [brawler]);
   useEffect(() => {
     try {
       localStorage.setItem("matriz-brawler", brawler);
@@ -400,8 +418,8 @@ export default function MatchupMatrix() {
             <p className="matriz-explica">{api.ligada ? "Vantagem ajustada por força no mapa, amostra, elo e idade dos jogos." : "Levam vantagem sobre ele nas fontes."}</p>
             <ol className="matriz-lista">
               {api.ligada
-                ? (ficha?.counters ?? []).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo="counter" />)
-                : (fontes?.counters ?? []).map((linha, i) => <LinhaDasFontes key={linha.adversario} nome={linha.adversario} valor={linha.valor} texto={linha.texto} posicao={i + 1} tipo="counter" />)}
+                ? (ficha?.counters ?? []).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo="counter" base={nome} />)
+                : (fontes?.counters ?? []).map((linha, i) => <LinhaDasFontes key={linha.adversario} nome={linha.adversario} valor={linha.valor} texto={linha.texto} posicao={i + 1} tipo="counter" base={nome} />)}
             </ol>
             {api.ligada && ficha && !ficha.counters.length ? <p className="matriz-vazio">Ainda sem counters com {10}+ jogos neste filtro.</p> : null}
           </div>
@@ -410,8 +428,8 @@ export default function MatchupMatrix() {
             <p className="matriz-explica">{api.ligada ? "Desvantagem residual após descontar a força individual dos brawlers." : "Ele leva vantagem sobre eles nas fontes."}</p>
             <ol className="matriz-lista">
               {api.ligada
-                ? (ficha?.castiga ?? []).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo="castiga" />)
-                : (fontes?.castiga ?? []).map((linha, i) => <LinhaDasFontes key={linha.adversario} nome={linha.adversario} valor={linha.valor} texto={linha.texto} posicao={i + 1} tipo="castiga" />)}
+                ? (ficha?.castiga ?? []).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo="castiga" base={nome} />)
+                : (fontes?.castiga ?? []).map((linha, i) => <LinhaDasFontes key={linha.adversario} nome={linha.adversario} valor={linha.valor} texto={linha.texto} posicao={i + 1} tipo="castiga" base={nome} />)}
             </ol>
             {api.ligada && ficha && !ficha.castiga.length ? <p className="matriz-vazio">Ainda sem brawlers castigados com {10}+ jogos neste filtro.</p> : null}
           </div>
@@ -458,8 +476,8 @@ export default function MatchupMatrix() {
           </p>
           <ol className="matriz-lista matriz-lista-larga">
             {api.ligada
-              ? todosDaApi.slice(0, mostrar).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo={(linha.delta ?? 0) >= 0 ? "counter" : "castiga"} />)
-              : todosDasFontes.slice(0, mostrar).map((linha, i) => <LinhaDasFontes key={linha.adversario} nome={linha.adversario} valor={linha.valor} texto={linha.texto} posicao={i + 1} tipo={linha.valor >= 0 ? "counter" : "castiga"} />)}
+              ? todosDaApi.slice(0, mostrar).map((linha, i) => <LinhaDeConfronto key={linha.adversario} linha={linha} posicao={i + 1} tipo={(linha.delta ?? 0) >= 0 ? "counter" : "castiga"} base={nome} />)
+              : todosDasFontes.slice(0, mostrar).map((linha, i) => <LinhaDasFontes key={linha.adversario} nome={linha.adversario} valor={linha.valor} texto={linha.texto} posicao={i + 1} tipo={linha.valor >= 0 ? "counter" : "castiga"} base={nome} />)}
           </ol>
           {!verTodos && !termo && totalDaLista > LISTA_INICIAL ? (
             <button type="button" className="ver-todos" onClick={() => setVerTodos(true)}>Ver todos ({totalDaLista})</button>

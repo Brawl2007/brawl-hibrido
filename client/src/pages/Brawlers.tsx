@@ -4,7 +4,9 @@ import { MobileNav } from "@/components/MobileNav";
 import { LOGO } from "@/lib/imagens";
 import { useDraftRolesVersion } from "@/contexts/DraftRolesContext";
 import { DraftRoleEditor } from "@/components/DraftRoleEditor";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useLayoutEffect } from "react";
+import { escreverParametros, formatarDecimal, lerParametro } from "@/lib/parametrosDaRota";
+import { filtrarPorTermos, guardarRegressoAoCatalogo, lerRegressoAoCatalogo, limparRegressoAoCatalogo, escalaComumDeAlcance } from "@/lib/regressoAoCatalogo";
 import { Link } from "wouter";
 import {
   ArrowLeft,
@@ -85,7 +87,7 @@ function roleClass(role: BrawlerCatalogItem["role"]) {
 
 function formatRangeBand(band: AttackRangeBand | null) {
   if (!band) return "Não publicado";
-  return `${band.minTiles.toLocaleString("pt-PT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}–${band.maxTiles.toLocaleString("pt-PT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} blocos`;
+  return `${formatarDecimal(band.minTiles, 1)}–${formatarDecimal(band.maxTiles, 1)} blocos`;
 }
 
 function CatalogTopbar({ onRefresh, isRefreshing, refreshProgress, liveState }: { onRefresh: () => void; isRefreshing: boolean; refreshProgress?: string | null; liveState: "connecting" | "live" | "offline" }) {
@@ -112,7 +114,7 @@ function MetricChip({ label, value, accent = "cyan" }: { label: string; value: s
 function BrawlerCard({ item, selected, onSelect }: { item: BrawlerCatalogItem; selected: boolean; onSelect: () => void }) {
   const image = imageFor(item);
   return (
-    <Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} className={`brawler-catalog-card ${selected ? "is-selected" : ""}`} onClick={onSelect} aria-label={`Abrir perfil de ${item.brawler}`}>
+    <Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} data-perfil={item.brawler} className={`brawler-catalog-card ${selected ? "is-selected" : ""}`} onClick={onSelect} aria-label={`Abrir perfil de ${item.brawler}`}>
       <div className="brawler-card-visual">
         <Retrato src={image} nome={item.brawler} alt={`${item.brawler} — ${roleLabel(item.role)}`} loading="lazy" />
         {item.isRankedAvailable ? <span className={`brawler-role-pill ${roleClass(item.role)}`}>{roleLabel(item.role)}</span> : <span className="brawler-role-pill is-flex">Fora do Ranked</span>}
@@ -166,13 +168,19 @@ function AttackRangeTable({
   sort,
   onSortChange,
   openingBonusRate,
+  query,
+  onQueryChange,
 }: {
   rows: Array<{ item: BrawlerCatalogItem; range: AttackRangeBand | null }>;
   sort: RangeSort;
   onSortChange: (sort: RangeSort) => void;
   openingBonusRate: number;
+  query: string;
+  onQueryChange: (query: string) => void;
 }) {
   const openingBonusCount = rows.filter(({ item }) => isOpeningLongRangeEligible(item.brawler)).length;
+  // Uma régua só para todos: começa em 0 e acaba na maior faixa à vista.
+  const escala = escalaComumDeAlcance(rows.map(({ range }) => range));
   return (
     <section className="attack-range-section" aria-labelledby="attack-range-title">
       <div className="attack-range-head">
@@ -188,6 +196,12 @@ function AttackRangeTable({
           <button type="button" className={sort === "name" ? "is-active" : ""} onClick={() => onSortChange("name")}>A–Z</button>
         </div>
       </div>
+      <label className="brawler-search alcance-procura">
+        <Search size={16} />
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Procurar ou comparar: Sprout, Willow, Angelo" aria-label="Procurar brawlers no alcance; separa nomes com vírgulas para comparar" />
+        {query && <button type="button" onClick={() => onQueryChange("")} aria-label="Limpar pesquisa"><X size={14} /></button>}
+      </label>
+      <p className="alcance-escala">Ataque base · escala comum de 0 a {formatarDecimal(escala, 0)} blocos · Brawl Planet</p>
       <div className="attack-range-source"><span className="tiny-live" /> Fonte de faixas: <a href={BRAWL_PLANET_ATTACK_RANGE_SOURCE_URL} target="_blank" rel="noreferrer">Brawl Planet · Attack Range</a><span>· {rows.length} brawlers visíveis · {openingBonusCount} com bónus de abertura</span></div>
       <div className="attack-range-table-wrap">
         <table className="attack-range-table">
@@ -196,8 +210,15 @@ function AttackRangeTable({
             const image = imageFor(item);
             const hasOpeningBonus = isOpeningLongRangeEligible(item.brawler);
             return <tr key={item.brawler}>
-              <td><Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} className="attack-range-brawler"><span className="attack-range-avatar"><Retrato src={image} nome={item.brawler} loading="lazy" /></span><strong>{item.brawler}</strong></Link></td>
-              <td><span className={`attack-range-value ${range ? "" : "is-unavailable"}`}>{formatRangeBand(range)}</span>{!range && <small>A aguardar publicação</small>}</td>
+              <td><Link href={`/brawlers/${encodeURIComponent(item.brawler)}`} data-perfil={item.brawler} onClick={() => guardarRegressoAoCatalogo(item.brawler)} className="attack-range-brawler"><span className="attack-range-avatar"><Retrato src={image} nome={item.brawler} loading="lazy" /></span><strong>{item.brawler}</strong></Link></td>
+              <td>
+                <span className={`attack-range-value ${range ? "" : "is-unavailable"}`}>{formatRangeBand(range)}</span>
+                {range ? (
+                  <span className="regua-de-alcance" role="img" aria-label={`De ${formatarDecimal(range.minTiles, 1)} a ${formatarDecimal(range.maxTiles, 1)} blocos, numa escala de 0 a ${formatarDecimal(escala, 0)}`}>
+                    <i style={{ left: `${(range.minTiles / escala) * 100}%`, width: `${((range.maxTiles - range.minTiles) / escala) * 100}%` }} />
+                  </span>
+                ) : <small>A aguardar publicação no Brawl Planet</small>}
+              </td>
               <td>{range ? <span className={`attack-range-band band-${range.id.toLowerCase()}`}>{range.id} · {range.label}</span> : <span className="attack-range-band is-unavailable">— · Sem faixa</span>}</td>
               <td>{hasOpeningBonus ? <span className="opening-bonus-pill"><Zap size={11} /> +{openingBonusRate * 100}%<small>{getOpeningBonusEligibilityLabel(item.brawler)}</small></span> : <span className="opening-bonus-pill is-inactive">—</span>}</td>
               <td><span className={`brawler-role-pill ${roleClass(item.role)} attack-range-role`}>{roleLabel(item.role)}</span></td>
@@ -218,16 +239,33 @@ export default function Brawlers() {
   const trpcUtils = trpc.useUtils();
   // Mesmo hook das outras páginas: arranca o trabalho e não fica à espera dele.
   const { isRefreshing, progress: syncProgress, start: handleRefresh } = useSyncRefresh();
-  const [query, setQuery] = useState("");
+  /*
+   * O que se escolheu aqui vive no endereço (`?q=…&aba=alcance&tier=S…`):
+   * abrir um perfil e voltar encontra a mesma pesquisa, os mesmos filtros e a
+   * mesma aba — e um link partilhado abre igual.
+   */
+  const [query, setQuery] = useState(() => lerParametro("q") ?? "");
   // O catálogo e a tabela de alcance (106 linhas) eram duas páginas empilhadas: agora são abas.
-  const [aba, setAba] = useState<"catalogo" | "alcance">("catalogo");
+  const [aba, setAba] = useState<"catalogo" | "alcance">(() => lerParametro("aba") === "alcance" ? "alcance" : "catalogo");
   // 106 cartões de uma vez eram 13 000 px no telemóvel: mostram-se 24 e o resto a pedido.
-  const [verTodos, setVerTodos] = useState(false);
-  const [tier, setTier] = useState<TierFilter>("Todos");
-  const [role, setRole] = useState<DraftRoleFilter>("Todas");
-  const [classFilter, setClassFilter] = useState<BrawlerClassFilter>("Todas");
-  const [matchup, setMatchup] = useState<MatchupFilter>("Todos");
-  const [rangeSort, setRangeSort] = useState<RangeSort>("highest");
+  const [verTodos, setVerTodos] = useState(() => lerParametro("todos") === "1");
+  const [tier, setTier] = useState<TierFilter>(() => (["S", "A", "B"].includes(lerParametro("tier") ?? "") ? lerParametro("tier") as TierFilter : "Todos"));
+  const [role, setRole] = useState<DraftRoleFilter>(() => (["side", "mid", "flex"].includes(lerParametro("funcao") ?? "") ? lerParametro("funcao") as DraftRoleFilter : "Todas"));
+  const [classFilter, setClassFilter] = useState<BrawlerClassFilter>(() => { const pedida = lerParametro("classe"); return (classFilterOptions as readonly string[]).includes(pedida ?? "") ? pedida as BrawlerClassFilter : "Todas"; });
+  const [matchup, setMatchup] = useState<MatchupFilter>(() => (["has-counters", "countered-by"].includes(lerParametro("relacao") ?? "") ? lerParametro("relacao") as MatchupFilter : "Todos"));
+  const [rangeSort, setRangeSort] = useState<RangeSort>(() => (["lowest", "name"].includes(lerParametro("ordem") ?? "") ? lerParametro("ordem") as RangeSort : "highest"));
+  useEffect(() => {
+    escreverParametros({
+      q: query.trim() ? query : null,
+      aba: aba === "alcance" ? "alcance" : null,
+      todos: verTodos ? "1" : null,
+      tier: tier === "Todos" ? null : tier,
+      funcao: role === "Todas" ? null : role,
+      classe: classFilter === "Todas" ? null : classFilter,
+      relacao: matchup === "Todos" ? null : matchup,
+      ordem: rangeSort === "highest" ? null : rangeSort,
+    });
+  }, [query, aba, verTodos, tier, role, classFilter, matchup, rangeSort]);
   const [selectedName, setSelectedName] = useState("");
   const { weights: hybridWeights, winRateWeight, starPlayerWeight } = useHybridWeights();
   const { topBrawlWeight } = useSourceBalance();
@@ -248,7 +286,8 @@ export default function Brawlers() {
   const catalogRows = useMemo(() => [...liveRows, ...officialCatalogRows, ...preRankedBrawlerCatalogRows], [liveRows, officialCatalogRows]);
   const catalog = useMemo(() => buildBrawlerCatalog(catalogRows, counterSnapshot), [catalogRows, counterSnapshot, counterSnapshotVersion, roleVersion]);
   const filteredCatalog = useMemo(() => catalog.filter((item) => {
-    const matchesQuery = item.brawler.toLowerCase().includes(query.trim().toLowerCase());
+    // Vírgulas comparam vários: "Sprout, Willow, Angelo".
+    const matchesQuery = filtrarPorTermos(item.brawler, query);
     const matchesTier = tier === "Todos" || (item.isRankedAvailable && item.bestRow.tier === tier);
     const matchesRole = role === "Todas" || item.role === role;
     const matchesClass = classFilter === "Todas" || getBrawlerClass(item.brawler) === classFilter;
@@ -274,6 +313,22 @@ export default function Brawlers() {
     if (selected && selected.brawler !== selectedName) setSelectedName(selected.brawler);
   }, [selected, selectedName]);
 
+  /*
+   * O regresso do perfil: a rolagem e o foco voltam ao cartão (ou à linha da
+   * tabela de alcance) de onde se partiu. Só depois de a lista estar
+   * desenhada, e só uma vez.
+   */
+  useLayoutEffect(() => {
+    const regresso = lerRegressoAoCatalogo();
+    if (!regresso || !catalog.length) return;
+    if (regresso.endereco !== `${window.location.pathname}${window.location.search}`) { limparRegressoAoCatalogo(); return; }
+    limparRegressoAoCatalogo();
+    window.scrollTo(0, regresso.rolagem);
+    const alvo = document.querySelector<HTMLElement>(`[data-perfil="${CSS.escape(regresso.brawler)}"]`);
+    alvo?.focus({ preventScroll: true });
+  }, [catalog.length > 0]);
+  const aoAbrirPerfil = (brawler: string) => guardarRegressoAoCatalogo(brawler);
+
   return (
     <div className="app-shell draft-shell brawlers-shell com-barra-no-topo" style={{ backgroundColor: "#0b0e14" }}>
       <div className="app-main">
@@ -287,13 +342,13 @@ export default function Brawlers() {
             <button type="button" role="tab" aria-selected={aba === "catalogo"} className={aba === "catalogo" ? "is-active" : ""} onClick={() => setAba("catalogo")}>Brawlers e counters</button>
             <button type="button" role="tab" aria-selected={aba === "alcance"} className={aba === "alcance" ? "is-active" : ""} onClick={() => setAba("alcance")}>Alcance</button>
           </div>
-          {aba === "alcance" && <AttackRangeTable rows={rangeRows} sort={rangeSort} onSortChange={setRangeSort} openingBonusRate={draftRules.openingLongRange} />}
+          {aba === "alcance" && <AttackRangeTable rows={rangeRows} sort={rangeSort} onSortChange={setRangeSort} openingBonusRate={draftRules.openingLongRange} query={query} onQueryChange={setQuery} />}
 
           {aba === "catalogo" && (
           <section className="brawlers-workspace">
             <DraftRoleEditor names={catalog.map(item => item.brawler)} /><div className="brawlers-toolbar"><label className="brawler-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Procurar brawler…" aria-label="Procurar brawler" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Limpar pesquisa"><X size={14} /></button>}</label><div className="brawler-filter-group"><span>Tier</span>{(["Todos", "S", "A", "B"] as TierFilter[]).map((option) => <button type="button" key={option} onClick={() => setTier(option)} className={tier === option ? "is-active" : ""}>{option === "Todos" ? "Todos" : `Tier ${option}`}</button>)}</div><div className="brawler-filter-group"><span>Função</span>{(["Todas", "mid", "side", "flex"] as DraftRoleFilter[]).map((option) => <button type="button" key={option} onClick={() => setRole(option)} className={role === option ? "is-active" : ""}>{draftRoleLabels[option]}</button>)}</div><label className="brawler-select-filter"><SlidersHorizontal size={14} /><select value={classFilter} onChange={(event) => setClassFilter(event.target.value as BrawlerClassFilter)} aria-label="Filtrar por classe"><option value="Todas">Todas as classes</option>{classFilterOptions.filter((option) => option !== "Todas").map((option) => <option key={option} value={option}>{option}</option>)}</select><ChevronDown size={13} /></label><label className="brawler-select-filter"><SlidersHorizontal size={14} /><select value={matchup} onChange={(event) => setMatchup(event.target.value as MatchupFilter)}><option value="Todos">Todos os matchups</option><option value="has-counters">Tem counters</option><option value="countered-by">Tem respostas</option></select><ChevronDown size={13} /></label></div>
             <div className="brawlers-catalog-meta"><span><span className="tiny-live" /> {filteredCatalog.length} de {catalog.length} brawlers visíveis</span><span>Seleciona um cartão para abrir o perfil completo.</span></div>
-            <div className="brawlers-content-grid"><div className="brawler-catalog-grid">{filteredCatalog.slice(0, verTodos || query.trim() ? filteredCatalog.length : 24).map((item) => <BrawlerCard key={item.brawler} item={item} selected={selected?.brawler === item.brawler} onSelect={() => setSelectedName(item.brawler)} />)}{filteredCatalog.length === 0 && <div className="brawlers-empty"><Crosshair size={24} /><strong>Nenhum brawler encontrado.</strong><span>Experimenta limpar a pesquisa ou trocar os filtros.</span></div>}{!verTodos && !query.trim() && filteredCatalog.length > 24 && <button type="button" className="ver-todos" onClick={() => setVerTodos(true)}>Ver todos ({filteredCatalog.length})</button>}</div>{selected && <BrawlerDetail key={selected.brawler} item={selected} catalog={catalog} onPick={(name) => setSelectedName(name)} />}</div>
+            <div className="brawlers-content-grid"><div className="brawler-catalog-grid">{filteredCatalog.slice(0, verTodos || query.trim() ? filteredCatalog.length : 24).map((item) => <BrawlerCard key={item.brawler} item={item} selected={selected?.brawler === item.brawler} onSelect={() => { setSelectedName(item.brawler); aoAbrirPerfil(item.brawler); }} />)}{filteredCatalog.length === 0 && <div className="brawlers-empty"><Crosshair size={24} /><strong>Nenhum brawler encontrado.</strong><span>Experimenta limpar a pesquisa ou trocar os filtros.</span></div>}{!verTodos && !query.trim() && filteredCatalog.length > 24 && <button type="button" className="ver-todos" onClick={() => setVerTodos(true)}>Ver todos ({filteredCatalog.length})</button>}</div>{selected && <BrawlerDetail key={selected.brawler} item={selected} catalog={catalog} onPick={(name) => setSelectedName(name)} />}</div>
           </section>
           )}
         </main>

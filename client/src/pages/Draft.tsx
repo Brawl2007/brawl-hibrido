@@ -106,6 +106,9 @@ import type { DraftRuleSettings } from "@shared/draftRules";
 import "./draftRules.css";
 import { MobileNav } from "@/components/MobileNav";
 import { BarraDoSite } from "@/components/BarraDoSite";
+import { idDoMapaNaRota, resolverMapaDaRota } from "@shared/mapaNaRota";
+import { escreverParametros, lerParametro, prefereMenosMovimento } from "@/lib/parametrosDaRota";
+import { exemploDaRota, proximoPassoPendente, rotuloDoTurno, ultimoPassoResolvido, vezDaEquipa } from "@shared/turnoDoDraft";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -1171,15 +1174,15 @@ function DraftTopbar({ onReset, isRefreshing, refreshProgress, onRefresh, observ
   );
 }
 
-function EmptySlot({ step, active, onClick }: { step: DraftStep; active: boolean; onClick?: () => void }) {
+function EmptySlot({ step, active, onClick, passo }: { step: DraftStep; active: boolean; onClick?: () => void; passo?: number }) {
   return (
-    <button className={`draft-slot empty-slot ${active ? "is-active" : ""}`} onClick={onClick} disabled={!onClick} title="Clique para ativar este turno" aria-label={`Ativar ${step.label} para a equipa ${step.team === "blue" ? "Azul" : "Vermelha"}`}>
+    <button data-passo={passo} className={`draft-slot empty-slot ${active ? "is-active" : ""}`} onClick={onClick} disabled={!onClick} title="Clique para ativar este turno" aria-label={`Ativar ${step.label} para a equipa ${step.team === "blue" ? "Azul" : "Vermelha"}`}>
       <span className="slot-index">{step.label}</span><span className="slot-plus">{active ? "●" : "+"}</span>
     </button>
   );
 }
 
-function FilledSlot({ row, step, onClear, teammateNames, mapTeams }: { row: RankedRow; step: DraftStep; onClear: () => void; teammateNames: string[]; mapTeams?: readonly BrawlPlanetMapTeam[] }) {
+function FilledSlot({ row, step, onClear, teammateNames, mapTeams, passo }: { row: RankedRow; step: DraftStep; onClear: () => void; teammateNames: string[]; mapTeams?: readonly BrawlPlanetMapTeam[]; passo?: number }) {
   const role = inferDraftRole(row.brawler);
   const winRate = row.brawlPlanetWinRate ?? row.topBrawlWinRate ?? row.winRate;
   const mapTeamSynergy = step.kind === "pick" ? findBrawlPlanetMapTeam(row.brawler, teammateNames, mapTeams) : null;
@@ -1187,7 +1190,7 @@ function FilledSlot({ row, step, onClear, teammateNames, mapTeams }: { row: Rank
     ? teammateNames.filter((name) => mapTeamSynergy.brawlers.some((member) => member.toLocaleLowerCase() === name.toLocaleLowerCase()))
     : [];
   const slotButton = (
-    <button className={`draft-slot filled-slot ${step.kind}-slot`} onClick={onClear} title="Clique para remover esta escolha">
+    <button data-passo={passo} className={`draft-slot filled-slot ${step.kind}-slot`} onClick={onClear} title="Clique para remover esta escolha" aria-label={`${row.brawler}, ${step.label} da equipa ${step.team === "blue" ? "azul" : "vermelha"}. Tocar remove esta escolha.`}>
       <span className="slot-image com-retrato"><Retrato src={brawlerImageFor(row)} nome={row.brawler} /></span>
       <span className="slot-copy"><strong>{row.brawler}</strong><small>{step.kind === "ban" ? "BAN" : `${role.toUpperCase()} · WR ${formatMetric(winRate)}`}</small></span>
       <span className="slot-remove"><X size={13} /></span>
@@ -1259,9 +1262,9 @@ function TeamBoard({ team, myTeam, steps, choices, skipped, rows, mapTeams, acti
   const resolvedTeamSteps = stepsForTeam.filter(({ index }) => choices[index] || skipped[index]).length;
   return (
     <section className={`team-board ${team}`}>
-      <div className="team-heading"><div className="team-identity"><div className="team-color-dot" /><div><span className="team-kicker">TEAM {team === "blue" ? "01" : "02"} · {team === "blue" ? "BLUE SIDE" : "RED SIDE"}</span><h3>{team === "blue" ? "Azul" : "Vermelha"}</h3></div></div><div className="team-heading-meta"><span className={`team-perspective ${team === myTeam ? "is-you" : "is-opponent"}`}>{team === myTeam ? "Tu" : "Adversário"}</span><span className="team-count"><strong>{resolvedTeamSteps}</strong><em>/{stepsForTeam.length}</em></span></div></div>
-      <div className="team-lane ban-lane"><div className="lane-label"><span><Shield size={13} /> BANS</span><small>{banSteps.length} slots</small></div><div className="slot-grid">{banSteps.map(({ step, index }) => choices[index] ? <FilledSlot key={index} row={findRow(choices[index]) ?? rows[0]} step={step} teammateNames={[]} onClear={() => onClear(index)} /> : skipped[index] ? <SkippedSlot key={index} step={step} onClear={() => onClearSkip(index)} /> : <EmptySlot key={index} step={step} active={activeStep === index} onClick={() => onActivate(index)} />)}</div></div>
-      <div className="team-lane pick-lane"><div className="lane-label"><span><Target size={13} /> PICKS</span><small>{pickSteps.length} slots</small></div><div className="slot-grid">{pickSteps.map(({ step, index }) => choices[index] ? <FilledSlot key={index} row={findRow(choices[index]) ?? rows[0]} step={step} teammateNames={teamPickNames.filter((name) => name !== choices[index])} mapTeams={mapTeams} onClear={() => onClear(index)} /> : skipped[index] ? <SkippedSlot key={index} step={step} onClear={() => onClearSkip(index)} /> : <EmptySlot key={index} step={step} active={activeStep === index} onClick={() => onActivate(index)} />)}</div></div>
+      <div className="team-heading"><div className="team-identity"><div className="team-color-dot" /><div><span className="team-kicker">TEAM {team === "blue" ? "01" : "02"} · {team === "blue" ? "BLUE SIDE" : "RED SIDE"}</span><h3>{team === "blue" ? "Equipa azul" : "Equipa vermelha"}</h3></div></div><div className="team-heading-meta"><span className={`team-perspective ${team === myTeam ? "is-you" : "is-opponent"}`}>{team === myTeam ? "Tu" : "Adversário"}</span><span className="team-count"><strong>{resolvedTeamSteps}</strong><em>/{stepsForTeam.length}</em></span></div></div>
+      <div className="team-lane ban-lane"><div className="lane-label"><span><Shield size={13} /> BANS</span><small>{banSteps.length} slots</small></div><div className="slot-grid">{banSteps.map(({ step, index }) => choices[index] ? <FilledSlot key={index} passo={index} row={findRow(choices[index]) ?? rows[0]} step={step} teammateNames={[]} onClear={() => onClear(index)} /> : skipped[index] ? <SkippedSlot key={index} step={step} onClear={() => onClearSkip(index)} /> : <EmptySlot key={index} passo={index} step={step} active={activeStep === index} onClick={() => onActivate(index)} />)}</div></div>
+      <div className="team-lane pick-lane"><div className="lane-label"><span><Target size={13} /> PICKS</span><small>{pickSteps.length} slots</small></div><div className="slot-grid">{pickSteps.map(({ step, index }) => choices[index] ? <FilledSlot key={index} passo={index} row={findRow(choices[index]) ?? rows[0]} step={step} teammateNames={teamPickNames.filter((name) => name !== choices[index])} mapTeams={mapTeams} onClear={() => onClear(index)} /> : skipped[index] ? <SkippedSlot key={index} step={step} onClear={() => onClearSkip(index)} /> : <EmptySlot key={index} passo={index} step={step} active={activeStep === index} onClick={() => onActivate(index)} />)}</div></div>
     </section>
   );
 }
@@ -2594,7 +2597,26 @@ export default function Draft() {
     () => buildActiveRankedMapCatalog(rankedSync.snapshot?.maps, liveRows, allMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
     [winRateWeight, starPlayerWeight, topBrawlWeight, rankedSync.snapshot?.maps, liveRows],
   );
-  const [selectedMapName, setSelectedMapName] = useState("Beach Ball");
+  /*
+   * O mapa chega pelo endereço (`/draft?map=hard-rock-mine`), vindo do Início,
+   * da ficha de um brawler ou de um link partilhado. O destino explícito tem
+   * prioridade; é validado pelo catálogo ativo, e um mapa que saiu da rotação
+   * não abre um draft vazio — fica o mapa de sempre e um aviso.
+   */
+  const pedidoDoEndereco = useMemo(() => resolverMapaDaRota(liveMaps, lerParametro("map")), []);
+  // Sem mapa no endereço (o «Usar no Draft» de uma ficha, a barra de baixo),
+  // volta-se ao mapa do draft que estava a decorrer nesta sessão.
+  const [selectedMapName, setSelectedMapName] = useState(() => {
+    if (pedidoDoEndereco.mapa) return pedidoDoEndereco.mapa.name;
+    try {
+      const emCurso = JSON.parse(window.sessionStorage.getItem("brawl-hibrido:draft-em-curso:v1") ?? "null");
+      if (emCurso && typeof emCurso.mapa === "string" && liveMaps.some((mapa) => mapa.name === emCurso.mapa)) return emCurso.mapa as string;
+    } catch { /* sem sessão guardada */ }
+    return "Beach Ball";
+  });
+  const [avisoDaRota, setAvisoDaRota] = useState<string | null>(() => pedidoDoEndereco.estado === "desconhecido"
+    ? `O mapa «${pedidoDoEndereco.pedido}» não está na rotação atual. O draft abriu noutro mapa da rotação.`
+    : null);
   const selectedMap = resolveRankedMapSelection(liveMaps, selectedMapName);
   const [scrimPreset, setScrimPreset] = useState<ScrimPreset>("standard");
   const [initialTeam, setInitialTeam] = useState<TeamId>("blue");
@@ -2607,7 +2629,9 @@ export default function Draft() {
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [analysisSelectedStepIndex, setAnalysisSelectedStepIndex] = useState<number | null>(null);
   const [myTeam, setMyTeam] = useState<TeamId>("blue");
-  const [query, setQuery] = useState("");
+  // «Usar no Draft» na ficha traz `?brawler=`: fica na pesquisa, pronto a um
+  // toque, e respeita a vez — não é escolhido sozinho.
+  const [query, setQuery] = useState(() => lerParametro("brawler") ?? "");
   const [voiceState, setVoiceState] = useState<VoiceCaptureState>("idle");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const [roleFilter, setRoleFilter] = useState<DraftRoleFilter>("Todas");
@@ -2818,6 +2842,7 @@ export default function Draft() {
   }, []);
   useEffect(() => {
     if (!selectedMap || selectedMap.name === selectedMapName) return;
+    historicoRef.current = [];
     setSelectedMapName(selectedMap.name);
     setChoices(Array(draftSequence.length).fill(null));
     setAnalysisChoices(Array(draftSequence.length).fill(null));
@@ -2877,11 +2902,81 @@ export default function Draft() {
 
   const interactiveDraftStateRef = useRef({ choices, skipped, activeStepIndex, lockedNames });
   interactiveDraftStateRef.current = { choices, skipped, activeStepIndex, lockedNames };
+  /** A ordem em que os passos foram resolvidos, para «Desfazer» tirar o último. */
+  const historicoRef = useRef<number[]>([]);
+  /** Um toque repetido no mesmo nome (toque duplo) não é um segundo pedido. */
+  const ultimoToqueRef = useRef<{ nome: string; em: number } | null>(null);
+  /** De onde partiu o toque: é dali que o retrato decorativo levanta voo. */
+  const origemDoToqueRef = useRef<{ elemento: Element; em: number } | null>(null);
+  const vooRef = useRef<{ animacao: Animation; no: HTMLElement } | null>(null);
+  const cancelarVoo = useCallback(() => {
+    vooRef.current?.animacao.cancel();
+    vooRef.current?.no.remove();
+    vooRef.current = null;
+  }, []);
+  useEffect(() => cancelarVoo, [cancelarVoo]);
+  /*
+   * O retrato que viaja do nome para a vaga, em ~180 ms. É só decoração: o
+   * motor, o turno seguinte e «Desfazer» já responderam quando ele parte, e
+   * nada espera por ele. Com movimento reduzido não há voo.
+   */
+  const voarParaAVaga = useCallback((origem: DOMRect | null, passo: number, nome: string, imagem: string | null) => {
+    cancelarVoo();
+    if (!origem || prefereMenosMovimento() || typeof document === "undefined") return;
+    window.requestAnimationFrame(() => {
+      const alvo = document.querySelector(`[data-passo="${passo}"]`);
+      if (!alvo) return;
+      const destino = alvo.getBoundingClientRect();
+      if (destino.bottom < 0 || destino.top > window.innerHeight) return;
+      const no = document.createElement("div");
+      no.className = "voo-do-retrato";
+      no.setAttribute("aria-hidden", "true");
+      if (imagem) {
+        const retrato = document.createElement("img");
+        retrato.src = imagem;
+        retrato.alt = "";
+        retrato.onerror = () => { retrato.remove(); no.textContent = nome.slice(0, 2).toUpperCase(); };
+        no.appendChild(retrato);
+      } else {
+        no.textContent = nome.slice(0, 2).toUpperCase();
+      }
+      const lado = 40;
+      no.style.left = `${origem.left + origem.width / 2 - lado / 2}px`;
+      no.style.top = `${origem.top + origem.height / 2 - lado / 2}px`;
+      document.body.appendChild(no);
+      const dx = destino.left + destino.width / 2 - (origem.left + origem.width / 2);
+      const dy = destino.top + destino.height / 2 - (origem.top + origem.height / 2);
+      const animacao = no.animate(
+        [{ transform: "translate(0, 0) scale(1)", opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(.85)`, opacity: 0.85 }],
+        { duration: 180, easing: "cubic-bezier(.2, .7, .2, 1)", fill: "forwards" },
+      );
+      vooRef.current = { animacao, no };
+      animacao.onfinish = () => { no.remove(); if (vooRef.current?.no === no) vooRef.current = null; };
+    });
+  }, [cancelarVoo]);
   const assignBrawler = useCallback((name: string) => {
     const { choices: currentChoices, skipped: currentSkipped, activeStepIndex: currentActiveStepIndex, lockedNames: currentLockedNames } = interactiveDraftStateRef.current;
-    if (currentActiveStepIndex === null) { toast.info("O draft está completo ou os passos restantes foram ignorados."); return; }
-    if (currentLockedNames.has(name)) { toast.info(`${name} já está bloqueado neste draft.`); return; }
+    const agora = Date.now();
+    const repetido = ultimoToqueRef.current?.nome === name && agora - ultimoToqueRef.current.em < 700;
+    if (currentActiveStepIndex === null) { if (!repetido) toast.info("O draft está completo ou os passos restantes foram ignorados."); return; }
+    if (currentLockedNames.has(name)) { if (!repetido) toast.info(`${name} já está bloqueado neste draft.`); return; }
+    ultimoToqueRef.current = { nome: name, em: agora };
     const nextChoices = currentChoices.map((choice, index) => index === currentActiveStepIndex ? name : choice);
+    // O estado interativo muda JÁ, não no próximo render: um segundo toque que
+    // chegue antes disso vê o nome bloqueado e a vez seguinte.
+    interactiveDraftStateRef.current = {
+      choices: nextChoices,
+      skipped: currentSkipped,
+      activeStepIndex: proximoPassoPendente(nextChoices, currentSkipped),
+      lockedNames: new Set([...currentLockedNames, name]),
+    };
+    historicoRef.current = [...historicoRef.current, currentActiveStepIndex];
+    const toque = origemDoToqueRef.current;
+    origemDoToqueRef.current = null;
+    const origem = toque && agora - toque.em < 1500 && toque.elemento.isConnected ? toque.elemento : null;
+    const caixaDeOrigem = origem ? (origem.closest("button, [role='button'], article, li") ?? origem).getBoundingClientRect() : null;
+    const linhaEscolhida = currentRows.find((row) => row.brawler === name);
+    voarParaAVaga(caixaDeOrigem, currentActiveStepIndex, name, linhaEscolhida ? brawlerImageFor(linhaEscolhida) : null);
     // A pesquisa apaga-se assim que o brawler entra e o cursor fica lá: o
     // próximo escreve-se logo, sem clicar outra vez na caixa.
     if (pesquisaRef.current?.value) {
@@ -2892,7 +2987,7 @@ export default function Draft() {
     setChoices(nextChoices);
     setSelectedStepIndex(null);
     scheduleContextualAnalysis(nextChoices, currentSkipped, null);
-  }, [scheduleContextualAnalysis]);
+  }, [scheduleContextualAnalysis, voarParaAVaga, currentRows]);
   const startVoiceFill = () => {
     if (activeStepIndex === null || !activeDraftStep) {
       toast.info("Seleciona primeiro um slot de Ban ou Pick para usar o microfone.");
@@ -2945,6 +3040,7 @@ export default function Draft() {
   const skipActiveStep = () => {
     if (activeStepIndex === null) { toast.info("Não há passo ativo para ignorar."); return; }
     const nextSkipped = skipped.map((value, index) => index === activeStepIndex ? true : value);
+    historicoRef.current = [...historicoRef.current, activeStepIndex];
     setRosterPage(1);
     setSkipped(nextSkipped);
     setSelectedStepIndex(null);
@@ -2967,8 +3063,92 @@ export default function Draft() {
     setSelectedStepIndex(index);
     scheduleContextualAnalysis(choices, nextSkipped, index);
   };
-  const resetDraft = () => { resetChoices(); toast.success("Draft limpo."); };
-  const changeMap = (name: string) => { setSelectedMapName(name); resetDraft(); setQuery(""); };
+  /**
+   * «Desfazer»: retira o último passo resolvido e devolve a vez à equipa que
+   * o tinha. Funciona a meio do voo do retrato (o voo é cancelado) e lê o
+   * estado interativo, não o do último render — dois toques seguidos em
+   * «Desfazer» desfazem dois passos.
+   */
+  const desfazer = () => {
+    const { choices: atuais, skipped: ignorados } = interactiveDraftStateRef.current;
+    const passo = ultimoPassoResolvido(historicoRef.current, atuais, ignorados);
+    if (passo === null) return;
+    cancelarVoo();
+    historicoRef.current = historicoRef.current.filter((indice) => indice !== passo);
+    ultimoToqueRef.current = null;
+    const proximasEscolhas = atuais.map((escolha, indice) => indice === passo ? null : escolha);
+    const proximosIgnorados = ignorados.map((valor, indice) => indice === passo ? false : valor);
+    interactiveDraftStateRef.current = {
+      choices: proximasEscolhas,
+      skipped: proximosIgnorados,
+      activeStepIndex: passo,
+      lockedNames: new Set(proximasEscolhas.filter((nome): nome is string => Boolean(nome))),
+    };
+    setRosterPage(1);
+    setChoices(proximasEscolhas);
+    setSkipped(proximosIgnorados);
+    setSelectedStepIndex(passo);
+    scheduleContextualAnalysis(proximasEscolhas, proximosIgnorados, passo);
+  };
+  const podeDesfazer = choices.some(Boolean) || skipped.some(Boolean);
+
+  /*
+   * Recarregar não perde o draft. O que está escolhido fica guardado nesta
+   * sessão do navegador, por mapa e pela ordem padrão; ao voltar ao mesmo mapa
+   * com a mesma ordem, reaparece. Um exemplo pedido no endereço (`?picks=`)
+   * tem prioridade e é aplicado uma vez.
+   */
+  const CHAVE_DO_DRAFT_EM_CURSO = "brawl-hibrido:draft-em-curso:v1";
+  const arranqueFeito = useRef(false);
+  useEffect(() => {
+    // Sem linhas ainda (dados a carregar) não se decide: o draft guardado esperaria e seria apagado.
+    if (arranqueFeito.current || !selectedMap || !currentRows.length) return;
+    arranqueFeito.current = true;
+    const nomes = currentRows.map((row) => row.brawler);
+    const exemplo = exemploDaRota(draftSequence, lerParametro("picks"), nomes);
+    let estado: { escolhas: (string | null)[]; ignorados: boolean[]; historico: number[] } | null = exemplo;
+    if (exemplo) escreverParametros({ picks: null });
+    if (!estado && scrimPreset === "standard") {
+      try {
+        const guardado = JSON.parse(window.sessionStorage.getItem(CHAVE_DO_DRAFT_EM_CURSO) ?? "null");
+        const valido = guardado && guardado.mapa === selectedMap.name && guardado.equipaInicial === initialTeam
+          && Array.isArray(guardado.escolhas) && guardado.escolhas.length === draftSequence.length
+          && guardado.escolhas.every((nome: unknown) => nome === null || (typeof nome === "string" && nomes.includes(nome)));
+        if (valido) estado = { escolhas: guardado.escolhas, ignorados: guardado.ignorados.map(Boolean), historico: (guardado.historico ?? []).filter((n: unknown) => typeof n === "number") };
+      } catch { /* sessão sem armazenamento: começa limpo */ }
+    }
+    if (!estado) return;
+    historicoRef.current = estado.historico;
+    setChoices(estado.escolhas);
+    setSkipped(estado.ignorados);
+    setSelectedStepIndex(null);
+    scheduleContextualAnalysis(estado.escolhas, estado.ignorados, null);
+  }, [selectedMap, currentRows, draftSequence, scrimPreset, initialTeam, scheduleContextualAnalysis]);
+  useEffect(() => {
+    if (!arranqueFeito.current || !selectedMap || scrimPreset !== "standard") return;
+    try {
+      window.sessionStorage.setItem(CHAVE_DO_DRAFT_EM_CURSO, JSON.stringify({
+        mapa: selectedMap.name, equipaInicial: initialTeam, escolhas: choices, ignorados: skipped, historico: historicoRef.current,
+      }));
+    } catch { /* sem armazenamento: o draft continua, só não sobrevive ao recarregar */ }
+  }, [choices, skipped, selectedMap?.name, scrimPreset, initialTeam]);
+  // O endereço acompanha o mapa: voltar ao Início ou recarregar reencontra-o.
+  useEffect(() => {
+    if (selectedMap) escreverParametros({ map: idDoMapaNaRota(selectedMap.name) });
+  }, [selectedMap?.name]);
+  useEffect(() => {
+    const aoNavegar = () => {
+      const pedido = resolverMapaDaRota(liveMaps, lerParametro("map"));
+      // Outro mapa é outro draft: os picks do mapa anterior não passam para este.
+      if (pedido.mapa && pedido.mapa.name !== selectedMapName) { historicoRef.current = []; cancelarVoo(); setSelectedMapName(pedido.mapa.name); resetChoices(); }
+    };
+    window.addEventListener("popstate", aoNavegar);
+    return () => window.removeEventListener("popstate", aoNavegar);
+  }, [liveMaps, selectedMapName]);
+  const rotuloDoPasso = rotuloDoTurno(draftSequence, activeStepIndex);
+  const textoDaVez = vezDaEquipa(activeDraftStep);
+  const resetDraft = () => { historicoRef.current = []; cancelarVoo(); resetChoices(); toast.success("Draft limpo."); };
+  const changeMap = (name: string) => { setSelectedMapName(name); setAvisoDaRota(null); resetDraft(); setQuery(""); };
   // Enter na pesquisa escolhe o primeiro da lista: escrever "sha" + Enter chega.
   const escolherOPrimeiro = () => {
     if (activeStepIndex === null) return;
@@ -3033,13 +3213,23 @@ export default function Draft() {
           blockedSources={blockedSources}
         />
         <main className="draft-main">
+          <header className="draft-cabeca">
+            <a className="ligacao-voltar" href={selectedMap ? `/?map=${idDoMapaNaRota(selectedMap.name)}` : "/"}>‹ Mapas</a>
+            <h1 className="titulo-de-mapa">{selectedMap?.name ?? "Draft"}</h1>
+            <button type="button" className="draft-cabeca-ajustes" onClick={() => {
+              const ajustes = document.getElementById("ajustes-do-draft");
+              ajustes?.scrollIntoView({ behavior: prefereMenosMovimento() ? "auto" : "smooth", block: "start" });
+              ajustes?.focus({ preventScroll: true });
+            }}>Mapa e ajustes</button>
+            {avisoDaRota ? <p className="aviso-de-rota" role="status">{avisoDaRota}</p> : null}
+          </header>
           {/*
             * Tudo o que se usa em cada turno cabe num ecrã: o mapa e a ordem em
             * cima, as duas equipas dos lados e as sugestões ao meio. O que se
             * configura uma vez (regras, funções, fontes) abre num painel ao
             * lado, a partir da mini-lista — não ocupa a página.
             */}
-          <section className="draft-contextbar" aria-label="Mapa e ordem do draft">
+          <section className="draft-contextbar" id="ajustes-do-draft" tabIndex={-1} aria-label="Mapa e ordem do draft">
             <label className="draft-select mesa-mapa">
               <Layers3 size={15} />
               <select aria-label="Mapa do draft" value={selectedMap?.name ?? ""} onChange={(event) => changeMap(event.target.value)}>{liveMaps.map((map) => <option key={map.name} value={map.name}>{map.name} · {map.mode}</option>)}</select>
@@ -3091,11 +3281,12 @@ export default function Draft() {
             <AnaliseApi lanes={lanesApi} inimigos={escolhasInimigasApi} aberta={visaoInimigaApi} onAlternar={() => setVisaoInimigaApi((v) => !v)} chanceDaEquipa={chanceDaEquipa} calibracao={calibracaoApi.data ?? null} />
           </>}
           <div className="draft-content">
-            <section className="draft-mesa" aria-label="Azul contra Vermelha">
-              <div className={`mesa-vez ${activeDraftStep ? `vez-${activeDraftStep.team}` : "vez-fim"}`} aria-live="polite">
-                <div className="mesa-vez-texto">
-                  <strong className="bh-display">{activeDraftStep ? `${activeDraftStep.kind === "ban" ? "Ban" : "Pick"} da ${activeDraftStep.team === "blue" ? "Azul" : "Vermelha"}${activeDraftStep.team === myTeam ? " · é a tua vez" : ""}` : "Draft fechado"}</strong>
-                  <small>{selectedMap?.name ?? "Sem mapa"} · {activeDraftStep ? activeDraftStep.label : "—"}</small>
+            <section className="draft-mesa" aria-label="Equipa azul contra equipa vermelha" onPointerDownCapture={(evento) => { origemDoToqueRef.current = { elemento: evento.target as Element, em: Date.now() }; }}>
+              <div className={`mesa-vez ${activeDraftStep ? `vez-${activeDraftStep.team}` : "vez-fim"}`}>
+                <div className="mesa-vez-texto" aria-live="polite">
+                  <strong className="bh-display">{rotuloDoPasso ?? "Equipas completas"}</strong>
+                  {textoDaVez ? <span className={`mesa-vez-equipa equipa-${activeDraftStep?.team}`}>{textoDaVez}{activeDraftStep?.team === myTeam ? " · é a tua vez" : ""}</span> : null}
+                  <small>{selectedMap?.name ?? "Sem mapa"}</small>
                 </div>
                 <div className="progress-steps" aria-label="Progresso do draft">
                   {draftSequence.map((step, index) => <span key={index} className={`progress-step team-${step.team} ${choices[index] || skipped[index] ? "is-done" : ""} ${skipped[index] ? "is-skipped" : ""} ${activeStepIndex === index ? "is-current" : ""}`} title={skipped[index] ? `${describeDraftStep(step)} · ignorado` : describeDraftStep(step)}><i /></span>)}
@@ -3103,6 +3294,11 @@ export default function Draft() {
                 <span className="progress-count">{resolvedCount}/{draftSequence.length}</span>
                 <button type="button" className={`draft-voice-button ${voiceState === "listening" ? "is-listening" : ""}`} onClick={startVoiceFill} disabled={activeStepIndex === null} aria-label={voiceState === "listening" ? "A ouvir nome do brawler" : "Falar o nome do brawler para o slot ativo"} title="Falar o nome do brawler"><Mic size={15} /><span>{voiceState === "listening" ? "A ouvir…" : voiceState === "processing" ? "A preencher…" : "Falar"}</span></button>
                 <button type="button" className="draft-skip-button" onClick={skipActiveStep} disabled={activeStepIndex === null}><SkipForward size={14} /> {activeDraftStep?.kind === "ban" ? "Passar ban" : "Pular"}</button>
+                {/* aria-disabled e não disabled: o foco fica no botão depois do último «Desfazer». */}
+                <button type="button" className="draft-desfazer" onClick={desfazer} aria-disabled={!podeDesfazer}><RotateCcw size={14} /> Desfazer</button>
+                {activeStepIndex === null && draftFechado ? (
+                  <button type="button" className="botao-amarelo draft-abrir-quadro" onClick={() => secaoFinalRef.current?.scrollIntoView({ behavior: prefereMenosMovimento() ? "auto" : "smooth", block: "start" })}>Abrir Quadro</button>
+                ) : null}
               </div>
               <div className="mesa-grelha">
                 <TeamBoard team="blue" myTeam={myTeam} steps={draftSequence} choices={choices} skipped={skipped} rows={currentRows} mapTeams={mapTeams} activeStep={activeStepIndex} onClear={clearSlot} onClearSkip={clearSkippedSlot} onActivate={setSelectedStepIndex} />

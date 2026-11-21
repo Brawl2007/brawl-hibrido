@@ -4,7 +4,7 @@ import { Retrato } from "@/components/Retrato";
  * Style reminder: Championship Arena — dark carbon surfaces, electric violet,
  * cyan telemetry, amber S-tier emphasis, asymmetric data-first composition.
  */
-import { LOGO, IMAGEM_PRINCIPAL, FUNDO_DE_MAPA, TEXTURA, fundoCom } from "@/lib/imagens";
+import { LOGO, FUNDO_DE_MAPA, TEXTURA, fundoCom } from "@/lib/imagens";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -77,6 +77,10 @@ import { LIMITE_DE_CONFIANCA_MS, descreverFrescura } from "@shared/idadeDosDados
 import { useRankedSync } from "@/contexts/RankedSyncContext";
 import { MobileNav } from "@/components/MobileNav";
 import { BarraDoSite } from "@/components/BarraDoSite";
+import { MapaEmDestaque } from "@/components/MapaEmDestaque";
+import { RankingDoMapa } from "@/components/RankingDoMapa";
+import { enderecoDoDraft, idDoMapaNaRota, resolverMapaDaRota } from "@shared/mapaNaRota";
+import { escreverParametros, lerParametro, prefereMenosMovimento } from "@/lib/parametrosDaRota";
 
 const LOGO_URL = LOGO;
 
@@ -205,97 +209,6 @@ function Topbar({ capturedAt, lastStatus, liveState, onRefresh, isRefreshing, re
         </button>
       ) : null}
     </BarraDoSite>
-  );
-}
-
-/**
- * A entrada.
- *
- * O lado direito era meio ecrã vazio, depois um brilho, depois um selo "BH
- * INTEL" rodado — decoração, nas três versões. A regra que se aplica aqui é
- * simples: texto e um gradiente não fazem uma entrada, fazem o lugar onde ela
- * devia estar.
- *
- * O que lá entra agora é a resposta ao título. "Joga com dados" e, ao lado, o
- * dado: quem é o nº1 do mapa escolhido, com o retrato e o Score. Muda sozinho
- * quando se escolhe outro mapa, e o foco de luz que já lá estava passa a ter
- * alguém para iluminar.
- *
- * O retrato vem do mesmo CDN da Brawlify que os cartões já usam. Se não houver
- * id ou a imagem falhar, o cartão fica só com o nome e o número — nunca com um
- * quadrado partido.
- */
-function Hero({ selectedMap, leader, onExplore }: { selectedMap: MapSummary; leader?: RankedRow; onExplore: () => void }) {
-  const retrato = leader ? brawlerImageFor(leader.brawler, leader.brawlerId) : null;
-  // Guarda o endereço que falhou, não um sim/não: ao mudar de mapa o retrato
-  // novo tenta outra vez sem precisar de efeito nenhum a repor o estado.
-  const [retratoFalhado, setRetratoFalhado] = useState<string | null>(null);
-  const mostrarRetrato = Boolean(retrato) && retratoFalhado !== retrato;
-  /*
-   * Duas animações diferentes para o mesmo cartão, e não é capricho.
-   *
-   * Ao abrir a página, o nº1 entra depois do título, como a última peça da
-   * cascata. Ao escolher outro mapa, é resposta a um clique — e resposta a um
-   * clique tem de começar já. Medido antes: o retrato ficava 240ms invisível
-   * (o atraso da entrada a ser reaproveitado) e só assentava aos ~800ms,
-   * enquanto o nome e o número trocavam de uma vez, sem movimento nenhum.
-   *
-   */
-  //
-  // PRIMEIRA VERSÃO ERRADA, APANHADA A MEDIR: "primeira vez" era o primeiro
-  // render do componente. Mas a entrada renderiza primeiro SEM dados, e o nº1
-  // só aparece depois — quando já não era "a primeira vez". Resultado: ao
-  // abrir a página, o cartão usava sempre a animação de troca.
-  //
-  // Agora "primeira vez" é o primeiro nº1 MOSTRADO, e a entrada acaba no
-  // momento em que se mostra outro. Uma atualização dos dados com o mesmo nº1
-  // não muda a classe — senão a animação repetia a cada sincronização.
-  const primeiroMostrado = useRef<string | null>(null);
-  const jaTrocou = useRef(false);
-  const chaveDoLider = leader ? `${selectedMap.name}::${leader.brawler}` : null;
-  if (chaveDoLider && primeiroMostrado.current === null) primeiroMostrado.current = chaveDoLider;
-  if (chaveDoLider && chaveDoLider !== primeiroMostrado.current) jaTrocou.current = true;
-
-  return (
-    <section className="hero-panel" style={IMAGEM_PRINCIPAL ? { backgroundImage: `url(${IMAGEM_PRINCIPAL})` } : undefined}>
-      <div className="hero-overlay" />
-      <div className="hero-content">
-        <h1>Joga com dados.<br /><em>Ganha com contexto.</em></h1>
-        <p className="hero-copy">
-          A leitura híbrida da rotação Ranked: força competitiva, consistência de mapa e sinais de meta numa só tabela.
-        </p>
-        <div className="hero-actions">
-          <button className="primary-button" onClick={onExplore}>
-            Explorar {selectedMap.name} <ChevronRight size={17} />
-          </button>
-        </div>
-      </div>
-      {leader ? (
-        <aside
-          // A chave inclui o mapa: se o mesmo brawler lidera dois mapas, o
-          // "Nº1 em …" mudou e a troca tem de se ver na mesma.
-          key={chaveDoLider!}
-          className={`hero-champion ${jaTrocou.current ? "is-troca" : "is-entrada"}`}
-          aria-label={`Nº1 em ${selectedMap.name}: ${leader.brawler}`}
-        >
-          {mostrarRetrato ? (
-            <img
-              className="hero-champion-portrait"
-              src={retrato!}
-              alt=""
-              onError={() => setRetratoFalhado(retrato)}
-            />
-          ) : null}
-          <div className="hero-champion-card">
-            <span className="hero-champion-rank">Nº1 em {selectedMap.name}</span>
-            <strong className="hero-champion-name">{leader.brawler}</strong>
-            <span className="hero-champion-score"><b>{formatScore(leader.score)}</b> Score Híbrido</span>
-          </div>
-        </aside>
-      ) : null}
-      <div className="hero-orbit orbit-one" />
-      <div className="hero-orbit orbit-two" />
-    </section>
   );
 }
 
@@ -921,7 +834,18 @@ export default function Home() {
     () => buildMapDisplayRows(liveRows, liveMapSummaries, winRateWeight, topBrawlWeight, starPlayerWeight),
     [winRateWeight, starPlayerWeight, topBrawlWeight, liveRows, liveMapSummaries],
   );
-  const [selectedMap, setSelectedMap] = useState<MapSummary>(() => liveMapSummaries.find((map) => map.name === "Beach Ball") ?? liveMapSummaries[0]);
+  /*
+   * O mapa de partida: o do endereço (`/?map=hard-rock-mine`), quando existe no
+   * catálogo; senão o de sempre. Um mapa que saiu da rotação não abre uma
+   * página vazia — fica o de sempre e um aviso a dizer porquê.
+   */
+  const pedidoInicial = useMemo(() => resolverMapaDaRota(liveMapSummaries, lerParametro("map")), []);
+  const [avisoDoMapa, setAvisoDoMapa] = useState<string | null>(() => pedidoInicial.estado === "desconhecido"
+    ? `O mapa «${pedidoInicial.pedido}» não está na rotação atual. A mostrar outro mapa da rotação.`
+    : null);
+  const [selectedMap, setSelectedMap] = useState<MapSummary>(() => pedidoInicial.mapa
+    ?? liveMapSummaries.find((map) => map.name === "Beach Ball")
+    ?? liveMapSummaries[0]);
   /**
    * «API oficial» ligada (o mesmo interruptor do Draft e da Matriz): a vitória
    * e o uso de cada brawler, em cada mapa, saem das partidas Ranked recolhidas
@@ -1031,8 +955,40 @@ export default function Home() {
 
   const selectMap = (map: MapSummary) => {
     setSelectedMap(map);
+    setAvisoDoMapa(null);
     setActiveSection("maps");
   };
+
+  // O endereço acompanha o mapa: "voltar", recarregar e partilhar reencontram-no.
+  useEffect(() => {
+    if (selectedMap) escreverParametros({ map: idDoMapaNaRota(selectedMap.name) });
+  }, [selectedMap?.name]);
+  // "Voltar"/"Avançar" entre entradas com mapas diferentes repõe o mapa delas.
+  useEffect(() => {
+    const aoNavegar = () => {
+      const pedido = resolverMapaDaRota(liveMapSummaries, lerParametro("map"));
+      if (pedido.mapa && pedido.mapa.name !== selectedMap.name) setSelectedMap(pedido.mapa);
+    };
+    window.addEventListener("popstate", aoNavegar);
+    return () => window.removeEventListener("popstate", aoNavegar);
+  }, [liveMapSummaries, selectedMap.name]);
+
+  const tituloDoMapaRef = useRef<HTMLHeadingElement>(null);
+  const tituloDoRankingRef = useRef<HTMLHeadingElement>(null);
+  /** Desce até ao título e põe lá o foco: o leitor de ecrã anuncia onde se chegou. */
+  const irPara = (titulo: HTMLHeadingElement | null) => {
+    if (!titulo) return;
+    titulo.scrollIntoView({ behavior: prefereMenosMovimento() ? "auto" : "smooth", block: "start" });
+    titulo.focus({ preventScroll: true });
+  };
+  /** Um mapa da rotação com taxas publicadas, onde a régua de pesos tem efeito. */
+  const mapaParaTestarPesos = useMemo(() => {
+    const comTaxas = new Set(liveRows.filter((row) => typeof row.winRate === "number" && typeof row.usage === "number").map((row) => row.map));
+    return liveMapSummaries.find((map) => map.name === "Ring of Fire" && comTaxas.has(map.name))
+      ?? liveMapSummaries.find((map) => comTaxas.has(map.name))
+      ?? null;
+  }, [liveRows, liveMapSummaries]);
+  const retratoDaLinha = (row: RankedRow) => brawlerImageFor(row.brawler, row.brawlerId);
 
   // As secções de baixo são abas: só uma de cada vez, em vez de cinco
   // empilhadas (a página tinha 5000 px). O menu de cima escolhe a aba certa.
@@ -1059,7 +1015,38 @@ export default function Home() {
       <div className="app-main">
         <Topbar activeSection={activeSection} onSection={scrollTo} capturedAt={capturedAt} lastStatus={lastStatus} liveState={rankedSync.connectionState} onRefresh={handleRefresh} isRefreshing={isRefreshing || snapshotQuery.isFetching || statusQuery.isFetching} refreshProgress={syncProgress} />
         <main>
-          <Hero selectedMap={selectedMap} leader={lider} onExplore={() => scrollTo("maps")} />
+          <div className="tema-papel inicio-papel">
+            <MapaEmDestaque
+              ref={tituloDoMapaRef}
+              mapa={selectedMap}
+              mapas={resumosDosMapas}
+              lider={lider}
+              retratoDe={retratoDaLinha}
+              onEscolher={selectMap}
+              onVerRanking={() => irPara(tituloDoRankingRef.current)}
+              onIrParaMapas={() => scrollTo("maps")}
+              enderecoDoDraft={enderecoDoDraft(selectedMap)}
+              aviso={avisoDoMapa}
+            />
+            <RankingDoMapa
+              ref={tituloDoRankingRef}
+              mapa={selectedMap}
+              linhas={currentRows}
+              pesos={hybridWeights}
+              onPesos={updateWeights}
+              fontes={sourceBalance}
+              mapaParaTestar={mapaParaTestarPesos && mapaParaTestarPesos.name !== selectedMap.name ? mapaParaTestarPesos : null}
+              onTestarPesos={() => {
+                if (!mapaParaTestarPesos) return;
+                selectMap(mapaParaTestarPesos);
+                // O título muda de mapa mas fica no mesmo sítio: o foco volta a ele.
+                window.requestAnimationFrame(() => tituloDoRankingRef.current?.focus({ preventScroll: true }));
+              }}
+              onVoltarAosMapas={() => irPara(tituloDoMapaRef.current)}
+              enderecoDoDraft={enderecoDoDraft(selectedMap)}
+              retratoDe={retratoDaLinha}
+            />
+          </div>
           <div className="main-content">
             {avisoDaAutomatica ? (
               <p className="aviso-recolha" role="status">{avisoDaAutomatica}</p>

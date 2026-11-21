@@ -9,6 +9,7 @@ import { startLogin } from "./const";
 import "./index.css";
 import "./arena-v55.css";
 import "./layout-v143.css";
+import "./percursos-v186.css";
 
 const queryClient = new QueryClient();
 
