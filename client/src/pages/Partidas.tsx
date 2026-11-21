@@ -197,7 +197,7 @@ export default function Partidas() {
         <header className="partidas-cabeca">
           <h1 className="bh-display">Partidas Ranked</h1>
           <p>
-            Jogos Ranked reais da API oficial. Recolha programada a cada 15 minutos; o estado abaixo confirma as voltas. Cada brawler, cada
+            Jogos Ranked reais da API oficial. Recolha programada de hora a hora; o estado abaixo confirma as voltas. Cada brawler, cada
             confronto, cada equipa e cada par de aliados — sem cortes.
           </p>
         </header>

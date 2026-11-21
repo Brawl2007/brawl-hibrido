@@ -9,7 +9,7 @@ describe("confirmação visível da recolha", () => {
     const cadencia = estadoDaCadenciaDasPartidas({ lastStatus: "running", lastStartedAt: "2026-09-30T12:00:00Z" }, true, new Date("2026-09-30T13:00:00Z"));
     const html = renderToStaticMarkup(createElement(EstadoDaRecolha, { cadencia }));
     expect(html).toContain("Recolha atrasada");
-    expect(html).toContain("15 minutos");
+    expect(html).toContain("ciclo de 1 hora");
     expect(html).not.toContain("Guardada:");
   });
 

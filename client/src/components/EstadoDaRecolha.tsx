@@ -53,7 +53,7 @@ export function EstadoDaRecolha({ cadencia, armazenamento, ritmo }: { cadencia: 
   const aviso = cadencia.estado === "atrasada" || cadencia.estado === "falhou" || cadencia.estado === "sem_chave";
   return (
     <aside className={`my-3 rounded-xl border border-border bg-card px-4 py-3 text-sm ${aviso ? "text-destructive" : "text-muted-foreground"}`} aria-label="Estado da recolha automática">
-      <strong>{ROTULOS[cadencia.estado]}</strong> · ciclo de 15 minutos
+      <strong>{ROTULOS[cadencia.estado]}</strong> · ciclo de {cadencia.intervaloMinutos === 60 ? "1 hora" : `${cadencia.intervaloMinutos} minutos`}
       <span className="mt-1 block">
         {cadencia.ultimaTentativa ? <>Último início: <time dateTime={cadencia.ultimaTentativa}>{hora(cadencia.ultimaTentativa)}</time>. </> : null}
         {cadencia.ultimaConclusao ? <>Guardada: <time dateTime={cadencia.ultimaConclusao}>{hora(cadencia.ultimaConclusao)}</time>. </> : null}

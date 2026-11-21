@@ -1,8 +1,10 @@
+import { diagnosticoDasPartidas } from "../erroDasPartidas";
 import { VERSAO_DO_SITE } from "@shared/version";
 import { INTERVALO_DE_RELIGACAO_MS } from "@shared/realtimeStream";
 import "dotenv/config";
 import { registarImagensDaBrawlify } from "./imagensDaBrawlify";
 import express from "express";
+import { recolherSeForAltura } from "../observedMatchCollection";
 import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -56,8 +58,8 @@ export function createApp() {
    * primeira abertura de quem apanhasse uma instância acabada de acordar.
    */
   app.use((req, _res, next) => {
-    // As rotas da recolha já não tocam na base: não precisam do arranque.
-    if (req.path === "/api/partidas/agendar" || req.path === "/api/partidas/recolher") return next();
+    // O agendador externo já não toca na base: não precisa do arranque.
+    if (req.path === "/api/partidas/agendar") return next();
     if (!precisaDoArranque(req.path)) return next();
     void garantirArranque().finally(() => next());
   });
@@ -75,18 +77,29 @@ export function createApp() {
    */
   app.get("/api/cron/sync", handleCronSync);
   /**
-   * A recolha de partidas saiu daqui (v189): corre no GitHub Actions
-   * (`.github/workflows/recolher-partidas.yml`). Corrida na Vercel, a cada 15
-   * minutos, passou o limite de CPU do plano Hobby e o site foi pausado.
-   * Quem ainda chamar estas rotas (o agendador externo) recebe a resposta sem
-   * a função tocar na base nem gastar CPU.
+   * Recolha de partidas Ranked, uma vez por hora (v190).
+   *
+   * Só o GitHub Actions a pede (`.github/workflows/recolher-partidas.yml`). Era
+   * a cada 15 minutos e o site foi pausado em 19/11/2026 por passar o limite de
+   * CPU do plano Hobby. É público de propósito; o que o protege é o intervalo
+   * mínimo entre recolhas (`podeRecolherAgora`).
    */
-  const recolhaNoutroSitio = (_req: express.Request, res: express.Response) => {
+  app.get("/api/partidas/recolher", async (_req, res) => {
+    try {
+      const resultado = await recolherSeForAltura("scheduled");
+      res.setHeader("Cache-Control", "no-store");
+      res.status(resultado.ok || "saltada" in resultado ? 200 : 503).json(resultado);
+    } catch (erro) {
+      const diagnostico = diagnosticoDasPartidas(erro);
+      console.error("[Partidas] Pedido falhou:", diagnostico.errorCode);
+      res.status(500).json({ ok: false, ...diagnostico });
+    }
+  });
+  /** O agendador externo (a cada 15 minutos) já não recolhe: responde sem tocar na base nem gastar CPU. */
+  app.get("/api/partidas/agendar", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({ ok: false, saltada: true, motivo: "A recolha de partidas corre no GitHub Actions." });
-  };
-  app.get("/api/partidas/recolher", recolhaNoutroSitio);
-  app.get("/api/partidas/agendar", recolhaNoutroSitio);
+    res.status(200).json({ ok: false, saltada: true, motivo: "A recolha corre de hora a hora, pedida pelo GitHub Actions." });
+  });
   registarImagensDaBrawlify(app);
   app.post("/api/scheduled/rankedSync", handleRankedSyncScheduled);
   app.post("/api/scheduled/counterSync", handleCounterSyncScheduled);
