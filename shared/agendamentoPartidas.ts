@@ -8,10 +8,9 @@ const MARGEM_DO_ALERTA_MS = 90_000;
 export const AGENDAMENTO_DAS_PARTIDAS = {
   intervaloMinutos: 15,
   cron: "3,18,33,48 * * * *",
-  descricao: "a cada 15 minutos; GitHub Actions pode atrasar",
+  descricao: "a cada 15 minutos, no GitHub Actions (pode atrasar)",
   fonte: ".github/workflows/recolher-partidas.yml",
-  horarioPrincipal: "00, 15, 30 e 45 de cada hora",
-  urlAgendador: "https://brawl-hibrido.vercel.app/api/partidas/agendar",
+  horarioPrincipal: "03, 18, 33 e 48 de cada hora",
 } as const;
 
 type EstadoGuardado = {
