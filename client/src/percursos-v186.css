@@ -189,6 +189,8 @@
 .draft-cabeca-ajustes { grid-column: 2; grid-row: 1; min-height: 44px; display: inline-flex; align-items: center; color: var(--bh-lilas); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .draft-cabeca .aviso-de-rota { grid-column: 1 / -1; }
 .mesa-vez-equipa { display: block; font-weight: 700; font-size: 15px; }
+/* O nome do mapa por baixo da vez: o cinzento de antes ficava a 4,4:1 sobre o gradiente. */
+.draft-shell .mesa-vez-texto small { color: var(--bh-text-muted); }
 .mesa-vez-equipa.equipa-blue { color: var(--bh-azul-equipa); }
 .mesa-vez-equipa.equipa-red { color: var(--bh-coral-equipa); }
 .draft-desfazer {
@@ -257,7 +259,8 @@
 .quadro-plano-ficha.lado-eles > img, .quadro-plano-ficha.lado-eles > span { box-shadow: 0 0 0 3px var(--bh-coral-equipa); }
 .quadro-plano-ficha.pode-mover { touch-action: none; }
 .quadro-plano-ficha.a-arrastar { z-index: 3; cursor: grabbing; }
-.quadro-plano-campo.com-realce .quadro-plano-ficha:not(.is-realce) { opacity: .55; }
+/* Esbate as outras fichas sem baixar o texto (as iniciais) de 4,5:1. */
+.quadro-plano-campo.com-realce .quadro-plano-ficha:not(.is-realce) { opacity: .8; }
 .quadro-plano-ficha.is-realce > img, .quadro-plano-ficha.is-realce > span { box-shadow: 0 0 0 3px var(--bh-amarelo); }
 .quadro-plano-ficha:focus-visible { outline: 3px solid var(--bh-amarelo); outline-offset: 1px; border-radius: 8px; }
 

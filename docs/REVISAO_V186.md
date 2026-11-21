@@ -84,3 +84,11 @@ num iPhone real, medições de desempenho e a gravação num telemóvel físico.
 `pnpm dev` abria uma página em branco na v185: `server/_core/vite.ts` espalhava
 a configuração do Vite, que é uma função assíncrona, e a raiz `client/` perdia-se.
 Corrigido para a configuração ser resolvida antes.
+
+## v187 — contraste medido
+
+Contraste do texto medido sobre o fundo composto, nas oito rotas. Duas subidas:
+a legenda do mapa no turno do Draft (4,38 → 7,45:1) e as fichas esbatidas do
+Quadro plano (3,88:1 → acima de 4,5:1). «Falar» e «Pular» ficam a 4,28:1 só
+quando o draft está fechado e estão desativados (exceção da regra 1.4.3); o
+estilo é o da v185.
