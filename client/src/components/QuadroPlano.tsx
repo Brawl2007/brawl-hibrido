@@ -87,6 +87,9 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
   // que os renders, e um handler com o estado do render anterior perdia-os.
   const arrastoRef = useRef<{ chave: string; ponto: PontoNoMapa; id: number } | null>(null);
   const [aArrastar, setAArrastar] = useState<string | null>(null);
+  // Um arrasto acaba com um "click" no mesmo botão: esse não escolhe faixa.
+  const acabouDeArrastar = useRef(false);
+  const [anuncio, setAnuncio] = useState("");
 
   const colocar = (chave: string, ponto: PontoNoMapa) => {
     const no = nos.current.get(chave);
@@ -117,6 +120,7 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
     const presentes = new Set<string>();
     for (const ficha of fichas) {
       presentes.add(ficha.chave);
+      if (arrastoRef.current?.chave === ficha.chave) continue; // o dedo manda nesta
       const de = atuais.current.get(ficha.chave);
       const para = ficha.ponto;
       if (!de || reduzido || (Math.abs(de.x - para.x) < 1e-4 && Math.abs(de.y - para.y) < 1e-4)) {
@@ -134,7 +138,9 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
       animacoes.current.set(ficha.chave, { pontos, comprimentos, total, inicio: agora, duracao: Math.min(1100, 320 + total * 45) });
     }
     for (const chave of Array.from(atuais.current.keys())) if (!presentes.has(chave)) { atuais.current.delete(chave); animacoes.current.delete(chave); }
-    if (animacoes.current.size && frame.current === null) frame.current = window.requestAnimationFrame(passo);
+    // Reagenda sempre: o passo antigo guardava a grelha do render anterior.
+    if (frame.current !== null) window.cancelAnimationFrame(frame.current);
+    frame.current = animacoes.current.size ? window.requestAnimationFrame(passo) : null;
   }, [assinatura, terreno, colunas, linhas]);
   useEffect(() => () => { if (frame.current !== null) window.cancelAnimationFrame(frame.current); }, []);
 
@@ -176,6 +182,7 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
     const inicial = ficha.ponto;
     const movido = Math.hypot((arrasto.ponto.x - inicial.x) * colunas, (arrasto.ponto.y - inicial.y) * linhas) > 0.4;
     if (cancelado || !movido) { atuais.current.set(ficha.chave, inicial); colocar(ficha.chave, inicial); return; }
+    acabouDeArrastar.current = true;
     onMover?.(ficha.chave, arrasto.ponto);
   };
   const aoTeclar = (ficha: FichaNo3D) => (evento: KeyboardEvent<HTMLButtonElement>) => {
@@ -185,7 +192,9 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
     if (!deslocamento) return;
     evento.preventDefault();
     const de = ficha.ponto;
-    onMover(ficha.chave, { x: Math.min(1, Math.max(0, de.x + deslocamento[0])), y: Math.min(1, Math.max(0, de.y + deslocamento[1])) });
+    const para = { x: Math.min(1, Math.max(0, de.x + deslocamento[0])), y: Math.min(1, Math.max(0, de.y + deslocamento[1])) };
+    onMover(ficha.chave, para);
+    setAnuncio(`${ficha.nome}: coluna ${Math.floor(para.x * colunas) + 1}, linha ${Math.floor(para.y * linhas) + 1}.`);
   };
 
   const mostrarImagem = imagem && imagemFalhou !== imagem;
@@ -223,15 +232,18 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
                   ref={(no) => { if (no) { nos.current.set(ficha.chave, no); const ponto = atuais.current.get(ficha.chave) ?? ficha.ponto; const { x, y } = paraImagem(ponto, colunas, linhas); no.style.left = `${x}%`; no.style.top = `${y}%`; } else nos.current.delete(ficha.chave); }}
                   className={`quadro-plano-ficha lado-${ficha.lado} ${realce ? "is-realce" : ""} ${aArrastar === ficha.chave ? "a-arrastar" : ""} ${onMover ? "pode-mover" : ""}`}
                   aria-label={`${ficha.nome}, equipa ${lado}${onMover ? ". Setas do teclado movem uma casa." : ""}`}
-                  aria-pressed={realce}
-                  onClick={() => { const propria = faixaDe(ficha); if (propria) onFaixa(propria); }}
+                  aria-current={realce || undefined}
+                  onClick={() => {
+                    if (acabouDeArrastar.current) { acabouDeArrastar.current = false; return; }
+                    const propria = faixaDe(ficha); if (propria) onFaixa(propria);
+                  }}
                   onKeyDown={aoTeclar(ficha)}
                   onPointerDown={aoPousar(ficha)}
                   onPointerMove={aoMover}
                   onPointerUp={aoLargar(ficha, false)}
                   onPointerCancel={aoLargar(ficha, true)}
                 >
-                  {ficha.retrato ? <img src={ficha.retrato} alt="" draggable={false} onError={(evento) => { evento.currentTarget.remove(); }} /> : null}
+                  {ficha.retrato ? <img key={ficha.retrato} src={ficha.retrato} alt="" draggable={false} onError={(evento) => { evento.currentTarget.style.display = "none"; }} /> : null}
                   <span>{ficha.nome.slice(0, 2).toUpperCase()}</span>
                 </button>
               </li>
@@ -239,6 +251,7 @@ export function QuadroPlano({ nomeDoMapa, imagem, terreno, fichas, setas, duelos
           })}
         </ul>
       </div>
+      <p className="sr-only" aria-live="polite">{anuncio}</p>
     </div>
   );
 }

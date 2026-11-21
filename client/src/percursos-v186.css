@@ -159,6 +159,7 @@
 .ranking-presets { display: flex; gap: 4px; }
 .ranking-presets button { min-height: 44px; min-width: 64px; padding: 0 10px; background: none; border: 0; border-bottom: 3px solid transparent; cursor: pointer; color: var(--bh-tinta); font: 700 15px "Space Grotesk", sans-serif; font-variant-numeric: tabular-nums; }
 .ranking-presets button.is-active { color: var(--bh-violeta); border-bottom-color: var(--bh-violeta); }
+.ranking-presets button:disabled { opacity: .45; cursor: default; }
 .ranking-pesos-nota, .ranking-origem { margin: 0; color: var(--bh-tinta-suave); font-size: 14px; }
 .ranking-publicado p { margin: 0; line-height: 1.45; }
 .ranking-do-mapa > .botao-tinta { justify-self: start; }
@@ -186,7 +187,7 @@
 }
 .draft-cabeca .ligacao-voltar { color: var(--bh-lilas); justify-self: start; }
 .draft-cabeca .titulo-de-mapa { grid-column: 1 / -1; grid-row: 2; font-size: clamp(38px, 9vw, 64px); color: var(--bh-papel); }
-.draft-cabeca-ajustes { grid-column: 2; grid-row: 1; min-height: 44px; display: inline-flex; align-items: center; color: var(--bh-lilas); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.draft-cabeca-ajustes { grid-column: 2; grid-row: 1; min-height: 44px; display: inline-flex; align-items: center; padding: 0; background: none; border: 0; cursor: pointer; color: var(--bh-lilas); font: 700 15px "Space Grotesk", sans-serif; text-decoration: underline; text-underline-offset: 3px; }
 .draft-cabeca .aviso-de-rota { grid-column: 1 / -1; }
 .mesa-vez-equipa { display: block; font-weight: 700; font-size: 15px; }
 /* O nome do mapa por baixo da vez: o cinzento de antes ficava a 4,4:1 sobre o gradiente. */
@@ -198,7 +199,7 @@
   border: 1px solid var(--bh-noite-linha); border-radius: 8px; background: transparent; cursor: pointer;
   color: var(--bh-lilas); font: 700 14px "Space Grotesk", sans-serif;
 }
-.draft-desfazer:disabled { opacity: .45; cursor: default; }
+.draft-desfazer[aria-disabled="true"] { opacity: .45; cursor: default; }
 .draft-abrir-quadro { width: auto; min-width: 160px; }
 .draft-shell .team-board.blue .team-heading h3 { color: var(--bh-azul-equipa); }
 .draft-shell .team-board.red .team-heading h3 { color: var(--bh-coral-equipa); }

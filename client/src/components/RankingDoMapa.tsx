@@ -62,6 +62,8 @@ export const RankingDoMapa = forwardRef<HTMLHeadingElement, Props>(function Rank
   const [verTodos, setVerTodos] = useState(false);
   const tabela = useRef<HTMLTableSectionElement>(null);
   const focado = useRef<string | null>(null);
+  // Só um reordenamento pode tirar o foco de um botão sem o pôr noutro sítio.
+  const ordemAnterior = useRef("");
 
   const ordenadas = useMemo(
     () => linhas
@@ -75,13 +77,17 @@ export const RankingDoMapa = forwardRef<HTMLHeadingElement, Props>(function Rank
   // A linha escolhida não desaparece do resumo só porque desceu de lugar.
   const escolhida = selecionado ? ordenadas.find((linha) => linha.brawler === selecionado) : undefined;
   const mostradas = escolhida && !visiveis.includes(escolhida) ? [...visiveis, escolhida] : visiveis;
+  const assinaturaDaOrdem = mostradas.map((linha) => linha.brawler).join("|");
+  const reordenou = ordemAnterior.current !== "" && ordemAnterior.current !== assinaturaDaOrdem;
+  const maximoDaVitoria = pesos.starPlayerEnabled ? 100 - pesos.starPlayer : 100;
   const vitoria = proposta ?? pesos.winRate;
   const uso = 100 - vitoria - (pesos.starPlayerEnabled ? pesos.starPlayer : 0);
 
   // Reordenar move nós do DOM; se o foco estava num deles, devolve-se ao mesmo brawler.
   useLayoutEffect(() => {
+    ordemAnterior.current = assinaturaDaOrdem;
     const nome = focado.current;
-    if (!nome || !tabela.current) return;
+    if (!reordenou || !nome || !tabela.current) return;
     if (document.activeElement && document.activeElement !== document.body) return;
     const botao = tabela.current.querySelector<HTMLButtonElement>(`button[data-brawler="${CSS.escape(nome)}"]`);
     botao?.focus({ preventScroll: true });
@@ -110,16 +116,15 @@ export const RankingDoMapa = forwardRef<HTMLHeadingElement, Props>(function Rank
             className="regua-de-pesos"
             value={[vitoria]}
             min={0}
-            max={pesos.starPlayerEnabled ? 100 - pesos.starPlayer : 100}
+            max={maximoDaVitoria}
             step={1}
             onValueChange={([valor]) => setProposta(valor ?? pesos.winRate)}
             onValueCommit={([valor]) => confirmar(valor ?? pesos.winRate)}
-            aria-label="Peso da vitória no Score: para a direita, mais vitória"
           >
             <SliderPrimitive.Track className="regua-de-pesos-trilho">
               <SliderPrimitive.Range className="regua-de-pesos-alcance" />
             </SliderPrimitive.Track>
-            <SliderPrimitive.Thumb className="regua-de-pesos-polegar" aria-valuetext={`Vitória ${vitoria}%, uso ${uso}%`}>
+            <SliderPrimitive.Thumb className="regua-de-pesos-polegar" aria-label="Peso da vitória no Score: para a direita, mais vitória" aria-valuetext={`Vitória ${vitoria}%, uso ${uso}%`}>
               {proposta !== null ? <span className="regua-de-pesos-bolha" aria-hidden="true">{proposta}%</span> : null}
             </SliderPrimitive.Thumb>
           </SliderPrimitive.Root>
@@ -130,6 +135,8 @@ export const RankingDoMapa = forwardRef<HTMLHeadingElement, Props>(function Rank
                 type="button"
                 className={pesos.winRate === valor ? "is-active" : ""}
                 aria-pressed={pesos.winRate === valor}
+                // Com Star Player ligado, a vitória não pode passar o que ele deixa.
+                disabled={valor > maximoDaVitoria}
                 onClick={() => confirmar(valor)}
               >
                 {valor} / {100 - valor}
@@ -170,7 +177,6 @@ export const RankingDoMapa = forwardRef<HTMLHeadingElement, Props>(function Rank
                 layout="position"
                 transition={{ duration: 0.26, ease: [0.2, 0.7, 0.2, 1] }}
                 className={ativo ? "is-selecionada" : undefined}
-                aria-selected={ativo}
               >
                 <td className="ranking-posicao">{posicao}</td>
                 <td>
@@ -182,7 +188,7 @@ export const RankingDoMapa = forwardRef<HTMLHeadingElement, Props>(function Rank
                     onFocus={() => { focado.current = linha.brawler; }}
                     // Só se esquece quando o foco vai PARA outro sítio; perdido para o
                     // <body> (o nó mudou de lugar) volta a este botão no efeito acima.
-                    onBlur={(evento) => { if (evento.relatedTarget && focado.current === linha.brawler) focado.current = null; }}
+                    onBlur={(evento) => { if (focado.current === linha.brawler && (evento.relatedTarget || !reordenou)) focado.current = null; }}
                     onClick={() => setSelecionado((atual) => atual === linha.brawler ? null : linha.brawler)}
                   >
                     <span className="ranking-retrato"><Retrato src={retratoDe(linha)} nome={linha.brawler} loading="lazy" /></span>

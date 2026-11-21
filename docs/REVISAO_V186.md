@@ -92,3 +92,17 @@ a legenda do mapa no turno do Draft (4,38 → 7,45:1) e as fichas esbatidas do
 Quadro plano (3,88:1 → acima de 4,5:1). «Falar» e «Pular» ficam a 4,28:1 só
 quando o draft está fechado e estão desativados (exceção da regra 1.4.3); o
 estilo é o da v185.
+
+## v188 — revisão independente de UX e acessibilidade
+
+Um revisor só de leitura apontou 12 defeitos; todos confirmados e corrigidos:
+nome acessível no polegar da régua de pesos; `aria-selected` inválido nas linhas;
+o foco já não salta para uma linha deixada (só volta depois de um reordenamento);
+predefinições acima do máximo ficam desativadas com Star Player ligado; o gesto da
+estampa captura o ponteiro logo no toque (um arrasto que acabava fora da moldura
+bloqueava os seguintes); a região viva da estampa só fala quando a face muda;
+«Desfazer» usa `aria-disabled` e não perde o foco; «Mapa e ajustes» é um botão
+que leva o foco à secção sem entrada nova no histórico; voltar para outro mapa no
+Draft limpa o draft; o draft guardado só é lido com os dados prontos; no Quadro
+plano, um arrasto não escolhe faixa, mover com as setas é anunciado, o retrato que
+falha é escondido sem tirar o nó ao React e a animação usa sempre a grelha atual.

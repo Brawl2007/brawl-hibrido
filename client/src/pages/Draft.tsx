@@ -3101,7 +3101,8 @@ export default function Draft() {
   const CHAVE_DO_DRAFT_EM_CURSO = "brawl-hibrido:draft-em-curso:v1";
   const arranqueFeito = useRef(false);
   useEffect(() => {
-    if (arranqueFeito.current || !selectedMap) return;
+    // Sem linhas ainda (dados a carregar) não se decide: o draft guardado esperaria e seria apagado.
+    if (arranqueFeito.current || !selectedMap || !currentRows.length) return;
     arranqueFeito.current = true;
     const nomes = currentRows.map((row) => row.brawler);
     const exemplo = exemploDaRota(draftSequence, lerParametro("picks"), nomes);
@@ -3138,7 +3139,8 @@ export default function Draft() {
   useEffect(() => {
     const aoNavegar = () => {
       const pedido = resolverMapaDaRota(liveMaps, lerParametro("map"));
-      if (pedido.mapa && pedido.mapa.name !== selectedMapName) setSelectedMapName(pedido.mapa.name);
+      // Outro mapa é outro draft: os picks do mapa anterior não passam para este.
+      if (pedido.mapa && pedido.mapa.name !== selectedMapName) { historicoRef.current = []; cancelarVoo(); setSelectedMapName(pedido.mapa.name); resetChoices(); }
     };
     window.addEventListener("popstate", aoNavegar);
     return () => window.removeEventListener("popstate", aoNavegar);
@@ -3214,7 +3216,11 @@ export default function Draft() {
           <header className="draft-cabeca">
             <a className="ligacao-voltar" href={selectedMap ? `/?map=${idDoMapaNaRota(selectedMap.name)}` : "/"}>‹ Mapas</a>
             <h1 className="titulo-de-mapa">{selectedMap?.name ?? "Draft"}</h1>
-            <a className="draft-cabeca-ajustes" href="#ajustes-do-draft">Ajustes</a>
+            <button type="button" className="draft-cabeca-ajustes" onClick={() => {
+              const ajustes = document.getElementById("ajustes-do-draft");
+              ajustes?.scrollIntoView({ behavior: prefereMenosMovimento() ? "auto" : "smooth", block: "start" });
+              ajustes?.focus({ preventScroll: true });
+            }}>Mapa e ajustes</button>
             {avisoDaRota ? <p className="aviso-de-rota" role="status">{avisoDaRota}</p> : null}
           </header>
           {/*
@@ -3223,7 +3229,7 @@ export default function Draft() {
             * configura uma vez (regras, funções, fontes) abre num painel ao
             * lado, a partir da mini-lista — não ocupa a página.
             */}
-          <section className="draft-contextbar" id="ajustes-do-draft" aria-label="Mapa e ordem do draft">
+          <section className="draft-contextbar" id="ajustes-do-draft" tabIndex={-1} aria-label="Mapa e ordem do draft">
             <label className="draft-select mesa-mapa">
               <Layers3 size={15} />
               <select aria-label="Mapa do draft" value={selectedMap?.name ?? ""} onChange={(event) => changeMap(event.target.value)}>{liveMaps.map((map) => <option key={map.name} value={map.name}>{map.name} · {map.mode}</option>)}</select>
@@ -3276,8 +3282,8 @@ export default function Draft() {
           </>}
           <div className="draft-content">
             <section className="draft-mesa" aria-label="Equipa azul contra equipa vermelha" onPointerDownCapture={(evento) => { origemDoToqueRef.current = { elemento: evento.target as Element, em: Date.now() }; }}>
-              <div className={`mesa-vez ${activeDraftStep ? `vez-${activeDraftStep.team}` : "vez-fim"}`} aria-live="polite">
-                <div className="mesa-vez-texto">
+              <div className={`mesa-vez ${activeDraftStep ? `vez-${activeDraftStep.team}` : "vez-fim"}`}>
+                <div className="mesa-vez-texto" aria-live="polite">
                   <strong className="bh-display">{rotuloDoPasso ?? "Equipas completas"}</strong>
                   {textoDaVez ? <span className={`mesa-vez-equipa equipa-${activeDraftStep?.team}`}>{textoDaVez}{activeDraftStep?.team === myTeam ? " · é a tua vez" : ""}</span> : null}
                   <small>{selectedMap?.name ?? "Sem mapa"}</small>
@@ -3288,7 +3294,8 @@ export default function Draft() {
                 <span className="progress-count">{resolvedCount}/{draftSequence.length}</span>
                 <button type="button" className={`draft-voice-button ${voiceState === "listening" ? "is-listening" : ""}`} onClick={startVoiceFill} disabled={activeStepIndex === null} aria-label={voiceState === "listening" ? "A ouvir nome do brawler" : "Falar o nome do brawler para o slot ativo"} title="Falar o nome do brawler"><Mic size={15} /><span>{voiceState === "listening" ? "A ouvir…" : voiceState === "processing" ? "A preencher…" : "Falar"}</span></button>
                 <button type="button" className="draft-skip-button" onClick={skipActiveStep} disabled={activeStepIndex === null}><SkipForward size={14} /> {activeDraftStep?.kind === "ban" ? "Passar ban" : "Pular"}</button>
-                <button type="button" className="draft-desfazer" onClick={desfazer} disabled={!podeDesfazer}><RotateCcw size={14} /> Desfazer</button>
+                {/* aria-disabled e não disabled: o foco fica no botão depois do último «Desfazer». */}
+                <button type="button" className="draft-desfazer" onClick={desfazer} aria-disabled={!podeDesfazer}><RotateCcw size={14} /> Desfazer</button>
                 {activeStepIndex === null && draftFechado ? (
                   <button type="button" className="botao-amarelo draft-abrir-quadro" onClick={() => secaoFinalRef.current?.scrollIntoView({ behavior: prefereMenosMovimento() ? "auto" : "smooth", block: "start" })}>Abrir Quadro</button>
                 ) : null}

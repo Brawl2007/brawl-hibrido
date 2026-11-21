@@ -77,6 +77,8 @@ export function EstampaDoMapa({ mapa }: { mapa: { name: string; id?: string; mod
       decidido: false,
       horizontal: false,
     };
+    // Captura já no toque: o fim do gesto chega sempre, mesmo fora da moldura.
+    try { evento.currentTarget.setPointerCapture(evento.pointerId); } catch { /* ponteiro já libertado */ }
   };
 
   const aoMover = (evento: EventoDePonteiro<HTMLDivElement>) => {
@@ -89,7 +91,6 @@ export function EstampaDoMapa({ mapa }: { mapa: { name: string; id?: string; mod
       atual.decidido = true;
       atual.horizontal = Math.abs(dx) > Math.abs(dy);
       if (!atual.horizontal) { gesto.current = null; return; } // é scroll: a página que fique com ele
-      try { evento.currentTarget.setPointerCapture(evento.pointerId); } catch { /* ponteiro já libertado */ }
       setAArrastar(true);
     }
     if (!atual.horizontal) return;
@@ -123,7 +124,7 @@ export function EstampaDoMapa({ mapa }: { mapa: { name: string; id?: string; mod
         onPointerMove={aoMover}
         onPointerUp={(evento) => terminar(evento, false)}
         onPointerCancel={(evento) => terminar(evento, true)}
-        onLostPointerCapture={(evento) => { if (gesto.current?.id === evento.pointerId && gesto.current.horizontal) terminar(evento, true); }}
+        onLostPointerCapture={(evento) => terminar(evento, true)}
       >
         <div className="estampa-face estampa-face-terreno" aria-hidden={face !== "terreno"}>
           {mostrarTerreno && imagemDoTerreno && terrenoFalhou !== imagemDoTerreno ? (
@@ -172,7 +173,7 @@ export function EstampaDoMapa({ mapa }: { mapa: { name: string; id?: string; mod
           style={{ ["--progresso" as string]: `${percentagem}%` }}
         />
         <button type="button" className={face === "terreno" ? "is-active" : ""} aria-pressed={face === "terreno"} onClick={() => fixar(1)}>Terreno</button>
-        <span className="sr-only" aria-live="polite">{face === "terreno" ? `Terreno de ${mapa.name} à vista.` : `Estampa de ${mapa.name} à vista.`}</span>
+        <span className="sr-only" aria-live="polite">{face === "terreno" ? "Terreno à vista." : "Estampa à vista."}</span>
       </figcaption>
     </figure>
   );
