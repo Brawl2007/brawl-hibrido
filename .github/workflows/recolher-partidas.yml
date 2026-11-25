@@ -28,7 +28,7 @@ jobs:
           trap 'rm -f "$ficheiro"' EXIT
           codigo=0
           curl --fail-with-body --silent --show-error --max-time 240 \
-            https://brawl-hibrido.vercel.app/api/partidas/recolher --output "$ficheiro" || codigo=$?
+            https://brawl-hibrido-sage.vercel.app/api/partidas/recolher --output "$ficheiro" || codigo=$?
           if [ "$codigo" -ne 0 ] && grep -q "DEPLOYMENT_DISABLED" "$ficheiro" 2>/dev/null; then
             # Site pausado pela Vercel: não é uma falha da recolha, e não vale um email por hora.
             echo "::warning::O site está pausado pela Vercel; a recolha volta quando ele voltar."

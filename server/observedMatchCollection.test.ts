@@ -140,7 +140,7 @@ describe("recolha de partidas Ranked a sério (v155)", () => {
     const workflow = ler(".github/workflows/recolher-partidas.yml");
     expect(workflow).toContain(`cron: "${AGENDAMENTO_DAS_PARTIDAS.cron}"`);
     expect(AGENDAMENTO_DAS_PARTIDAS.cron).toBe("7 * * * *");
-    expect(workflow).toContain("https://brawl-hibrido.vercel.app/api/partidas/recolher");
+    expect(workflow).toContain("https://brawl-hibrido-sage.vercel.app/api/partidas/recolher");
   });
 });
 
