@@ -107,7 +107,7 @@ function BestTeammates({ item, catalog }: { item: BrawlerCatalogItem; catalog: B
   const profile = brawlPlanetProfileFor(item.brawler);
   const relations = profile?.bestTeammates ?? [];
   return <section className="brawler-relation-section teammates">
-    <div className="relation-section-head"><div><span className="section-kicker">SINERGIAS · BEST TEAMMATES</span><h2>Best Teammates</h2><p>Sinergias: parceiros com desempenho conjunto acima do esperado na ficha pública do Brawl Planet.</p></div><strong>{relations.length}</strong></div>
+    <div className="relation-section-head"><div><span className="section-kicker">Sinergias</span><h2>Best Teammates</h2><p>Sinergias: parceiros com desempenho conjunto acima do esperado na ficha pública do Brawl Planet.</p></div><strong>{relations.length}</strong></div>
     {relations.length ? <div className="brawler-relation-grid">{relations.map((relation) => <TeammateCard key={relation.brawler} relation={relation} target={catalog.find((entry) => relationKey(entry.brawler) === relationKey(relation.brawler))} />)}</div> : <p className="relation-empty-state">Sem sinergia pública disponível na ficha do Brawl Planet.</p>}
   </section>;
 }
@@ -116,7 +116,7 @@ function WorstTeammates({ item, catalog }: { item: BrawlerCatalogItem; catalog: 
   const profile = brawlPlanetProfileFor(item.brawler);
   const relations = profile?.worstTeammates ?? [];
   return <section className="brawler-relation-section teammates worst-teammates">
-    <div className="relation-section-head"><div><span className="section-kicker">SINERGIA NEGATIVA · WORST TEAMMATES</span><h2>Worst Teammates</h2><p>Aliados cujo desempenho conjunto aparece abaixo do esperado na ficha pública do Brawl Planet. Cada relação ativa aplica -5% no Draft.</p></div><strong>{relations.length}</strong></div>
+    <div className="relation-section-head"><div><span className="section-kicker">Sinergia negativa</span><h2>Worst Teammates</h2><p>Aliados cujo desempenho conjunto aparece abaixo do esperado na ficha pública do Brawl Planet. Cada relação ativa aplica -5% no Draft.</p></div><strong>{relations.length}</strong></div>
     {relations.length ? <div className="brawler-relation-grid">{relations.map((relation) => {
       const target = catalog.find((entry) => relationKey(entry.brawler) === relationKey(relation.brawler));
       const image = imageFor(target);
@@ -134,7 +134,7 @@ function BrawlScopeSynergy({ item, catalog, modeId }: { item: BrawlerCatalogItem
   const relations = getBrawlScopeSynergyTeammates(item.brawler, modeId);
   const viewLabel = modeId ? brawlScopeModes.find(mode => mode.modeId === modeId || mode.id === modeId)?.label ?? modeId : "Geral";
   return <section id="perfil-sinergias" className="brawler-relation-section sourced-list teammates brawlscope-synergy">
-    <div className="relation-section-head"><div><span className="section-kicker">BRAWLSCOPE · PAIR WITH</span><h2>Sinergias · {viewLabel}</h2><p>Top {BRAWLSCOPE_SYNERGY_LIMIT} de aliados na última importação publicada do BrawlScope. Esta mesma lista alimenta o Draft na leitura correspondente.</p></div><strong>{relations.length}</strong></div>
+    <div className="relation-section-head"><div><span className="section-kicker">Do BrawlScope</span><h2>Sinergias · {viewLabel}</h2><p>Top {BRAWLSCOPE_SYNERGY_LIMIT} de aliados na última importação publicada do BrawlScope. Esta mesma lista alimenta o Draft na leitura correspondente.</p></div><strong>{relations.length}</strong></div>
     {relations.length ? <div className="sourced-counter-grid">{relations.map((relation, index) => {
       const target = catalog.find((entry) => relationKey(entry.brawler) === relationKey(relation.brawler));
       const image = imageFor(target);
@@ -211,7 +211,7 @@ function BrawlScopeMatchupMatrix({ item, catalog, modeId, vistasComFicha }: { it
     // orientação publicada são os mais negativos.
     .sort((left, right) => left.delta - right.delta || left.entry.brawler.localeCompare(right.entry.brawler));
   return <section className="brawler-relation-section sourced-list brawl-scope-matrix">
-    <div className="relation-section-head"><div><span className="section-kicker">BRAWLSCOPE · LEITURA DE COUNTER</span><h2>Matchup contra todos os brawlers</h2><p>Os valores estão como o BrawlScope os publica na ficha: <b>negativo</b> significa que {item.brawler} pune o adversário e <b>positivo</b> significa que o adversário leva vantagem. Delta da fonte + 2% por cada fonte que confirma a mesma direção. No Draft o mesmo confronto aparece na perspetiva do teu pick, por isso com o sinal trocado. Todas as linhas são preservadas; sem delta publicado, não há percentagem calculada.</p></div><strong>{rows.length}</strong></div>
+    <div className="relation-section-head"><div><span className="section-kicker">Leitura de counter do BrawlScope</span><h2>Matchup contra todos os brawlers</h2><p>Os valores estão como o BrawlScope os publica na ficha: <b>negativo</b> significa que {item.brawler} pune o adversário e <b>positivo</b> significa que o adversário leva vantagem. Delta da fonte + 2% por cada fonte que confirma a mesma direção. No Draft o mesmo confronto aparece na perspetiva do teu pick, por isso com o sinal trocado. Todas as linhas são preservadas; sem delta publicado, não há percentagem calculada.</p></div><strong>{rows.length}</strong></div>
     {/*
       De onde vieram estes números.
       "Os valores não estão a atualizar" não se consegue investigar sem isto: o
@@ -349,7 +349,7 @@ export default function BrawlerDetail() {
           <div className="brawler-relation-columns synergies-full"><BestTeammates item={item} catalog={catalog} /><WorstTeammates item={item} catalog={catalog} /></div>
         </>}
         {aba === "todos" && <BrawlScopeMatchupMatrix item={item} catalog={catalog} modeId={counterModeId} vistasComFicha={vistasComFicha} />}
-        <section className="profile-build-panel"><div className="build-panel-icon"><Zap size={18} /></div><div><span className="section-kicker">BUILD DE REFERÊNCIA</span><h2>{item.isRankedAvailable ? `Preparação para ${item.bestRow.mode}` : "Ainda sem build Ranked"}</h2><p>{item.isRankedAvailable ? <>Gadget: <strong>{item.build?.gadget}</strong> · Star Power: <strong>{item.build?.starPower}</strong> · Engrenagens: <strong>{item.build?.gears.join(", ")}</strong></> : "O site não cria build, taxa de vitória, uso ou matchups de Ranked antes das fontes publicarem estes dados."}</p></div>{item.isRankedAvailable ? <button type="button" onClick={() => navigate(enderecoDoDraft(null, item.brawler))}><Swords size={15} /> Usar no Draft</button> : <span className="profile-map">Aguardando elegibilidade Ranked</span>}</section>
+        <section className="profile-build-panel"><div className="build-panel-icon"><Zap size={18} /></div><div><span className="section-kicker">Build de referência</span><h2>{item.isRankedAvailable ? `Preparação para ${item.bestRow.mode}` : "Ainda sem build Ranked"}</h2><p>{item.isRankedAvailable ? <>Gadget: <strong>{item.build?.gadget}</strong> · Star Power: <strong>{item.build?.starPower}</strong> · Engrenagens: <strong>{item.build?.gears.join(", ")}</strong></> : "O site não cria build, taxa de vitória, uso ou matchups de Ranked antes das fontes publicarem estes dados."}</p></div>{item.isRankedAvailable ? <button type="button" onClick={() => navigate(enderecoDoDraft(null, item.brawler))}><Swords size={15} /> Usar no Draft</button> : <span className="profile-map">Aguardando elegibilidade Ranked</span>}</section>
       </main>
     </div>
     <MobileNav pathname="/brawlers" />

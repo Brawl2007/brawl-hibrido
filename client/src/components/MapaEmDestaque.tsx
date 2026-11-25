@@ -51,8 +51,8 @@ export const MapaEmDestaque = forwardRef<HTMLHeadingElement, Props>(function Map
         <h1 id="mapa-em-destaque-titulo" ref={tituloRef} tabIndex={-1} className="titulo-de-mapa titulo-grande">{mapa.name}</h1>
         {aviso ? <p className="aviso-de-rota" role="status">{aviso}</p> : null}
         <div className="mapa-em-destaque-acoes">
-          <a className="botao-tinta" href={enderecoDoDraft}>Abrir Draft <span aria-hidden="true">→</span></a>
-          <button type="button" className="botao-lilas" onClick={onVerRanking}>Ver ranking <span aria-hidden="true">→</span></button>
+          <a className="botao-tinta" href={enderecoDoDraft}>Abrir Draft</a>
+          <button type="button" className="botao-lilas" onClick={onVerRanking}>Ver ranking</button>
         </div>
         {lider ? (
           <p className="mapa-lider">

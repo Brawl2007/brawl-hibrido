@@ -214,8 +214,22 @@ body { background: var(--bs-noite); color: var(--bs-texto); }
   font-style: normal;
   color: var(--bs-texto);
   letter-spacing: .005em;
-  text-shadow: var(--bs-letra-contornada);
+  /* Subtítulos: só a sombra dura. O contorno inteiro é do título da página. */
+  text-shadow: 0 .08em 0 var(--bs-contorno);
   text-transform: none;
+}
+
+/*
+ * v193 — a ousadia num só sítio. O contorno grosso de cartaz fica para o
+ * título de cada página (um por página); tudo o resto sobe um degrau calmo.
+ */
+.titulo-grande,
+.draft-cabeca .titulo-de-mapa,
+h1.bh-display,
+.brawlers-hero h1,
+.profile-hero-copy h1,
+.pagina-inexistente main > strong {
+  text-shadow: var(--bs-letra-contornada) !important;
 }
 
 /* Tamanhos: um título de cartaz por página, o resto em degraus. */
@@ -224,7 +238,7 @@ body { background: var(--bs-noite); color: var(--bs-texto); }
 .ranking-do-mapa > .titulo-de-mapa { font-size: clamp(2.5rem, 1.9rem + 2.6vw, 4.25rem) !important; line-height: .95; }
 .bh-display { font-size: clamp(2.6rem, 1.9rem + 2.8vw, 4.5rem) !important; line-height: .95 !important; }
 .brawlers-hero h1 { font-size: clamp(2.6rem, 1.8rem + 3.4vw, 5rem) !important; line-height: .98 !important; letter-spacing: .005em !important; }
-.brawlers-hero h1 em { color: var(--bs-amarelo); text-shadow: var(--bs-letra-contornada); }
+.brawlers-hero h1 em { color: inherit; font-style: normal; }
 .profile-hero-copy h1 { font-size: clamp(2.8rem, 2rem + 3.6vw, 5.4rem) !important; line-height: .9 !important; text-transform: uppercase !important; }
 .intro-copy h2,
 .section-heading-row h2,
@@ -240,15 +254,58 @@ body { background: var(--bs-noite); color: var(--bs-texto); }
 .matriz-titulo small,
 .na-rotacao-titulo small { text-shadow: none; font-family: "Space Grotesk", sans-serif; }
 
-/* A etiqueta por cima dos títulos: um corte amarelo, não um carimbo. */
+/* A etiqueta por cima dos títulos: discreta, em frase normal. O amarelo é
+   do que se carrega e do nº1 — numa etiqueta só fazia barulho. */
 .section-kicker,
 .eyebrow,
 .draft-probability-kicker,
 .team-kicker,
 .pick-insight-kicker,
 .duel-map-side-kicker {
-  color: var(--bs-amarelo) !important;
-  letter-spacing: .12em;
+  color: var(--bs-texto-3) !important;
+  font-weight: 600 !important;
+}
+.eyebrow-line, .eyebrow-dot { display: none; }
+
+/*
+ * Rótulos sem caixa alta espaçada. As folhas antigas punham 110 rótulos em
+ * MAIÚSCULAS com letras afastadas: é o tique de modelo pronto, e lê-se pior.
+ * Os títulos-cartaz (o nome do mapa, o do brawler) continuam em maiúsculas.
+ */
+:is(.app-footer, .attack-range-controls > span, .attack-range-table th, .back-link, .brand-kicker,
+    .brawler-filter-group span, .brawler-metric-chip span, .brawler-name-stack small, .brawler-opponent-select span,
+    .brawler-role-pill, .brawler-tier-pill, .card-heading h3, .coach-confidence small, .coach-confidence span,
+    .coach-decision-strip small, .coach-decision-strip span, .coach-desk-header h2, .coach-metric-strip span,
+    .coach-phase-grid span, .counter-source-badge, .counter-source-group-head a, .counter-source-group-head span,
+    .data-heading h2, .detail-source-tag, .draft-arena-first-team > strong, .draft-arena-header h2,
+    .draft-arena-map-control > strong, .draft-arena-map-status strong, .draft-arena-map-teams > strong,
+    .draft-composition-alert-item > strong, .draft-contextbar-mode, .draft-contextbar-stat > span,
+    .draft-control-panel h2, .draft-counter-tips-heading h2, .draft-experimental-banner,
+    .draft-initial-team-actions button, .draft-map-meta span, .draft-quick-pick-heading strong,
+    .draft-rules-section legend, .draft-weight-apply, .experiment-score, .eyebrow, .fatores-dica-subtitulo,
+    .final-win-call small, .final-win-call span, .final-win-heading h3, .game-plan-heading h2,
+    .guide-callout > a, .guide-callout strong, .hybrid-usage-head strong, .intro-copy h2, .lane-label,
+    .legend-optional, .live-counter-card button, .live-counter-head h2, .live-counter-matchup,
+    .live-counter-simulate, .map-card-meta-label, .matchup-zone-empty strong, .matchup-zone-head > strong,
+    .matriz-coluna .matriz-titulo, .matriz-numeros span, .matriz-resumo h3, .nav-label, .observed-controls,
+    .observed-counter-intel-head, .observed-kicker, .observed-mode-deck, .observed-row-section,
+    .partidas-grupo-de-mapas h3, .partidas-linha.is-cabeca, .partidas-ordem, .pick-insight-hint,
+    .pick-insight-metrics span, .pick-insight-synergy span, .pick-insight-tooltip > strong,
+    .profile-build-panel button, .profile-build-panel h2, .profile-map, .profile-tier, .qg-fases b,
+    .qg-tatico-resumo dt, .quadro-general-cabecalho h2, .quick-pick-more, .quick-search-submit,
+    .quick-skip-button, .rank-change, .rank-kpi small, .recommendation-decision-line,
+    .recommendation-metrics small, .recommendation-side span, .recommendation-summary span,
+    .recommendations-heading h2, .relation-section-head h2, .rotation-kpis small, .sandbox-optional,
+    .sandbox-switch, .scrim-setup-controls label > span, .scrim-setup-heading h3, .scrim-setup-stat span,
+    .section-heading-row h2, .section-kicker, .seletor-elo-rotulo, .slot-index, .source-card-foot,
+    .source-coverage-strip span, .source-full-header, .source-full-heading, .source-full-status,
+    .source-link-stack a, .source-live-chip, .source-metric span, .source-sorters button, .source-tabs button,
+    .stat-label, .table-header, .team-heading h3, .team-kicker, .usage-ban-hint, .weight-readout,
+    .profile-metrics span, .profile-hero-score span, .profile-hero-score small, .brawlers-hero-stats span,
+    .draft-probability-team span, .duel-map-side-kicker, .pick-insight-kicker,
+    .map-card-mode, .map-card-best em, .brawler-detail-score small, .matchup-list-head .section-kicker) {
+  text-transform: none !important;
+  letter-spacing: .01em !important;
 }
 
 /* Os números que importam: Lilita, amarelo, contorno fino. */
@@ -556,6 +613,48 @@ body { background: var(--bs-noite); color: var(--bs-texto); }
   box-shadow: inset 0 0 0 3px var(--bs-amarelo), var(--bs-aresta-pequena) !important;
 }
 .map-card.is-selected::after { display: none; }
+
+/*
+ * v193 — o placar. Eram quatro cartões iguais, cada um com ícone, rótulo e
+ * número grande: o arranjo de painel de controlo genérico. Passa a ser uma
+ * peça só, dividida como o ecrã de fim de partida, e o amarelo fica no nº1.
+ */
+.stats-grid {
+  gap: 0 !important;
+  overflow: hidden;
+  border: var(--bs-borda) solid var(--bs-contorno);
+  border-radius: var(--bs-raio);
+  background: linear-gradient(180deg, #16338f 0, var(--bs-painel) 120px);
+  box-shadow: var(--bs-brilho-de-cima), var(--bs-aresta);
+}
+.stats-grid .stat-card {
+  min-height: 0 !important;
+  padding: 18px 20px 16px !important;
+  border: 0 !important;
+  border-left: 2px solid rgba(255, 255, 255, .12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.stats-grid .stat-card:first-child { border-left: 0 !important; }
+.stats-grid .stat-icon { display: none !important; }
+.stats-grid .stat-value { color: var(--bs-texto) !important; font-size: clamp(30px, 2.4vw, 40px) !important; }
+.stats-grid .stat-card:first-child .stat-value { color: var(--bs-amarelo) !important; }
+@media (max-width: 900px) {
+  .stats-grid .stat-card:nth-child(odd) { border-left: 0 !important; }
+  .stats-grid .stat-card:nth-child(n + 3) { border-top: 2px solid rgba(255, 255, 255, .12) !important; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .stats-grid .stat-card:hover { background: transparent !important; }
+}
+
+/* A unidade por baixo do número de cada sugestão: em minúsculas, como unidade.
+   O texto fica "PONTOS FINAIS" no código porque os testes o procuram. */
+.draft-recommendation .recommendation-metrics small,
+.draft-shell .recommendation-metrics small { text-transform: lowercase !important; letter-spacing: .01em !important; }
+
+/* A posição na lista não é uma sequência com significado: sai do cartão. */
+.map-card-top b { display: none; }
 
 /* As fichas de estatística: cor só no número. */
 .stat-card { border-left-width: var(--bs-borda) !important; color: var(--bs-texto); }
@@ -1009,7 +1108,9 @@ input::placeholder { color: var(--bs-texto-3); opacity: 1; }
   background: var(--bs-painel) !important;
   box-shadow: var(--bs-brilho-de-cima), 0 3px 0 var(--bs-contorno) !important;
 }
-.profile-metrics strong { font-family: "Lilita One", sans-serif !important; font-weight: 400 !important; font-size: 28px !important; color: var(--bs-amarelo) !important; text-shadow: var(--bs-letra-contornada-fina); }
+.profile-metrics strong { font-family: "Lilita One", sans-serif !important; font-weight: 400 !important; font-size: 28px !important; color: var(--bs-texto) !important; text-shadow: var(--bs-letra-contornada-fina); }
+/* Nos cartões de mapa o número é branco: amarelo em 26 cartões era ruído. */
+.map-card-meta strong, .map-card-meta .bh-figure { color: var(--bs-texto) !important; }
 .ficha-contexto .source-link-stack a {
   border: 2px solid var(--bs-contorno) !important;
   border-radius: 10px !important;
