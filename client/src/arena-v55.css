@@ -14,15 +14,15 @@
  * área colorida quase não muda — o que muda é haver relevo.
  */
 .app-shell {
-  background-color: #070c1f;
+  background-color: #091845;
   background-image:
-    radial-gradient(58% 44% at 6% 0%, rgba(124, 58, 237, .26), transparent 64%),
-    radial-gradient(52% 40% at 97% 6%, rgba(34, 211, 238, .13), transparent 62%),
-    radial-gradient(96% 52% at 50% 100%, rgba(124, 58, 237, .11), transparent 72%) !important;
+    radial-gradient(58% 44% at 6% 0%, rgba(58, 118, 237, .26), transparent 64%),
+    radial-gradient(52% 40% at 97% 6%, rgba(61, 158, 255, .13), transparent 62%),
+    radial-gradient(96% 52% at 50% 100%, rgba(58, 118, 237, .11), transparent 72%) !important;
 }
-.site-version-badge { position: fixed; top: 6px; right: 10px; z-index: 60; pointer-events: none; background: #ffce45; color: #19213a; padding: 4px 9px; border: 2px solid #111a33; border-radius: 7px; font: 900 13px/1.1 sans-serif; box-shadow: 0 2px 0 #03091d; }
+.site-version-badge { position: fixed; top: 6px; right: 10px; z-index: 60; pointer-events: none; background: #ffd745; color: #143596; padding: 4px 9px; border: 2px solid #112b7b; border-radius: 7px; font: 900 13px/1.1 sans-serif; box-shadow: 0 2px 0 #08143a; }
 .draft-shell .draft-main { max-width: 1720px; padding: 22px 24px 48px; gap: 18px; }
-.draft-shell .draft-contextbar { order: 0; margin: 0; padding: 16px 20px; border: 1px solid #415591; border-radius: 16px; background: linear-gradient(115deg, #233d83, #392566); box-shadow: 0 5px 0 #050b20; }
+.draft-shell .draft-contextbar { order: 0; margin: 0; padding: 16px 20px; border: 1px solid #416291; border-radius: 16px; background: linear-gradient(115deg, #234b83, #1c47ca); box-shadow: 0 5px 0 #091843; }
 /*
  * A etiqueta "Draft" era dourada SOBRE dourado.
  *
@@ -42,10 +42,10 @@
 .draft-shell .draft-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; width: 100%; }
 .draft-shell .draft-content > * { order: 0; margin: 0; min-width: 0; grid-column: 1 / -1; }
 .draft-shell .draft-content > .draft-arena,
-.draft-shell .draft-content > .recommendations-section { width: 100%; margin: 0; border: 1px solid #354574; border-radius: 18px; background: #111b37 !important; box-shadow: 0 5px 0 #050b20; overflow: hidden; }
-.draft-shell .draft-arena-header { padding: 18px; background: linear-gradient(110deg,#193b72,#342349); }
+.draft-shell .draft-content > .recommendations-section { width: 100%; margin: 0; border: 1px solid #354f74; border-radius: 18px; background: #122e82 !important; box-shadow: 0 5px 0 #091843; overflow: hidden; }
+.draft-shell .draft-arena-header { padding: 18px; background: linear-gradient(110deg,#1c47ca,#1b45c3); }
 .draft-shell .draft-arena-header h2 { font-size: 28px; margin: 6px 0; }
-.draft-shell .draft-arena-header p { font-size: 13px; color: #bdcbed; }
+.draft-shell .draft-arena-header p { font-size: 13px; color: #bdd1ed; }
 .draft-shell .draft-arena-map-status { display: none; }
 .draft-shell .draft-action-zone { display: block; padding: 14px; }
 .draft-shell .draft-progress { margin-bottom: 14px; padding: 0; gap: 10px; flex-wrap: wrap; }
@@ -62,8 +62,8 @@
 .draft-shell .draft-arena .draft-progress { grid-template-columns: minmax(0, 1fr) auto; }
 .draft-shell .draft-arena .draft-progress-actions { grid-column: 1 / -1; justify-content: flex-start; }
 .draft-shell .draft-board-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; gap: 10px; margin: 0; }
-.draft-shell .draft-board-grid .team-board { order: 0; padding: 12px; border: 1px solid #3866a5; border-radius: 12px; background: #132b4d; min-width: 0; }
-.draft-shell .draft-board-grid .team-board.red { border-color: #8d466a; background: #392039; }
+.draft-shell .draft-board-grid .team-board { order: 0; padding: 12px; border: 1px solid #3865a5; border-radius: 12px; background: #183dad; min-width: 0; }
+.draft-shell .draft-board-grid .team-board.red { border-color: #8d466a; background: #1639a1; }
 .draft-shell .team-heading { flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .draft-shell .team-heading h3 { font-size: 23px; }
 .draft-shell .team-kicker { display: none; }
@@ -73,53 +73,53 @@
 .draft-shell .draft-slot { min-height: 48px; border-radius: 8px; padding: 6px; }
 .draft-shell .draft-slot .slot-copy { min-width: 0; }
 .draft-shell .draft-slot .slot-copy strong { white-space: normal; font-size: 13px; overflow-wrap: anywhere; }
-.draft-shell .draft-slot.is-active { border-color: #ffd453; background: #544729; box-shadow: 0 0 0 2px #ffd45338; }
-.draft-shell .draft-board-grid .draft-probability-center { order: 1; grid-column: 1/-1; width: auto; min-height: 0; padding: 12px; background: #0a142c; border-radius: 10px; }
+.draft-shell .draft-slot.is-active { border-color: #ffda53; background: #544729; box-shadow: 0 0 0 2px #ffd45338; }
+.draft-shell .draft-board-grid .draft-probability-center { order: 1; grid-column: 1/-1; width: auto; min-height: 0; padding: 12px; background: #0d2261; border-radius: 10px; }
 .draft-shell .draft-probability-center strong { font-size: 24px; }
 .draft-shell .draft-arena-controls { display: block; padding: 14px; }
 .draft-shell .draft-arena-map-control { padding: 0; border: 0; }
 .draft-shell .draft-arena-map-control > strong,
 .draft-shell .draft-arena-map-control > small { display: none; }
 .draft-shell .draft-select { width: 100%; margin: 8px 0; }
-.arena-more { padding: 12px 16px; border-top: 1px solid #304168; }
-.arena-more summary { cursor: pointer; color: #d1def7; font-size: 13.5px; font-weight: 700; min-height: 24px; }
-.arena-more[open] summary { color: #ffcf4b; margin-bottom: 12px; }
+.arena-more { padding: 12px 16px; border-top: 1px solid #1c47ca; }
+.arena-more summary { cursor: pointer; color: #d1e1f7; font-size: 13.5px; font-weight: 700; min-height: 24px; }
+.arena-more[open] summary { color: #ffd84b; margin-bottom: 12px; }
 .arena-options { padding: 12px 0 0; }
 .arena-options-body { display: grid; gap: 16px; }
 .draft-shell .recommendations-section { padding: 18px; }
 .draft-shell .recommendations-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
 .draft-shell .recommendations-heading h2 { font-size: 27px; margin: 4px 0; }
-.draft-shell .recommendations-heading p { font-size: 13px; line-height: 1.5; margin: 0; color: #aebfdf; }
-.turn-team { display: inline-block; font: 800 12.5px/1.5 sans-serif; vertical-align: middle; padding: 3px 8px; border-radius: 6px; background: #255da3; color: #fff; }
-.turn-team.red { background: #a43c63; }
-.pick-details-toggle { flex-shrink: 0; padding: 10px; border: 1px solid #4a5e8b; border-radius: 8px; color: #e1ebff; font-size: 13px; background: #233252; cursor: pointer; }
-.pick-details-toggle[aria-pressed="true"] { color: #ffcf4b; border-color: #ffcf4b; }
+.draft-shell .recommendations-heading p { font-size: 13px; line-height: 1.5; margin: 0; color: #aec2df; }
+.turn-team { display: inline-block; font: 800 12.5px/1.5 sans-serif; vertical-align: middle; padding: 3px 8px; border-radius: 6px; background: #2559a3; color: #fff; }
+.turn-team.red { background: #a43c3c; }
+.pick-details-toggle { flex-shrink: 0; padding: 10px; border: 1px solid #4a658b; border-radius: 8px; color: #e1eeff; font-size: 13px; background: #1c47ca; cursor: pointer; }
+.pick-details-toggle[aria-pressed="true"] { color: #ffd84b; border-color: #ffd84b; }
 .draft-shell .recommendation-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
 .draft-shell .draft-search-voice { flex: 1 1 230px; min-width: 0; }
-.draft-shell .draft-search { min-width: 0; background: #0a132b; border-radius: 10px; }
+.draft-shell .draft-search { min-width: 0; background: #0d2260; border-radius: 10px; }
 .draft-shell .draft-role-filter { flex-wrap: wrap; }
 .draft-shell .draft-role-filter button { min-height: 36px; padding: 6px 12px; }
-.draft-shell .draft-role-filter button.is-active { background: #ffcf4b; color: #152044; border-color: #ffcf4b; }
+.draft-shell .draft-role-filter button.is-active { background: #ffd84b; color: #1639a1; border-color: #ffd84b; }
 .draft-shell .draft-recommendation-list { display: grid; gap: 8px; }
-.draft-shell .draft-recommendation { display: grid; grid-template-columns: 22px 46px minmax(0,1fr) 64px; align-items: center; gap: 10px; width: 100%; min-height: 90px; padding: 12px; border: 1px solid #30446f; border-bottom: 3px solid #070e23; border-radius: 12px; background: #192745; content-visibility: auto; contain-intrinsic-size: auto 90px; transition: transform .14s ease, border-color .14s ease, background .14s ease; }
-.draft-shell .draft-recommendation:hover:not(:disabled) { transform: translateY(-2px); border-color: #eec344; background: #223458; }
+.draft-shell .draft-recommendation { display: grid; grid-template-columns: 22px 46px minmax(0,1fr) 64px; align-items: center; gap: 10px; width: 100%; min-height: 90px; padding: 12px; border: 1px solid #304a6f; border-bottom: 3px solid #0a1b4c; border-radius: 12px; background: #173caa; content-visibility: auto; contain-intrinsic-size: auto 90px; transition: transform .14s ease, border-color .14s ease, background .14s ease; }
+.draft-shell .draft-recommendation:hover:not(:disabled) { transform: translateY(-2px); border-color: #ffd333; background: #1c47ca; }
 .draft-shell .draft-recommendation:active:not(:disabled) { transform: translateY(1px); }
-.draft-shell .recommendation-avatar { width: 46px; height: 46px; border-radius: 10px; border: 2px solid #6683c1; }
-.draft-shell .recommendation-rank { font-size: 14px; color: #91a6ce; }
-.draft-shell .draft-recommendation-list > :first-child .recommendation-rank { color: #ffcf4b; }
+.draft-shell .recommendation-avatar { width: 46px; height: 46px; border-radius: 10px; border: 2px solid #668cc1; }
+.draft-shell .recommendation-rank { font-size: 14px; color: #91aace; }
+.draft-shell .draft-recommendation-list > :first-child .recommendation-rank { color: #ffd84b; }
 .draft-shell .recommendation-main { min-width: 0; }
 .draft-shell .recommendation-main > strong { font-size: 18px; color: #fff; }
 .draft-shell .recommendation-main > small { font-size: 12.5px; line-height: 1.5; white-space: normal; }
-.draft-shell .recommendation-metrics b { color: #ffda66; font-size: 25px; }
+.draft-shell .recommendation-metrics b { color: #ffde66; font-size: 25px; }
 .draft-shell .recommendation-metrics small { font-size: 10.5px; }
 .draft-shell .recommendation-side,.draft-shell .recommendation-action { display: none; }
-.draft-shell .pick-brief { color: #b3c5e6; margin-top: 4px; }
+.draft-shell .pick-brief { color: #b3c8e6; margin-top: 4px; }
 .draft-shell .with-details .draft-recommendation { align-items: start; contain-intrinsic-size: auto 650px; }
 .draft-shell .with-details .recommendation-main { overflow-wrap: anywhere; }
 .draft-shell .roster-pagination { flex-wrap: wrap; gap: 6px; margin: 14px 0; }
 .draft-shell .signal-radar-grid { grid-template-columns: minmax(0,1fr); }
 .draft-shell .recommendation-foot { display: none; }
-.draft-shell button:focus-visible,.draft-shell summary:focus-visible,.draft-shell select:focus-visible { outline: 3px solid #ffe078; outline-offset: 3px; }
+.draft-shell button:focus-visible,.draft-shell summary:focus-visible,.draft-shell select:focus-visible { outline: 3px solid #ffe278; outline-offset: 3px; }
 @media (min-width: 1150px) {
   .draft-shell .draft-content { grid-template-columns: minmax(420px,.95fr) minmax(430px,1.05fr); align-items: start; }
   .draft-shell .draft-content > .draft-arena { grid-column: 1; grid-row: 1; position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; scrollbar-width: thin; }
@@ -143,11 +143,11 @@
   .draft-shell *, .draft-shell *::before, .draft-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 /* Shared navigation keeps the same visual identity across the site. */
-.app-shell .app-sidebar { background: linear-gradient(180deg,#142342,#0b1329); border-right: 1px solid #34436b; }
+.app-shell .app-sidebar { background: linear-gradient(180deg,#15379b,#0d215e); border-right: 1px solid #344b6b; }
 .app-shell .sidebar-link { border-radius: 10px; margin-bottom: 5px; }
-.app-shell .sidebar-link.is-active { color: #ffe078; background: #33466b; border-color: #6b7da1; }
-.app-shell .topbar { background: #0d1730; border-bottom-color: #2d3e65; }
-.app-shell .refresh-button { box-shadow: 0 3px 0 #785719; border-radius: 9px; }
+.app-shell .sidebar-link.is-active { color: #ffe278; background: #334a6b; border-color: #6b82a1; }
+.app-shell .topbar { background: #0f276e; border-bottom-color: #1c47ca; }
+.app-shell .refresh-button { box-shadow: 0 3px 0 #917200; border-radius: 9px; }
 .draft-shell .is-compact .draft-recommendation { overflow: hidden; }
 /* v56: expanded audits use the full card width, without ellipsis or clipping. */
 .draft-shell .with-details .draft-recommendation { content-visibility: visible; contain: none; contain-intrinsic-size: none; overflow: visible; grid-template-columns: 22px 46px minmax(0,1fr) 64px; }
@@ -159,11 +159,11 @@
 .draft-shell .with-details .recommendation-bonus-source { flex: 1 1 100%; }
 .draft-shell .with-details .recommendation-counter-audit :is(small,b,span),
 .draft-shell .with-details .recommendation-main > small { font-size: 13px !important; line-height: 1.5; letter-spacing: normal; }
-.ranking-order-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #d1def7; font-size: 13px; }
-.ranking-order-control select { min-width: 0; max-width: 100%; padding: 9px; background: #182744; border: 1px solid #4a5e8b; border-radius: 8px; color: #ffe078; }
+.ranking-order-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #d1e1f7; font-size: 13px; }
+.ranking-order-control select { min-width: 0; max-width: 100%; padding: 9px; background: #173aa6; border: 1px solid #4a658b; border-radius: 8px; color: #ffe278; }
 .ranking-order-control small { flex-basis: 100%; line-height: 1.5; }
 /* v57: comparisons are visible again and reachable directly from the board. */
-.duel-jump-link { display: inline-flex; align-items: center; padding: 10px 12px; border: 1px solid #ffcf4b; border-radius: 9px; color: #ffe078; background: #182744; font-size: 13px; font-weight: 700; text-decoration: none; }
+.duel-jump-link { display: inline-flex; align-items: center; padding: 10px 12px; border: 1px solid #ffd84b; border-radius: 9px; color: #ffe278; background: #173aa6; font-size: 13px; font-weight: 700; text-decoration: none; }
 .duel-jump-link:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .draft-shell #matchup-matrix { scroll-margin-top: 24px; }
 .draft-shell .matchup-score-rise-bonuses > span { white-space: normal; flex-wrap: wrap; overflow-wrap: anywhere; }
@@ -172,12 +172,12 @@
 
 /* v61: leitura resumida dos duelos, sem remover as percentagens. */
 .duel-points-overview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:14px 0; }
-.duel-points-overview > div { display:grid; gap:6px; padding:14px; border:1px solid #365577; border-radius:12px; min-width:0; }
+.duel-points-overview > div { display:grid; gap:6px; padding:14px; border:1px solid #365177; border-radius:12px; min-width:0; }
 .duel-points-overview span { font-weight:800; overflow-wrap:anywhere; }
 .duel-points-overview strong { font-size:24px; color:#fff; }
-.duel-points-overview small { font-size:13px; color:#bfd0e6; }
-.duel-points-overview b { color:#ffd75a; }
-.duel-details > summary { cursor:pointer; padding:12px 0; font-weight:700; color:#ffd75a; }
+.duel-points-overview small { font-size:13px; color:#bfcfe6; }
+.duel-points-overview b { color:#ffdb5a; }
+.duel-details > summary { cursor:pointer; padding:12px 0; font-weight:700; color:#ffdb5a; }
 .duel-details .matchup-score-rise-grid { grid-template-columns:1fr; }
 .duel-details .matchup-score-rise-bonuses { display:grid; gap:8px; }
 .duel-details .matchup-score-rise-bonuses > span { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px; border-radius:6px; padding:10px; }
@@ -308,9 +308,9 @@
  */
 .draft-shell .draft-recommendation-list > :first-child .draft-recommendation,
 .draft-shell .draft-recommendation-list > .draft-recommendation:first-child {
-  border-color: #6a5220;
-  border-bottom-color: #ffc02e;
-  background: linear-gradient(118deg, #24304f, #1d2a49);
+  border-color: #8a6c00;
+  border-bottom-color: #ffd22e;
+  background: linear-gradient(118deg, #1c47ca, #1941b8);
 }
 
 /*
@@ -321,7 +321,7 @@
  * index.css perdia para as regras deste ficheiro. Fica declarado onde manda.
  */
 .draft-shell .draft-slot {
-  border-bottom: 3px solid #070e23;
+  border-bottom: 3px solid #0a1b4c;
   transition: transform .14s cubic-bezier(.34, 1.56, .64, 1), border-color .14s ease, background .14s ease;
 }
 .draft-shell .draft-slot:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 1px; }
@@ -352,7 +352,7 @@
   position: absolute;
   inset: -3px;
   border-radius: 11px;
-  box-shadow: 0 0 0 3px rgba(255, 212, 83, .3);
+  box-shadow: 0 0 0 3px rgba(255, 218, 83, .3);
   pointer-events: none;
   animation: bh-slot-waiting 2.4s ease-in-out infinite;
 }
@@ -363,8 +363,8 @@
 
 /* A barra de contexto ganha a aresta sólida das outras peças. */
 .draft-shell .draft-contextbar {
-  border-bottom: 4px solid #050b20;
-  box-shadow: 0 5px 0 rgba(5, 11, 32, .5);
+  border-bottom: 4px solid #091843;
+  box-shadow: 0 5px 0 rgba(9, 24, 67, .5);
 }
 
 @media (prefers-reduced-motion: reduce) {

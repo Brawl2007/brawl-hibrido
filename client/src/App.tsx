@@ -13,6 +13,7 @@ import { Route, Switch, useLocation } from "wouter";
 import { tituloDaPagina } from "./lib/tituloDaPagina";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VersaoDoSite from "./components/VersaoDoSite";
+import { RodapeDoSite } from "./components/RodapeDoSite";
 import { CounterSyncProvider } from "./contexts/CounterSyncContext";
 import { RankedSyncProvider } from "./contexts/RankedSyncContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -29,7 +30,7 @@ function Router() {
   const [caminho] = useLocation();
   useEffect(() => { document.title = tituloDaPagina(caminho); }, [caminho]);
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0b0e14] text-slate-300 grid place-items-center text-sm tracking-[.12em] uppercase">A carregar arena…</div>}>
+    <Suspense fallback={<div className="ecra-a-carregar" role="status"><span className="ecra-a-carregar-vs" aria-hidden="true">VS</span>A carregar a arena…</div>}>
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/draft" component={Draft} />
@@ -62,7 +63,7 @@ export default function App() {
               as mudanças de opacidade, que ajudam a perceber o que mudou.
             */}
             <MotionConfig reducedMotion="user">
-              <DraftRolesProvider><Router /></DraftRolesProvider>
+              <DraftRolesProvider><Router /><RodapeDoSite /></DraftRolesProvider>
             </MotionConfig>
             </TooltipProvider>
           </RankedSyncProvider>

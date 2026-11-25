@@ -39,14 +39,14 @@ export default function Entrar() {
   const palavraPasseFraca = estado.data?.configured === true && estado.data.strongEnough === false;
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#0b0e14] px-4">
-      <Card className="w-full max-w-md border-slate-800 bg-slate-900/60">
+    <div className="app-shell entrar-pagina min-h-screen w-full flex items-center justify-center px-4">
+      <Card className="entrar-cartao w-full max-w-md">
         <CardContent className="pt-8 pb-8">
           <div className="flex justify-center mb-6">
             <KeyRound className="h-12 w-12 text-amber-400" aria-hidden />
           </div>
 
-          <h1 className="text-2xl font-bold text-slate-100 text-center mb-2">Entrar como dono</h1>
+          <h1 className="entrar-titulo text-center mb-2">Entrar como dono</h1>
           <p className="text-sm text-slate-400 text-center mb-6">
             {/*
               Esta frase dizia "O Draft, o diagnóstico e a colagem de fichas são
@@ -94,7 +94,7 @@ export default function Entrar() {
               autoFocus
               value={palavraPasse}
               onChange={(evento) => setPalavraPasse(evento.target.value)}
-              className="mb-4 bg-slate-950 border-slate-700 text-slate-100"
+              className="entrar-campo mb-4"
             />
 
             {erro && (
@@ -115,7 +115,7 @@ export default function Entrar() {
           <button
             type="button"
             onClick={() => setLocation("/")}
-            className="mt-6 w-full text-center text-sm text-slate-500 hover:text-slate-300"
+            className="entrar-voltar mt-6 w-full text-center"
           >
             Voltar ao site
           </button>

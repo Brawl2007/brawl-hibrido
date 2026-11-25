@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Brawl Híbrido">
+  <title>Brawl Híbrido</title>
+  <!--
+    v192: o emblema é o corte VS do site. A equipa azul à esquerda, a vermelha
+    à direita e a diagonal amarela entre as duas, com o contorno grosso do jogo.
+    Sem letras: num <img> o SVG não usa os tipos da página, e um "BH" em Arial
+    não tinha nada do jogo.
+  -->
+  <defs>
+    <clipPath id="peca">
+      <rect x="7" y="7" width="114" height="114" rx="24"/>
+    </clipPath>
+    <linearGradient id="azul" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5aa8ff"/>
+      <stop offset="1" stop-color="#1e5bff"/>
+    </linearGradient>
+    <linearGradient id="vermelho" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff7a7a"/>
+      <stop offset="1" stop-color="#e83030"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="124" height="124" rx="29" fill="#03091f"/>
+  <g clip-path="url(#peca)">
+    <rect x="7" y="7" width="114" height="114" fill="url(#azul)"/>
+    <polygon points="84,7 121,7 121,121 46,121" fill="url(#vermelho)"/>
+    <polygon points="70,7 98,7 60,121 32,121" fill="#03091f"/>
+    <polygon points="76,7 92,7 54,121 38,121" fill="#ffce1f"/>
+    <rect x="7" y="7" width="114" height="10" fill="#ffffff" opacity=".22"/>
+  </g>
+</svg>

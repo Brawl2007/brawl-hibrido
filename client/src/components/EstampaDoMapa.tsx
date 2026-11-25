@@ -191,9 +191,9 @@ function ArteDoModo({ modeId }: { modeId: string }) {
     <svg className="estampa-arte" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
       <defs>
         <radialGradient id={luz} cx="30%" cy="22%" r="85%">
-          <stop offset="0" stopColor="#F4EEFF" />
-          <stop offset="0.55" stopColor="#D8C9F4" />
-          <stop offset="1" stopColor="#A98CE0" />
+          <stop offset="0" stopColor="#EAF6FF" />
+          <stop offset="0.55" stopColor="#A9D4FF" />
+          <stop offset="1" stopColor="#5FA2FF" />
         </radialGradient>
         <linearGradient id={sombra} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.55" />

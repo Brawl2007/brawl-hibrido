@@ -10,6 +10,7 @@ import "./index.css";
 import "./arena-v55.css";
 import "./layout-v143.css";
 import "./percursos-v186.css";
+import "./brawl-v192.css";
 
 const queryClient = new QueryClient();
 

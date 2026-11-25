@@ -1,0 +1,1192 @@
+/*
+ * v192 — o site com a cara do Brawl Stars.
+ *
+ * DECISÃO (uma linha, antes de qualquer regra):
+ *   Cartaz cinético (+ índice) para o Brawl Híbrido: o corte VS — a diagonal
+ *   que separa a equipa azul da vermelha — inclina-se para quem está a ganhar
+ *   à medida que se escolhem brawlers. Chão #0A1A4F, tinta #FFFFFF, acento
+ *   #FFCE1F (campo e botão principal). Títulos em Lilita One com contorno
+ *   #03091F e sombra dura. Relógio ease-out-quart; escada 120/200/350/600 ms.
+ *
+ * DE ONDE VEM CADA PEÇA (o kit do próprio jogo, não um tema genérico)
+ *   - Lilita One é o tipo da interface do Brawl Stars. Por isso é ele que fala
+ *     em todos os títulos, botões e abas; o Space Grotesk fica no texto
+ *     corrido e nas tabelas, que precisam de números alinhados.
+ *   - Contorno escuro grosso + sombra dura por baixo: é assim que o jogo
+ *     escreve os títulos e desenha os botões. Nada de brilhos nem de néon.
+ *   - Botão amarelo com aresta inferior: carrega-se e ele desce (só no toque,
+ *     nunca no hover). É o botão "JOGAR" do lobby.
+ *   - Azul do lobby como campo, azul-noite como chão, amarelo só no que se
+ *     carrega ou no número que importa. Azul e vermelho das equipas são sinal,
+ *     tal como o verde e o vermelho de ganhar e perder.
+ *   - O corte VS: diagonal amarela na aba ativa, nas costuras entre secções,
+ *     na barra da probabilidade do Draft, no rodapé e na página 404.
+ *
+ * COMO ESTA FOLHA SE PORTA
+ *   Vem por último (main.tsx). Não mexe em nada do que as páginas fazem: só
+ *   muda cor, tipo, contorno e forma. Todo o hover está atrás de
+ *   `(hover: hover) and (pointer: fine)` e todo o deslocamento atrás de
+ *   `(prefers-reduced-motion: no-preference)`.
+ */
+
+/* ------------------------------------------------------------------ *
+ * 1. Paleta
+ * ------------------------------------------------------------------ */
+:root {
+  /* O kit. */
+  --bs-noite: #0a1a4f;          /* chão */
+  --bs-noite-funda: #061238;    /* barra de cima, fundo das tabelas */
+  --bs-contorno: #03091f;       /* contornos, arestas, sombras duras */
+  --bs-painel: #112a78;         /* cartões */
+  --bs-painel-2: #17369a;       /* cartão dentro de cartão, linha ativa */
+  --bs-painel-3: #1d44b8;       /* realce de linha */
+  --bs-azul: #1e5bff;           /* campo do lobby */
+  --bs-azul-claro: #78aaff;     /* ligações e sinais sobre o chão */
+  --bs-ceu: #5fb4ff;            /* informação */
+  --bs-amarelo: #ffce1f;        /* a cor do jogo: botão e número */
+  --bs-amarelo-claro: #ffe066;
+  --bs-amarelo-aresta: #b07a00;
+  --bs-tinta-amarelo: #1a1206;  /* texto sobre amarelo: 12,6:1 */
+  --bs-texto: #ffffff;
+  --bs-texto-2: #cfdbff;        /* 9,8:1 sobre o painel */
+  --bs-texto-3: #9db2ee;        /* 5,5:1 sobre o painel */
+  --bs-linha: rgba(255, 255, 255, .14);
+  --bs-verde: #3fe07a;
+  --bs-vermelho: #ff4d4d;
+  --bs-equipa-azul: #3ea6ff;
+  --bs-equipa-vermelha: #ff4a4a;
+
+  /* Forma: cantos de peça de jogo, contorno grosso e aresta por baixo. */
+  --bs-raio: 16px;
+  --bs-raio-pequeno: 11px;
+  --bs-borda: 3px;
+  --bs-aresta: 0 5px 0 var(--bs-contorno);
+  --bs-aresta-pequena: 0 3px 0 var(--bs-contorno);
+  --bs-brilho-de-cima: inset 0 2px 0 rgba(255, 255, 255, .12);
+
+  /* O contorno das letras do jogo: oito direções e uma sombra dura. */
+  --bs-letra-contornada:
+    -.045em -.045em 0 var(--bs-contorno), .045em -.045em 0 var(--bs-contorno),
+    -.045em .045em 0 var(--bs-contorno), .045em .045em 0 var(--bs-contorno),
+    0 -.055em 0 var(--bs-contorno), 0 .055em 0 var(--bs-contorno),
+    -.055em 0 0 var(--bs-contorno), .055em 0 0 var(--bs-contorno),
+    0 .12em 0 var(--bs-contorno);
+  --bs-letra-contornada-fina:
+    -1px -1px 0 var(--bs-contorno), 1px -1px 0 var(--bs-contorno),
+    -1px 1px 0 var(--bs-contorno), 1px 1px 0 var(--bs-contorno),
+    0 2px 0 var(--bs-contorno);
+
+  /* Movimento: uma família, uma escada. */
+  --bs-ease: cubic-bezier(.25, 1, .5, 1);
+  --bs-ease-micro: cubic-bezier(.33, 1, .68, 1);
+  --bs-dur-1: 120ms;
+  --bs-dur-2: 200ms;
+  --bs-dur-3: 350ms;
+  --bs-dur-4: 600ms;
+
+  /* Os tokens que o resto do site já usa passam a apontar para o kit. */
+  --bh-ground: var(--bs-noite);
+  --bh-surface: var(--bs-painel);
+  --bh-surface-2: var(--bs-painel-2);
+  --bh-surface-3: var(--bs-painel-3);
+  --bh-gold: var(--bs-amarelo);
+  --bh-gold-soft: var(--bs-amarelo-claro);
+  --bh-gold-deep: #e0a800;
+  --bh-on-gold: var(--bs-tinta-amarelo);
+  --bh-violet: var(--bs-azul-claro);
+  --bh-violet-deep: var(--bs-azul);
+  --bh-positive: var(--bs-verde);
+  --bh-negative: var(--bs-vermelho);
+  --bh-info: var(--bs-ceu);
+  --bh-text: var(--bs-texto);
+  --bh-text-muted: var(--bs-texto-2);
+  --bh-text-dim: var(--bs-texto-3);
+  --bh-line: var(--bs-linha);
+  --bh-line-strong: rgba(255, 255, 255, .24);
+  --bh-edge: var(--bs-contorno);
+  --bh-radius: var(--bs-raio);
+  --bh-radius-sm: var(--bs-raio-pequeno);
+
+  --time-azul: var(--bs-equipa-azul);
+  --time-azul-fundo: rgba(62, 166, 255, .16);
+  --time-vermelha: var(--bs-equipa-vermelha);
+  --time-vermelha-fundo: rgba(255, 74, 74, .16);
+  --mesa-fundo: var(--bs-painel);
+  --mesa-borda: var(--bs-linha);
+
+  /*
+   * As cores do "papel" servem duas coisas: fundo claro no Início e texto
+   * claro sobre o escuro (o cabeçalho do Draft escreve com `--bh-papel`).
+   * Aqui fica o segundo sentido; o primeiro é trocado só dentro de
+   * `.tema-papel`, mais abaixo. Trocar o token no :root apagava o texto do
+   * Draft — azul-noite sobre azul-noite.
+   */
+  --bh-papel: #f4f7ff;
+  --bh-tinta: var(--bs-noite);
+  --bh-tinta-suave: var(--bs-texto-3);
+  --bh-violeta: var(--bs-azul);
+  --bh-lilas: var(--bs-azul-claro);
+  --bh-lilas-claro: var(--bs-painel-2);
+  --bh-amarelo: var(--bs-amarelo);
+  --bh-azul-equipa: #6cbcff;
+  --bh-coral-equipa: #ff8a8a;
+  --bh-noite: var(--bs-noite);
+  --bh-noite-2: var(--bs-painel);
+  --bh-noite-linha: var(--bs-linha);
+  --bh-papel-linha: var(--bs-linha);
+
+  /* Os componentes shadcn (diálogos, menus, o botão do Entrar). */
+  --background: var(--bs-noite);
+  --foreground: var(--bs-texto);
+  --card: var(--bs-painel);
+  --card-foreground: var(--bs-texto);
+  --popover: var(--bs-painel);
+  --popover-foreground: var(--bs-texto);
+  --primary: var(--bs-amarelo);
+  --primary-foreground: var(--bs-tinta-amarelo);
+  --secondary: var(--bs-painel-2);
+  --secondary-foreground: var(--bs-texto);
+  --muted: var(--bs-painel-2);
+  --muted-foreground: var(--bs-texto-2);
+  --accent: var(--bs-painel-3);
+  --accent-foreground: var(--bs-texto);
+  --border: var(--bs-linha);
+  --input: rgba(255, 255, 255, .2);
+  --ring: var(--bs-amarelo);
+  --radius: 0.9rem;
+}
+
+/* O Início em "papel" passa a ser o campo azul do lobby. */
+.tema-papel {
+  --bh-papel: var(--bs-azul);
+  --bh-tinta: var(--bs-texto);
+  --bh-tinta-suave: #f3f7ff;   /* 4,9:1 sobre o azul do lobby */
+  --bh-violeta: var(--bs-amarelo);
+  --bh-lilas: var(--bs-painel-2);
+  --bh-lilas-claro: var(--bs-painel);
+  --bh-papel-linha: rgba(255, 255, 255, .18);
+}
+
+/* ------------------------------------------------------------------ *
+ * 2. Chão
+ *
+ * Um só matiz: o azul acende em cima e escurece para baixo, como a luz do
+ * lobby. As riscas diagonais são o padrão dos menus do jogo e ficam no chão,
+ * nunca por cima de texto. Não é fixo: rola com a página.
+ * ------------------------------------------------------------------ */
+html { background: var(--bs-noite); }
+body { background: var(--bs-noite); color: var(--bs-texto); }
+::selection { color: var(--bs-tinta-amarelo); background: var(--bs-amarelo); }
+
+.app-shell,
+.pagina-inexistente,
+.ecra-a-carregar {
+  background-color: var(--bs-noite) !important;
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, .028) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #13328f 0, #0e2466 320px, var(--bs-noite) 760px) !important;
+  background-attachment: scroll !important;
+  background-size: auto !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. Títulos: Lilita One contornado
+ * ------------------------------------------------------------------ */
+.titulo-de-mapa,
+.bh-display,
+.brawlers-hero h1,
+.profile-hero-copy h1,
+.pagina-inexistente main > strong,
+.pagina-inexistente h1,
+.intro-copy h2,
+.section-heading-row h2,
+.data-heading h2,
+.relation-section-head h2,
+.brawler-detail-title h2,
+.matriz-titulo,
+.partidas-painel-cabeca h2,
+.final-win-heading h2,
+.formula-heading h2,
+.source-heading h2,
+.attack-range-head h2 {
+  font-family: "Lilita One", "Space Grotesk", sans-serif !important;
+  font-weight: 400 !important;
+  font-style: normal;
+  color: var(--bs-texto);
+  letter-spacing: .005em;
+  text-shadow: var(--bs-letra-contornada);
+  text-transform: none;
+}
+
+/* Tamanhos: um título de cartaz por página, o resto em degraus. */
+.titulo-grande { font-size: clamp(3.25rem, 1.75rem + 6.4vw, 8.5rem) !important; line-height: .92 !important; text-transform: uppercase !important; }
+.draft-cabeca .titulo-de-mapa,
+.ranking-do-mapa > .titulo-de-mapa { font-size: clamp(2.5rem, 1.9rem + 2.6vw, 4.25rem) !important; line-height: .95; }
+.bh-display { font-size: clamp(2.6rem, 1.9rem + 2.8vw, 4.5rem) !important; line-height: .95 !important; }
+.brawlers-hero h1 { font-size: clamp(2.6rem, 1.8rem + 3.4vw, 5rem) !important; line-height: .98 !important; letter-spacing: .005em !important; }
+.brawlers-hero h1 em { color: var(--bs-amarelo); text-shadow: var(--bs-letra-contornada); }
+.profile-hero-copy h1 { font-size: clamp(2.8rem, 2rem + 3.6vw, 5.4rem) !important; line-height: .9 !important; text-transform: uppercase !important; }
+.intro-copy h2,
+.section-heading-row h2,
+.data-heading h2,
+.relation-section-head h2,
+.final-win-heading h2,
+.formula-heading h2,
+.source-heading h2,
+.attack-range-head h2 { font-size: clamp(1.75rem, 1.35rem + 1.6vw, 2.75rem) !important; line-height: 1.02 !important; }
+.matriz-titulo,
+.brawler-detail-title h2,
+.partidas-painel-cabeca h2 { font-size: clamp(1.35rem, 1.15rem + .8vw, 1.9rem) !important; line-height: 1.05 !important; }
+.matriz-titulo small,
+.na-rotacao-titulo small { text-shadow: none; font-family: "Space Grotesk", sans-serif; }
+
+/* A etiqueta por cima dos títulos: um corte amarelo, não um carimbo. */
+.section-kicker,
+.eyebrow,
+.draft-probability-kicker,
+.team-kicker,
+.pick-insight-kicker,
+.duel-map-side-kicker {
+  color: var(--bs-amarelo) !important;
+  letter-spacing: .12em;
+}
+
+/* Os números que importam: Lilita, amarelo, contorno fino. */
+.stat-value,
+.profile-hero-score strong,
+.brawler-detail-score strong,
+.mapa-lider-score b,
+.qg-indice-valor,
+.draft-probability-team strong,
+.matriz-numeros strong,
+.brawlers-hero-stats strong {
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: .01em;
+  text-shadow: var(--bs-letra-contornada-fina);
+}
+
+/* O resto do que estava em Barlow Condensed: uma só voz de títulos e números.
+   Assim o site carrega dois tipos de letra em vez de três. */
+:is(.map-card-top b, .map-card-name, .map-card-meta .bh-figure, .progress-count,
+    .team-count strong, .team-count em, .slot-index, .draft-probability-center .blue,
+    .draft-probability-center .red, .recommendation-rank, .recommendation-metrics b,
+    .matriz-delta, .relation-section-head strong, .brawler-detail-main h2,
+    .profile-hero-image span, .stat-stamp) {
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: .01em;
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. A barra de cima
+ * ------------------------------------------------------------------ */
+.barra-do-site {
+  height: 64px;
+  background: var(--bs-noite-funda);
+  border-bottom: var(--bs-borda) solid var(--bs-contorno);
+  box-shadow: 0 4px 0 rgba(3, 9, 31, .35);
+  backdrop-filter: none;
+}
+.barra-do-site-marca {
+  gap: 10px;
+  font-family: "Lilita One", sans-serif;
+  font-size: 22px;
+  color: var(--bs-texto);
+  text-shadow: var(--bs-letra-contornada-fina);
+}
+.barra-do-site-marca img {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  border: 2px solid var(--bs-contorno);
+  box-shadow: var(--bs-aresta-pequena);
+}
+.barra-do-site-destinos { gap: 4px; padding: 6px 4px 8px; }
+.barra-do-site-destinos a {
+  position: relative;
+  isolation: isolate;
+  padding: 8px 13px;
+  border-radius: 0;
+  color: var(--bs-texto-2);
+  font-family: "Lilita One", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: .01em;
+  background: transparent;
+  transition: color var(--bs-dur-2) var(--bs-ease-micro);
+}
+/* O corte VS da aba ativa: um paralelogramo amarelo atrás do nome. */
+.barra-do-site-destinos a::before {
+  content: "";
+  position: absolute; inset: 2px 0;
+  z-index: -1;
+  border-radius: 7px;
+  transform: skewX(-12deg);
+  background: transparent;
+  transition: background-color var(--bs-dur-2) var(--bs-ease-micro);
+}
+.barra-do-site-destinos a.is-active {
+  color: var(--bs-tinta-amarelo);
+  background: transparent;
+  box-shadow: none;
+}
+.barra-do-site-destinos a.is-active::before {
+  background: var(--bs-amarelo);
+  border: 2px solid var(--bs-contorno);
+  box-shadow: var(--bs-aresta-pequena);
+}
+.barra-do-site-acoes .live-chip { border: 2px solid var(--bs-contorno); background: var(--bs-painel); color: var(--bs-texto-2); }
+
+/* O número da versão, em ficha amarela. */
+.site-version-badge {
+  top: 14px;
+  background: var(--bs-amarelo) !important;
+  color: var(--bs-tinta-amarelo) !important;
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 9px !important;
+  box-shadow: var(--bs-aresta-pequena) !important;
+  font: 400 14px/1.1 "Lilita One", sans-serif !important;
+  letter-spacing: .02em;
+}
+
+@media (max-width: 900px) {
+  .barra-do-site { height: 56px; }
+  .barra-do-site-marca { font-size: 19px; }
+  .barra-do-site-marca img { width: 34px; height: 34px; }
+  .site-version-badge { top: 11px; }
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. A barra de baixo (telemóvel)
+ * ------------------------------------------------------------------ */
+@media (max-width: 900px) {
+  .mobile-nav {
+    gap: 6px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0));
+    background: var(--bs-noite-funda);
+    border-top: var(--bs-borda) solid var(--bs-contorno);
+    backdrop-filter: none;
+  }
+  .mobile-nav-item {
+    min-height: 54px;
+    border-radius: 12px;
+    color: var(--bs-texto-2);
+    font-family: "Lilita One", sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: .02em;
+  }
+  .mobile-nav-item.is-active {
+    color: var(--bs-tinta-amarelo);
+    background: var(--bs-amarelo);
+    border: 2px solid var(--bs-contorno);
+    box-shadow: var(--bs-aresta-pequena);
+  }
+  .mobile-nav-item.is-active::before { display: none; }
+  .scroll-top-button { bottom: 86px; }
+}
+
+/* ------------------------------------------------------------------ *
+ * 6. Botões
+ *
+ * Amarelo: a ação principal da vista. Azul: tudo o resto. Os dois com o
+ * mesmo corpo — contorno, brilho em cima, aresta em baixo — e a mesma
+ * resposta: o hover muda o tom, o toque afunda a peça 3px.
+ * ------------------------------------------------------------------ */
+.botao-tinta,
+.botao-amarelo,
+.primary-button,
+.pagina-inexistente-acoes a,
+.botao-lilas,
+.botao-ver-matriz,
+.copy-button,
+.map-export-button,
+.refresh-button,
+.draft-desfazer,
+.scroll-top-button,
+.bs-botao {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px;
+  padding: 0 20px;
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: 13px !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-size: 17px !important;
+  font-weight: 400 !important;
+  letter-spacing: .015em;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--bs-dur-2) var(--bs-ease-micro),
+    box-shadow var(--bs-dur-1) var(--bs-ease-micro),
+    transform var(--bs-dur-1) var(--bs-ease-micro);
+}
+
+/* Amarelo. */
+.botao-tinta,
+.botao-amarelo,
+.primary-button,
+.pagina-inexistente-acoes a.is-principal,
+.bs-botao-principal {
+  color: var(--bs-tinta-amarelo) !important;
+  background: linear-gradient(180deg, #ffe45c 0, var(--bs-amarelo) 55%, #f5bd00 100%) !important;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45), inset 0 -4px 0 rgba(176, 122, 0, .35), var(--bs-aresta) !important;
+}
+
+/* Azul. */
+.botao-lilas,
+.botao-ver-matriz,
+.copy-button,
+.map-export-button,
+.refresh-button,
+.draft-desfazer,
+.scroll-top-button,
+.pagina-inexistente-acoes a:not(.is-principal),
+.bs-botao {
+  color: var(--bs-texto) !important;
+  background: linear-gradient(180deg, #3a78ff 0, var(--bs-azul) 55%, #164ad8 100%) !important;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .28), inset 0 -4px 0 rgba(3, 9, 31, .25), var(--bs-aresta) !important;
+  text-shadow: var(--bs-letra-contornada-fina);
+}
+.refresh-button svg, .map-export-button svg, .copy-button svg { color: currentColor !important; }
+
+/* Pequenos, dentro das barras de ferramentas. */
+.map-export-button,
+.copy-button,
+.refresh-button,
+.draft-desfazer { min-height: 40px; padding: 0 14px; font-size: 15px !important; }
+.scroll-top-button { width: 46px; height: 46px; padding: 0; border-radius: 50% !important; }
+
+/* Desligado: sem aresta, sem convite. */
+.botao-tinta:disabled, .botao-amarelo:disabled, .primary-button:disabled,
+.copy-button:disabled, .map-export-button:disabled, .refresh-button:disabled,
+.draft-desfazer[aria-disabled="true"] {
+  box-shadow: none !important;
+  filter: saturate(.4);
+  opacity: .6;
+}
+
+/* O shadcn (Entrar, diálogos): o mesmo corpo. */
+[data-slot="button"].bg-primary {
+  border: var(--bs-borda) solid var(--bs-contorno);
+  border-radius: 13px;
+  font-family: "Lilita One", sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45), var(--bs-aresta);
+}
+
+/* O toque afunda a peça: o feedback do jogo. */
+@media (prefers-reduced-motion: no-preference) {
+  .botao-tinta:active, .botao-amarelo:active, .primary-button:active,
+  .pagina-inexistente-acoes a:active, .botao-lilas:active, .botao-ver-matriz:active,
+  .copy-button:active:not(:disabled), .map-export-button:active, .refresh-button:active:not(:disabled),
+  .draft-desfazer:active, .scroll-top-button:active, .bs-botao:active,
+  [data-slot="button"].bg-primary:active {
+    transform: translateY(3px) !important;
+  }
+}
+.botao-tinta:active, .botao-amarelo:active, .primary-button:active,
+.pagina-inexistente-acoes a:active, .bs-botao-principal:active {
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45), 0 2px 0 var(--bs-contorno) !important;
+}
+.botao-lilas:active, .botao-ver-matriz:active, .copy-button:active, .map-export-button:active,
+.refresh-button:active, .draft-desfazer:active, .scroll-top-button:active, .bs-botao:active {
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .28), 0 2px 0 var(--bs-contorno) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 7. Painéis: peças com contorno, não retângulos desenhados
+ * ------------------------------------------------------------------ */
+.stat-card,
+.map-section,
+.data-section,
+.map-card,
+.source-card,
+.formula-card,
+.signal-card,
+.brawler-profile-hero,
+.brawlers-hero-stats div,
+.profile-build-panel,
+.brawler-detail-panel,
+.brawler-catalog-card,
+.brawler-relation-section,
+.sourced-counter-card,
+.matchup-list-card,
+.attack-range-section,
+.brawlers-workspace,
+.estampa-do-mapa,
+.ranking-pesos,
+.ranking-publicado,
+.draft-contextbar,
+.team-board,
+.partidas-painel,
+.partidas-mapa,
+.matriz-cartao,
+.matriz-coluna,
+.matriz-escolher,
+.final-win-probability,
+.draft-probability-center,
+.qg-indice-da-faixa {
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: var(--bs-raio) !important;
+  background: linear-gradient(180deg, #16338f 0, var(--bs-painel) 120px) !important;
+  box-shadow: var(--bs-brilho-de-cima), var(--bs-aresta) !important;
+  clip-path: none !important;
+}
+.map-section::before, .stat-card::after, .stat-stamp { display: none !important; }
+
+/* Cartões pequenos e repetidos: a mesma peça, mais leve. */
+.map-card,
+.brawler-catalog-card,
+.sourced-counter-card,
+.partidas-mapa,
+.brawlers-hero-stats div {
+  border-width: 2px !important;
+  border-radius: 13px !important;
+  box-shadow: var(--bs-brilho-de-cima), var(--bs-aresta-pequena) !important;
+}
+
+/* Escolhido: contorno amarelo por dentro, sem levantar a peça. */
+.map-card.is-selected,
+.brawler-catalog-card.is-active,
+.brawler-catalog-card.is-selected,
+.partidas-mapa.is-active {
+  border-color: var(--bs-contorno) !important;
+  box-shadow: inset 0 0 0 3px var(--bs-amarelo), var(--bs-aresta-pequena) !important;
+}
+.map-card.is-selected::after { display: none; }
+
+/* As fichas de estatística: cor só no número. */
+.stat-card { border-left-width: var(--bs-borda) !important; color: var(--bs-texto); }
+.stat-card .stat-value { color: var(--bs-amarelo); }
+.stat-label { color: var(--bs-texto-2); }
+.stat-icon { border-radius: 9px; border: 2px solid var(--bs-contorno); background: var(--bs-painel-2) !important; color: var(--bs-amarelo) !important; }
+
+/* ------------------------------------------------------------------ *
+ * 8. Abas e escolhas segmentadas
+ *
+ * O trilho é uma ranhura escura; a escolhida é a ficha amarela do jogo.
+ * ------------------------------------------------------------------ */
+.inicio-abas,
+.mesa-abas,
+.source-tabs,
+.duel-map-tabs,
+.partidas-separadores,
+.qg-momentos {
+  gap: 6px;
+  padding: 5px;
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: 15px !important;
+  background: var(--bs-noite-funda) !important;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .35);
+}
+.inicio-abas button,
+.mesa-abas button,
+.source-tabs button,
+.duel-map-tabs button,
+.partidas-separadores button,
+.qg-momentos button {
+  min-height: 42px;
+  border: 2px solid transparent !important;
+  border-radius: 11px !important;
+  background: transparent !important;
+  color: var(--bs-texto-2) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  letter-spacing: .015em;
+  transition: background-color var(--bs-dur-2) var(--bs-ease-micro), color var(--bs-dur-2) var(--bs-ease-micro);
+}
+.inicio-abas button.is-active,
+.mesa-abas button.is-active,
+.source-tabs button.is-active,
+.duel-map-tabs button.is-active,
+.partidas-separadores button.is-active,
+.partidas-separadores button[aria-selected="true"],
+.qg-momentos button.is-active,
+.qg-momentos button[aria-selected="true"] {
+  color: var(--bs-tinta-amarelo) !important;
+  background: var(--bs-amarelo) !important;
+  border-color: var(--bs-contorno) !important;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), 0 3px 0 var(--bs-contorno) !important;
+}
+.inicio-abas button.is-active svg,
+.partidas-separadores button.is-active svg { color: currentColor; }
+
+/* Pílulas de filtro (Elo, período, rank, modo, função, tier). */
+.seletor-elo-botoes button,
+.ranking-presets button,
+.estampa-controlos button,
+.qg-faixas button,
+.qg-vista-do-campo button {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 10px !important;
+  background: var(--bs-painel) !important;
+  color: var(--bs-texto-2) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  text-decoration: none !important;
+  box-shadow: 0 2px 0 var(--bs-contorno) !important;
+}
+.seletor-elo-botoes button.is-active,
+.ranking-presets button.is-active,
+.estampa-controlos button.is-active,
+.qg-faixas button.is-active,
+.qg-vista-do-campo button.is-active {
+  color: var(--bs-tinta-amarelo) !important;
+  background: var(--bs-amarelo) !important;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), 0 2px 0 var(--bs-contorno) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 9. Campos de texto e seletores
+ * ------------------------------------------------------------------ */
+.search-field,
+.brawler-search,
+.draft-search,
+.partidas-procura,
+.matriz-procura,
+.brawler-select-filter,
+.brawler-opponent-select,
+.draft-select {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-noite-funda) !important;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .3);
+}
+input::placeholder { color: var(--bs-texto-3); opacity: 1; }
+
+/* ------------------------------------------------------------------ *
+ * 10. Tiers: fichas de raridade
+ * ------------------------------------------------------------------ */
+.tier-badge,
+.brawler-tier-pill,
+.profile-tier {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 8px !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: .03em;
+  box-shadow: 0 2px 0 var(--bs-contorno) !important;
+  text-shadow: none !important;
+}
+.tier-s, .brawler-tier-pill.tier-s { color: var(--bs-tinta-amarelo) !important; background: var(--bs-amarelo) !important; }
+.tier-a, .brawler-tier-pill.tier-a { color: #04122f !important; background: var(--bs-ceu) !important; }
+.tier-b, .brawler-tier-pill.tier-b { color: #04122f !important; background: #b9c8f2 !important; }
+.tier-pending { color: var(--bs-texto-2) !important; background: var(--bs-painel-2) !important; }
+
+/* ------------------------------------------------------------------ *
+ * 11. Tabelas e listas
+ * ------------------------------------------------------------------ */
+.table-shell,
+.attack-range-table-wrap {
+  border: var(--bs-borda) solid var(--bs-contorno);
+  border-radius: var(--bs-raio);
+  background: var(--bs-noite-funda);
+  box-shadow: var(--bs-aresta);
+  overflow: hidden;
+}
+.table-header,
+.ranking-tabela th {
+  color: var(--bs-texto-2) !important;
+  font-family: "Lilita One", sans-serif;
+  font-weight: 400 !important;
+  letter-spacing: .03em;
+}
+.ranking-tabela { border-collapse: separate; border-spacing: 0 6px; }
+.ranking-tabela th { border-bottom: 0 !important; }
+.ranking-tabela tr { background: transparent !important; }
+.ranking-tabela td {
+  border-bottom: 0 !important;
+  background: var(--bs-painel);
+  border-top: 2px solid var(--bs-contorno);
+  border-bottom: 2px solid var(--bs-contorno) !important;
+}
+.ranking-tabela td:first-child { border-left: 2px solid var(--bs-contorno); border-radius: 11px 0 0 11px; padding-left: 12px; }
+.ranking-tabela td:last-child { border-right: 2px solid var(--bs-contorno); border-radius: 0 11px 11px 0; padding-right: 12px; }
+.ranking-tabela tr.is-selecionada td { background: var(--bs-painel-3); }
+.ranking-posicao { font-family: "Lilita One", sans-serif; font-size: 18px; color: var(--bs-amarelo) !important; text-shadow: var(--bs-letra-contornada-fina); }
+.ranking-score { font-family: "Lilita One", sans-serif; font-weight: 400 !important; font-size: 19px !important; color: var(--bs-amarelo); text-shadow: var(--bs-letra-contornada-fina); }
+.ranking-retrato,
+.mapa-lider-retrato {
+  border: 2px solid var(--bs-contorno);
+  border-radius: 10px;
+  background: var(--bs-painel-2) !important;
+  color: var(--bs-texto);
+  font-family: "Lilita One", sans-serif;
+}
+
+/* ------------------------------------------------------------------ *
+ * 12. Início: o mapa em destaque no campo azul do lobby
+ * ------------------------------------------------------------------ */
+.tema-papel.inicio-papel {
+  position: relative;
+  background-color: var(--bs-azul) !important;
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, .05) 0 26px, transparent 26px 52px),
+    linear-gradient(180deg, #3172ff 0, var(--bs-azul) 260px, #1a52f0 100%);
+  color: var(--bs-texto);
+  /* A costura com o chão é o corte VS: uma diagonal, não uma linha reta. */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 34px), 0 100%);
+  padding-bottom: 72px !important;
+  border-bottom: 0;
+}
+.tema-papel .migalhas { color: var(--bs-texto); font-family: "Lilita One", sans-serif; font-size: 17px; letter-spacing: .02em; text-shadow: var(--bs-letra-contornada-fina); }
+.tema-papel .migalhas-ligacao { text-decoration-thickness: 2px; }
+.tema-papel .aviso-de-rota {
+  border: 2px solid var(--bs-contorno);
+  border-radius: 12px;
+  color: var(--bs-tinta-amarelo);
+  background: var(--bs-amarelo);
+  box-shadow: var(--bs-aresta-pequena);
+}
+.mapa-em-destaque-acoes { gap: 12px; }
+.mapa-lider {
+  padding: 12px 14px !important;
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: 14px;
+  background: var(--bs-painel);
+  box-shadow: var(--bs-brilho-de-cima), var(--bs-aresta);
+}
+.mapa-lider small { color: var(--bs-texto-2) !important; }
+.mapa-lider b { font-family: "Lilita One", sans-serif; font-weight: 400; font-size: 19px; }
+.mapa-lider-score { color: var(--bs-texto-2) !important; }
+.mapa-lider-score b { color: var(--bs-amarelo); font-size: 24px; }
+
+/* A estampa é uma carta do jogo. */
+.estampa-do-mapa { overflow: hidden; }
+.estampa-moldura { border-bottom: var(--bs-borda) solid var(--bs-contorno); }
+.estampa-controlos { background: var(--bs-painel); }
+.estampa-controlos button { min-height: 38px !important; padding: 0 12px !important; font-size: 15px !important; }
+.estampa-corte { width: 4px; margin-left: -2px; background: var(--bs-amarelo) !important; box-shadow: 0 0 0 2px var(--bs-contorno) !important; }
+.estampa-regua::-webkit-slider-runnable-track { height: 10px; border-radius: 6px; border: 2px solid var(--bs-contorno); background: linear-gradient(90deg, var(--bs-amarelo) var(--progresso, 0%), var(--bs-noite-funda) var(--progresso, 0%)); }
+.estampa-regua::-webkit-slider-thumb { width: 28px; height: 28px; margin-top: -11px; background: var(--bs-amarelo); border: 3px solid var(--bs-contorno); box-shadow: 0 3px 0 var(--bs-contorno); }
+.estampa-regua::-moz-range-track { height: 8px; border: 2px solid var(--bs-contorno); background: var(--bs-noite-funda); }
+.estampa-regua::-moz-range-progress { height: 8px; background: var(--bs-amarelo); }
+.estampa-regua::-moz-range-thumb { width: 24px; height: 24px; background: var(--bs-amarelo); border: 3px solid var(--bs-contorno); }
+
+/* A rotação: fichas de mapa como no seletor de eventos do jogo. */
+.na-rotacao { border-top: 0 !important; padding-top: 4px; }
+.na-rotacao-titulo { font-family: "Lilita One", sans-serif; font-weight: 400 !important; font-size: 19px !important; text-shadow: var(--bs-letra-contornada-fina); }
+.na-rotacao-lista { gap: 8px; padding: 4px 2px 10px; }
+.na-rotacao-lista button {
+  min-height: 54px;
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px;
+  background: var(--bs-painel) !important;
+  color: var(--bs-texto) !important;
+  box-shadow: 0 3px 0 var(--bs-contorno);
+  font-weight: 600 !important;
+}
+.na-rotacao-lista button.is-active {
+  background: var(--bs-amarelo) !important;
+  color: var(--bs-tinta-amarelo) !important;
+  font-family: "Lilita One", sans-serif;
+  font-weight: 400 !important;
+}
+.na-rotacao-lista button.is-active small { color: #4a3a05 !important; font-family: "Space Grotesk", sans-serif; }
+.na-rotacao-nome small { color: var(--bs-texto-2) !important; }
+.na-rotacao-miniatura { border-radius: 7px; border: 2px solid var(--bs-contorno); }
+
+/* O ranking do mapa: uma peça escura sobre o campo azul. */
+.ranking-do-mapa {
+  padding: 18px 18px 20px;
+  border: var(--bs-borda) solid var(--bs-contorno);
+  border-radius: 20px;
+  background: var(--bs-noite);
+  box-shadow: var(--bs-brilho-de-cima), 0 6px 0 var(--bs-contorno);
+}
+.ranking-do-mapa .ranking-pesos, .ranking-do-mapa .ranking-publicado { background: var(--bs-painel) !important; }
+.ranking-cabeca { color: var(--bs-texto-2) !important; }
+.ranking-cabeca .ligacao-voltar { color: var(--bs-amarelo); font-family: "Lilita One", sans-serif; font-weight: 400; font-size: 17px; }
+.regua-de-pesos-trilho { height: 10px; border: 2px solid var(--bs-contorno); background: var(--bs-noite-funda) !important; }
+.regua-de-pesos-alcance { background: var(--bs-amarelo) !important; }
+.regua-de-pesos-polegar { width: 30px; height: 30px; background: var(--bs-amarelo) !important; border: 3px solid var(--bs-contorno) !important; box-shadow: 0 3px 0 var(--bs-contorno) !important; }
+.regua-de-pesos-bolha { border-radius: 8px; border: 2px solid var(--bs-contorno); background: var(--bs-amarelo) !important; color: var(--bs-tinta-amarelo) !important; font-family: "Lilita One", sans-serif; font-weight: 400 !important; }
+
+/* ------------------------------------------------------------------ *
+ * 13. Draft: o corte VS
+ *
+ * A barra da probabilidade deixa de ser um fio e passa a ser o corte do
+ * ecrã de confronto: azul de um lado, vermelho do outro, e a diagonal entre
+ * os dois anda para o lado de quem está a ganhar a cada escolha.
+ * ------------------------------------------------------------------ */
+.draft-probability-track {
+  position: relative;
+  height: 18px !important;
+  border: var(--bs-borda) solid var(--bs-contorno);
+  border-radius: 10px !important;
+  background: var(--bs-equipa-vermelha) !important;
+  box-shadow: 0 3px 0 var(--bs-contorno);
+  overflow: hidden;
+}
+.draft-probability-track .blue-fill {
+  position: relative; z-index: 1;
+  /* A diagonal: o azul passa 9px por cima do vermelho, cortado em bisel. */
+  margin-right: -9px;
+  background: linear-gradient(180deg, #74c2ff, var(--bs-equipa-azul)) !important;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: none !important;
+}
+.draft-probability-track .red-fill {
+  background: linear-gradient(180deg, #ff7a7a, var(--bs-equipa-vermelha)) !important;
+  box-shadow: none !important;
+}
+.draft-probability-mid > span {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 2px solid var(--bs-contorno);
+  border-radius: 8px;
+  transform: skewX(-10deg);
+  color: var(--bs-tinta-amarelo) !important;
+  background: var(--bs-amarelo);
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  box-shadow: 0 3px 0 var(--bs-contorno);
+}
+.draft-probability-team.blue strong { color: var(--bs-equipa-azul) !important; }
+.draft-probability-team.red strong { color: var(--bs-equipa-vermelha) !important; }
+
+.team-board.blue { border-top: var(--bs-borda) solid var(--bs-contorno) !important; box-shadow: inset 0 5px 0 var(--bs-equipa-azul), var(--bs-aresta) !important; }
+.team-board.red { border-top: var(--bs-borda) solid var(--bs-contorno) !important; box-shadow: inset 0 5px 0 var(--bs-equipa-vermelha), var(--bs-aresta) !important; }
+.team-heading h3 { font-family: "Lilita One", sans-serif !important; font-weight: 400 !important; text-shadow: var(--bs-letra-contornada-fina); }
+
+/* As vagas de pick e ban: encaixes do jogo. */
+.draft-slot {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-noite-funda) !important;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .35) !important;
+}
+.draft-slot.is-active {
+  border-color: var(--bs-contorno) !important;
+  box-shadow: inset 0 0 0 3px var(--bs-amarelo), 0 3px 0 var(--bs-contorno) !important;
+}
+
+/* A sugestão: uma carta de brawler. */
+.draft-recommendation,
+.recommendation-card {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 13px !important;
+  box-shadow: var(--bs-brilho-de-cima), 0 3px 0 var(--bs-contorno) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 14. Partidas, Matriz e Brawlers: cabeçalhos
+ * ------------------------------------------------------------------ */
+.partidas-cabeca p,
+.matriz-cabeca p,
+.brawlers-hero p { color: var(--bs-texto-2) !important; }
+.matriz-cartao { background: linear-gradient(180deg, #1a3ea6 0, var(--bs-painel) 160px) !important; }
+.brawler-profile-hero { background: linear-gradient(180deg, #1a3ea6 0, var(--bs-painel) 200px) !important; }
+.profile-hero-image,
+.matriz-retrato-grande,
+.brawler-detail-avatar {
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: 18px !important;
+  background: var(--bs-azul) !important;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .25), var(--bs-aresta) !important;
+}
+.profile-hero-image span,
+.matriz-retrato-grande span { font-family: "Lilita One", sans-serif !important; font-weight: 400 !important; color: var(--bs-texto) !important; text-shadow: var(--bs-letra-contornada); }
+.profile-hero-score strong { color: var(--bs-amarelo) !important; }
+
+/* O turno do Draft é uma etiqueta, não um cartaz. */
+.mesa-vez-texto strong.bh-display { font-size: clamp(1.45rem, 1.25rem + .6vw, 1.85rem) !important; line-height: 1.05 !important; }
+.mesa-vez {
+  border: 2px solid var(--bs-contorno) !important;
+  border-left-width: 6px !important;
+  box-shadow: 0 3px 0 var(--bs-contorno);
+}
+.mesa-vez.vez-blue { border-left-color: var(--bs-equipa-azul) !important; }
+.mesa-vez.vez-red { border-left-color: var(--bs-equipa-vermelha) !important; }
+.mesa-vez .progress-step { height: 8px !important; border-radius: 4px !important; }
+.mesa-vez .progress-step.is-current { background: var(--bs-amarelo) !important; }
+
+/* Os botões secundários do turno: o mesmo corpo azul, mais pequenos. */
+.mesa-vez .draft-voice-button,
+.mesa-vez .draft-skip-button {
+  min-height: 40px !important;
+  padding: 0 14px !important;
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: 13px !important;
+  color: var(--bs-texto) !important;
+  background: linear-gradient(180deg, #3a78ff 0, var(--bs-azul) 55%, #164ad8 100%) !important;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .28), var(--bs-aresta-pequena) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  text-shadow: var(--bs-letra-contornada-fina);
+}
+.mesa-vez .draft-voice-button.is-listening { background: linear-gradient(180deg, #ff7a7a, var(--bs-equipa-vermelha)) !important; }
+
+/* Grupos de filtros: a mesma ranhura das abas, em pequeno. */
+.partidas-grupo,
+.brawler-filter-group {
+  gap: 4px !important;
+  padding: 4px !important;
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-noite-funda) !important;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .3);
+}
+.partidas-grupo > span,
+.brawler-filter-group span { color: var(--bs-texto-2) !important; }
+.partidas-grupo button,
+.brawler-filter-group button {
+  min-height: 34px;
+  border: 2px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: var(--bs-texto-2) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+}
+.partidas-grupo button.is-active,
+.brawler-filter-group button.is-active {
+  color: var(--bs-tinta-amarelo) !important;
+  background: var(--bs-amarelo) !important;
+  border-color: var(--bs-contorno) !important;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45);
+}
+.seletor-periodo-dias input { border: 2px solid var(--bs-contorno); border-radius: 8px; background: var(--bs-painel); color: var(--bs-texto); }
+
+/* Os modos de jogo: fichas com a cor do modo, como no seletor de eventos. */
+.matriz-modos button,
+.partidas-modos button {
+  min-height: 40px !important;
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-painel) !important;
+  color: var(--bs-texto) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  box-shadow: 0 3px 0 var(--bs-contorno) !important;
+}
+.matriz-modos button i { width: 12px !important; height: 12px !important; border: 2px solid var(--bs-contorno); box-shadow: none !important; }
+.matriz-modos button.is-active,
+.partidas-modos button.is-active {
+  background: var(--bs-painel-3) !important;
+  box-shadow: inset 0 0 0 3px var(--bs-amarelo), 0 3px 0 var(--bs-contorno) !important;
+}
+.partidas-mapa-todos {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-painel) !important;
+  color: var(--bs-texto) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  box-shadow: 0 3px 0 var(--bs-contorno) !important;
+}
+.partidas-mapa-todos.is-active { box-shadow: inset 0 0 0 3px var(--bs-amarelo), 0 3px 0 var(--bs-contorno) !important; }
+
+/* A caixa da API oficial: um interruptor do jogo. */
+.botao-api-oficial {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-painel) !important;
+  color: var(--bs-texto) !important;
+  font-family: "Lilita One", sans-serif !important;
+  font-weight: 400 !important;
+  box-shadow: 0 3px 0 var(--bs-contorno) !important;
+}
+.botao-api-oficial .mesa-fonte-api-caixa { border: 2px solid var(--bs-contorno) !important; border-radius: 6px; background: var(--bs-noite-funda) !important; color: var(--bs-tinta-amarelo) !important; }
+.botao-api-oficial.is-active .mesa-fonte-api-caixa { background: var(--bs-amarelo) !important; }
+
+/* Matriz: o painel de escolher e os títulos das colunas. */
+.matriz-escolher { padding: 16px 18px 14px !important; }
+.matriz-coluna { padding: 16px 16px 18px !important; }
+.matriz-coluna .matriz-titulo { font-size: clamp(1.2rem, 1.05rem + .5vw, 1.5rem) !important; text-transform: none !important; }
+
+/* Ficha do brawler: números em peças pequenas. */
+.profile-metrics > div,
+.ficha-contexto {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 13px !important;
+  background: var(--bs-painel) !important;
+  box-shadow: var(--bs-brilho-de-cima), 0 3px 0 var(--bs-contorno) !important;
+}
+.profile-metrics strong { font-family: "Lilita One", sans-serif !important; font-weight: 400 !important; font-size: 28px !important; color: var(--bs-amarelo) !important; text-shadow: var(--bs-letra-contornada-fina); }
+.ficha-contexto .source-link-stack a {
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 10px !important;
+  background: var(--bs-painel-2);
+  color: var(--bs-texto) !important;
+  box-shadow: 0 2px 0 var(--bs-contorno);
+}
+
+/* A entrada do dono: o mesmo lobby, uma só peça ao centro. */
+.entrar-pagina { background: transparent; }
+.entrar-cartao {
+  border: var(--bs-borda) solid var(--bs-contorno) !important;
+  border-radius: 20px !important;
+  background: linear-gradient(180deg, #16338f 0, var(--bs-painel) 160px) !important;
+  box-shadow: var(--bs-brilho-de-cima), 0 6px 0 var(--bs-contorno) !important;
+}
+.entrar-titulo { font-family: "Lilita One", sans-serif !important; font-weight: 400 !important; font-size: 30px !important; text-shadow: var(--bs-letra-contornada); }
+.entrar-cartao p { color: var(--bs-texto-2) !important; }
+.entrar-campo {
+  min-height: 46px;
+  border: 2px solid var(--bs-contorno) !important;
+  border-radius: 12px !important;
+  background: var(--bs-noite-funda) !important;
+  color: var(--bs-texto) !important;
+}
+.entrar-voltar { min-height: 44px; color: var(--bs-texto-2) !important; font-family: "Lilita One", sans-serif; font-size: 16px !important; }
+
+/* ------------------------------------------------------------------ *
+ * 15. Rodapé, 404 e ecrã de carregamento
+ * ------------------------------------------------------------------ */
+.rodape-do-site {
+  position: relative;
+  margin-top: 48px;
+  padding: 46px 24px 34px;
+  color: var(--bs-texto-2);
+  background: var(--bs-noite-funda);
+  border-top: var(--bs-borda) solid var(--bs-contorno);
+  font-size: 14px;
+  line-height: 1.55;
+}
+/* O corte VS na costura: uma faixa amarela em diagonal. */
+.rodape-do-site::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: -3px; height: 14px;
+  background: linear-gradient(100deg, var(--bs-equipa-azul) 0 48%, var(--bs-amarelo) 48% 52%, var(--bs-equipa-vermelha) 52% 100%);
+  border-bottom: var(--bs-borda) solid var(--bs-contorno);
+}
+.rodape-do-site-conteudo { display: grid; gap: 18px; max-width: 1360px; margin: 0 auto; }
+.rodape-do-site-marca { display: flex; align-items: center; gap: 10px; color: var(--bs-texto); font-family: "Lilita One", sans-serif; font-size: 22px; text-shadow: var(--bs-letra-contornada-fina); }
+.rodape-do-site-marca img { width: 34px; height: 34px; border-radius: 10px; border: 2px solid var(--bs-contorno); }
+.rodape-do-site nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.rodape-do-site nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--bs-texto); font-family: "Lilita One", sans-serif; font-size: 16px; text-decoration: none; }
+.rodape-do-site small { display: block; max-width: 760px; color: var(--bs-texto-3); font-size: 13px; }
+.rodape-do-site small a { color: var(--bs-texto-2); }
+@media (max-width: 900px) {
+  .rodape-do-site { padding-bottom: 104px; }
+}
+
+.pagina-inexistente main > strong {
+  font-size: clamp(5.5rem, 3rem + 10vw, 11rem) !important;
+  line-height: .9 !important;
+  color: var(--bs-amarelo) !important;
+  transform: rotate(-4deg);
+}
+.pagina-inexistente main > strong + h1 { margin-top: 8px; }
+.pagina-inexistente main > p { color: var(--bs-texto-2); }
+.pagina-inexistente-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 12px; }
+
+.ecra-a-carregar {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  color: var(--bs-texto);
+  font-family: "Lilita One", sans-serif;
+  font-size: 20px;
+  text-shadow: var(--bs-letra-contornada-fina);
+}
+.ecra-a-carregar-vs {
+  display: grid;
+  place-items: center;
+  width: 92px; height: 56px;
+  border: var(--bs-borda) solid var(--bs-contorno);
+  border-radius: 12px;
+  transform: skewX(-12deg);
+  color: var(--bs-tinta-amarelo);
+  background: var(--bs-amarelo);
+  box-shadow: var(--bs-aresta);
+  font-size: 30px;
+  text-shadow: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * 16. Foco: sempre visível, sempre por cima
+ * ------------------------------------------------------------------ */
+:is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--bs-amarelo) !important;
+  outline-offset: 3px !important;
+}
+:is(.botao-tinta, .botao-amarelo, .primary-button, .pagina-inexistente-acoes a.is-principal, .inicio-abas button.is-active, .mobile-nav-item.is-active, .barra-do-site-destinos a.is-active):focus-visible {
+  outline-color: var(--bs-texto) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 17. Hover: só com rato, só tom — a peça nunca levanta
+ * ------------------------------------------------------------------ */
+@media (hover: hover) and (pointer: fine) {
+  .barra-do-site-destinos a:hover { color: var(--bs-texto); background: transparent; }
+  .barra-do-site-destinos a:not(.is-active):hover::before { background: rgba(255, 255, 255, .09); }
+
+  .botao-tinta:hover, .botao-amarelo:hover, .primary-button:hover,
+  .pagina-inexistente-acoes a.is-principal:hover, .bs-botao-principal:hover {
+    background: linear-gradient(180deg, #fff08a 0, var(--bs-amarelo-claro) 55%, #ffd21f 100%) !important;
+    transform: none;
+  }
+  .botao-lilas:hover, .botao-ver-matriz:hover, .copy-button:hover:not(:disabled),
+  .map-export-button:hover, .refresh-button:hover:not(:disabled), .draft-desfazer:hover,
+  .scroll-top-button:hover, .pagina-inexistente-acoes a:not(.is-principal):hover, .bs-botao:hover {
+    background: linear-gradient(180deg, #5a90ff 0, #3a74ff 55%, #2559ea 100%) !important;
+    transform: none;
+  }
+
+  .inicio-abas button:not(.is-active):hover,
+  .mesa-abas button:not(.is-active):hover,
+  .source-tabs button:not(.is-active):hover,
+  .duel-map-tabs button:not(.is-active):hover,
+  .partidas-separadores button:not(.is-active):hover,
+  .qg-momentos button:not(.is-active):hover,
+  .seletor-elo-botoes button:not(.is-active):hover,
+  .ranking-presets button:not(.is-active):hover,
+  .na-rotacao-lista button:not(.is-active):hover {
+    color: var(--bs-texto) !important;
+    background: var(--bs-painel-2) !important;
+  }
+
+  .map-card:hover,
+  .stat-card:hover,
+  .brawler-catalog-card:hover,
+  .partidas-mapa:hover,
+  .sourced-counter-card:hover {
+    transform: none !important;
+    background: linear-gradient(180deg, #1b3ea8 0, var(--bs-painel-2) 120px) !important;
+  }
+  .ranking-tabela tr:hover td { background: var(--bs-painel-2); }
+  .rodape-do-site nav a:hover { color: var(--bs-amarelo); }
+
+  /* As folhas antigas levantavam a peça no hover. No jogo nada levanta:
+     muda o tom e pronto. Uma lista, para nenhum escapar. */
+  .refresh-button:hover, .primary-button:hover, .copy-button:hover, .map-export-button:hover,
+  .map-card:hover, .source-card:hover, .filled-slot:hover, .draft-recommendation:hover,
+  .official-event-chip:hover, .quick-pick-row:hover, .draft-slot:hover, .live-counter-simulate:hover,
+  .brawler-catalog-card:hover, .brawler-relation-card:hover, .sourced-counter-card:hover,
+  .draft-initial-team-actions button:hover, .observed-back:hover, .observed-mode-list button:hover,
+  .observed-cell:hover, .roster-pagination button:hover, .partidas-mapa:hover,
+  .draft-rules-toggle:hover, .draft-rules-actions button:hover {
+    transform: none !important;
+  }
+}
+.brawler-catalog-card.is-selected { transform: none !important; }
+
+/* ------------------------------------------------------------------ *
+ * 18. Movimento: a entrada do título e o que corta quem pediu menos
+ * ------------------------------------------------------------------ */
+@keyframes bs-ko-pancada {
+  from { transform: rotate(-4deg) scale(1.18); }
+  to { transform: rotate(-4deg) scale(1); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pagina-inexistente main > strong { animation: bs-ko-pancada var(--bs-dur-4) var(--bs-ease) both; }
+  .draft-probability-track .blue-fill { transition: width var(--bs-dur-4) var(--bs-ease) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .botao-tinta, .botao-amarelo, .primary-button, .pagina-inexistente-acoes a, .botao-lilas,
+  .botao-ver-matriz, .copy-button, .map-export-button, .refresh-button, .draft-desfazer,
+  .scroll-top-button, .bs-botao, .barra-do-site-destinos a, .barra-do-site-destinos a::before,
+  .inicio-abas button, .mesa-abas button, .source-tabs button, .duel-map-tabs button,
+  .partidas-separadores button, .qg-momentos button { transition: none !important; }
+  .draft-probability-track .blue-fill, .draft-probability-track .red-fill { transition: none !important; }
+}

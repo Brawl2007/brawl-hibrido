@@ -15,7 +15,9 @@
  * imagem falhada em todas as páginas e no separador do navegador. Passa a
  * apontar para um ficheiro que existe aqui — um monograma provisório, sem
  * pretensões de ser a marca final, mas que é servido como qualquer recurso
- * estático e não custa uma invocação de função.
+ * estático e não custa uma invocação de função. Na v192 passou a ser o
+ * emblema do corte VS (azul, amarelo, vermelho), com outro nome de ficheiro
+ * para a cache de 7 dias não continuar a servir o monograma antigo.
  *
  * Os outros quatro eram decorativos e estavam SEMPRE por baixo de um gradiente
  * que já sustenta o aspeto sozinho. Ficam a `null`: o gradiente fica como está e
@@ -28,7 +30,7 @@
  * quatro páginas, no `index.html` e no `index.css`. Os nomes que a plataforma
  * anterior usava estão em `reports/imagens-do-site.md`.
  */
-export const LOGO = "/marca/logo-provisorio.svg";
+export const LOGO = "/marca/emblema-vs.svg";
 
 /** Decorativas. `null` significa "só o gradiente", que é o que se vê hoje. */
 export const IMAGEM_PRINCIPAL: string | null = null;

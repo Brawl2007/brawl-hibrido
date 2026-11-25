@@ -329,7 +329,7 @@ function MapSelector({
                * com `index * 0.025` o 26.º cartão esperava 650ms, acima do
                * orçamento de 500ms para uma cascata inteira.
                */
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 1, y: 8 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.25 }}
               transition={{ duration: 0.24, delay: (index % 6) * 0.035 }}
@@ -750,7 +750,7 @@ function SourceComparison({ rows, mapName }: { rows: RankedRow[]; mapName: strin
         {current.metrics.map((metric) => <span key={metric.label}><b>{coverageFor(metric.key)}/{rows.length}</b> {metric.label}</span>)}
       </div>
       <div className="source-card-grid" aria-label={`Seis brawlers em destaque no ${current.label}`}>
-        {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
+        {featureRows.map((row, index) => <motion.article key={`${sourceTab}-${row.map}-${row.brawler}`} className="source-card" initial={{ opacity: 1, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.18, delay: index * 0.035 }}>
           <div className="source-card-top"><span className="source-rank">{String(index + 1).padStart(2, "0")}</span><span className="source-tier"><TierBadge tier={row.tier} /></span></div>
           <div className="source-brawler"><span className="source-avatar com-retrato"><Retrato src={brawlerImageFor(row.brawler, row.brawlerId)} nome={row.brawler} /></span><strong>{row.brawler}</strong></div>
           <div className="source-metric-grid">{current.metrics.map((metric) => <div className="source-metric" key={metric.label}><span>{metric.label}</span><strong>{readMetric(row, metric.key)}</strong></div>)}</div>
